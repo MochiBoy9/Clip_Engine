@@ -1,0 +1,275 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ClipEngine.Desktop.ViewModels"
+             x:Class="ClipEngine.Desktop.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel">
+  <DockPanel Margin="18,0,22,0">
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,18">
+      <StackPanel VerticalAlignment="Center" Spacing="2">
+        <TextBlock Classes="h1" Text="Settings" />
+        <TextBlock Classes="caption" Text="{Binding SavedMessage, FallbackValue='Recording changes apply when you save; the engine restarts in a second.'}" />
+      </StackPanel>
+      <Button Grid.Column="1" Classes="glass" Content="Revert" Command="{Binding RevertCommand}" Margin="0,0,10,0"
+              VerticalAlignment="Center" />
+      <Button Grid.Column="2" Classes="accent" Content="Save changes" Command="{Binding SaveCommand}"
+              VerticalAlignment="Center" />
+    </Grid>
+    <ScrollViewer>
+      <Grid ColumnDefinitions="1.25*,18,*" Margin="0,0,0,24">
+        <StackPanel>
+        <Border Classes="glass" Padding="22" Margin="0,0,0,18">
+          <StackPanel>
+            <TextBlock Classes="eyebrow" Text="RECORDING" Margin="0,0,0,16" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Width="36" Height="36" CornerRadius="11" VerticalAlignment="Center" Margin="0,0,14,0">
+                <Border.Background>
+                  <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                    <GradientStop Offset="0" Color="#B45CF6" /><GradientStop Offset="1" Color="#6C63FF" />
+                  </LinearGradientBrush>
+                </Border.Background>
+                <PathIcon Data="{StaticResource IconClock}" Width="16" Height="16" Foreground="White" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Replay buffer" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="Recent gameplay kept in memory, ready to save." TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                  <Slider Width="200" Minimum="10" Maximum="600" Value="{Binding BufferSeconds}"
+                          SmallChange="10" LargeChange="10" TickFrequency="10" IsSnapToTickEnabled="True" />
+                  <Border Classes="inset" Width="78" Padding="0,6" CornerRadius="10" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding BufferText}" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" />
+                  </Border>
+                </StackPanel>
+              </Panel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,14" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Width="36" Height="36" CornerRadius="11" VerticalAlignment="Center" Margin="0,0,14,0">
+                <Border.Background>
+                  <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                    <GradientStop Offset="0" Color="#FF5E9C" /><GradientStop Offset="1" Color="#FFB457" />
+                  </LinearGradientBrush>
+                </Border.Background>
+                <PathIcon Data="{StaticResource IconBolt}" Width="16" Height="16" Foreground="White" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Clip length" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="How much of the buffer a saved clip keeps." TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                  <Slider Width="200" Minimum="5" Maximum="{Binding BufferSeconds}" Value="{Binding ClipSeconds}"
+                          SmallChange="5" LargeChange="5" TickFrequency="5" IsSnapToTickEnabled="True" />
+                  <Border Classes="inset" Width="78" Padding="0,6" CornerRadius="10" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding ClipText}" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" />
+                  </Border>
+                </StackPanel>
+              </Panel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,14" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Width="36" Height="36" CornerRadius="11" VerticalAlignment="Center" Margin="0,0,14,0">
+                <Border.Background>
+                  <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                    <GradientStop Offset="0" Color="#22C8EE" /><GradientStop Offset="1" Color="#3EE0A6" />
+                  </LinearGradientBrush>
+                </Border.Background>
+                <PathIcon Data="{StaticResource IconMonitor}" Width="16" Height="16" Foreground="White" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Frame rate" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="Match monitor records at your refresh rate." TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <ComboBox Width="190" ItemsSource="{Binding FpsOptions}" SelectedItem="{Binding Fps}" />
+              </Panel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,14" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Width="36" Height="36" CornerRadius="11" VerticalAlignment="Center" Margin="0,0,14,0">
+                <Border.Background>
+                  <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                    <GradientStop Offset="0" Color="#2F7BFF" /><GradientStop Offset="1" Color="#7C6CFF" />
+                  </LinearGradientBrush>
+                </Border.Background>
+                <PathIcon Data="{StaticResource IconDrive}" Width="16" Height="16" Foreground="White" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Bitrate" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="Auto picks one from resolution and frame rate." TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                  <Slider Width="200" Minimum="0" Maximum="150" Value="{Binding Bitrate}"
+                          SmallChange="5" LargeChange="5" TickFrequency="5" IsSnapToTickEnabled="True" />
+                  <Border Classes="inset" Width="78" Padding="0,6" CornerRadius="10" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding BitrateText}" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" />
+                  </Border>
+                </StackPanel>
+              </Panel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,14" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Width="36" Height="36" CornerRadius="11" VerticalAlignment="Center" Margin="0,0,14,0">
+                <Border.Background>
+                  <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                    <GradientStop Offset="0" Color="#3EE0A6" /><GradientStop Offset="1" Color="#2F7BFF" />
+                  </LinearGradientBrush>
+                </Border.Background>
+                <PathIcon Data="{StaticResource IconClips}" Width="16" Height="16" Foreground="White" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Codec" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="Auto uses H.264, and HEVC when the resolution needs it." TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <Border Classes="inset" Padding="4" CornerRadius="13">
+                  <StackPanel Orientation="Horizontal" Spacing="2">
+                    <RadioButton Classes="segment" GroupName="codec" Content="Auto" IsChecked="{Binding CodecAuto}" />
+                    <RadioButton Classes="segment" GroupName="codec" Content="H.264" IsChecked="{Binding CodecH264}" />
+                    <RadioButton Classes="segment" GroupName="codec" Content="HEVC" IsChecked="{Binding CodecHevc}" />
+                  </StackPanel>
+                </Border>
+              </Panel>
+            </Grid>
+          </StackPanel>
+        </Border>
+        <Border Classes="glass" Padding="22" Margin="0,0,0,18">
+          <StackPanel>
+            <TextBlock Classes="eyebrow" Text="AUDIO" Margin="0,0,0,16" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Width="36" Height="36" CornerRadius="11" VerticalAlignment="Center" Margin="0,0,14,0">
+                <Border.Background>
+                  <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                    <GradientStop Offset="0" Color="#B45CF6" /><GradientStop Offset="1" Color="#6C63FF" />
+                  </LinearGradientBrush>
+                </Border.Background>
+                <PathIcon Data="{StaticResource IconGames}" Width="16" Height="16" Foreground="White" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Game audio" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="Everything you hear, on its own track." TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <ToggleSwitch IsChecked="{Binding GameAudio}" OnContent="{x:Null}" OffContent="{x:Null}" />
+              </Panel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,14" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Width="36" Height="36" CornerRadius="11" VerticalAlignment="Center" Margin="0,0,14,0">
+                <Border.Background>
+                  <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                    <GradientStop Offset="0" Color="#FF5E9C" /><GradientStop Offset="1" Color="#FFB457" />
+                  </LinearGradientBrush>
+                </Border.Background>
+                <PathIcon Data="{StaticResource IconMic}" Width="16" Height="16" Foreground="White" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Microphone" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="Your mic on a separate track, so it can be muted later." TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <ToggleSwitch IsChecked="{Binding MicAudio}" OnContent="{x:Null}" OffContent="{x:Null}" />
+              </Panel>
+            </Grid>
+          </StackPanel>
+        </Border>
+        </StackPanel>
+        <StackPanel Grid.Column="2">
+        <Border Classes="glass" Padding="22" Margin="0,0,0,18">
+          <StackPanel>
+            <TextBlock Classes="eyebrow" Text="HOTKEY" Margin="0,0,0,16" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Width="36" Height="36" CornerRadius="11" VerticalAlignment="Center" Margin="0,0,14,0">
+                <Border.Background>
+                  <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                    <GradientStop Offset="0" Color="#22C8EE" /><GradientStop Offset="1" Color="#3EE0A6" />
+                  </LinearGradientBrush>
+                </Border.Background>
+                <PathIcon Data="{StaticResource IconKeyboard}" Width="16" Height="16" Foreground="White" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Save hotkey" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="Examples: F8, Alt+F10, Ctrl+Shift+S" TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <TextBox Width="160" Text="{Binding SaveHotkey}" HorizontalContentAlignment="Center" FontWeight="SemiBold" />
+              </Panel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,14" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Width="36" Height="36" CornerRadius="11" VerticalAlignment="Center" Margin="0,0,14,0">
+                <Border.Background>
+                  <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                    <GradientStop Offset="0" Color="#2F7BFF" /><GradientStop Offset="1" Color="#7C6CFF" />
+                  </LinearGradientBrush>
+                </Border.Background>
+                <PathIcon Data="{StaticResource IconMonitor}" Width="16" Height="16" Foreground="White" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Record without a game" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="Keep a buffer of the main monitor when no game is open." TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <ToggleSwitch IsChecked="{Binding RecordWithoutGame}" OnContent="{x:Null}" OffContent="{x:Null}" />
+              </Panel>
+            </Grid>
+          </StackPanel>
+        </Border>
+        <Border Classes="glass" Padding="22" Margin="0,0,0,18">
+          <StackPanel>
+            <TextBlock Classes="eyebrow" Text="STORAGE" Margin="0,0,0,16" />
+            <TextBlock Text="Clips folder" FontWeight="SemiBold" FontSize="14" />
+            <TextBlock Classes="caption" Text="One folder per game is created inside it." Margin="0,2,0,12" />
+            <Grid ColumnDefinitions="*,Auto,Auto">
+              <TextBox Text="{Binding OutputDir}" Watermark="{Binding OutputDirShown}" />
+              <Button Grid.Column="1" Classes="glass" Content="Browse" Margin="10,0,0,0" Click="OnBrowse" />
+            </Grid>
+          </StackPanel>
+        </Border>
+        <Border Classes="glass" Padding="22" Margin="0,0,0,18">
+          <StackPanel>
+            <TextBlock Classes="eyebrow" Text="APP" Margin="0,0,0,16" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Width="36" Height="36" CornerRadius="11" VerticalAlignment="Center" Margin="0,0,14,0">
+                <Border.Background>
+                  <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                    <GradientStop Offset="0" Color="#3EE0A6" /><GradientStop Offset="1" Color="#2F7BFF" />
+                  </LinearGradientBrush>
+                </Border.Background>
+                <PathIcon Data="{StaticResource IconHome}" Width="16" Height="16" Foreground="White" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Close to tray" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="Closing the window keeps Clip Engine recording." TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <ToggleSwitch IsChecked="{Binding CloseToTray}" OnContent="{x:Null}" OffContent="{x:Null}" />
+              </Panel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,14" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Width="36" Height="36" CornerRadius="11" VerticalAlignment="Center" Margin="0,0,14,0">
+                <Border.Background>
+                  <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                    <GradientStop Offset="0" Color="#B45CF6" /><GradientStop Offset="1" Color="#6C63FF" />
+                  </LinearGradientBrush>
+                </Border.Background>
+                <PathIcon Data="{StaticResource IconSparkle}" Width="16" Height="16" Foreground="White" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Animated background" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="Pauses whenever the window isn't in front." TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <ToggleSwitch IsChecked="{Binding AnimatedBackground}" OnContent="{x:Null}" OffContent="{x:Null}" />
+              </Panel>
+            </Grid>
+          </StackPanel>
+        </Border>
+        </StackPanel>
+      </Grid>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

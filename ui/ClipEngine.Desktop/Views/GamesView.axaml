@@ -1,0 +1,78 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ClipEngine.Desktop.ViewModels"
+             x:Class="ClipEngine.Desktop.Views.GamesView"
+             x:DataType="vm:GamesPage">
+  <ScrollViewer>
+    <StackPanel Margin="18,0,22,24" Spacing="18">
+      <StackPanel Spacing="2">
+        <TextBlock Classes="h1" Text="Games" />
+        <TextBlock Classes="caption" Text="Clip Engine starts recording as soon as one of these opens, on the monitor it's on." />
+      </StackPanel>
+
+      <ItemsControl ItemsSource="{Binding Main.Games}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate><UniformGrid Columns="3" /></ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:GameItemViewModel">
+            <Border Classes="glass" Padding="0" Margin="0,0,16,16" CornerRadius="26">
+              <Panel>
+                <!-- Tinted wash of the game's colours across the top of the card -->
+                <Border Background="{Binding Gradient}" Opacity="0.4" IsHitTestVisible="False">
+                  <Border.OpacityMask>
+                    <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                      <GradientStop Offset="0" Color="#FF000000" />
+                      <GradientStop Offset="0.75" Color="#00000000" />
+                    </LinearGradientBrush>
+                  </Border.OpacityMask>
+                </Border>
+                <StackPanel Margin="22" Spacing="16">
+                  <Grid ColumnDefinitions="Auto,*">
+                    <Border Width="64" Height="64" CornerRadius="20" Background="{Binding Gradient}"
+                            BorderBrush="#66FFFFFF" BorderThickness="1"
+                            BoxShadow="0 10 26 0 #55000010, inset 0 1 0 0 #80FFFFFF">
+                      <TextBlock Text="{Binding Initials}" FontSize="22" FontWeight="Black" Foreground="White"
+                                 HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <Border Grid.Column="1" Classes="pill" HorizontalAlignment="Right" VerticalAlignment="Top"
+                            Background="#33FF4D7A" BorderBrush="#80FF4D7A" IsVisible="{Binding IsRecording}">
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Ellipse Classes="liveDot pulsing" Width="7" Height="7" VerticalAlignment="Center" />
+                        <TextBlock Text="REC" FontSize="11" FontWeight="Bold" LetterSpacing="1" />
+                      </StackPanel>
+                    </Border>
+                  </Grid>
+                  <StackPanel Spacing="4">
+                    <TextBlock Classes="h2" Text="{Binding Name}" FontSize="19" />
+                    <TextBlock Classes="body" Text="{Binding Status}" FontSize="13" />
+                  </StackPanel>
+                  <Border Height="1" Background="{StaticResource Divider}" />
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="caption" Text="{Binding ClipCountText}" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Classes="caption" Text="Auto-detect on" VerticalAlignment="Center"
+                               Foreground="{StaticResource SuccessBrush}" />
+                  </Grid>
+                </StackPanel>
+              </Panel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <Border Classes="glass" Padding="24" Margin="0,0,16,0">
+        <Grid ColumnDefinitions="Auto,*">
+          <Border Width="48" Height="48" CornerRadius="16" Background="{StaticResource AccentGradient}"
+                  BoxShadow="{StaticResource AccentGlow}" VerticalAlignment="Top" Margin="0,0,18,0">
+            <PathIcon Data="{StaticResource IconSparkle}" Width="22" Height="22" Foreground="White" />
+          </Border>
+          <StackPanel Grid.Column="1" Spacing="6">
+            <TextBlock Classes="h2" Text="Coming next: automatic moments" />
+            <TextBlock Classes="body" TextWrapping="Wrap"
+                       Text="Clips for every kill, assist, death, revive and round win, saved without pressing anything. Until then, the save hotkey keeps the last stretch of gameplay." />
+          </StackPanel>
+        </Grid>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

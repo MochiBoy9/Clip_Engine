@@ -1,0 +1,31 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="ClipEngine.Desktop.App"
+             Name="Clip Engine"
+             RequestedThemeVariant="Dark">
+  <Application.Styles>
+    <FluentTheme>
+      <FluentTheme.Palettes>
+        <ColorPaletteResources x:Key="Dark" Accent="#8B6CFF" AltHigh="#0B0A1C" RegionColor="#141228"
+                               ChromeMediumLow="#1C1A33" BaseHigh="#F4F6FF" />
+      </FluentTheme.Palettes>
+    </FluentTheme>
+    <StyleInclude Source="avares://ClipEngine/Theme/Glass.axaml" />
+  </Application.Styles>
+
+  <TrayIcon.Icons>
+    <TrayIcons>
+      <TrayIcon Icon="avares://ClipEngine/Assets/ClipEngine.ico" ToolTipText="Clip Engine" Clicked="OnTrayClicked">
+        <TrayIcon.Menu>
+          <NativeMenu>
+            <NativeMenuItem Header="Open Clip Engine" Click="OnTrayOpen" />
+            <NativeMenuItem Header="Save clip" Click="OnTraySaveClip" />
+            <NativeMenuItem Header="Open clips folder" Click="OnTrayOpenFolder" />
+            <NativeMenuItemSeparator />
+            <NativeMenuItem Header="Quit" Click="OnTrayQuit" />
+          </NativeMenu>
+        </TrayIcon.Menu>
+      </TrayIcon>
+    </TrayIcons>
+  </TrayIcon.Icons>
+</Application>

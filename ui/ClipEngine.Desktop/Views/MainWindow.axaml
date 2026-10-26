@@ -1,0 +1,180 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:ClipEngine.Desktop.ViewModels"
+        xmlns:views="using:ClipEngine.Desktop.Views"
+        x:Class="ClipEngine.Desktop.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Title="Clip Engine"
+        Icon="avares://ClipEngine/Assets/ClipEngine.ico"
+        Width="1280" Height="820" MinWidth="1040" MinHeight="660"
+        WindowStartupLocation="CenterScreen"
+        Background="Transparent"
+        TransparencyLevelHint="AcrylicBlur, Mica, None"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="PreferSystemChrome"
+        ExtendClientAreaTitleBarHeightHint="44">
+
+  <Window.DataTemplates>
+    <DataTemplate DataType="vm:HomePage"><views:HomeView /></DataTemplate>
+    <DataTemplate DataType="vm:ClipsPage"><views:ClipsView /></DataTemplate>
+    <DataTemplate DataType="vm:GamesPage"><views:GamesView /></DataTemplate>
+    <DataTemplate DataType="vm:SettingsViewModel"><views:SettingsView /></DataTemplate>
+  </Window.DataTemplates>
+
+  <Window.Styles>
+    <!-- Slow drifting colour behind the glass. Only runs while the window is active. -->
+    <Style Selector="Panel#Root.animated Ellipse#BlobViolet">
+      <Style.Animations>
+        <Animation Duration="0:0:22" IterationCount="Infinite" PlaybackDirection="Alternate" Easing="SineEaseInOut">
+          <KeyFrame Cue="0%"><Setter Property="Canvas.Left" Value="-160" /><Setter Property="Canvas.Top" Value="-260" /></KeyFrame>
+          <KeyFrame Cue="100%"><Setter Property="Canvas.Left" Value="20" /><Setter Property="Canvas.Top" Value="-140" /></KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+    <Style Selector="Panel#Root.animated Ellipse#BlobCyan">
+      <Style.Animations>
+        <Animation Duration="0:0:26" IterationCount="Infinite" PlaybackDirection="Alternate" Easing="SineEaseInOut">
+          <KeyFrame Cue="0%"><Setter Property="Canvas.Left" Value="760" /><Setter Property="Canvas.Top" Value="380" /></KeyFrame>
+          <KeyFrame Cue="100%"><Setter Property="Canvas.Left" Value="540" /><Setter Property="Canvas.Top" Value="290" /></KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+    <Style Selector="Panel#Root.animated Ellipse#BlobPink">
+      <Style.Animations>
+        <Animation Duration="0:0:30" IterationCount="Infinite" PlaybackDirection="Alternate" Easing="SineEaseInOut">
+          <KeyFrame Cue="0%"><Setter Property="Canvas.Left" Value="820" /><Setter Property="Canvas.Top" Value="-240" /></KeyFrame>
+          <KeyFrame Cue="100%"><Setter Property="Canvas.Left" Value="660" /><Setter Property="Canvas.Top" Value="-100" /></KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+    <Style Selector="Panel#Root.animated Ellipse#BlobBlue">
+      <Style.Animations>
+        <Animation Duration="0:0:24" IterationCount="Infinite" PlaybackDirection="Alternate" Easing="SineEaseInOut">
+          <KeyFrame Cue="0%"><Setter Property="Canvas.Left" Value="120" /><Setter Property="Canvas.Top" Value="480" /></KeyFrame>
+          <KeyFrame Cue="100%"><Setter Property="Canvas.Left" Value="320" /><Setter Property="Canvas.Top" Value="340" /></KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+  </Window.Styles>
+
+  <Panel Name="Root">
+    <!-- Deep base gradient. Partly see-through when Windows provides acrylic behind the window. -->
+    <Border Name="BaseLayer">
+      <Border.Background>
+        <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+          <GradientStop Offset="0" Color="#0E0B24" />
+          <GradientStop Offset="0.55" Color="#120E2C" />
+          <GradientStop Offset="1" Color="#081A2E" />
+        </LinearGradientBrush>
+      </Border.Background>
+    </Border>
+
+    <!-- Soft colour blobs. Radial gradients are already soft, so no blur effect is needed. -->
+    <Canvas IsHitTestVisible="False" ClipToBounds="True">
+      <Ellipse Name="BlobViolet" Width="760" Height="760" Canvas.Left="-160" Canvas.Top="-260">
+        <Ellipse.Fill>
+          <RadialGradientBrush>
+            <GradientStop Offset="0" Color="#B88B5CF6" />
+            <GradientStop Offset="0.55" Color="#408B5CF6" />
+            <GradientStop Offset="1" Color="#008B5CF6" />
+          </RadialGradientBrush>
+        </Ellipse.Fill>
+      </Ellipse>
+      <Ellipse Name="BlobCyan" Width="720" Height="720" Canvas.Left="760" Canvas.Top="380">
+        <Ellipse.Fill>
+          <RadialGradientBrush>
+            <GradientStop Offset="0" Color="#9922C8EE" />
+            <GradientStop Offset="0.55" Color="#3322C8EE" />
+            <GradientStop Offset="1" Color="#0022C8EE" />
+          </RadialGradientBrush>
+        </Ellipse.Fill>
+      </Ellipse>
+      <Ellipse Name="BlobPink" Width="620" Height="620" Canvas.Left="820" Canvas.Top="-240">
+        <Ellipse.Fill>
+          <RadialGradientBrush>
+            <GradientStop Offset="0" Color="#A0FF4FA3" />
+            <GradientStop Offset="0.55" Color="#30FF4FA3" />
+            <GradientStop Offset="1" Color="#00FF4FA3" />
+          </RadialGradientBrush>
+        </Ellipse.Fill>
+      </Ellipse>
+      <Ellipse Name="BlobBlue" Width="680" Height="680" Canvas.Left="120" Canvas.Top="480">
+        <Ellipse.Fill>
+          <RadialGradientBrush>
+            <GradientStop Offset="0" Color="#902F6BFF" />
+            <GradientStop Offset="0.55" Color="#302F6BFF" />
+            <GradientStop Offset="1" Color="#002F6BFF" />
+          </RadialGradientBrush>
+        </Ellipse.Fill>
+      </Ellipse>
+    </Canvas>
+
+    <Grid ColumnDefinitions="252,*">
+      <!-- Sidebar -->
+      <Border Classes="glass" Margin="14,14,0,14" Padding="14,18,14,14" CornerRadius="28">
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="12" Margin="6,2,0,26"
+                      IsHitTestVisible="False">
+            <Border Width="38" Height="38" CornerRadius="12" Background="{StaticResource AccentGradient}"
+                    BoxShadow="{StaticResource AccentGlow}">
+              <PathIcon Data="{StaticResource IconPlay}" Width="16" Height="16" Foreground="White" Margin="2,0,0,0" />
+            </Border>
+            <StackPanel VerticalAlignment="Center">
+              <TextBlock Text="Clip Engine" FontSize="17" FontWeight="Bold" LetterSpacing="-0.3" />
+              <TextBlock Text="{Binding Version}" Classes="caption" />
+            </StackPanel>
+          </StackPanel>
+
+          <!-- Engine status, always visible -->
+          <Border DockPanel.Dock="Bottom" Classes="inset" Padding="14,12" CornerRadius="18">
+            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
+              <Panel Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,10,0">
+                <Ellipse Fill="{Binding StatusBrush}" Classes="liveDot" Classes.pulsing="{Binding IsRecording}" />
+              </Panel>
+              <TextBlock Grid.Column="1" Text="{Binding SidebarStatus}" FontWeight="SemiBold" FontSize="13" />
+              <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SaveHint}" Classes="caption" Margin="0,3,0,0"
+                         TextTrimming="CharacterEllipsis" />
+            </Grid>
+          </Border>
+
+          <ListBox Classes="nav" ItemsSource="{Binding Nav}" SelectedItem="{Binding SelectedNav}">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:NavItem">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                  <Border Classes="navGlyph" Width="32" Height="32" CornerRadius="10">
+                    <PathIcon Data="{Binding Icon}" Width="17" Height="17"
+                              Foreground="{Binding $parent[ListBoxItem].Foreground}" />
+                  </Border>
+                  <TextBlock Text="{Binding Title}" VerticalAlignment="Center" FontSize="14" FontWeight="SemiBold"
+                             Foreground="{Binding $parent[ListBoxItem].Foreground}" />
+                </StackPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </DockPanel>
+      </Border>
+
+      <TransitioningContentControl Grid.Column="1" Content="{Binding CurrentPage}" Margin="0,44,0,0">
+        <TransitioningContentControl.PageTransition>
+          <CrossFade Duration="0:0:0.18" />
+        </TransitioningContentControl.PageTransition>
+      </TransitioningContentControl>
+    </Grid>
+
+    <!-- Toast -->
+    <Border Classes="glass soft" IsVisible="{Binding HasToast}" HorizontalAlignment="Center" VerticalAlignment="Bottom"
+            Margin="252,0,0,28" Padding="18,12" CornerRadius="18" Background="#E61B1836">
+      <StackPanel Orientation="Horizontal" Spacing="10">
+        <Border Width="24" Height="24" CornerRadius="8" Background="{StaticResource AccentGradient}"
+                IsVisible="{Binding !ToastIsError}">
+          <PathIcon Data="{StaticResource IconCheck}" Width="13" Height="13" Foreground="White" />
+        </Border>
+        <Border Width="24" Height="24" CornerRadius="8" Background="{StaticResource RecordGradient}"
+                IsVisible="{Binding ToastIsError}">
+          <PathIcon Data="{StaticResource IconAlert}" Width="13" Height="13" Foreground="White" />
+        </Border>
+        <TextBlock Text="{Binding Toast}" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="14" />
+      </StackPanel>
+    </Border>
+  </Panel>
+</Window>

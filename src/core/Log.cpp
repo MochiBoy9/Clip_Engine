@@ -36,7 +36,10 @@ void Write(Level level, std::string_view message) {
                                        t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond,
                                        t.wMilliseconds, LevelName(level), message);
   std::lock_guard lock(g_mutex);
-  std::fputs(line.c_str(), level == Level::Info ? stdout : stderr);
+  FILE* out = level == Level::Info ? stdout : stderr;
+  std::fputs(line.c_str(), out);
+  // The desktop app reads these lines through a pipe, where stdout would otherwise be buffered.
+  std::fflush(out);
   if (g_file) {
     g_file << line;
     g_file.flush();

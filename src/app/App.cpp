@@ -11,6 +11,10 @@ namespace clip {
 namespace {
 
 constexpr int kSaveHotkeyId = 1;
+
+// The desktop app signals these to save a clip or to shut down cleanly.
+constexpr wchar_t kSaveEventName[] = L"Local\\ClipEngine.SaveClip";
+constexpr wchar_t kQuitEventName[] = L"Local\\ClipEngine.Quit";
 constexpr int64_t kPollInterval = 2 * kHnsPerSecond;
 constexpr int64_t kRetryDelay = 10 * kHnsPerSecond;
 
@@ -49,18 +53,31 @@ int App::Run() {
   for (const auto& game : BuiltInGames()) supported += (supported.empty() ? "" : ", ") + game.name;
   log::Info("Waiting for a supported game: {}", supported);
 
+  const HANDLE events[] = {CreateEventW(nullptr, FALSE, FALSE, kSaveEventName),
+                           CreateEventW(nullptr, FALSE, FALSE, kQuitEventName)};
+  const bool haveEvents = events[0] && events[1];
+  if (!haveEvents) log::Warn("Couldn't create the events the desktop app uses; only the hotkey will save clips");
+
+  auto shutDown = [&] {
+    log::Info("Shutting down");
+    UnregisterHotKey(nullptr, kSaveHotkeyId);
+    StopSession();
+    for (auto& save : saves_) save.wait();
+    for (HANDLE event : events) {
+      if (event) CloseHandle(event);
+    }
+    return 0;
+  };
+
   int64_t nextPoll = 0;
   while (true) {
-    MsgWaitForMultipleObjects(0, nullptr, FALSE, 500, QS_ALLINPUT);
+    const DWORD wait = MsgWaitForMultipleObjects(haveEvents ? 2 : 0, haveEvents ? events : nullptr, FALSE, 500,
+                                                 QS_ALLINPUT);
+    if (haveEvents && wait == WAIT_OBJECT_0) SaveClip();
+    if (haveEvents && wait == WAIT_OBJECT_0 + 1) return shutDown();
     MSG msg;
     while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
-      if (msg.message == WM_QUIT) {
-        log::Info("Shutting down");
-        UnregisterHotKey(nullptr, kSaveHotkeyId);
-        StopSession();
-        for (auto& save : saves_) save.wait();
-        return 0;
-      }
+      if (msg.message == WM_QUIT) return shutDown();
       if (msg.message == WM_HOTKEY && msg.wParam == kSaveHotkeyId) SaveClip();
       TranslateMessage(&msg);
       DispatchMessageW(&msg);
