@@ -1,0 +1,44 @@
+name: Release
+
+# Run from the Actions tab (or push a v* tag) to publish the version in CMakeLists.txt as a GitHub release.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: Clip_Engine-${{ needs.build.outputs.version }}-windows-x64
+          path: Clip_Engine
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: screenshots
+          path: screenshots
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          zip -r "Clip_Engine-$VERSION-windows-x64.zip" Clip_Engine
+          tag="v$VERSION"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; bump the version in CMakeLists.txt first." >&2
+            exit 1
+          fi
+          gh release create "$tag" "Clip_Engine-$VERSION-windows-x64.zip" screenshots/*.png \
+            --target "$GITHUB_SHA" --title "Clip Engine $VERSION" --notes-file .github/release-notes.md

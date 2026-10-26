@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>ClipEngine</AssemblyName>
+    <RootNamespace>ClipEngine.Desktop</RootNamespace>
+    <Version>0.2.0</Version>
+    <Product>Clip Engine</Product>
+    <Copyright>Copyright (c) 2026 MochiBoy9. All rights reserved.</Copyright>
+    <ApplicationIcon>Assets\ClipEngine.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.22" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ClipEngine.Desktop.Preview" />
+    <InternalsVisibleTo Include="ClipEngine.Desktop.Tests" />
+  </ItemGroup>
+
+</Project>

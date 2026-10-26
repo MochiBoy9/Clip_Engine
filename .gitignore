@@ -6,3 +6,8 @@ CMakeUserPresets.json
 *.user
 *.mp4
 *.part
+bin/
+obj/
+*.binlog
+dist/
+screenshots/

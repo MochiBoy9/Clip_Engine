@@ -4,21 +4,61 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_call:
+    outputs:
+      version:
+        value: ${{ jobs.windows.outputs.version }}
 
 jobs:
   windows:
     runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: echo "version=$(sed -nE 's/^project\(ClipEngine VERSION ([0-9.]+).*/\1/p' CMakeLists.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Configure engine
         run: cmake -S . -B build -A x64
 
-      - name: Build
+      - name: Build engine
         run: cmake --build build --config Release --parallel
+
+      - name: Test desktop app
+        run: dotnet test ui/ClipEngine.Desktop.Tests -c Release
+
+      - name: Publish desktop app
+        run: >
+          dotnet publish ui/ClipEngine.Desktop -c Release -r win-x64 --self-contained
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
+          -p:Version=${{ steps.version.outputs.version }} -o dist
+
+      - name: Assemble package
+        shell: pwsh
+        run: |
+          Copy-Item build/Release/clip_engine.exe dist/
+          Copy-Item LICENSE dist/LICENSE.txt
+          Get-ChildItem dist -Filter *.pdb | Remove-Item
+
+      - name: Render screenshots
+        run: dotnet run --project ui/ClipEngine.Desktop.Preview -c Release -- screenshots
 
       - uses: actions/upload-artifact@v4
         with:
-          name: clip_engine-windows-x64
-          path: build/Release/clip_engine.exe
+          name: Clip_Engine-${{ steps.version.outputs.version }}-windows-x64
+          path: dist/
+          retention-days: 14
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: screenshots/
           retention-days: 14

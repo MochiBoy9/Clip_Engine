@@ -1,0 +1,90 @@
+using Avalonia;
+using Avalonia.Headless;
+using Avalonia.Media.Imaging;
+using Avalonia.Threading;
+using ClipEngine.Desktop;
+using ClipEngine.Desktop.Services;
+using ClipEngine.Desktop.ViewModels;
+using ClipEngine.Desktop.Views;
+
+// Usage: ClipEngine.Desktop.Preview <output folder>
+var output = Path.GetFullPath(args.Length > 0 ? args[0] : "screenshots");
+Directory.CreateDirectory(output);
+
+AppBuilder.Configure<App>()
+          .UseSkia()
+          .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+          .WithInterFont()
+          .SetupWithoutStarting();
+
+var vm = new MainViewModel(live: false);
+Sample.Fill(vm);
+
+var window = new MainWindow { DataContext = vm, Width = 1440, Height = 900 };
+window.Show();
+window.ForceAnimated(false);
+
+void Capture(Page page, string name)
+{
+    vm.SelectedNav = vm.Nav.First(n => n.Page == page);
+    // Let layout, bindings and the page cross-fade finish.
+    for (var i = 0; i < 40; i++)
+    {
+        Dispatcher.UIThread.RunJobs();
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+    }
+    var frame = window.CaptureRenderedFrame() ?? throw new InvalidOperationException("Nothing was rendered");
+    var path = Path.Combine(output, name);
+    frame.Save(path);
+    Console.WriteLine(path);
+}
+
+Capture(Page.Home, "1-home.png");
+Capture(Page.Clips, "2-clips.png");
+Capture(Page.Games, "3-games.png");
+Capture(Page.Settings, "4-settings.png");
+
+internal static class Sample
+{
+    public static void Fill(MainViewModel vm)
+    {
+        var now = DateTime.Now;
+        vm.SetSupportedGames(["The Finals", "Overwatch", "Battlefield 6"]);
+
+        var clips = new (string Game, string Thumb, double MinutesAgo, int Seconds, long Mb)[]
+        {
+            ("The Finals", "finals_1", 4, 30, 212),
+            ("The Finals", "finals_2", 26, 30, 198),
+            ("Overwatch", "overwatch_1", 95, 30, 176),
+            ("Battlefield 6", "bf6_1", 170, 45, 301),
+            ("Overwatch", "overwatch_2", 60 * 26, 30, 181),
+            ("Battlefield 6", "bf6_2", 60 * 30, 30, 224),
+        };
+        var files = clips.Select(c =>
+        {
+            var time = now.AddMinutes(-c.MinutesAgo);
+            var name = $"{c.Game}_{time:yyyy-MM-dd_HH-mm-ss}.mp4";
+            return new ClipFile(Path.Combine(@"C:\Users\You\Videos\Clip_Engine", c.Game, name), c.Game, time,
+                                c.Mb * 1024 * 1024, TimeSpan.FromSeconds(c.Seconds));
+        }).ToList();
+        vm.SetClips(files);
+
+        var dir = Path.Combine(AppContext.BaseDirectory, "SampleThumbnails");
+        for (var i = 0; i < clips.Length; i++)
+            vm.Clips[i].Thumbnail = new Bitmap(Path.Combine(dir, clips[i].Thumb + ".png"));
+
+        vm.SimulateEngine(EngineState.Running,
+            new EngineStarted("0.2.0"),
+            new SaveHotkey("F8", 30),
+            new GameDetected("The Finals"),
+            new RecordingStarted("The Finals", 2560, 1440, 165, "HEVC", 60, "NVIDIA HEVC Encoder MFT"));
+
+        vm.Activity.Clear();
+        vm.AddActivity(ActivityKind.Info, "Engine started", now.AddMinutes(-41));
+        vm.AddActivity(ActivityKind.Info, "The Finals detected", now.AddMinutes(-39));
+        vm.AddActivity(ActivityKind.Recording, "Recording The Finals at 2560×1440, 165 fps", now.AddMinutes(-39));
+        vm.AddActivity(ActivityKind.Clip, "Saved a 30 s clip (198.0 MB)", now.AddMinutes(-26));
+        vm.AddActivity(ActivityKind.Clip, "Saved a 30 s clip (212.0 MB)", now.AddMinutes(-4));
+        vm.ShowToast("Clip saved · 30 s · 212.0 MB");
+    }
+}
