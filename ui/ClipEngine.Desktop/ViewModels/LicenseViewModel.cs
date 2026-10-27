@@ -78,7 +78,7 @@ public sealed class LicenseViewModel : ObservableObject, IDisposable
                 Plan.Founder => $"Founder license for life · {_state.DisplayKey}",
                 Plan.Pro when _state.ExpiresAt is { } expires => $"Pro until {expires.LocalDateTime:d MMM yyyy} · {_state.DisplayKey}",
                 Plan.Pro => $"Pro subscription · {_state.DisplayKey}",
-                _ => "Everything you need to record and clip. Pro adds more for those who want it.",
+                _ => "Everything you need to record and clip. A Founder license unlocks the Pro features that run on your PC, for life, with one payment.",
             };
         }
     }

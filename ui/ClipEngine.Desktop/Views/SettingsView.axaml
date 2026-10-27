@@ -306,7 +306,7 @@
                 <TextBlock Classes="caption" Text="{Binding PlanDetail}" TextWrapping="Wrap" />
               </StackPanel>
               <Panel Grid.Column="2" VerticalAlignment="Center">
-                <Button Classes="accent" Content="Get Pro" Command="{Binding GetProCommand}"
+                <Button Classes="accent" Content="Become a Founder" Command="{Binding GetProCommand}"
                         IsVisible="{Binding IsFree}" IsEnabled="{Binding PurchasesOpen}" />
                 <Button Classes="glass" Content="Manage" Command="{Binding ManageCommand}" IsVisible="{Binding IsPaid}" />
               </Panel>
