@@ -15,12 +15,13 @@ internal static class LicenseConfig
     // Settings > General in the Polar dashboard.
     public const string OrganizationId = "";
 
-    // The license key benefit attached to each product (Products > Benefits).
-    public const string ProBenefitId = "";
-    public const string FounderBenefitId = "";
+    // The license key benefit attached to each product (Benefits in the dashboard). Attach the Pro benefit to both the
+    // monthly and the yearly Pro product so either one unlocks Pro.
+    public const string ProBenefitId = "9a541bac-0016-4dd0-b64a-b0a14e9b00c5";
+    public const string FounderBenefitId = "4ac3e8c3-34ee-459d-91fc-10877de707dd";
 
     public const string PricingUrl = "https://clipengine.app/#pricing";
-    public const string ManageUrl = "https://polar.sh/clipengine/portal";
+    public const string ManageUrl = "https://polar.sh/clip-engine/portal";
 
     public const string ApiBase = "https://api.polar.sh/v1/customer-portal/license-keys/";
 
