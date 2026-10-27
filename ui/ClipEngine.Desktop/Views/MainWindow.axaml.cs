@@ -11,6 +11,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        UpdateBaseLayer();
         Activated += (_, _) => UpdateAnimation();
         Deactivated += (_, _) => UpdateAnimation();
         DataContextChanged += (_, _) =>
@@ -26,10 +27,11 @@ public partial class MainWindow : Window
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
+        // Windows reports the transparency level while InitializeComponent is still loading the XAML,
+        // before the named controls exist, so the handlers below have to cope with them being null.
         if (change.Property == ActualTransparencyLevelProperty)
         {
-            // With acrylic behind the window, let some of the desktop show through the base gradient.
-            BaseLayer.Opacity = ActualTransparencyLevel == WindowTransparencyLevel.None ? 1 : 0.84;
+            UpdateBaseLayer();
         }
         else if (change.Property == WindowStateProperty)
         {
@@ -57,8 +59,16 @@ public partial class MainWindow : Window
     }
 
     // The background only moves while you're looking at it, so it costs nothing while you play.
+    private void UpdateBaseLayer()
+    {
+        // With acrylic behind the window, let some of the desktop show through the base gradient.
+        if (BaseLayer is null) return;
+        BaseLayer.Opacity = ActualTransparencyLevel == WindowTransparencyLevel.None ? 1 : 0.84;
+    }
+
     private void UpdateAnimation()
     {
+        if (Root is null) return;
         var enabled = DataContext is MainViewModel vm && vm.Settings.AnimatedBackground;
         Root.Classes.Set("animated", enabled && IsActive && IsVisible && WindowState != WindowState.Minimized);
     }
