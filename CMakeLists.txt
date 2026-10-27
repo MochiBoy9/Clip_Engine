@@ -24,6 +24,7 @@ add_executable(clip_engine
   src/detect/TextMatcher.cpp
   src/game/GameDetector.cpp
   src/media/ClipMetadata.cpp
+  src/media/Exporter.cpp
   src/media/MediaUtil.cpp
   src/media/Mp4Writer.cpp
   src/media/ReplayBuffer.cpp
@@ -61,4 +62,4 @@ add_executable(clip_engine_tests
 )
 target_include_directories(clip_engine_tests PRIVATE src)
 target_compile_options(clip_engine_tests PRIVATE /W4 /permissive- /utf-8 /EHsc)
-add_test(NAME detection COMMAND clip_engine_tests ${CMAKE_SOURCE_DIR}/assets/detection.ini)
+add_test(NAME detection COMMAND clip_engine_tests ${CMAKE_SOURCE_DIR}/assets/detection.ini ${CMAKE_CURRENT_BINARY_DIR})

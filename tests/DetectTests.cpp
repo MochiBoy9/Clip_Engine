@@ -180,6 +180,23 @@ void TestMetadata() {
   CHECK(ToJson(ClipMetadata{}).find(R"("events": [])") != std::string::npos);
 }
 
+void TestMetadataBox(const char* scratch) {
+  const std::string path = std::string(scratch) + "/metadata_test.mp4";
+  {
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    // A minimal 'ftyp' box and an empty 'mdat', like the start of a real file.
+    const char ftyp[] = {0, 0, 0, 16, 'f', 't', 'y', 'p', 'i', 's', 'o', 'm', 0, 0, 2, 0};
+    const char mdat[] = {0, 0, 0, 8, 'm', 'd', 'a', 't'};
+    out.write(ftyp, sizeof(ftyp));
+    out.write(mdat, sizeof(mdat));
+  }
+  CHECK(!ReadMetadataBox(path).has_value());
+  CHECK(AppendMetadataBox(path, R"({"game":"Overwatch"})"));
+  const auto json = ReadMetadataBox(path);
+  CHECK(json.has_value() && *json == R"({"game":"Overwatch"})");
+  std::remove(path.c_str());
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -191,6 +208,7 @@ int main(int argc, char** argv) {
   TestPlanner();
   TestMetadata();
   if (argc > 1) TestShippedRulesParse(argv[1]);
+  if (argc > 2) TestMetadataBox(argv[2]);
   if (g_failures == 0) std::printf("All detection tests passed\n");
   return g_failures == 0 ? 0 : 1;
 }

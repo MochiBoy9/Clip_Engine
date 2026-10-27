@@ -4,11 +4,14 @@
 #include "core/Log.h"
 #include "detect/DetectionRules.h"
 #include "detect/EventDetector.h"
+#include "media/Exporter.h"
 
 #include <mfapi.h>
 #include <shlobj.h>
 
+#include <algorithm>
 #include <fstream>
+#include <string_view>
 
 namespace {
 
@@ -52,8 +55,29 @@ clip::DetectionRules LoadDetectionRules(const std::filesystem::path& dataDir) {
 
 }  // namespace
 
-int wmain() {
+// clip_engine.exe --export <clip.mp4> <out.mp4> [--max-mb 10]
+// Makes a small copy for sharing and exits. Runs alongside a recording engine.
+int RunExportCommand(int argc, wchar_t** argv) {
   using namespace clip;
+  ExportOptions options;
+  options.input = argv[2];
+  options.output = argv[3];
+  for (int i = 4; i + 1 < argc; i += 2) {
+    if (std::wstring_view(argv[i]) == L"--max-mb") options.maxMegabytes = std::clamp(_wtof(argv[i + 1]), 1.0, 4000.0);
+  }
+  winrt::init_apartment(winrt::apartment_type::multi_threaded);
+  if (FAILED(MFStartup(MF_VERSION))) {
+    log::Error("Export failed: Media Foundation is unavailable");
+    return 1;
+  }
+  const int result = RunExport(options);
+  MFShutdown();
+  return result;
+}
+
+int wmain(int argc, wchar_t** argv) {
+  using namespace clip;
+  if (argc >= 4 && std::wstring_view(argv[1]) == L"--export") return RunExportCommand(argc, argv);
 
   // One copy at a time; two would fight over the hotkey and the GPU encoder.
   HANDLE instance = CreateMutexW(nullptr, TRUE, L"Local\\ClipEngine.SingleInstance");

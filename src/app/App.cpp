@@ -232,9 +232,13 @@ bool App::SaveRange(int64_t start, int64_t end, const char* trigger) {
     try {
       std::filesystem::create_directories(path.parent_path());
       WriteMp4(partial, clip);
+      // The markers go both inside the file, so they travel with it when shared, and next to
+      // it, so the app can read them without opening every video.
+      const std::string json = ToJson(metadata);
+      AppendMetadataBox(partial, json);
       auto sidecar = path;
       sidecar.replace_extension(L".json");
-      std::ofstream(sidecar, std::ios::binary) << ToJson(metadata);
+      std::ofstream(sidecar, std::ios::binary) << json;
       std::filesystem::rename(partial, path);
       const double mb = static_cast<double>(std::filesystem::file_size(path)) / (1024.0 * 1024.0);
       const std::string summary = Summarize(metadata.markers);
