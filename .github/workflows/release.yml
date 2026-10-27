@@ -42,3 +42,16 @@ jobs:
           fi
           gh release create "$tag" "Clip_Engine-$VERSION-windows-x64.zip" screenshots/*.png \
             --target "$GITHUB_SHA" --title "Clip Engine $VERSION" --notes-file .github/release-notes.md
+
+      # The source repository is private, so its releases can't be downloaded by players. When the repository variable
+      # DOWNLOADS_REPO (e.g. MochiBoy9/Clip_Engine-downloads, a public repository) and the secret DOWNLOADS_TOKEN (a
+      # fine-grained token with Contents: read and write on that repository) are set, the zip is published there too.
+      - name: Publish to the public downloads repository
+        if: vars.DOWNLOADS_REPO != ''
+        env:
+          GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN }}
+          VERSION: ${{ needs.build.outputs.version }}
+          REPO: ${{ vars.DOWNLOADS_REPO }}
+        run: |
+          gh release create "v$VERSION" "Clip_Engine-$VERSION-windows-x64.zip" --repo "$REPO" \
+            --title "Clip Engine $VERSION" --notes-file .github/release-notes.md

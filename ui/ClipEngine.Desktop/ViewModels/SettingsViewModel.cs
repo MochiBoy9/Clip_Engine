@@ -55,6 +55,9 @@ public sealed class SettingsViewModel : ObservableObject
     public RelayCommand SaveCommand { get; }
     public RelayCommand RevertCommand { get; }
 
+    // The plan card at the top of the right column.
+    public LicenseViewModel? License { get; init; }
+
     public event Action<bool>? AnimatedBackgroundChanged;
     public event Action<string>? SidePanelHotkeyChanged;
 
