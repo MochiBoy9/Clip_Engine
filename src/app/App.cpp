@@ -2,6 +2,7 @@
 
 #include "core/Clock.h"
 #include "core/Log.h"
+#include "integrations/IntegrationSetup.h"
 #include "media/ClipMetadata.h"
 #include "media/Mp4Writer.h"
 
