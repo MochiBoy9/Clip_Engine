@@ -28,6 +28,7 @@ add_executable(clip_engine
   src/media/MediaUtil.cpp
   src/media/Mp4Writer.cpp
   src/media/ReplayBuffer.cpp
+  src/media/Trimmer.cpp
   src/video/Nv12Converter.cpp
   src/video/VideoEncoder.cpp
 )

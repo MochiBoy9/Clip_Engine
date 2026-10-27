@@ -15,7 +15,10 @@ Proprietary software. All rights reserved; see [LICENSE](LICENSE).
 - A desktop app (`ClipEngine.exe`) with a liquid-glass look: live recording status, a Save clip button, a clip gallery with thumbnails, the supported games and all the settings. It runs the engine for you and keeps recording from the tray.
 - A clip player in the app with the detected moments on the timeline.
 - Share to Discord: a copy that fits the upload limit, put on the clipboard. Clips friends send can be dropped on the window to import them, moments included.
-- A side panel (Alt+Shift+C) on the edge of the screen, over the game.
+- A side panel (Alt+Shift+C) on the edge of the screen, over the game. It and the "Clip saved" notice are left out of recordings.
+- Trim a clip in the player (drag the handles, or I and O) and save that part as a new clip, instantly and at full quality.
+- Clips grouped by match: each match's result, kills, assists, deaths and revives, every moment on one colored ribbon, and its best clips.
+- Star clips as favorites, and optionally have old clips cleaned up by age or by a size limit. Favorites are always kept.
 
 ![Home screen](docs/screenshots/1-home.png)
 
@@ -54,6 +57,7 @@ Run `ClipEngine.exe` and launch a supported game. `clip_engine.exe` can also run
 - Clips: `Videos\Clip_Engine\<Game>\`
 - Detection rules: `detection.ini` next to the app. Copy it to `%LOCALAPPDATA%\Clip_Engine\` to tune it; that copy wins. With `detection_debug = true` in the settings, the log shows what the engine reads from each screen region, which is how rules are tuned.
 - `clip_engine.exe --export <clip.mp4> <out.mp4> --max-mb 10` makes a small copy for sharing.
+- `clip_engine.exe --trim <clip.mp4> <out.mp4> --start 4.5 --end 20` copies part of a clip without re-encoding, starting on the keyframe at or before the start (at most a second early).
 
 ## Layout
 
@@ -63,7 +67,7 @@ Run `ClipEngine.exe` and launch a supported game. `clip_engine.exe` can also run
 | `src/capture` | GPU device and monitor capture |
 | `src/video` | BGRA to NV12 conversion and the hardware encoder |
 | `src/audio` | WASAPI game/mic capture and AAC encoding |
-| `src/media` | Replay buffer, MP4 writing, clip metadata and the share export |
+| `src/media` | Replay buffer, MP4 writing, clip metadata, trimming and the share export |
 | `src/detect` | Reading the HUD for kills and other moments, and the rules for each game |
 | `src/game` | Supported games and detection of running games |
 | `src/core` | Settings, logging, clock |
@@ -71,4 +75,4 @@ Run `ClipEngine.exe` and launch a supported game. `clip_engine.exe` can also run
 | `tests` | Tests for the detection rules, matching and clip metadata |
 | `ui/ClipEngine.Desktop` | The desktop app (C#, Avalonia) |
 | `ui/ClipEngine.Desktop.Preview` | Renders the app's screens to PNGs with sample data |
-| `ui/ClipEngine.Desktop.Tests` | Tests for the app's log parsing, settings file, MP4 reading, clip markers and import |
+| `ui/ClipEngine.Desktop.Tests` | Tests for the app's log parsing, settings file, MP4 reading, clip markers, match grouping and storage cleanup |

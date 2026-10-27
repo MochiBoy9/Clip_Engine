@@ -22,7 +22,17 @@ internal sealed class ClipMetadata
     [JsonPropertyName("title")] public string Title { get; set; } = "";
     [JsonPropertyName("events")] public List<ClipEvent> Events { get; set; } = [];
 
+    // The recording the clip came from (when it started), where the clip starts in it, and
+    // which match of that recording it belongs to (0 when no match start was detected).
+    [JsonPropertyName("session")] public string Session { get; set; } = "";
+    [JsonPropertyName("session_seconds")] public double SessionSeconds { get; set; } = -1;
+    [JsonPropertyName("match")] public int Match { get; set; }
+
+    // Starred in the app. Favorites are never removed by the storage cleanup.
+    [JsonPropertyName("favorite")] public bool Favorite { get; set; }
+
     public bool IsAutomatic => Trigger == "auto";
+    public bool HasSession => Session.Length > 0 && SessionSeconds >= 0;
 }
 
 [JsonSerializable(typeof(ClipMetadata))]

@@ -19,6 +19,17 @@ internal sealed class DesktopSettings
     // The clip player's volume, 0 to 100.
     public int PlayerVolume { get; set; } = 80;
 
+    // Storage cleanup: delete clips older than this many days, and the oldest clips once the
+    // library is over this many GB. 0 turns a rule off; both are off until the user picks one.
+    public int DeleteAfterDays { get; set; }
+    public int MaxLibraryGb { get; set; }
+
+    // A small "Clip saved" notice over the game.
+    public bool GameNotifications { get; set; } = true;
+
+    // Clips page: show matches instead of single clips.
+    public bool ShowMatches { get; set; }
+
     // Folders clips shared with you were imported into, shown in the library too.
     public List<string> ImportFolders { get; set; } = [];
 

@@ -330,6 +330,41 @@
               <TextBox Text="{Binding OutputDir}" Watermark="{Binding OutputDirShown}" />
               <Button Grid.Column="1" Classes="glass" Content="Browse" Margin="10,0,0,0" Click="OnBrowse" />
             </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16,0,14" />
+            <Grid ColumnDefinitions="*,Auto">
+              <StackPanel VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Delete old clips" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="Starred clips are always kept." TextWrapping="Wrap" />
+              </StackPanel>
+              <Border Grid.Column="1" Classes="inset" Padding="3" CornerRadius="13" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="2">
+                  <RadioButton Classes="segment" GroupName="keep" Content="Never" IsChecked="{Binding KeepForever}" />
+                  <RadioButton Classes="segment" GroupName="keep" Content="7 days" IsChecked="{Binding Keep7Days}" />
+                  <RadioButton Classes="segment" GroupName="keep" Content="30 days" IsChecked="{Binding Keep30Days}" />
+                  <RadioButton Classes="segment" GroupName="keep" Content="90 days" IsChecked="{Binding Keep90Days}" />
+                </StackPanel>
+              </Border>
+            </Grid>
+            <Grid ColumnDefinitions="*,Auto" Margin="0,14,0,0">
+              <StackPanel VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Size limit" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="Removes the oldest clips once the folder is bigger." TextWrapping="Wrap" />
+              </StackPanel>
+              <Border Grid.Column="1" Classes="inset" Padding="3" CornerRadius="13" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="2">
+                  <RadioButton Classes="segment" GroupName="limit" Content="None" IsChecked="{Binding NoSizeLimit}" />
+                  <RadioButton Classes="segment" GroupName="limit" Content="50 GB" IsChecked="{Binding Limit50Gb}" />
+                  <RadioButton Classes="segment" GroupName="limit" Content="100 GB" IsChecked="{Binding Limit100Gb}" />
+                  <RadioButton Classes="segment" GroupName="limit" Content="250 GB" IsChecked="{Binding Limit250Gb}" />
+                </StackPanel>
+              </Border>
+            </Grid>
+            <Grid ColumnDefinitions="*,Auto" Margin="0,14,0,0" IsVisible="{Binding HasCleanupPreview}">
+              <TextBlock Classes="caption" Text="{Binding CleanupPreview}" TextWrapping="Wrap" VerticalAlignment="Center"
+                         Margin="0,0,16,0" />
+              <Button Grid.Column="1" Classes="glass" Content="Clean up now" Command="{Binding CleanUpNowCommand}"
+                      ToolTip.Tip="Run the cleanup now instead of waiting" />
+            </Grid>
           </StackPanel>
         </Border>
         <Border Classes="glass" Padding="22" Margin="0,0,0,18">
@@ -368,6 +403,25 @@
               </StackPanel>
               <Panel Grid.Column="2" VerticalAlignment="Center">
                 <ToggleSwitch IsChecked="{Binding AnimatedBackground}" OnContent="{x:Null}" OffContent="{x:Null}" />
+              </Panel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,14" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Width="36" Height="36" CornerRadius="11" VerticalAlignment="Center" Margin="0,0,14,0">
+                <Border.Background>
+                  <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                    <GradientStop Offset="0" Color="#FFC24B" /><GradientStop Offset="1" Color="#FF5E9C" />
+                  </LinearGradientBrush>
+                </Border.Background>
+                <PathIcon Data="{StaticResource IconCheck}" Width="16" Height="16" Foreground="White" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Notice over the game" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="A small &quot;Clip saved&quot; in the corner while you play. It never shows up in your clips."
+                           TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <ToggleSwitch IsChecked="{Binding GameNotifications}" OnContent="{x:Null}" OffContent="{x:Null}" />
               </Panel>
             </Grid>
           </StackPanel>

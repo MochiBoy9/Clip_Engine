@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace clip {
@@ -22,9 +23,24 @@ struct ClipMetadata {
   std::string trigger;  // "hotkey" or "auto"
   double seconds = 0;
   std::vector<Marker> markers;
+
+  // Which recording and match the clip came from, so the app can group clips by match.
+  // session is when the recording started ("2026-10-27T20:41:05"); sessionSeconds is where the
+  // clip starts within it, which lines up clips that overlap. match counts the match starts
+  // detected so far in the session (0 before the first, or in games without match detection).
+  std::string session;
+  double sessionSeconds = -1;
+  int match = 0;
 };
 
 std::string ToJson(const ClipMetadata& metadata);
+
+// Reads JSON written by ToJson or by the desktop app. Unknown fields are skipped.
+std::optional<ClipMetadata> ParseMetadataJson(std::string_view json);
+
+// The part of a clip from `from` to `to` seconds: markers outside it are dropped and the rest
+// move so they count from the new start.
+ClipMetadata Trimmed(const ClipMetadata& metadata, double from, double to);
 
 // "3 kills, 1 assist", or empty when there are no markers.
 std::string Summarize(const std::vector<ClipMetadata::Marker>& markers);
@@ -34,5 +50,8 @@ std::string Summarize(const std::vector<ClipMetadata::Marker>& markers);
 // know. Must match ClipEngine.Desktop/Services/ClipMetadataFile.cs.
 bool AppendMetadataBox(const std::filesystem::path& mp4, const std::string& json);
 std::optional<std::string> ReadMetadataBox(const std::filesystem::path& mp4);
+
+// The clip's metadata JSON, from the .json next to it or else from inside the file.
+std::optional<std::string> ReadClipMetadataJson(const std::filesystem::path& mp4);
 
 }  // namespace clip

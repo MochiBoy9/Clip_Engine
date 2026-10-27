@@ -97,4 +97,27 @@ public class ClipMetadataTests : IDisposable
         stream.Write(header);
         stream.Write(body);
     }
+
+    [Fact]
+    public void ReadsMatchTagsAndKeepsFavoritesInTheSidecar()
+    {
+        const string json = """
+            { "version": 2, "game": "Overwatch", "trigger": "auto", "seconds": 15.00,
+              "session": "2026-10-27T20:41:05", "session_seconds": 812.50, "match": 3,
+              "title": "", "events": [] }
+            """;
+        var m = ClipMetadataFile.Parse(json);
+        Assert.NotNull(m);
+        Assert.Equal(("2026-10-27T20:41:05", 812.5, 3), (m.Session, m.SessionSeconds, m.Match));
+        Assert.True(m.HasSession);
+        Assert.False(m.Favorite);
+        Assert.False(ClipMetadataFile.Parse(Json)!.HasSession);
+
+        var clip = Path.Combine(_dir, "clip.mp4");
+        m.Favorite = true;
+        ClipMetadataFile.WriteSidecar(clip, m);
+        var back = ClipMetadataFile.ReadSidecar(clip);
+        Assert.True(back?.Favorite);
+        Assert.Equal(3, back?.Match);
+    }
 }

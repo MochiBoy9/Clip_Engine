@@ -31,6 +31,13 @@ BOOL WINAPI OnConsoleClose(DWORD) {
   return TRUE;
 }
 
+// "2026-10-27T20:41:05", in local time.
+std::string LocalTimestamp() {
+  SYSTEMTIME t;
+  GetLocalTime(&t);
+  return std::format("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}", t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond);
+}
+
 // Folder and file names can't contain these characters.
 std::string SafeFileName(std::string name) {
   std::ranges::replace_if(name, [](char c) { return std::string_view("<>:\"/\\|?*").find(c) != std::string_view::npos; }, '_');
@@ -140,6 +147,9 @@ void App::Poll() {
     try {
       session_ = std::make_unique<RecordingSession>(config_, monitor, label, std::move(rules), rules_.sampleMs);
       sessionGameId_ = gameId;
+      sessionId_ = LocalTimestamp();
+      sessionStart_ = NowHns();
+      matchStarts_.clear();
     } catch (const winrt::hresult_error& e) {
       log::Error("Couldn't start recording {}: {}. Trying again in 10 seconds.", label, Describe(e));
       session_.reset();
@@ -162,6 +172,7 @@ void App::HandleEvents() {
   if (!session_) return;
   for (const auto& event : session_->TakeNewEvents()) {
     log::Info("Detected {} in {}: {}", EventName(event.type), session_->Label(), event.text);
+    if (event.type == EventType::MatchStart) matchStarts_.push_back(event.time);
     if (config_.autoClip && config_.autoClipEvents.contains(event.type)) planner_.Add(event.time);
   }
 }
@@ -217,6 +228,11 @@ bool App::SaveRange(int64_t start, int64_t end, const char* trigger) {
   metadata.game = session_->Label();
   metadata.trigger = trigger;
   metadata.seconds = static_cast<double>(clip->packets.back()->pts - clip->start) / kHnsPerSecond;
+  metadata.session = sessionId_;
+  metadata.sessionSeconds = static_cast<double>(clip->start - sessionStart_) / kHnsPerSecond;
+  // A clip belongs to the last match that had started by its end, so a clip of the match
+  // start itself counts toward the new match.
+  metadata.match = static_cast<int>(std::ranges::count_if(matchStarts_, [&](int64_t t) { return t <= end; }));
   for (const auto& event : session_->EventsBetween(clip->start, end)) {
     metadata.markers.push_back({event.type, static_cast<double>(event.time - clip->start) / kHnsPerSecond, event.text});
   }

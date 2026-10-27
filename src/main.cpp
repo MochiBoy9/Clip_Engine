@@ -5,6 +5,7 @@
 #include "detect/DetectionRules.h"
 #include "detect/EventDetector.h"
 #include "media/Exporter.h"
+#include "media/Trimmer.h"
 
 #include <mfapi.h>
 #include <shlobj.h>
@@ -75,9 +76,32 @@ int RunExportCommand(int argc, wchar_t** argv) {
   return result;
 }
 
+// clip_engine.exe --trim <clip.mp4> <out.mp4> --start <seconds> --end <seconds>
+// Copies part of a clip without re-encoding and exits.
+int RunTrimCommand(int argc, wchar_t** argv) {
+  using namespace clip;
+  TrimOptions options;
+  options.input = argv[2];
+  options.output = argv[3];
+  for (int i = 4; i + 1 < argc; i += 2) {
+    const std::wstring_view flag = argv[i];
+    if (flag == L"--start") options.startSeconds = _wtof(argv[i + 1]);
+    if (flag == L"--end") options.endSeconds = _wtof(argv[i + 1]);
+  }
+  winrt::init_apartment(winrt::apartment_type::multi_threaded);
+  if (FAILED(MFStartup(MF_VERSION))) {
+    log::Error("Trim failed: Media Foundation is unavailable");
+    return 1;
+  }
+  const int result = RunTrim(options);
+  MFShutdown();
+  return result;
+}
+
 int wmain(int argc, wchar_t** argv) {
   using namespace clip;
   if (argc >= 4 && std::wstring_view(argv[1]) == L"--export") return RunExportCommand(argc, argv);
+  if (argc >= 4 && std::wstring_view(argv[1]) == L"--trim") return RunTrimCommand(argc, argv);
 
   // One copy at a time; two would fight over the hotkey and the GPU encoder.
   HANDLE instance = CreateMutexW(nullptr, TRUE, L"Local\\ClipEngine.SingleInstance");

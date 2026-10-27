@@ -26,23 +26,43 @@ public sealed class ActivityItem(DateTime time, ActivityKind kind, string text)
 public sealed class ClipItemViewModel : ObservableObject
 {
     private Bitmap? _thumbnail;
+    private ClipFile _file;
 
     internal ClipItemViewModel(ClipFile file, int paletteIndex, MainViewModel? owner = null)
     {
-        File = file;
+        _file = file;
         Placeholder = Palettes.Gradient(paletteIndex);
         OpenCommand = new RelayCommand(() => owner?.OpenClipCommand.Execute(this));
         ShowCommand = new RelayCommand(() => owner?.ShowClipCommand.Execute(this));
         DeleteCommand = new RelayCommand(() => owner?.DeleteClipCommand.Execute(this));
         ShareCommand = new RelayCommand(() => owner?.ShareClipCommand.Execute(this));
+        FavoriteCommand = new RelayCommand(() => owner?.FavoriteClipCommand.Execute(this));
     }
 
     public RelayCommand OpenCommand { get; }
     public RelayCommand ShowCommand { get; }
     public RelayCommand DeleteCommand { get; }
     public RelayCommand ShareCommand { get; }
+    public RelayCommand FavoriteCommand { get; }
 
-    internal ClipFile File { get; }
+    internal ClipFile File
+    {
+        get => _file;
+        set
+        {
+            if (!Set(ref _file, value)) return;
+            Raise(nameof(IsFavorite));
+            Raise(nameof(FavoriteTip));
+        }
+    }
+
+    // Starred clips sort into Favorites and are never removed by the storage cleanup.
+    public bool IsFavorite => File.Metadata?.Favorite == true;
+    public string FavoriteTip => IsFavorite ? "Remove from favorites" : "Add to favorites (kept forever)";
+
+    // The clip's moments along its length, for the strip under the thumbnail.
+    public IReadOnlyList<RibbonTick> Ribbon => RibbonTick.For(Events, File.Duration?.TotalSeconds ?? File.Metadata?.Seconds ?? 0);
+    public bool HasRibbon => Events.Count > 0;
     public string Path => File.Path;
     public string Game => File.Game;
     public string Title => System.IO.Path.GetFileNameWithoutExtension(File.Path).Replace('_', ' ');
@@ -70,6 +90,13 @@ public sealed class ClipItemViewModel : ObservableObject
     }
 
     public bool HasThumbnail => _thumbnail is not null;
+}
+
+// One moment on an event ribbon, as a fraction of the way along.
+public sealed record RibbonTick(double Fraction, IBrush Brush)
+{
+    internal static IReadOnlyList<RibbonTick> For(IEnumerable<ClipEvent> events, double seconds) =>
+        seconds > 0 ? events.Select(e => new RibbonTick(e.Time / seconds, EventKinds.Brush(e.Type))).ToList() : [];
 }
 
 // A detected moment on the player's timeline.

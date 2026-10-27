@@ -206,6 +206,11 @@
   <Style Selector="Button.glass:pressed /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{StaticResource GlassFill}" />
   </Style>
+  <!-- A glass button whose mode is on, like Trim while trimming -->
+  <Style Selector="Button.glass.active /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#33FFC24B" />
+    <Setter Property="BorderBrush" Value="#99FFC24B" />
+  </Style>
 
   <Style Selector="Button.icon">
     <Setter Property="Background" Value="#26000000" />

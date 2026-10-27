@@ -17,6 +17,7 @@ public partial class App : Application
     private MainViewModel? _viewModel;
     private MainWindow? _window;
     private SidePanelWindow? _sidePanel;
+    private GameNoticeWindow? _notice;
     private IDisposable? _hotkey;
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
@@ -32,6 +33,7 @@ public partial class App : Application
             _viewModel.Dialogs = _window;
             _viewModel.ShowMainWindowRequested += ShowWindow;
             _viewModel.SidePanelToggleRequested += ToggleSidePanel;
+            _viewModel.GameNoticeRequested += ShowGameNotice;
             _viewModel.Settings.SidePanelHotkeyChanged += RegisterHotkey;
             _window.Show();
             RegisterHotkey(_viewModel.DesktopSettings.SidePanelHotkey);
@@ -83,6 +85,16 @@ public partial class App : Application
         var screen = _window is { IsVisible: true } ? _window.Screens.ScreenFromWindow(_window) : null;
         _sidePanel.Dock(_viewModel.DesktopSettings.SidePanelEdge, screen);
         _sidePanel.Show();
+        // It sits over the game, so keep it out of the clips the engine records.
+        if (OperatingSystem.IsWindows()) Win32.KeepOutOfCaptures(_sidePanel.TryGetPlatformHandle()?.Handle ?? 0);
+    }
+
+    // Only while playing: when Clip Engine's own window is in front, its toast says the same thing.
+    private void ShowGameNotice(string text)
+    {
+        if (_window is { IsActive: true }) return;
+        _notice ??= new GameNoticeWindow();
+        _notice.Show(text);
     }
 
     private void ShowWindow()
@@ -108,6 +120,7 @@ public partial class App : Application
         if (_viewModel is not null) await _viewModel.StopEngineAsync();
         _window?.AllowClose();
         _sidePanel?.Close();
+        _notice?.Close();
         (ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.Shutdown();
     }
 }

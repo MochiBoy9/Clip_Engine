@@ -7,7 +7,8 @@ using ClipEngine.Desktop.ViewModels;
 namespace ClipEngine.Desktop.Views;
 
 // The player's seek bar: the played part, a tick for every detected moment, and the playhead.
-// Click or drag anywhere to seek.
+// Click or drag anywhere to seek. While trimming it also shows the part being kept, with a
+// handle at each end to drag.
 internal sealed class MarkerTimeline : Control
 {
     public static readonly StyledProperty<double> PositionProperty =
@@ -20,7 +21,21 @@ internal sealed class MarkerTimeline : Control
     public static readonly StyledProperty<IReadOnlyList<MarkerViewModel>?> MarkersProperty =
         AvaloniaProperty.Register<MarkerTimeline, IReadOnlyList<MarkerViewModel>?>(nameof(Markers));
 
+    public static readonly StyledProperty<bool> IsTrimmingProperty =
+        AvaloniaProperty.Register<MarkerTimeline, bool>(nameof(IsTrimming));
+
+    public static readonly StyledProperty<double> TrimStartProperty =
+        AvaloniaProperty.Register<MarkerTimeline, double>(nameof(TrimStart),
+            defaultBindingMode: Avalonia.Data.BindingMode.TwoWay);
+
+    public static readonly StyledProperty<double> TrimEndProperty =
+        AvaloniaProperty.Register<MarkerTimeline, double>(nameof(TrimEnd),
+            defaultBindingMode: Avalonia.Data.BindingMode.TwoWay);
+
     private const double TrackHeight = 6;
+    private const double HandleWidth = 6;
+    private const double HandleHeight = 26;
+    private const double HandleGrab = 10;
     private const double MarkerWidth = 4;
     private const double MarkerHeight = 18;
     private const double ThumbRadius = 8;
@@ -34,20 +49,30 @@ internal sealed class MarkerTimeline : Control
         GradientStops = { new GradientStop(Color.Parse("#B45CF6"), 0), new GradientStop(Color.Parse("#22C8EE"), 1) },
     };
 
-    private bool _dragging;
+    private static readonly IBrush TrimOutsideBrush = new SolidColorBrush(Color.Parse("#B30B0918"));
+    private static readonly IBrush TrimRangeBrush = new SolidColorBrush(Color.Parse("#1AFFC24B"));
+    private static readonly IBrush HandleBrush = new SolidColorBrush(Color.Parse("#FFC24B"));
+
+    private enum Drag { None, Seek, TrimStart, TrimEnd }
+
+    private Drag _drag;
 
     static MarkerTimeline()
     {
-        AffectsRender<MarkerTimeline>(PositionProperty, DurationProperty, MarkersProperty);
+        AffectsRender<MarkerTimeline>(PositionProperty, DurationProperty, MarkersProperty, IsTrimmingProperty,
+                                      TrimStartProperty, TrimEndProperty);
         CursorProperty.OverrideDefaultValue<MarkerTimeline>(new Cursor(StandardCursorType.Hand));
     }
 
     public double Position { get => GetValue(PositionProperty); set => SetValue(PositionProperty, value); }
     public double Duration { get => GetValue(DurationProperty); set => SetValue(DurationProperty, value); }
     public IReadOnlyList<MarkerViewModel>? Markers { get => GetValue(MarkersProperty); set => SetValue(MarkersProperty, value); }
+    public bool IsTrimming { get => GetValue(IsTrimmingProperty); set => SetValue(IsTrimmingProperty, value); }
+    public double TrimStart { get => GetValue(TrimStartProperty); set => SetValue(TrimStartProperty, value); }
+    public double TrimEnd { get => GetValue(TrimEndProperty); set => SetValue(TrimEndProperty, value); }
 
     protected override Size MeasureOverride(Size availableSize) =>
-        new(double.IsInfinity(availableSize.Width) ? 200 : availableSize.Width, 28);
+        new(double.IsInfinity(availableSize.Width) ? 200 : availableSize.Width, 32);
 
     public override void Render(DrawingContext context)
     {
@@ -78,6 +103,21 @@ internal sealed class MarkerTimeline : Control
             }
         }
 
+        if (IsTrimming && Duration > 0)
+        {
+            var from = left + width * Math.Clamp(TrimStart / Duration, 0, 1);
+            var to = left + width * Math.Clamp(TrimEnd / Duration, 0, 1);
+            var band = new Rect(0, mid - HandleHeight / 2, Bounds.Width, HandleHeight);
+            context.FillRectangle(TrimOutsideBrush, band.WithWidth(from));
+            context.FillRectangle(TrimOutsideBrush, new Rect(to, band.Y, Bounds.Width - to, band.Height));
+            context.DrawRectangle(TrimRangeBrush, new Pen(HandleBrush, 1.5), new Rect(from, band.Y, to - from, band.Height), 4, 4);
+            foreach (var x in new[] { from, to })
+            {
+                context.DrawRectangle(HandleBrush, null, new Rect(x - HandleWidth / 2, band.Y - 2, HandleWidth, band.Height + 4),
+                                      HandleWidth / 2, HandleWidth / 2);
+            }
+        }
+
         var thumb = new Point(left + width * fraction, mid);
         context.DrawEllipse(ThumbBrush, new Pen(new SolidColorBrush(Color.Parse("#668B6CFF")), 4), thumb, ThumbRadius - 2,
                             ThumbRadius - 2);
@@ -87,31 +127,65 @@ internal sealed class MarkerTimeline : Control
     {
         base.OnPointerPressed(e);
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        _dragging = true;
+        var x = e.GetPosition(this).X;
+        _drag = HandleAt(x);
         e.Pointer.Capture(this);
-        SeekTo(e.GetPosition(this).X, snap: true);
+        if (_drag == Drag.Seek) SeekTo(x, snap: true);
         e.Handled = true;
     }
 
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
-        if (_dragging) SeekTo(e.GetPosition(this).X, snap: false);
+        var x = e.GetPosition(this).X;
+        switch (_drag)
+        {
+            case Drag.Seek:
+                SeekTo(x, snap: false);
+                break;
+            case Drag.TrimStart:
+                TrimStart = SecondsAt(x);
+                Position = TrimStart;
+                break;
+            case Drag.TrimEnd:
+                TrimEnd = SecondsAt(x);
+                Position = TrimEnd;
+                break;
+        }
     }
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
-        if (!_dragging) return;
-        _dragging = false;
+        if (_drag == Drag.None) return;
+        _drag = Drag.None;
         e.Pointer.Capture(null);
+    }
+
+    private double SecondsAt(double x)
+    {
+        var width = Bounds.Width - ThumbRadius * 2;
+        return width <= 0 || Duration <= 0 ? 0 : Math.Clamp((x - ThumbRadius) / width, 0, 1) * Duration;
+    }
+
+    // Which trim handle is under x, if any; otherwise a click seeks.
+    private Drag HandleAt(double x)
+    {
+        if (!IsTrimming || Duration <= 0) return Drag.Seek;
+        var width = Bounds.Width - ThumbRadius * 2;
+        var from = ThumbRadius + width * Math.Clamp(TrimStart / Duration, 0, 1);
+        var to = ThumbRadius + width * Math.Clamp(TrimEnd / Duration, 0, 1);
+        var toStart = Math.Abs(x - from);
+        var toEnd = Math.Abs(x - to);
+        if (Math.Min(toStart, toEnd) > HandleGrab) return Drag.Seek;
+        return toStart < toEnd || (toStart == toEnd && x < from) ? Drag.TrimStart : Drag.TrimEnd;
     }
 
     private void SeekTo(double x, bool snap)
     {
         var width = Bounds.Width - ThumbRadius * 2;
         if (width <= 0 || Duration <= 0) return;
-        var seconds = Math.Clamp((x - ThumbRadius) / width, 0, 1) * Duration;
+        var seconds = SecondsAt(x);
 
         // A click right on a marker jumps to it, a little before so the moment isn't missed.
         if (snap && Markers is { } markers)

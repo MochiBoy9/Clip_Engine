@@ -25,6 +25,7 @@ public sealed class SettingsViewModel : ObservableObject
     private bool _animatedBackground;
     private bool _hasChanges;
     private string? _savedMessage;
+    private string? _cleanupPreview;
 
     internal SettingsViewModel(EngineSettings engine, DesktopSettings desktop, Func<Task>? applyToEngine)
     {
@@ -38,6 +39,7 @@ public sealed class SettingsViewModel : ObservableObject
         _closeToTray = desktop.CloseToTray;
         _animatedBackground = desktop.AnimatedBackground;
         _sidePanelHotkey = desktop.SidePanelHotkey;
+        CleanUpNowCommand = new RelayCommand(() => CleanUpNowRequested?.Invoke());
         SaveCommand = new RelayCommand(() => _ = SaveAsync(), () => HasChanges);
         RevertCommand = new RelayCommand(() =>
         {
@@ -54,9 +56,12 @@ public sealed class SettingsViewModel : ObservableObject
 
     public RelayCommand SaveCommand { get; }
     public RelayCommand RevertCommand { get; }
+    public RelayCommand CleanUpNowCommand { get; }
 
     public event Action<bool>? AnimatedBackgroundChanged;
     public event Action<string>? SidePanelHotkeyChanged;
+    public event Action? StorageRulesChanged;
+    public event Action? CleanUpNowRequested;
 
     public string OutputDir { get => _outputDir; set => Change(ref _outputDir, value); }
     public string OutputDirShown => string.IsNullOrWhiteSpace(OutputDir) ? AppPaths.DefaultClipsDir : OutputDir;
@@ -176,6 +181,38 @@ public sealed class SettingsViewModel : ObservableObject
     public bool Share50 { get => _desktop.ShareLimitMb == 50; set { if (value) SetShareLimit(50); } }
     public bool Share500 { get => _desktop.ShareLimitMb == 500; set { if (value) SetShareLimit(500); } }
 
+    // Storage cleanup, applied by the app on a timer (see MainViewModel).
+    public bool KeepForever { get => _desktop.DeleteAfterDays <= 0; set { if (value) SetDeleteAfter(0); } }
+    public bool Keep7Days { get => _desktop.DeleteAfterDays == 7; set { if (value) SetDeleteAfter(7); } }
+    public bool Keep30Days { get => _desktop.DeleteAfterDays == 30; set { if (value) SetDeleteAfter(30); } }
+    public bool Keep90Days { get => _desktop.DeleteAfterDays == 90; set { if (value) SetDeleteAfter(90); } }
+
+    public bool NoSizeLimit { get => _desktop.MaxLibraryGb <= 0; set { if (value) SetSizeLimit(0); } }
+    public bool Limit50Gb { get => _desktop.MaxLibraryGb == 50; set { if (value) SetSizeLimit(50); } }
+    public bool Limit100Gb { get => _desktop.MaxLibraryGb == 100; set { if (value) SetSizeLimit(100); } }
+    public bool Limit250Gb { get => _desktop.MaxLibraryGb == 250; set { if (value) SetSizeLimit(250); } }
+
+    // What the cleanup would remove right now, or null while it's off.
+    public string? CleanupPreview
+    {
+        get => _cleanupPreview;
+        internal set { if (Set(ref _cleanupPreview, value)) Raise(nameof(HasCleanupPreview)); }
+    }
+
+    public bool HasCleanupPreview => _cleanupPreview is not null;
+
+    public bool GameNotifications
+    {
+        get => _desktop.GameNotifications;
+        set
+        {
+            if (_desktop.GameNotifications == value) return;
+            _desktop.GameNotifications = value;
+            TrySaveDesktop();
+            Raise();
+        }
+    }
+
     public bool HasChanges
     {
         get => _hasChanges;
@@ -251,6 +288,30 @@ public sealed class SettingsViewModel : ObservableObject
         TrySaveDesktop();
         Raise(nameof(DockLeft));
         Raise(nameof(DockRight));
+    }
+
+    private void SetDeleteAfter(int days)
+    {
+        if (_desktop.DeleteAfterDays == days) return;
+        _desktop.DeleteAfterDays = days;
+        TrySaveDesktop();
+        Raise(nameof(KeepForever));
+        Raise(nameof(Keep7Days));
+        Raise(nameof(Keep30Days));
+        Raise(nameof(Keep90Days));
+        StorageRulesChanged?.Invoke();
+    }
+
+    private void SetSizeLimit(int gigabytes)
+    {
+        if (_desktop.MaxLibraryGb == gigabytes) return;
+        _desktop.MaxLibraryGb = gigabytes;
+        TrySaveDesktop();
+        Raise(nameof(NoSizeLimit));
+        Raise(nameof(Limit50Gb));
+        Raise(nameof(Limit100Gb));
+        Raise(nameof(Limit250Gb));
+        StorageRulesChanged?.Invoke();
     }
 
     private void SetShareLimit(int megabytes)
