@@ -19,6 +19,7 @@
         <TrayIcon.Menu>
           <NativeMenu>
             <NativeMenuItem Header="Open Clip Engine" Click="OnTrayOpen" />
+            <NativeMenuItem Header="Side panel" Click="OnTraySidePanel" />
             <NativeMenuItem Header="Save clip" Click="OnTraySaveClip" />
             <NativeMenuItem Header="Open clips folder" Click="OnTrayOpenFolder" />
             <NativeMenuItemSeparator />

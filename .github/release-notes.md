@@ -1,16 +1,15 @@
-## Clip Engine 0.2.1
+## Clip Engine 0.3.0
 
-Fixes the desktop app closing immediately on launch on Windows 11. When Windows turned on the acrylic glass effect while the window was still loading, the app crashed before it could appear. It now opens normally.
+Clip Engine now watches your game for kills and other moments and clips them by itself.
 
-## Clip Engine desktop app
+- **Automatic clips.** While you play The Finals, Overwatch or Battlefield 6, the engine reads the kill feed and other parts of the HUD with Windows text recognition and saves a clip around every kill, assist, death, revive, match start or end and highlight you choose. Moments close together become one clip. Change which moments count, and how much is kept before and after, under **Settings → Automatic clips**.
+- **Clip player.** Clips open inside the app, with every detected moment on the timeline and in a list beside the video. Click one to jump to it.
+- **Share to Discord.** One click makes a copy small enough for Discord (10 MB, or 50 MB / 500 MB for Nitro) and puts it on your clipboard, ready to paste. **Copy** puts the full-quality clip on the clipboard instead.
+- **Import clips friends send you.** Drop a clip on the window, use **Import**, or open it with Clip Engine, and pick the folder to keep it in. Clips made with Clip Engine carry their moments inside the file, so they show up for the person you send them to.
+- **Side panel.** Alt+Shift+C (or the tray menu) shows a slim panel on the edge of the screen over your game, with recording status, a Save clip button, what was just detected and your latest clips.
+- **Smoother while you play.** Capture and audio run at multimedia priority, clip saving runs in the background, and screen reading only uses frames the GPU has already finished, so saving and detection don't make the game stutter.
 
-This release adds the Windows desktop app: a liquid-glass window around the recording engine.
-
-- **Home** shows what's being recorded (game, resolution, frame rate, codec and GPU encoder), a big Save clip button, your recent clips and an activity feed.
-- **Clips** is a gallery of everything you've saved, with Explorer thumbnails, per-game filters, search, play, show in folder and delete (to the Recycle Bin).
-- **Games** lists the games that start recording automatically: The Finals, Overwatch and Battlefield 6.
-- **Settings** edits replay buffer, clip length, frame rate, bitrate, codec, audio tracks, hotkey and clips folder, and restarts the engine for you.
-- Closing the window keeps recording from the tray. The animated background pauses whenever the window isn't in front, so it costs nothing while you play.
+The detection rules live in `detection.ini` next to the app. They're a first version and will be tuned with real gameplay; a copy in `%LOCALAPPDATA%\Clip_Engine` overrides the shipped one.
 
 ## Install
 

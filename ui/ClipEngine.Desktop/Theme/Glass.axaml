@@ -256,7 +256,7 @@
   </Style>
 
   <!-- Filter chips (clip library) -->
-  <Style Selector="RadioButton.chip">
+  <Style Selector="RadioButton.chip, ToggleButton.chip">
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="Template">
       <ControlTemplate>
@@ -269,13 +269,13 @@
     </Setter>
     <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
   </Style>
-  <Style Selector="RadioButton.chip:pointerover /template/ Border#PART_Chip">
+  <Style Selector="RadioButton.chip:pointerover /template/ Border#PART_Chip, ToggleButton.chip:pointerover /template/ Border#PART_Chip">
     <Setter Property="Background" Value="#1FFFFFFF" />
   </Style>
-  <Style Selector="RadioButton.chip:checked">
+  <Style Selector="RadioButton.chip:checked, ToggleButton.chip:checked">
     <Setter Property="Foreground" Value="White" />
   </Style>
-  <Style Selector="RadioButton.chip:checked /template/ Border#PART_Chip">
+  <Style Selector="RadioButton.chip:checked /template/ Border#PART_Chip, ToggleButton.chip:checked /template/ Border#PART_Chip">
     <Setter Property="Background" Value="{StaticResource AccentGradient}" />
     <Setter Property="BorderBrush" Value="#66FFFFFF" />
   </Style>
@@ -407,5 +407,19 @@
   </Style>
   <Style Selector="Border.clipCard:pointerover Panel.hoverActions, Border.clipCard.showActions Panel.hoverActions">
     <Setter Property="Opacity" Value="1" />
+  </Style>
+  <!-- Rows in the player's list of moments -->
+  <Style Selector="Button.marker">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="10,8" />
+    <Setter Property="Margin" Value="0,0,0,2" />
+  </Style>
+  <Style Selector="Button.marker:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#14FFFFFF" />
+  </Style>
+  <Style Selector="Button.marker:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#22FFFFFF" />
   </Style>
 </Styles>

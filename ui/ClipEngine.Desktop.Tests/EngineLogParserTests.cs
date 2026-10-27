@@ -59,4 +59,20 @@ public class EngineLogParserTests
 
     [Fact]
     public void ErrorsAreNotEvents() => Assert.Null(Parse("Overwatch detected", "ERROR"));
+
+    [Fact]
+    public void Moment()
+    {
+        var e = Assert.IsType<MomentDetected>(Parse("Detected kill in The Finals: ELIMINATED Vortex"));
+        Assert.Equal(("kill", "The Finals", "ELIMINATED Vortex"), (e.Type, e.Game, e.Text));
+    }
+
+    [Fact]
+    public void Export()
+    {
+        Assert.Equal(42, Assert.IsType<ExportProgress>(Parse("Export progress 42%")).Percent);
+        var done = Assert.IsType<Exported>(Parse(@"Exported 9.4 MB to C:\Users\You\AppData\Local\Clip_Engine\Shared\a_10MB.mp4"));
+        Assert.Equal(9.4, done.Megabytes);
+        Assert.EndsWith("a_10MB.mp4", done.Path);
+    }
 }

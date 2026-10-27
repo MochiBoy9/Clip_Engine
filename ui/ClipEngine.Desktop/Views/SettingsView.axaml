@@ -175,6 +175,110 @@
             </Grid>
           </StackPanel>
         </Border>
+        <Border Classes="glass" Padding="22" Margin="0,0,0,18">
+          <StackPanel>
+            <TextBlock Classes="eyebrow" Text="AUTOMATIC CLIPS" Margin="0,0,0,16" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Width="36" Height="36" CornerRadius="11" VerticalAlignment="Center" Margin="0,0,14,0">
+                <Border.Background>
+                  <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                    <GradientStop Offset="0" Color="#B45CF6" /><GradientStop Offset="1" Color="#22C8EE" />
+                  </LinearGradientBrush>
+                </Border.Background>
+                <PathIcon Data="{StaticResource IconSparkle}" Width="16" Height="16" Foreground="White" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Detect moments" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="Reads kills, assists, revives and more off the screen while you play." TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <ToggleSwitch IsChecked="{Binding Detection}" OnContent="{x:Null}" OffContent="{x:Null}" />
+              </Panel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,14" />
+            <StackPanel Spacing="0" IsEnabled="{Binding Detection}">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Width="36" Height="36" CornerRadius="11" VerticalAlignment="Center" Margin="0,0,14,0">
+                <Border.Background>
+                  <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                    <GradientStop Offset="0" Color="#FF5E9C" /><GradientStop Offset="1" Color="#FFB457" />
+                  </LinearGradientBrush>
+                </Border.Background>
+                <PathIcon Data="{StaticResource IconRecord}" Width="16" Height="16" Foreground="White" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Save clips by themselves" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="A clip is saved around every moment you pick below, no hotkey needed." TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <ToggleSwitch IsChecked="{Binding AutoClip}" OnContent="{x:Null}" OffContent="{x:Null}" />
+              </Panel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,14" />
+            <StackPanel IsEnabled="{Binding AutoClip}">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Width="36" Height="36" CornerRadius="11" VerticalAlignment="Center" Margin="0,0,14,0">
+                <Border.Background>
+                  <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                    <GradientStop Offset="0" Color="#22C8EE" /><GradientStop Offset="1" Color="#3EE0A6" />
+                  </LinearGradientBrush>
+                </Border.Background>
+                <PathIcon Data="{StaticResource IconClock}" Width="16" Height="16" Foreground="White" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Before the moment" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="Gameplay kept from before it happened." TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                  <Slider Width="200" Minimum="0" Maximum="60" Value="{Binding ClipBeforeSeconds}"
+                          SmallChange="1" LargeChange="5" TickFrequency="1" IsSnapToTickEnabled="True" />
+                  <Border Classes="inset" Width="78" Padding="0,6" CornerRadius="10" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding ClipBeforeText}" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" />
+                  </Border>
+                </StackPanel>
+              </Panel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,14" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Width="36" Height="36" CornerRadius="11" VerticalAlignment="Center" Margin="0,0,14,0">
+                <Border.Background>
+                  <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                    <GradientStop Offset="0" Color="#2F7BFF" /><GradientStop Offset="1" Color="#7C6CFF" />
+                  </LinearGradientBrush>
+                </Border.Background>
+                <PathIcon Data="{StaticResource IconClock}" Width="16" Height="16" Foreground="White" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="After the moment" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="Moments close together end up in one clip." TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                  <Slider Width="200" Minimum="0" Maximum="30" Value="{Binding ClipAfterSeconds}"
+                          SmallChange="1" LargeChange="5" TickFrequency="1" IsSnapToTickEnabled="True" />
+                  <Border Classes="inset" Width="78" Padding="0,6" CornerRadius="10" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding ClipAfterText}" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" />
+                  </Border>
+                </StackPanel>
+              </Panel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,14" />
+            <TextBlock Text="Clip these moments" FontWeight="SemiBold" FontSize="14" Margin="0,0,0,10" />
+            <ItemsControl ItemsSource="{Binding AutoClipEvents}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:EventToggle">
+                  <ToggleButton Classes="chip" Content="{Binding Label}" IsChecked="{Binding IsOn}" Margin="0,0,8,8" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            </StackPanel>
+            </StackPanel>
+          </StackPanel>
+        </Border>
         </StackPanel>
         <StackPanel Grid.Column="2">
         <Border Classes="glass" Padding="22" Margin="0,0,0,18">
@@ -265,6 +369,75 @@
               <Panel Grid.Column="2" VerticalAlignment="Center">
                 <ToggleSwitch IsChecked="{Binding AnimatedBackground}" OnContent="{x:Null}" OffContent="{x:Null}" />
               </Panel>
+            </Grid>
+          </StackPanel>
+        </Border>
+        <Border Classes="glass" Padding="22" Margin="0,0,0,18">
+          <StackPanel>
+            <TextBlock Classes="eyebrow" Text="SIDE PANEL AND SHARING" Margin="0,0,0,16" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Width="36" Height="36" CornerRadius="11" VerticalAlignment="Center" Margin="0,0,14,0">
+                <Border.Background>
+                  <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                    <GradientStop Offset="0" Color="#7C6CFF" /><GradientStop Offset="1" Color="#FF5EC4" />
+                  </LinearGradientBrush>
+                </Border.Background>
+                <PathIcon Data="{StaticResource IconPanel}" Width="16" Height="16" Foreground="White" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Side panel hotkey" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="Shows a slim panel on the edge of the screen, over your game." TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <TextBox Width="160" Text="{Binding SidePanelHotkey, UpdateSourceTrigger=LostFocus}"
+                         HorizontalContentAlignment="Center" FontWeight="SemiBold" />
+              </Panel>
+            </Grid>
+            <TextBlock Classes="caption" Foreground="{StaticResource WarnBrush}" Text="{Binding SidePanelHotkeyProblem}"
+                       IsVisible="{Binding SidePanelHotkeyProblem, Converter={x:Static ObjectConverters.IsNotNull}}"
+                       Margin="50,6,0,0" />
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,14" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Width="36" Height="36" CornerRadius="11" VerticalAlignment="Center" Margin="0,0,14,0">
+                <Border.Background>
+                  <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                    <GradientStop Offset="0" Color="#22C8EE" /><GradientStop Offset="1" Color="#2F7BFF" />
+                  </LinearGradientBrush>
+                </Border.Background>
+                <PathIcon Data="{StaticResource IconMonitor}" Width="16" Height="16" Foreground="White" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Panel side" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="Which edge of the screen it docks to." TextWrapping="Wrap" />
+              </StackPanel>
+              <Border Grid.Column="2" Classes="inset" Padding="3" CornerRadius="13" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal">
+                  <RadioButton Classes="segment" GroupName="edge" Content="Left" IsChecked="{Binding DockLeft}" />
+                  <RadioButton Classes="segment" GroupName="edge" Content="Right" IsChecked="{Binding DockRight}" />
+                </StackPanel>
+              </Border>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,14" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Width="36" Height="36" CornerRadius="11" VerticalAlignment="Center" Margin="0,0,14,0">
+                <Border.Background>
+                  <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                    <GradientStop Offset="0" Color="#3EE0A6" /><GradientStop Offset="1" Color="#22C8EE" />
+                  </LinearGradientBrush>
+                </Border.Background>
+                <PathIcon Data="{StaticResource IconShare}" Width="16" Height="16" Foreground="White" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Share size" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="Share to Discord makes a copy under this size. 10 MB fits free accounts, 50 MB Nitro Basic, 500 MB Nitro." TextWrapping="Wrap" />
+              </StackPanel>
+              <Border Grid.Column="2" Classes="inset" Padding="3" CornerRadius="13" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal">
+                  <RadioButton Classes="segment" GroupName="share" Content="10 MB" IsChecked="{Binding Share10}" />
+                  <RadioButton Classes="segment" GroupName="share" Content="50 MB" IsChecked="{Binding Share50}" />
+                  <RadioButton Classes="segment" GroupName="share" Content="500 MB" IsChecked="{Binding Share500}" />
+                </StackPanel>
+              </Border>
             </Grid>
           </StackPanel>
         </Border>

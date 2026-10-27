@@ -47,4 +47,24 @@ public class EngineSettingsTests : IDisposable
         var settings = EngineSettings.Load(_file);
         Assert.Equal((60, 30, "auto", "F8"), (settings.BufferSeconds, settings.ClipSeconds, settings.Codec, settings.SaveHotkey));
     }
+
+    [Fact]
+    public void AutomaticClipSettingsRoundTrip()
+    {
+        var settings = EngineSettings.Load(_file);
+        Assert.True(settings.Detection);
+        Assert.Equal(EngineSettings.AllEvents, settings.AutoClipEvents);
+
+        settings.AutoClip = false;
+        settings.AutoClipEvents = ["kill", "revive"];
+        settings.ClipBeforeSeconds = 15;
+        settings.ClipAfterSeconds = 3;
+        settings.Save(_file);
+
+        var reloaded = EngineSettings.Load(_file);
+        Assert.False(reloaded.AutoClip);
+        Assert.True(reloaded.Detection);
+        Assert.Equal(["kill", "revive"], reloaded.AutoClipEvents);
+        Assert.Equal((15, 3), (reloaded.ClipBeforeSeconds, reloaded.ClipAfterSeconds));
+    }
 }

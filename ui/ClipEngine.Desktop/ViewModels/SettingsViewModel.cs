@@ -16,6 +16,11 @@ public sealed class SettingsViewModel : ObservableObject
     private bool _micAudio = true;
     private string _saveHotkey = "F8";
     private bool _recordWithoutGame;
+    private bool _detection;
+    private bool _autoClip;
+    private double _clipBeforeSeconds;
+    private double _clipAfterSeconds;
+    private string _sidePanelHotkey;
     private bool _closeToTray;
     private bool _animatedBackground;
     private bool _hasChanges;
@@ -26,9 +31,13 @@ public sealed class SettingsViewModel : ObservableObject
         _desktop = desktop;
         _applyToEngine = applyToEngine;
         _fps = FpsOptions[0];
+        AutoClipEvents = EngineSettings.AllEvents
+            .Select(e => new EventToggle(e, EventKinds.Plural(e), () => { HasChanges = true; SavedMessage = null; }))
+            .ToList();
         Load(engine);
         _closeToTray = desktop.CloseToTray;
         _animatedBackground = desktop.AnimatedBackground;
+        _sidePanelHotkey = desktop.SidePanelHotkey;
         SaveCommand = new RelayCommand(() => _ = SaveAsync(), () => HasChanges);
         RevertCommand = new RelayCommand(() =>
         {
@@ -47,6 +56,7 @@ public sealed class SettingsViewModel : ObservableObject
     public RelayCommand RevertCommand { get; }
 
     public event Action<bool>? AnimatedBackgroundChanged;
+    public event Action<string>? SidePanelHotkeyChanged;
 
     public string OutputDir { get => _outputDir; set => Change(ref _outputDir, value); }
     public string OutputDirShown => string.IsNullOrWhiteSpace(OutputDir) ? AppPaths.DefaultClipsDir : OutputDir;
@@ -96,6 +106,26 @@ public sealed class SettingsViewModel : ObservableObject
     public string SaveHotkey { get => _saveHotkey; set => Change(ref _saveHotkey, value); }
     public bool RecordWithoutGame { get => _recordWithoutGame; set => Change(ref _recordWithoutGame, value); }
 
+    // Reading kills and other moments off the screen, and saving clips around them.
+    public bool Detection { get => _detection; set => Change(ref _detection, value); }
+    public bool AutoClip { get => _autoClip; set => Change(ref _autoClip, value); }
+    public IReadOnlyList<EventToggle> AutoClipEvents { get; }
+
+    public double ClipBeforeSeconds
+    {
+        get => _clipBeforeSeconds;
+        set { if (Change(ref _clipBeforeSeconds, Math.Round(value))) Raise(nameof(ClipBeforeText)); }
+    }
+
+    public double ClipAfterSeconds
+    {
+        get => _clipAfterSeconds;
+        set { if (Change(ref _clipAfterSeconds, Math.Round(value))) Raise(nameof(ClipAfterText)); }
+    }
+
+    public string ClipBeforeText => FormatSeconds(ClipBeforeSeconds);
+    public string ClipAfterText => FormatSeconds(ClipAfterSeconds);
+
     // The desktop-only settings apply immediately.
     public bool CloseToTray
     {
@@ -119,6 +149,32 @@ public sealed class SettingsViewModel : ObservableObject
             AnimatedBackgroundChanged?.Invoke(value);
         }
     }
+
+    // Side panel and sharing.
+    public string SidePanelHotkey
+    {
+        get => _sidePanelHotkey;
+        set
+        {
+            value = value?.Trim() ?? "";
+            if (!Set(ref _sidePanelHotkey, value)) return;
+            Raise(nameof(SidePanelHotkeyProblem));
+            if (!HotkeyText.TryParse(value, out _, out _)) return;
+            _desktop.SidePanelHotkey = value;
+            TrySaveDesktop();
+            SidePanelHotkeyChanged?.Invoke(value);
+        }
+    }
+
+    public string? SidePanelHotkeyProblem =>
+        HotkeyText.TryParse(_sidePanelHotkey, out _, out _) ? null : "Use a key with Ctrl, Alt or Shift, like Alt+Shift+C";
+
+    public bool DockLeft { get => _desktop.SidePanelEdge == "left"; set { if (value) SetEdge("left"); } }
+    public bool DockRight { get => _desktop.SidePanelEdge != "left"; set { if (value) SetEdge("right"); } }
+
+    public bool Share10 { get => _desktop.ShareLimitMb == 10; set { if (value) SetShareLimit(10); } }
+    public bool Share50 { get => _desktop.ShareLimitMb == 50; set { if (value) SetShareLimit(50); } }
+    public bool Share500 { get => _desktop.ShareLimitMb == 500; set { if (value) SetShareLimit(500); } }
 
     public bool HasChanges
     {
@@ -145,6 +201,11 @@ public sealed class SettingsViewModel : ObservableObject
         MicAudio = MicAudio,
         SaveHotkey = string.IsNullOrWhiteSpace(SaveHotkey) ? "F8" : SaveHotkey.Trim(),
         RecordWithoutGame = RecordWithoutGame,
+        Detection = Detection,
+        AutoClip = AutoClip,
+        AutoClipEvents = AutoClipEvents.Where(e => e.IsOn).Select(e => e.Name).ToList(),
+        ClipBeforeSeconds = (int)ClipBeforeSeconds,
+        ClipAfterSeconds = (int)ClipAfterSeconds,
     };
 
     private async Task SaveAsync()
@@ -175,7 +236,31 @@ public sealed class SettingsViewModel : ObservableObject
         _micAudio = s.MicAudio;
         _saveHotkey = s.SaveHotkey;
         _recordWithoutGame = s.RecordWithoutGame;
+        _detection = s.Detection;
+        _autoClip = s.AutoClip;
+        _clipBeforeSeconds = Math.Clamp(s.ClipBeforeSeconds, 0, 60);
+        _clipAfterSeconds = Math.Clamp(s.ClipAfterSeconds, 0, 30);
+        foreach (var toggle in AutoClipEvents) toggle.Load(s.AutoClipEvents.Contains(toggle.Name));
         Raise(string.Empty);
+    }
+
+    private void SetEdge(string edge)
+    {
+        if (_desktop.SidePanelEdge == edge) return;
+        _desktop.SidePanelEdge = edge;
+        TrySaveDesktop();
+        Raise(nameof(DockLeft));
+        Raise(nameof(DockRight));
+    }
+
+    private void SetShareLimit(int megabytes)
+    {
+        if (_desktop.ShareLimitMb == megabytes) return;
+        _desktop.ShareLimitMb = megabytes;
+        TrySaveDesktop();
+        Raise(nameof(Share10));
+        Raise(nameof(Share50));
+        Raise(nameof(Share500));
     }
 
     private void SetCodec(string codec)
@@ -207,4 +292,28 @@ public sealed class SettingsViewModel : ObservableObject
 
     private static string FormatSeconds(double seconds) =>
         seconds >= 60 && seconds % 60 == 0 ? $"{seconds / 60:0} min" : seconds >= 60 ? $"{(int)seconds / 60}m {(int)seconds % 60}s" : $"{seconds:0} s";
+}
+
+// One of the moments that can trigger an automatic clip.
+public sealed class EventToggle(string name, string label, Action changed) : ObservableObject
+{
+    private bool _isOn;
+
+    public string Name { get; } = name;
+    public string Label { get; } = label;
+
+    public bool IsOn
+    {
+        get => _isOn;
+        set
+        {
+            if (Set(ref _isOn, value)) changed();
+        }
+    }
+
+    internal void Load(bool on)
+    {
+        _isOn = on;
+        Raise(nameof(IsOn));
+    }
 }

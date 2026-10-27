@@ -24,25 +24,46 @@ var window = new MainWindow { DataContext = vm, Width = 1440, Height = 900 };
 window.Show();
 window.ForceAnimated(false);
 
-void Capture(Page page, string name)
+void Settle()
 {
-    vm.SelectedNav = vm.Nav.First(n => n.Page == page);
     // Let layout, bindings and the page cross-fade finish.
     for (var i = 0; i < 40; i++)
     {
         Dispatcher.UIThread.RunJobs();
         AvaloniaHeadlessPlatform.ForceRenderTimerTick();
     }
-    var frame = window.CaptureRenderedFrame() ?? throw new InvalidOperationException("Nothing was rendered");
+}
+
+void Save(Avalonia.Controls.Window target, string name)
+{
+    Settle();
+    var frame = target.CaptureRenderedFrame() ?? throw new InvalidOperationException("Nothing was rendered");
     var path = Path.Combine(output, name);
     frame.Save(path);
     Console.WriteLine(path);
+}
+
+void Capture(Page page, string name)
+{
+    vm.SelectedNav = vm.Nav.First(n => n.Page == page);
+    Save(window, name);
 }
 
 Capture(Page.Home, "1-home.png");
 Capture(Page.Clips, "2-clips.png");
 Capture(Page.Games, "3-games.png");
 Capture(Page.Settings, "4-settings.png");
+
+// The player, opened on the newest clip partway through.
+vm.SelectedNav = vm.Nav.First(n => n.Page == Page.Clips);
+Settle();
+vm.OpenPlayer(vm.Clips[0]).ShowAt(17.6, playing: true);
+Save(window, "5-player.png");
+
+// The side panel as it sits on the edge of the screen.
+var panel = new SidePanelWindow { DataContext = vm, Width = 344, Height = 900 };
+panel.Show();
+Save(panel, "6-side-panel.png");
 
 internal static class Sample
 {
@@ -60,12 +81,12 @@ internal static class Sample
             ("Overwatch", "overwatch_2", 60 * 26, 30, 181),
             ("Battlefield 6", "bf6_2", 60 * 30, 30, 224),
         };
-        var files = clips.Select(c =>
+        var files = clips.Select((c, i) =>
         {
             var time = now.AddMinutes(-c.MinutesAgo);
             var name = $"{c.Game}_{time:yyyy-MM-dd_HH-mm-ss}.mp4";
             return new ClipFile(Path.Combine(@"C:\Users\You\Videos\Clip_Engine", c.Game, name), c.Game, time,
-                                c.Mb * 1024 * 1024, TimeSpan.FromSeconds(c.Seconds));
+                                c.Mb * 1024 * 1024, TimeSpan.FromSeconds(c.Seconds), Moments(i, c.Game, c.Seconds));
         }).ToList();
         vm.SetClips(files);
 
@@ -80,11 +101,39 @@ internal static class Sample
             new RecordingStarted("The Finals", 2560, 1440, 165, "HEVC", 60, "NVIDIA HEVC Encoder MFT"));
 
         vm.Activity.Clear();
+        vm.AddActivity(ActivityKind.Moment, "Kill in The Finals", now.AddMinutes(-6));
+        vm.AddActivity(ActivityKind.Moment, "Assist in The Finals", now.AddMinutes(-5));
+        vm.AddActivity(ActivityKind.Moment, "Kill in The Finals", now.AddMinutes(-4));
         vm.AddActivity(ActivityKind.Info, "Engine started", now.AddMinutes(-41));
         vm.AddActivity(ActivityKind.Info, "The Finals detected", now.AddMinutes(-39));
         vm.AddActivity(ActivityKind.Recording, "Recording The Finals at 2560×1440, 165 fps", now.AddMinutes(-39));
         vm.AddActivity(ActivityKind.Clip, "Saved a 30 s clip (198.0 MB)", now.AddMinutes(-26));
         vm.AddActivity(ActivityKind.Clip, "Saved a 30 s clip (212.0 MB)", now.AddMinutes(-4));
         vm.ShowToast("Clip saved · 30 s · 212.0 MB");
+    }
+
+    // Detected moments for some of the sample clips, like the engine writes into each clip.
+    private static ClipMetadata? Moments(int index, string game, int seconds)
+    {
+        (string Type, double Time, string Text)[] events = index switch
+        {
+            0 => [("kill", 6.2, "ELIMINATED Vortex"), ("assist", 12.8, "ASSIST Kintsugi"), ("kill", 19.5, "ELIMINATED Rook"),
+                  ("revive", 23.1, "REVIVED Mochi"), ("kill", 26.4, "ELIMINATED Haze")],
+            1 => [("kill", 14.0, "ELIMINATED Static")],
+            2 => [("kill", 9.5, "ELIMINATION Tracer"), ("kill", 11.2, "ELIMINATION Mercy"), ("highlight", 12.0, "DOUBLE KILL")],
+            3 => [("revive", 21.0, "REVIVED squadmate")],
+            _ => [],
+        };
+        if (events.Length == 0) return null;
+        var metadata = new ClipMetadata
+        {
+            Game = game,
+            Trigger = index == 0 || index == 2 ? "auto" : "hotkey",
+            Seconds = seconds,
+            Events = events.Select(e => new ClipEvent { Type = e.Type, Time = e.Time, Text = e.Text }).ToList(),
+        };
+        metadata.Title = string.Join(", ", metadata.Events.GroupBy(e => e.Type)
+            .Select(g => $"{g.Count()} {(g.Count() == 1 ? g.Key : g.Key + "s")}"));
+        return metadata;
     }
 }

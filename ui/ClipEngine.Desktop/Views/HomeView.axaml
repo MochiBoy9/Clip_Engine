@@ -180,6 +180,9 @@
                         <PathIcon Data="{StaticResource IconAlert}" Width="13" Height="13"
                                   Foreground="{StaticResource WarnBrush}" />
                       </Border>
+                      <Border CornerRadius="9" Background="#338B6CFF" IsVisible="{Binding IsMoment}">
+                        <PathIcon Data="{StaticResource IconSparkle}" Width="12" Height="12" Foreground="#D6C9FF" />
+                      </Border>
                       <Border CornerRadius="9" Background="#1FFFFFFF" IsVisible="{Binding IsInfo}">
                         <PathIcon Data="{StaticResource IconGames}" Width="14" Height="14"
                                   Foreground="{StaticResource TextSecondary}" />
