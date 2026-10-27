@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <istream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace clip {
@@ -20,6 +21,16 @@ struct ScreenRegion {
   bool operator==(const ScreenRegion&) const = default;
 };
 
+// Where on a row of text the words must be.
+enum class LinePosition {
+  Anywhere,  // anywhere in the region (the default)
+  Start,     // first on a row: in a killfeed, the player who got the kill
+  End,       // last on a row: in a killfeed, the player who died
+};
+
+// Stands for the player's own in-game names (player_names in clip_engine.ini) in words and exclude.
+inline constexpr std::string_view kPlayerPlaceholder = "{player}";
+
 // One "this text in this part of the screen means this happened" rule from detection.ini.
 struct DetectionRule {
   std::string name;  // the section name, for the log
@@ -30,6 +41,12 @@ struct DetectionRule {
   std::vector<Phrase> exclude;  // but not while any of these is on screen
   int cooldownMs = 1000;        // ignore repeats closer together than this
   int threshold = 0;            // 1-255 keeps only pixels at least this bright; 0 reads the region as is
+  LinePosition position = LinePosition::Anywhere;
+
+  // Phrases as written, kept when they mention {player} so the names can be filled in later.
+  std::vector<std::string> playerWords;
+  std::vector<std::string> playerExclude;
+  bool NeedsPlayer() const { return !playerWords.empty() || !playerExclude.empty(); }
 };
 
 struct DetectionRules {
@@ -37,11 +54,17 @@ struct DetectionRules {
   std::vector<DetectionRule> rules;
   std::vector<std::string> warnings;
 
-  std::vector<DetectionRule> ForGame(const std::string& game) const;
+  // The game's rules, with {player} filled in from playerNames. Rules that need a name are left
+  // out when there are none, and their names added to needingName.
+  std::vector<DetectionRule> ForGame(const std::string& game, const std::vector<std::string>& playerNames = {},
+                                     std::vector<std::string>* needingName = nullptr) const;
 };
 
 // Reads detection.ini. Sections are named [<game id>.<event>] or [<game id>.<event>.<anything>].
 DetectionRules ParseDetectionRules(std::istream& in);
+
+// How many times the rule's words show in one read of its region, given as rows of tokens.
+int CountMatches(const DetectionRule& rule, const std::vector<std::vector<std::string>>& rows);
 
 // Turns what one rule sees in successive screen reads into new events. A message that
 // stays on screen for several reads counts once; a second line appearing counts again.
@@ -50,7 +73,11 @@ class RuleTracker {
   explicit RuleTracker(const DetectionRule& rule) : rule_(&rule) {}
 
   // Returns how many new events this read shows.
-  int Update(const std::vector<std::string>& tokens, int64_t nowMs);
+  int Update(const std::vector<std::vector<std::string>>& rows, int64_t nowMs);
+  // The same for a read that is a single row.
+  int Update(const std::vector<std::string>& tokens, int64_t nowMs) {
+    return Update(std::vector<std::vector<std::string>>{tokens}, nowMs);
+  }
 
   const DetectionRule& Rule() const { return *rule_; }
 

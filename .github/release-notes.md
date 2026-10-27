@@ -1,13 +1,13 @@
-## Clip Engine 0.3.1
+## Clip Engine 0.4.0
 
-Clip Engine can now be supported with a Founder license.
+Automatic clips now work in 16 games, up from 3.
 
-- **Founder license.** A one-time $29 purchase that unlocks the Pro features that run on your PC, for life. Buy it from **Settings → Plan → Become a Founder**; the key arrives in your receipt email.
-- **Plan card in Settings.** Shows whether you're on Free, Pro or Founder. Paste your key and press **Activate**. **Remove from this PC** frees it for another PC.
-- **Works offline.** The key is checked when you activate it and about twice a day after that. A paid plan keeps working for 14 days without an internet connection.
-- **Nothing is taken away.** Everything that was free stays free: automatic clips, the clip player, Discord sharing and the side panel. No ads, no watermark.
+- **Official game events in Counter-Strike 2, Dota 2, League of Legends and Rocket League.** These games report kills, deaths, assists, multi-kills, objectives and match results themselves, so these clips are exact and don't depend on the HUD. Clip Engine turns the events on for you. If one of these games was already open when you installed this update, restart it once.
+- **Valorant, Marvel Rivals, Rainbow Six Siege and Delta Force** are read from the killfeed. Put your in-game name in **Games → Your in-game name** so Clip Engine can tell your kills and deaths from everyone else's.
+- **Fortnite, Apex Legends, PUBG, Call of Duty and ARC Raiders** are read from their kill, knock, revive and match messages.
+- The Games page shows how each game is detected.
 
-Payments are handled by Polar, which also takes care of sales tax and VAT.
+Screen detection in the new games is a first version. If a game misses moments or catches the wrong ones, tell us which game and what happened. Turning on `detection_debug` in the settings file logs what Clip Engine reads, which helps.
 
 ## Install
 

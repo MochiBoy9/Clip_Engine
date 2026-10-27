@@ -5,6 +5,7 @@
 #include "core/Config.h"
 #include "detect/DetectionRules.h"
 #include "game/GameDetector.h"
+#include "integrations/GameIntegration.h"
 
 #include <filesystem>
 #include <future>
@@ -30,6 +31,10 @@ class App {
   // Saves [start, end] of the replay buffer. Returns false when there's nothing to save yet.
   bool SaveRange(int64_t start, int64_t end, const char* trigger);
   std::filesystem::path ClipPath();
+  // Starts or stops reading the running game's own API, for games that have one.
+  void SyncIntegration(const DetectedGame* game);
+  // Hands moments from the game's API to the recording, like the ones read off the screen.
+  void PumpIntegrationEvents();
 
   Config config_;
   DetectionRules rules_;
@@ -42,6 +47,9 @@ class App {
   std::vector<std::future<void>> saves_;
   std::string lastStem_;
   int lastStemCount_ = 0;
+  std::unique_ptr<GameIntegration> integration_;
+  const GameProfile* integrationGame_ = nullptr;
+  DWORD integrationProcess_ = 0;
 };
 
 }  // namespace clip

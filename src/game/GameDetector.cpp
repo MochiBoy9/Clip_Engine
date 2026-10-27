@@ -9,6 +9,21 @@ const std::vector<GameProfile>& BuiltInGames() {
       {"the_finals", "The Finals", {L"Discovery.exe"}},
       {"overwatch", "Overwatch", {L"Overwatch.exe"}},
       {"battlefield_6", "Battlefield 6", {L"bf6.exe"}},
+      // Official game APIs.
+      {"cs2", "Counter-Strike 2", {L"cs2.exe"}, GameApi::Cs2Gsi},
+      {"dota2", "Dota 2", {L"dota2.exe"}, GameApi::Dota2Gsi},
+      {"league_of_legends", "League of Legends", {L"League of Legends.exe"}, GameApi::LeagueLiveClient},
+      {"rocket_league", "Rocket League", {L"RocketLeague.exe"}, GameApi::RocketLeagueStats},
+      // Read off the screen.
+      {"valorant", "Valorant", {L"VALORANT-Win64-Shipping.exe"}},
+      {"fortnite", "Fortnite", {L"FortniteClient-Win64-Shipping.exe"}},
+      {"apex_legends", "Apex Legends", {L"r5apex.exe", L"r5apex_dx12.exe"}},
+      {"pubg", "PUBG", {L"TslGame.exe"}},
+      {"marvel_rivals", "Marvel Rivals", {L"Marvel-Win64-Shipping.exe"}},
+      {"rainbow_six_siege", "Rainbow Six Siege", {L"RainbowSix.exe", L"RainbowSix_Vulkan.exe", L"RainbowSix_DX11.exe"}},
+      {"call_of_duty", "Call of Duty", {L"cod.exe", L"cod24-cod.exe", L"cod25-cod.exe"}},
+      {"arc_raiders", "ARC Raiders", {L"PioneerGame.exe"}},
+      {"delta_force", "Delta Force", {L"DeltaForceClient-Win64-Shipping.exe"}},
   };
   return games;
 }

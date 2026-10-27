@@ -50,6 +50,10 @@ auto_clip_events = kill, assist, death, revive, match_start, match_end, highligh
 clip_before_seconds = 10
 clip_after_seconds = 5
 
+# Your in-game names, separated by commas. Games that show kills in a killfeed (Valorant, Marvel
+# Rivals, Delta Force and others) need it to tell your kills and deaths from everyone else's.
+player_names =
+
 # Log everything read off the screen, to see what words a game uses when tuning detection.ini.
 detection_debug = false
 )";
@@ -80,6 +84,18 @@ std::optional<bool> ParseBool(const std::string& s) {
   return std::nullopt;
 }
 
+std::vector<std::string> SplitNames(const std::string& value) {
+  std::vector<std::string> names;
+  std::string rest = value;
+  while (!rest.empty()) {
+    const auto comma = rest.find(',');
+    std::string name = Trim(rest.substr(0, comma));
+    rest = comma == std::string::npos ? std::string() : rest.substr(comma + 1);
+    if (!name.empty()) names.push_back(std::move(name));
+  }
+  return names;
+}
+
 std::filesystem::path DefaultOutputDir() {
   PWSTR videos = nullptr;
   std::filesystem::path dir;
@@ -90,6 +106,20 @@ std::filesystem::path DefaultOutputDir() {
 }
 
 }  // namespace
+
+std::vector<std::string> ReadPlayerNames(const std::filesystem::path& file) {
+  std::ifstream in(file);
+  std::string line;
+  std::vector<std::string> names;
+  while (std::getline(in, line)) {
+    if (const auto hash = line.find('#'); hash != std::string::npos) line.resize(hash);
+    const auto eq = line.find('=');
+    if (eq != std::string::npos && Lower(Trim(std::string_view(line).substr(0, eq))) == "player_names") {
+      names = SplitNames(Trim(std::string_view(line).substr(eq + 1)));
+    }
+  }
+  return names;
+}
 
 std::optional<Hotkey> ParseHotkey(std::string_view text) {
   Hotkey hotkey{};
@@ -144,6 +174,7 @@ std::optional<Hotkey> ParseHotkey(std::string_view text) {
 
 Config Config::Load(const std::filesystem::path& file) {
   Config config;
+  config.file = file;
 
   if (!std::filesystem::exists(file)) {
     std::error_code ec;
@@ -223,6 +254,8 @@ Config Config::Load(const std::filesystem::path& file) {
       setInt(config.clipBeforeSeconds);
     } else if (key == "clip_after_seconds") {
       setInt(config.clipAfterSeconds);
+    } else if (key == "player_names") {
+      config.playerNames = SplitNames(value);
     } else {
       log::Warn("Unknown setting '{}' on line {}", key, lineNumber);
     }

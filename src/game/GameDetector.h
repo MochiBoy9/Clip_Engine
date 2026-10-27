@@ -8,10 +8,15 @@
 
 namespace clip {
 
+// Games with an official live API for kills and other moments. The rest are read off the
+// screen with the rules in detection.ini.
+enum class GameApi { None, Cs2Gsi, Dota2Gsi, LeagueLiveClient, RocketLeagueStats };
+
 struct GameProfile {
-  std::string id;    // stable key, also used for folder names
-  std::string name;  // shown to the user
+  std::string id;    // stable key, also used for detection.ini sections
+  std::string name;  // shown to the user and used for clip folders
   std::vector<std::wstring> executables;
+  GameApi api = GameApi::None;
 };
 
 // The games Clip Engine supports so far.

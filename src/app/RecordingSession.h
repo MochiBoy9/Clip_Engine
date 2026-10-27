@@ -37,6 +37,9 @@ class RecordingSession {
 
   const ReplayBuffer& Buffer() const { return buffer_; }
 
+  // Adds a moment found some other way than reading the screen (the game's own API).
+  void AddEvent(const GameEvent& event) { OnEvent(event); }
+
   // Events detected since the last call.
   std::vector<GameEvent> TakeNewEvents();
   // Every detected event still in the replay buffer between start and end.

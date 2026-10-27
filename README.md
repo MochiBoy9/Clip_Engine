@@ -6,18 +6,33 @@ Proprietary software. All rights reserved; see [LICENSE](LICENSE).
 
 ## What works today
 
-- Detects The Finals, Overwatch and Battlefield 6 and starts recording on the monitor the game is on, stopping when it closes.
+- Detects 16 games (see [Supported games](#supported-games)) and starts recording on the monitor the game is on, stopping when it closes.
 - Captures at the monitor's native resolution and refresh rate with Windows.Graphics.Capture. Nothing is injected into the game, so it is safe with anti-cheat.
 - Encodes on the GPU (NVIDIA, AMD or Intel) with H.264, switching to HEVC when the resolution and frame rate need it.
 - Keeps the last 60 seconds in memory; press **F8** to save the last 30 seconds as an MP4 with separate game and mic audio tracks.
 
-- Reads the HUD with Windows text recognition to spot kills, assists, deaths, revives, match start and end, and highlights, and saves a clip around them by itself. Each clip carries its moments, in a `.json` next to it and inside the MP4.
+- Spots kills, assists, deaths, revives, match start and end, and highlights, and saves a clip around them by itself: from the game's own live events where the game has them, and otherwise by reading the HUD with Windows text recognition. Each clip carries its moments, in a `.json` next to it and inside the MP4.
 - A desktop app (`ClipEngine.exe`) with a liquid-glass look: live recording status, a Save clip button, a clip gallery with thumbnails, the supported games and all the settings. It runs the engine for you and keeps recording from the tray.
 - A clip player in the app with the detected moments on the timeline.
 - Share to Discord: a copy that fits the upload limit, put on the clipboard. Clips friends send can be dropped on the window to import them, moments included.
 - A side panel (Alt+Shift+C) on the edge of the screen, over the game.
 
 ![Home screen](docs/screenshots/1-home.png)
+
+## Supported games
+
+| Game | How moments are found |
+| --- | --- |
+| Counter-Strike 2 | Official Game State Integration: kills (with headshots and weapon), assists, deaths, 3K/4K/ACE rounds, round MVPs, match start and result |
+| Dota 2 | Official Game State Integration: kills, deaths, assists, multi-kills, the horn and the match result |
+| League of Legends | Official Live Client Data API: kills, deaths, assists, multi-kills, aces, first blood, dragons, Baron and steals, game start and result |
+| Rocket League | Official Stats API: goals, assists, demolitions, saves, kickoff and the match result |
+| Valorant, Marvel Rivals, Rainbow Six Siege, Delta Force | The killfeed, by your in-game name (set it on the Games page), plus round and match banners |
+| The Finals, Overwatch, Battlefield 6, Fortnite, Apex Legends, PUBG, Call of Duty, ARC Raiders | The HUD's kill, death, revive and match messages |
+
+The official events are exact and work whatever the HUD looks like. Clip Engine turns them on by itself: it writes a `gamestate_integration_clipengine.cfg` into CS2's and Dota 2's `cfg` folders and sets `PacketSendRate` in Rocket League's `TAGame\Config\DefaultStatsAPI.ini`, for installs it finds through Steam and the Epic Games launcher and for any game it sees running. A game that was already open needs one restart to pick that up. Dota 2 may also need `-gamestateintegration` in its Steam launch options. League's API is always on during a game.
+
+Screen rules for the rest are a first pass and get tuned against real gameplay; see `detection.ini` below. Valorant has no local events API, so it is read off the screen like the others.
 
 ## Requirements
 
@@ -67,9 +82,10 @@ Run `ClipEngine.exe` and launch a supported game. `clip_engine.exe` can also run
 | `src/media` | Replay buffer, MP4 writing, clip metadata and the share export |
 | `src/detect` | Reading the HUD for kills and other moments, and the rules for each game |
 | `src/game` | Supported games and detection of running games |
-| `src/core` | Settings, logging, clock |
+| `src/core` | Settings, logging, clock, JSON |
+| `src/integrations` | Live events from games' own APIs (CS2, Dota 2, League of Legends, Rocket League) and turning them on |
 | `assets/detection.ini` | Where each game shows kills and other moments, and the words to look for |
-| `tests` | Tests for the detection rules, matching and clip metadata |
+| `tests` | Tests for the detection rules, matching, clip metadata, game API events and killfeed rules |
 | `ui/ClipEngine.Desktop` | The desktop app (C#, Avalonia) |
 | `ui/ClipEngine.Desktop.Preview` | Renders the app's screens to PNGs with sample data |
 | `ui/ClipEngine.Desktop.Tests` | Tests for the app's log parsing, settings file, MP4 reading, clip markers, import and licensing |

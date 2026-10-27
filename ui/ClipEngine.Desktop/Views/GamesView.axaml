@@ -10,6 +10,26 @@
         <TextBlock Classes="caption" Text="Clip Engine starts recording as soon as one of these opens, on the monitor it's on." />
       </StackPanel>
 
+      <!-- Killfeed games need the player's name to tell their kills from everyone else's. -->
+      <Border x:Name="NameCard" x:DataType="vm:PlayerNamesViewModel" Classes="glass" Padding="24" Margin="0,0,16,0">
+        <Grid ColumnDefinitions="Auto,*">
+          <Border Width="48" Height="48" CornerRadius="16" Background="{StaticResource AccentGradient}"
+                  BoxShadow="{StaticResource AccentGlow}" VerticalAlignment="Top" Margin="0,0,18,0">
+            <PathIcon Data="{StaticResource IconSparkle}" Width="22" Height="22" Foreground="White" />
+          </Border>
+          <StackPanel Grid.Column="1" Spacing="6">
+            <TextBlock Classes="h2" Text="Your in-game name" />
+            <TextBlock Classes="body" TextWrapping="Wrap"
+                       Text="Valorant, Marvel Rivals, Rainbow Six Siege and Delta Force show kills in a killfeed, so Clip Engine looks for your name there. Separate names for different games with commas, without the #tag." />
+            <Grid ColumnDefinitions="*,Auto" Margin="0,6,0,0">
+              <TextBox Text="{Binding Names}" Watermark="Your name, as it shows in the killfeed" />
+              <Button Grid.Column="1" Classes="accent" Content="Save" Command="{Binding SaveCommand}" Margin="10,0,0,0" />
+            </Grid>
+            <TextBlock Classes="caption" Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextWrapping="Wrap" />
+          </StackPanel>
+        </Grid>
+      </Border>
+
       <ItemsControl ItemsSource="{Binding Main.Games}">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate><UniformGrid Columns="3" /></ItemsPanelTemplate>
@@ -50,7 +70,7 @@
                   <Border Height="1" Background="{StaticResource Divider}" />
                   <Grid ColumnDefinitions="*,Auto">
                     <TextBlock Classes="caption" Text="{Binding ClipCountText}" VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="1" Classes="caption" Text="Auto-detect on" VerticalAlignment="Center"
+                    <TextBlock Grid.Column="1" Classes="caption" Text="{Binding DetectionText}" VerticalAlignment="Center"
                                Foreground="{StaticResource SuccessBrush}" />
                   </Grid>
                 </StackPanel>
@@ -60,19 +80,6 @@
         </ItemsControl.ItemTemplate>
       </ItemsControl>
 
-      <Border Classes="glass" Padding="24" Margin="0,0,16,0">
-        <Grid ColumnDefinitions="Auto,*">
-          <Border Width="48" Height="48" CornerRadius="16" Background="{StaticResource AccentGradient}"
-                  BoxShadow="{StaticResource AccentGlow}" VerticalAlignment="Top" Margin="0,0,18,0">
-            <PathIcon Data="{StaticResource IconSparkle}" Width="22" Height="22" Foreground="White" />
-          </Border>
-          <StackPanel Grid.Column="1" Spacing="6">
-            <TextBlock Classes="h2" Text="Coming next: automatic moments" />
-            <TextBlock Classes="body" TextWrapping="Wrap"
-                       Text="Clips for every kill, assist, death, revive and round win, saved without pressing anything. Until then, the save hotkey keeps the last stretch of gameplay." />
-          </StackPanel>
-        </Grid>
-      </Border>
     </StackPanel>
   </ScrollViewer>
 </UserControl>

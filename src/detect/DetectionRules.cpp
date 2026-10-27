@@ -43,20 +43,57 @@ bool ParseInt(const std::string& s, int& out) {
   return ec == std::errc() && ptr == s.data() + s.size();
 }
 
-std::vector<Phrase> ParsePhrases(const std::string& value) {
+bool MentionsPlayer(const std::string& text) { return Lower(text).find(kPlayerPlaceholder) != std::string::npos; }
+
+// Phrases from "A | B | C". Those mentioning {player} go to withPlayer instead, as written.
+std::vector<Phrase> ParsePhrases(const std::string& value, std::vector<std::string>& withPlayer) {
   std::vector<Phrase> phrases;
+  withPlayer.clear();
   for (const auto& part : Split(value, '|')) {
+    if (MentionsPlayer(part)) {
+      withPlayer.push_back(part);
+      continue;
+    }
     auto phrase = MakePhrase(part);
     if (!phrase.words.empty()) phrases.push_back(std::move(phrase));
   }
   return phrases;
 }
 
+// Each phrase once for every player name.
+void AddPlayerPhrases(const std::vector<std::string>& sources, const std::vector<std::string>& names,
+                      std::vector<Phrase>& out) {
+  for (const auto& source : sources) {
+    const auto at = Lower(source).find(kPlayerPlaceholder);
+    for (const auto& name : names) {
+      std::string text = source;
+      text.replace(at, kPlayerPlaceholder.size(), " " + name + " ");
+      auto phrase = MakePhrase(text);
+      if (!phrase.words.empty()) out.push_back(std::move(phrase));
+    }
+  }
+}
+
 }  // namespace
 
-std::vector<DetectionRule> DetectionRules::ForGame(const std::string& game) const {
+std::vector<DetectionRule> DetectionRules::ForGame(const std::string& game, const std::vector<std::string>& playerNames,
+                                                   std::vector<std::string>* needingName) const {
   std::vector<DetectionRule> result;
-  std::ranges::copy_if(rules, std::back_inserter(result), [&](const DetectionRule& r) { return r.game == game; });
+  for (const auto& rule : rules) {
+    if (rule.game != game) continue;
+    if (!rule.NeedsPlayer()) {
+      result.push_back(rule);
+      continue;
+    }
+    if (playerNames.empty()) {
+      if (needingName) needingName->push_back(rule.name);
+      continue;
+    }
+    DetectionRule filled = rule;
+    AddPlayerPhrases(rule.playerWords, playerNames, filled.words);
+    AddPlayerPhrases(rule.playerExclude, playerNames, filled.exclude);
+    if (!filled.words.empty()) result.push_back(std::move(filled));
+  }
   return result;
 }
 
@@ -70,7 +107,7 @@ DetectionRules ParseDetectionRules(std::istream& in) {
 
   auto warn = [&](std::string message) { result.warnings.push_back(std::format("line {}: {}", lineNumber, message)); };
   auto finishRule = [&] {
-    if (rule && rule->words.empty()) {
+    if (rule && rule->words.empty() && rule->playerWords.empty()) {
       warn(std::format("[{}] has no words, so it can never match; ignoring it", rule->name));
       result.rules.pop_back();
     }
@@ -144,9 +181,15 @@ DetectionRules ParseDetectionRules(std::istream& in) {
         warn(std::format("[{}] region must be four fractions: left, top, width, height", rule->name));
       }
     } else if (key == "words") {
-      rule->words = ParsePhrases(value);
+      rule->words = ParsePhrases(value, rule->playerWords);
     } else if (key == "exclude") {
-      rule->exclude = ParsePhrases(value);
+      rule->exclude = ParsePhrases(value, rule->playerExclude);
+    } else if (key == "position") {
+      const std::string v = Lower(value);
+      if (v == "anywhere") rule->position = LinePosition::Anywhere;
+      else if (v == "start") rule->position = LinePosition::Start;
+      else if (v == "end") rule->position = LinePosition::End;
+      else warn(std::format("[{}] position must be anywhere, start or end", rule->name));
     } else if (key == "cooldown_ms") {
       int ms = 0;
       if (ParseInt(value, ms) && ms >= 0) rule->cooldownMs = ms;
@@ -163,12 +206,36 @@ DetectionRules ParseDetectionRules(std::istream& in) {
   return result;
 }
 
-int RuleTracker::Update(const std::vector<std::string>& tokens, int64_t nowMs) {
-  int count = 0;
-  const bool excluded = std::ranges::any_of(rule_->exclude, [&](const Phrase& p) { return CountPhrase(tokens, p) > 0; });
-  if (!excluded) {
-    for (const auto& phrase : rule_->words) count += CountPhrase(tokens, phrase);
+int CountMatches(const DetectionRule& rule, const std::vector<std::vector<std::string>>& rows) {
+  auto excludedIn = [&](const std::vector<std::string>& tokens) {
+    return std::ranges::any_of(rule.exclude, [&](const Phrase& p) { return CountPhrase(tokens, p) > 0; });
+  };
+
+  if (rule.position == LinePosition::Anywhere) {
+    // The whole region as one run of text: a phrase may wrap onto the next row.
+    std::vector<std::string> tokens;
+    for (const auto& row : rows) tokens.insert(tokens.end(), row.begin(), row.end());
+    if (excludedIn(tokens)) return 0;
+    int count = 0;
+    for (const auto& phrase : rule.words) count += CountPhrase(tokens, phrase);
+    return count;
   }
+
+  // Row by row, as in a killfeed: each row that starts (or ends) with the words counts once,
+  // and exclude only cancels the rows it's on.
+  int count = 0;
+  for (const auto& row : rows) {
+    if (excludedIn(row)) continue;
+    const bool match = std::ranges::any_of(rule.words, [&](const Phrase& p) {
+      return rule.position == LinePosition::Start ? PhraseAtStart(row, p) : PhraseAtEnd(row, p);
+    });
+    if (match) ++count;
+  }
+  return count;
+}
+
+int RuleTracker::Update(const std::vector<std::vector<std::string>>& rows, int64_t nowMs) {
+  const int count = CountMatches(*rule_, rows);
 
   if (count > shown_) {
     const int fresh = count - shown_;
