@@ -1,3 +1,7 @@
+## Clip Engine 0.2.1
+
+Fixes the desktop app closing immediately on launch on Windows 11. When Windows turned on the acrylic glass effect while the window was still loading, the app crashed before it could appear. It now opens normally.
+
 ## Clip Engine desktop app
 
 This release adds the Windows desktop app: a liquid-glass window around the recording engine.
