@@ -2,9 +2,13 @@
 #include "capture/MonitorCapture.h"
 #include "core/Config.h"
 #include "core/Log.h"
+#include "detect/DetectionRules.h"
+#include "detect/EventDetector.h"
 
 #include <mfapi.h>
 #include <shlobj.h>
+
+#include <fstream>
 
 namespace {
 
@@ -15,6 +19,35 @@ std::filesystem::path DataDir() {
   CoTaskMemFree(local);
   if (dir.empty()) dir = std::filesystem::current_path();
   return dir / L"Clip_Engine";
+}
+
+std::filesystem::path ExeDir() {
+  std::wstring path(MAX_PATH, L'\0');
+  while (true) {
+    const DWORD length = GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()));
+    if (length < path.size()) {
+      path.resize(length);
+      break;
+    }
+    path.resize(path.size() * 2);
+  }
+  return std::filesystem::path(path).parent_path();
+}
+
+// A copy in the data folder wins over the one that ships with the app, so tuning a rule
+// survives updates.
+clip::DetectionRules LoadDetectionRules(const std::filesystem::path& dataDir) {
+  using namespace clip;
+  for (const auto& file : {dataDir / L"detection.ini", ExeDir() / L"detection.ini"}) {
+    std::ifstream in(file);
+    if (!in) continue;
+    auto rules = ParseDetectionRules(in);
+    for (const auto& warning : rules.warnings) log::Warn("detection.ini {}", warning);
+    log::Info("Detection rules: {} ({} rules)", winrt::to_string(file.wstring()), rules.rules.size());
+    return rules;
+  }
+  log::Warn("detection.ini wasn't found next to the app, so only the hotkey saves clips");
+  return {};
 }
 
 }  // namespace
@@ -51,7 +84,17 @@ int wmain() {
     return 1;
   }
 
-  int result = App(std::move(config)).Run();
+  DetectionRules rules;
+  if (config.detection) {
+    if (EventDetector::IsAvailable()) {
+      rules = LoadDetectionRules(dataDir);
+    } else {
+      log::Warn("Windows text recognition isn't installed, so automatic clips are off. Add English under "
+                "Settings > Time & language > Language to turn them on.");
+    }
+  }
+
+  int result = App(std::move(config), std::move(rules)).Run();
 
   MFShutdown();
   if (instance) CloseHandle(instance);

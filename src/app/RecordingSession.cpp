@@ -3,7 +3,10 @@
 #include "core/Clock.h"
 #include "core/Log.h"
 
+#include <avrt.h>
+
 #include <algorithm>
+#include <utility>
 
 namespace clip {
 namespace {
@@ -33,14 +36,15 @@ UINT AutoBitrate(UINT width, UINT height, UINT fps) {
 
 }  // namespace
 
-RecordingSession::RecordingSession(const Config& config, HMONITOR monitor, std::string label)
+RecordingSession::RecordingSession(const Config& config, HMONITOR monitor, std::string label,
+                                   std::vector<DetectionRule> rules, int detectionSampleMs)
     : label_(std::move(label)),
       monitor_(monitor),
-      buffer_(int64_t{config.bufferSeconds} * kHnsPerSecond) {
+      buffer_(int64_t{config.bufferSeconds} * kHnsPerSecond),
+      bufferDuration_(int64_t{config.bufferSeconds} * kHnsPerSecond) {
   gpu_ = GpuDevice::Create();
-  capture_ = std::make_unique<MonitorCapture>(gpu_, monitor);
-
   fps_ = config.fps > 0 ? static_cast<UINT>(config.fps) : std::clamp<UINT>(RefreshRate(monitor), 24, 240);
+  capture_ = std::make_unique<MonitorCapture>(gpu_, monitor, fps_);
 
   VideoSettings video;
   video.width = capture_->Width() & ~1u;
@@ -66,12 +70,22 @@ RecordingSession::RecordingSession(const Config& config, HMONITOR monitor, std::
   if (config.gameAudio) StartAudio(AudioCapture::Source::GameAudio, kGameAudioStream, gameAudioEncoder_, gameAudio_);
   if (config.micAudio) StartAudio(AudioCapture::Source::Microphone, kMicAudioStream, micAudioEncoder_, micAudio_);
 
+  if (!rules.empty()) {
+    try {
+      detector_ = std::make_unique<EventDetector>(gpu_, *capture_, std::move(rules), detectionSampleMs,
+                                                  config.detectionDebug, [this](const GameEvent& e) { OnEvent(e); });
+    } catch (const winrt::hresult_error& e) {
+      log::Warn("Recording without event detection: {}", Describe(e));
+    }
+  }
+
   pacer_ = std::thread([this] { PaceFrames(); });
 }
 
 RecordingSession::~RecordingSession() {
   stop_ = true;
   if (pacer_.joinable()) pacer_.join();
+  detector_.reset();
   micAudio_.reset();
   gameAudio_.reset();
   micAudioEncoder_.reset();
@@ -81,6 +95,27 @@ RecordingSession::~RecordingSession() {
 }
 
 bool RecordingSession::Healthy() const { return !capture_->SizeChanged() && !video_->Failed(); }
+
+void RecordingSession::OnEvent(const GameEvent& event) {
+  std::lock_guard lock(eventsMutex_);
+  history_.push_back(event);
+  while (!history_.empty() && history_.front().time < event.time - bufferDuration_) history_.pop_front();
+  newEvents_.push_back(event);
+}
+
+std::vector<GameEvent> RecordingSession::TakeNewEvents() {
+  std::lock_guard lock(eventsMutex_);
+  return std::exchange(newEvents_, {});
+}
+
+std::vector<GameEvent> RecordingSession::EventsBetween(int64_t start, int64_t end) const {
+  std::lock_guard lock(eventsMutex_);
+  std::vector<GameEvent> result;
+  for (const auto& e : history_) {
+    if (e.time >= start && e.time <= end) result.push_back(e);
+  }
+  return result;
+}
 
 void RecordingSession::StartAudio(AudioCapture::Source source, int stream, std::unique_ptr<AacEncoder>& encoder,
                                   std::unique_ptr<AudioCapture>& capture) {
@@ -105,7 +140,11 @@ void RecordingSession::StartAudio(AudioCapture::Source source, int stream, std::
 void RecordingSession::PaceFrames() {
   // Hand the encoder one frame per tick at a constant rate, repeating the last frame when the
   // screen didn't change, so clips play back smoothly in every player and editor.
-  SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
+  // Windows' multimedia scheduler gives the pacer steady, short time slices, which keeps
+  // frame timing even without raising its priority over the game.
+  DWORD taskIndex = 0;
+  HANDLE mmcss = AvSetMmThreadCharacteristicsW(L"Capture", &taskIndex);
+  if (!mmcss) SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
   HANDLE timer = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
   if (!timer) timer = CreateWaitableTimerW(nullptr, TRUE, nullptr);
 
@@ -141,6 +180,7 @@ void RecordingSession::PaceFrames() {
     }
   }
   CloseHandle(timer);
+  if (mmcss) AvRevertMmThreadCharacteristics(mmcss);
 }
 
 }  // namespace clip

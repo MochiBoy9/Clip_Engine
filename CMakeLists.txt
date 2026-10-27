@@ -19,7 +19,11 @@ add_executable(clip_engine
   src/capture/MonitorCapture.cpp
   src/core/Config.cpp
   src/core/Log.cpp
+  src/detect/DetectionRules.cpp
+  src/detect/EventDetector.cpp
+  src/detect/TextMatcher.cpp
   src/game/GameDetector.cpp
+  src/media/ClipMetadata.cpp
   src/media/MediaUtil.cpp
   src/media/Mp4Writer.cpp
   src/media/ReplayBuffer.cpp
@@ -40,5 +44,21 @@ target_compile_options(clip_engine PRIVATE /W4 /permissive- /utf-8 /EHsc /bigobj
 target_link_libraries(clip_engine PRIVATE
   d3d11 dxgi
   mfplat mfuuid mfreadwrite mf wmcodecdspuuid
-  windowsapp ole32 winmm
+  windowsapp ole32 winmm avrt
 )
+
+# The detection rules ship next to the executable.
+add_custom_command(TARGET clip_engine POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/assets/detection.ini $<TARGET_FILE_DIR:clip_engine>)
+
+# Tests for the parts of detection that don't need Windows APIs.
+enable_testing()
+add_executable(clip_engine_tests
+  tests/DetectTests.cpp
+  src/detect/DetectionRules.cpp
+  src/detect/TextMatcher.cpp
+  src/media/ClipMetadata.cpp
+)
+target_include_directories(clip_engine_tests PRIVATE src)
+target_compile_options(clip_engine_tests PRIVATE /W4 /permissive- /utf-8 /EHsc)
+add_test(NAME detection COMMAND clip_engine_tests ${CMAKE_SOURCE_DIR}/assets/detection.ini)
