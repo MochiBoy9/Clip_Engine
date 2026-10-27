@@ -26,10 +26,18 @@
             </Border.Background>
           </Border>
 
-          <Border Classes="pill" Background="#59000000" BorderBrush="#33FFFFFF" HorizontalAlignment="Left"
-                  VerticalAlignment="Top" Margin="8" Padding="9,3">
-            <TextBlock Text="{Binding Game}" FontSize="11" FontWeight="SemiBold" />
-          </Border>
+          <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8">
+            <Border Classes="pill" Background="#59000000" BorderBrush="#33FFFFFF" Padding="9,3">
+              <TextBlock Text="{Binding Game}" FontSize="11" FontWeight="SemiBold" />
+            </Border>
+            <Border Classes="pill" Background="#998B6CFF" BorderBrush="#808B6CFF" Padding="7,3"
+                    IsVisible="{Binding IsAutomatic}" ToolTip.Tip="Saved by itself when moments were detected">
+              <StackPanel Orientation="Horizontal" Spacing="4">
+                <PathIcon Data="{StaticResource IconSparkle}" Width="9" Height="9" Foreground="White" />
+                <TextBlock Text="AUTO" FontSize="10" FontWeight="Bold" LetterSpacing="0.8" />
+              </StackPanel>
+            </Border>
+          </StackPanel>
           <Border Classes="pill" Background="#73000000" BorderBrush="#33FFFFFF" HorizontalAlignment="Right"
                   VerticalAlignment="Bottom" Margin="8" Padding="8,2" IsVisible="{Binding HasDuration}">
             <TextBlock Text="{Binding Duration}" FontSize="11" FontWeight="SemiBold" />
@@ -43,6 +51,10 @@
             </Button>
             <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right" VerticalAlignment="Top"
                         Margin="8">
+              <Button Classes="icon" Width="30" Height="30" CornerRadius="10" Command="{Binding ShareCommand}"
+                      ToolTip.Tip="Share to Discord">
+                <PathIcon Data="{StaticResource IconShare}" Width="14" Height="14" />
+              </Button>
               <Button Classes="icon" Width="30" Height="30" CornerRadius="10" Command="{Binding ShowCommand}"
                       ToolTip.Tip="Show in folder">
                 <PathIcon Data="{StaticResource IconFolder}" Width="14" Height="14" />
@@ -58,7 +70,7 @@
       <StackPanel Margin="6,0,6,6" Spacing="2">
         <TextBlock Text="{Binding When}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis"
                    ToolTip.Tip="{Binding Title}" />
-        <TextBlock Text="{Binding Size}" Classes="caption" />
+        <TextBlock Text="{Binding Caption}" Classes="caption" TextTrimming="CharacterEllipsis" />
       </StackPanel>
     </StackPanel>
   </Border>

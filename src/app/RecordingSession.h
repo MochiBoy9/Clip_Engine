@@ -4,10 +4,12 @@
 #include "audio/AudioCapture.h"
 #include "capture/MonitorCapture.h"
 #include "core/Config.h"
+#include "detect/EventDetector.h"
 #include "media/ReplayBuffer.h"
 #include "video/VideoEncoder.h"
 
 #include <atomic>
+#include <deque>
 #include <memory>
 #include <string>
 #include <thread>
@@ -18,7 +20,9 @@ namespace clip {
 // a frame pacer feeding the hardware encoder, game and mic audio, and the replay buffer.
 class RecordingSession {
  public:
-  RecordingSession(const Config& config, HMONITOR monitor, std::string label);
+  // rules: what to look for on screen in this game; empty means no event detection.
+  RecordingSession(const Config& config, HMONITOR monitor, std::string label, std::vector<DetectionRule> rules,
+                   int detectionSampleMs);
   ~RecordingSession();
 
   RecordingSession(const RecordingSession&) = delete;
@@ -33,8 +37,14 @@ class RecordingSession {
 
   const ReplayBuffer& Buffer() const { return buffer_; }
 
+  // Events detected since the last call.
+  std::vector<GameEvent> TakeNewEvents();
+  // Every detected event still in the replay buffer between start and end.
+  std::vector<GameEvent> EventsBetween(int64_t start, int64_t end) const;
+
  private:
   void PaceFrames();
+  void OnEvent(const GameEvent& event);
   void StartAudio(AudioCapture::Source source, int stream, std::unique_ptr<AacEncoder>& encoder,
                   std::unique_ptr<AudioCapture>& capture);
 
@@ -51,6 +61,12 @@ class RecordingSession {
   std::unique_ptr<AacEncoder> micAudioEncoder_;
   std::unique_ptr<AudioCapture> gameAudio_;
   std::unique_ptr<AudioCapture> micAudio_;
+  std::unique_ptr<EventDetector> detector_;
+
+  int64_t bufferDuration_;
+  mutable std::mutex eventsMutex_;
+  std::deque<GameEvent> history_;
+  std::vector<GameEvent> newEvents_;
 
   std::atomic<bool> stop_{false};
   std::thread pacer_;

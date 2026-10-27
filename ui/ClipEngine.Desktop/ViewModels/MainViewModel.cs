@@ -13,6 +13,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private readonly EngineHost? _engine;
     private readonly ClipLibrary? _library;
     private readonly DispatcherTimer _toastTimer;
+    private readonly DispatcherTimer _saveDesktopTimer;
     private NavItem _selectedNav;
     private object _currentPage;
     private EngineState _engineState = EngineState.Stopped;
@@ -28,12 +29,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private bool _toastIsError;
     private long _libraryBytes;
     private int _clipsToday;
+    private bool _isSharing;
 
     public const string AllGames = "All clips";
 
     // live: start the engine and watch the clips folder. The preview tool passes false and fills in sample data.
     public MainViewModel(bool live = true)
     {
+        IsLive = live;
         Nav =
         [
             new NavItem(Page.Home, "Home", Icon("IconHome")),
@@ -46,6 +49,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var engineSettings = live ? EngineSettings.Load(AppPaths.EngineSettingsFile) : new EngineSettings();
         DesktopSettings = live ? DesktopSettings.Load() : new DesktopSettings();
         Settings = new SettingsViewModel(engineSettings, DesktopSettings, live ? RestartEngineAsync : null);
+        Settings.SidePanelHotkeyChanged += _ => Raise(nameof(SidePanelHotkey));
         _hotkey = engineSettings.SaveHotkey;
         _clipSeconds = engineSettings.ClipSeconds;
         _bufferSeconds = engineSettings.BufferSeconds;
@@ -59,9 +63,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         OpenClipsFolderCommand = new RelayCommand(() => Shell.Open(ClipsFolder));
         OpenLogCommand = new RelayCommand(() => Shell.Open(AppPaths.EngineLogFile));
         RestartEngineCommand = new RelayCommand(() => _ = RestartEngineAsync());
-        OpenClipCommand = new RelayCommand(p => { if (p is ClipItemViewModel c) Shell.Open(c.Path); });
+        OpenClipCommand = new RelayCommand(p => { if (p is ClipItemViewModel c) OpenPlayer(c); });
         ShowClipCommand = new RelayCommand(p => { if (p is ClipItemViewModel c) Shell.ShowInFolder(c.Path); });
         DeleteClipCommand = new RelayCommand(p => { if (p is ClipItemViewModel c) DeleteClip(c); });
+        ShareClipCommand = new RelayCommand(p => { if (p is ClipItemViewModel c) _ = ShareClipAsync(c); });
+        CopyClipCommand = new RelayCommand(p => { if (p is ClipItemViewModel c) CopyClip(c); });
+        ImportClipCommand = new RelayCommand(() => _ = ImportClipAsync(null));
+        ToggleSidePanelCommand = new RelayCommand(() => SidePanelToggleRequested?.Invoke());
+        ShowMainWindowCommand = new RelayCommand(() => ShowMainWindowRequested?.Invoke());
         GoToCommand = new RelayCommand(p => { if (p is Page page) SelectedNav = Nav.First(n => n.Page == page); });
 
         _toastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
@@ -71,9 +80,16 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             Toast = null;
         };
 
+        _saveDesktopTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _saveDesktopTimer.Tick += (_, _) =>
+        {
+            _saveDesktopTimer.Stop();
+            SaveDesktopSettings();
+        };
+
         if (!live) return;
 
-        _library = new ClipLibrary();
+        _library = new ClipLibrary { ExtraFolders = DesktopSettings.ImportFolders };
         _library.Changed += () => _ = RefreshClipsAsync();
         _library.Watch(engineSettings.OutputDir);
 
@@ -97,6 +113,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     internal DesktopSettings DesktopSettings { get; }
 
     public ObservableCollection<ActivityItem> Activity { get; } = [];
+    public ObservableCollection<ActivityItem> RecentMoments { get; } = [];
+    public bool HasRecentMoments => RecentMoments.Count > 0;
     public ObservableCollection<ClipItemViewModel> Clips { get; } = [];
     public ObservableCollection<ClipItemViewModel> RecentClips { get; } = [];
     public ObservableCollection<ClipItemViewModel> FilteredClips { get; } = [];
@@ -110,7 +128,21 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public RelayCommand OpenClipCommand { get; }
     public RelayCommand ShowClipCommand { get; }
     public RelayCommand DeleteClipCommand { get; }
+    public RelayCommand ShareClipCommand { get; }
+    public RelayCommand CopyClipCommand { get; }
+    public RelayCommand ImportClipCommand { get; }
+    public RelayCommand ToggleSidePanelCommand { get; }
+    public RelayCommand ShowMainWindowCommand { get; }
     public RelayCommand GoToCommand { get; }
+
+    // False in the preview tool, which has no engine and no video window.
+    internal bool IsLive { get; }
+
+    // File pickers and the window handle, from the main window.
+    internal IAppDialogs? Dialogs { get; set; }
+
+    internal event Action? SidePanelToggleRequested;
+    internal event Action? ShowMainWindowRequested;
 
     public NavItem SelectedNav
     {
@@ -129,6 +161,30 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     }
 
     public object CurrentPage { get => _currentPage; private set => Set(ref _currentPage, value); }
+
+    // Shows a page that isn't in the sidebar, like the player, or goes back to one that is.
+    internal void ShowPage(object page)
+    {
+        var nav = ReferenceEquals(page, Home) ? Nav[0]
+            : ReferenceEquals(page, ClipsPage) ? Nav[1]
+            : ReferenceEquals(page, GamesPage) ? Nav[2]
+            : ReferenceEquals(page, Settings) ? Nav[3]
+            : null;
+        if (nav is not null) Set(ref _selectedNav, nav, nameof(SelectedNav));
+        CurrentPage = page;
+    }
+
+    internal PlayerViewModel OpenPlayer(ClipItemViewModel clip)
+    {
+        var returnTo = CurrentPage is PlayerViewModel open ? open.ReturnTo : CurrentPage;
+        var player = new PlayerViewModel(this, clip, returnTo);
+        ShowPage(player);
+        ShowMainWindowRequested?.Invoke();
+        return player;
+    }
+
+    public bool IsSharing { get => _isSharing; private set => Set(ref _isSharing, value); }
+    public string SidePanelHotkey => DesktopSettings.SidePanelHotkey;
 
     public string ClipsFolder => _library?.Folder ?? AppPaths.DefaultClipsDir;
 
@@ -252,6 +308,128 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ShowToast("The engine isn't running, so there's nothing to save.", isError: true);
     }
 
+    private bool CopyToClipboard(string path) =>
+        OperatingSystem.IsWindows() && Dialogs is { WindowHandle: not 0 } dialogs
+        && Win32.CopyFilesToClipboard(dialogs.WindowHandle, [path]);
+
+    private void CopyClip(ClipItemViewModel clip)
+    {
+        if (!CopyToClipboard(clip.Path))
+        {
+            ShowToast("Couldn't put the clip on the clipboard.", isError: true);
+            return;
+        }
+        var limit = DesktopSettings.ShareLimitMb;
+        ShowToast(clip.File.Bytes > limit * 1_000_000L
+            ? $"Clip copied ({clip.Size}). That's over {limit} MB, so for Discord use Share instead."
+            : "Clip copied. Paste it into Discord, a chat or a folder.");
+    }
+
+    private async Task ShareClipAsync(ClipItemViewModel clip)
+    {
+        if (IsSharing)
+        {
+            ShowToast("Still making the last share copy…");
+            return;
+        }
+        IsSharing = true;
+        var limit = DesktopSettings.ShareLimitMb;
+        try
+        {
+            ShowToast($"Making a copy under {limit} MB…");
+            var progress = new Progress<int>(p => ShowToast($"Making a copy under {limit} MB… {p}%"));
+            var (path, megabytes) = await ClipSharing.MakeShareCopyAsync(clip.Path, limit, progress);
+            AddActivity(ActivityKind.Clip, $"Made a {megabytes:0.0} MB share copy of a {clip.Game} clip");
+            if (CopyToClipboard(path))
+            {
+                ShowToast($"Copied a {megabytes:0.0} MB version. Paste it into Discord with Ctrl+V.");
+            }
+            else
+            {
+                ShowToast($"Saved a {megabytes:0.0} MB version to share.");
+                Shell.ShowInFolder(path);
+            }
+        }
+        catch (ShareFailedException e)
+        {
+            ShowToast(e.Message, isError: true);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+        {
+            ShowToast($"Couldn't make the share copy: {e.Message}", isError: true);
+        }
+        finally
+        {
+            IsSharing = false;
+        }
+    }
+
+    // Brings a clip into the library, usually one a friend sent, into a folder the user picks.
+    // Clips made with Clip Engine carry their markers inside the file, so those come back too.
+    internal async Task ImportClipAsync(string? path)
+    {
+        if (Dialogs is null) return;
+        path ??= await Dialogs.PickClipAsync();
+        if (path is null || !File.Exists(path)) return;
+
+        if (Clips.FirstOrDefault(c => string.Equals(c.Path, Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase)) is { } known)
+        {
+            OpenPlayer(known);
+            return;
+        }
+
+        var suggested = DesktopSettings.ImportFolders.FirstOrDefault(Directory.Exists)
+                        ?? Path.Combine(ClipsFolder, "Shared with me");
+        var folder = await Dialogs.PickFolderAsync("Choose where to keep this clip", suggested);
+        if (folder is null) return;
+
+        string imported;
+        try
+        {
+            imported = await Task.Run(() => ClipSharing.Import(path, folder));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            ShowToast($"Couldn't import the clip: {e.Message}", isError: true);
+            return;
+        }
+
+        RememberImportFolder(folder);
+        await RefreshClipsAsync();
+        var clip = Clips.FirstOrDefault(c => string.Equals(c.Path, imported, StringComparison.OrdinalIgnoreCase));
+        ShowToast($"Clip added to {Path.GetFileName(folder.TrimEnd('\\', '/'))}");
+        AddActivity(ActivityKind.Clip, $"Imported {Path.GetFileName(imported)}");
+        if (clip is not null) OpenPlayer(clip);
+    }
+
+    private void RememberImportFolder(string folder)
+    {
+        var list = DesktopSettings.ImportFolders;
+        list.RemoveAll(f => string.Equals(f, folder, StringComparison.OrdinalIgnoreCase));
+        list.Insert(0, folder);
+        if (list.Count > 8) list.RemoveRange(8, list.Count - 8);
+        if (_library is not null) _library.ExtraFolders = [.. list];
+        SaveDesktopSettings();
+    }
+
+    internal void SaveDesktopSettingsSoon()
+    {
+        _saveDesktopTimer.Stop();
+        _saveDesktopTimer.Start();
+    }
+
+    private void SaveDesktopSettings()
+    {
+        if (!IsLive) return;
+        try
+        {
+            DesktopSettings.Save();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+
     private void DeleteClip(ClipItemViewModel clip)
     {
         try
@@ -317,6 +495,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 ShowToast($"Clip saved · {s.Seconds:0} s · {s.Megabytes:0.0} MB");
                 _ = RefreshClipsAsync();
                 break;
+            case MomentDetected m:
+                AddActivity(ActivityKind.Moment, $"{EventKinds.Label(m.Type)} in {m.Game}");
+                break;
         }
         UpdateGames();
         RaiseStatus();
@@ -342,8 +523,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     internal void AddActivity(ActivityKind kind, string text, DateTime? time = null)
     {
-        Activity.Insert(0, new ActivityItem(time ?? DateTime.Now, kind, text));
+        var item = new ActivityItem(time ?? DateTime.Now, kind, text);
+        Activity.Insert(0, item);
         while (Activity.Count > MaxActivity) Activity.RemoveAt(Activity.Count - 1);
+        if (kind != ActivityKind.Moment) return;
+        RecentMoments.Insert(0, item);
+        while (RecentMoments.Count > 4) RecentMoments.RemoveAt(RecentMoments.Count - 1);
+        Raise(nameof(HasRecentMoments));
     }
 
     private async Task RefreshClipsAsync()
@@ -405,7 +591,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             if (_filter != AllGames && !string.Equals(clip.Game, _filter, StringComparison.OrdinalIgnoreCase)) continue;
             if (_search.Length > 0 && !clip.Title.Contains(_search, StringComparison.OrdinalIgnoreCase)
-                && !clip.When.Contains(_search, StringComparison.OrdinalIgnoreCase)) continue;
+                && !clip.When.Contains(_search, StringComparison.OrdinalIgnoreCase)
+                && !clip.Summary.Contains(_search, StringComparison.OrdinalIgnoreCase)) continue;
             FilteredClips.Add(clip);
         }
         Raise(nameof(HasFilteredClips));

@@ -15,7 +15,8 @@ namespace clip {
 // fullscreen games and never touches the game process, so it is safe with anti-cheat.
 class MonitorCapture {
  public:
-  MonitorCapture(std::shared_ptr<GpuDevice> gpu, HMONITOR monitor);
+  // fps: the rate frames are used at; Windows is asked not to deliver them faster.
+  MonitorCapture(std::shared_ptr<GpuDevice> gpu, HMONITOR monitor, UINT fps);
   ~MonitorCapture();
 
   MonitorCapture(const MonitorCapture&) = delete;

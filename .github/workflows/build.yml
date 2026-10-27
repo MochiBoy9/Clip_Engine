@@ -32,6 +32,9 @@ jobs:
       - name: Build engine
         run: cmake --build build --config Release --parallel
 
+      - name: Test engine
+        run: ctest --test-dir build -C Release --output-on-failure
+
       - name: Test desktop app
         run: dotnet test ui/ClipEngine.Desktop.Tests -c Release
 
@@ -45,6 +48,7 @@ jobs:
         shell: pwsh
         run: |
           Copy-Item build/Release/clip_engine.exe dist/
+          Copy-Item assets/detection.ini dist/
           Copy-Item LICENSE dist/LICENSE.txt
           Get-ChildItem dist -Filter *.pdb | Remove-Item
 

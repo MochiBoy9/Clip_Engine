@@ -4,6 +4,7 @@
 #include "core/Log.h"
 
 #include <audioclient.h>
+#include <avrt.h>
 #include <mmdeviceapi.h>
 
 #include <vector>
@@ -33,6 +34,10 @@ AudioCapture::~AudioCapture() {
 void AudioCapture::Run() {
   winrt::init_apartment(winrt::apartment_type::multi_threaded);
   const bool loopback = source_ == Source::GameAudio;
+  // Audio gets short, regular time slices from Windows' multimedia scheduler, so it never
+  // crackles while the game keeps the CPU busy.
+  DWORD taskIndex = 0;
+  HANDLE mmcss = AvSetMmThreadCharacteristicsW(L"Audio", &taskIndex);
   try {
     auto enumerator = winrt::create_instance<IMMDeviceEnumerator>(__uuidof(MMDeviceEnumerator));
     winrt::com_ptr<IMMDevice> device;
@@ -98,6 +103,7 @@ void AudioCapture::Run() {
   } catch (const winrt::hresult_error& e) {
     log::Error("Stopped capturing {}: {}", SourceName(source_), Describe(e));
   }
+  if (mmcss) AvRevertMmThreadCharacteristics(mmcss);
   winrt::uninit_apartment();
 }
 

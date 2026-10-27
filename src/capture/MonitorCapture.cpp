@@ -1,5 +1,6 @@
 #include "capture/MonitorCapture.h"
 
+#include "core/Clock.h"
 #include "core/Log.h"
 
 #include <winrt/Windows.Foundation.Metadata.h>
@@ -44,7 +45,7 @@ bool MonitorCapture::IsSupported() {
   }
 }
 
-MonitorCapture::MonitorCapture(std::shared_ptr<GpuDevice> gpu, HMONITOR monitor) : gpu_(std::move(gpu)) {
+MonitorCapture::MonitorCapture(std::shared_ptr<GpuDevice> gpu, HMONITOR monitor, UINT fps) : gpu_(std::move(gpu)) {
   RequestBorderlessAccess();
 
   winrt::com_ptr<::IInspectable> inspectable;
@@ -86,6 +87,12 @@ MonitorCapture::MonitorCapture(std::shared_ptr<GpuDevice> gpu, HMONITOR monitor)
     } catch (const winrt::hresult_error&) {
       // The user hasn't allowed borderless capture; Windows shows the border instead.
     }
+  }
+  // On a 240 Hz monitor recording at 60 fps, skip copying most of the frames that would be
+  // thrown away (Windows 11 24H2 and newer). The limit sits a little under the frame interval
+  // so a frame is always ready when the pacer wants one.
+  if (ApiInformation::IsPropertyPresent(kSessionClass, L"MinUpdateInterval") && fps > 0) {
+    session_.MinUpdateInterval(winrt::Windows::Foundation::TimeSpan{kHnsPerSecond * 3 / 4 / fps});
   }
   session_.StartCapture();
 }

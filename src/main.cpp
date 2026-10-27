@@ -2,9 +2,16 @@
 #include "capture/MonitorCapture.h"
 #include "core/Config.h"
 #include "core/Log.h"
+#include "detect/DetectionRules.h"
+#include "detect/EventDetector.h"
+#include "media/Exporter.h"
 
 #include <mfapi.h>
 #include <shlobj.h>
+
+#include <algorithm>
+#include <fstream>
+#include <string_view>
 
 namespace {
 
@@ -17,10 +24,60 @@ std::filesystem::path DataDir() {
   return dir / L"Clip_Engine";
 }
 
+std::filesystem::path ExeDir() {
+  std::wstring path(MAX_PATH, L'\0');
+  while (true) {
+    const DWORD length = GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()));
+    if (length < path.size()) {
+      path.resize(length);
+      break;
+    }
+    path.resize(path.size() * 2);
+  }
+  return std::filesystem::path(path).parent_path();
+}
+
+// A copy in the data folder wins over the one that ships with the app, so tuning a rule
+// survives updates.
+clip::DetectionRules LoadDetectionRules(const std::filesystem::path& dataDir) {
+  using namespace clip;
+  for (const auto& file : {dataDir / L"detection.ini", ExeDir() / L"detection.ini"}) {
+    std::ifstream in(file);
+    if (!in) continue;
+    auto rules = ParseDetectionRules(in);
+    for (const auto& warning : rules.warnings) log::Warn("detection.ini {}", warning);
+    log::Info("Detection rules: {} ({} rules)", winrt::to_string(file.wstring()), rules.rules.size());
+    return rules;
+  }
+  log::Warn("detection.ini wasn't found next to the app, so only the hotkey saves clips");
+  return {};
+}
+
 }  // namespace
 
-int wmain() {
+// clip_engine.exe --export <clip.mp4> <out.mp4> [--max-mb 10]
+// Makes a small copy for sharing and exits. Runs alongside a recording engine.
+int RunExportCommand(int argc, wchar_t** argv) {
   using namespace clip;
+  ExportOptions options;
+  options.input = argv[2];
+  options.output = argv[3];
+  for (int i = 4; i + 1 < argc; i += 2) {
+    if (std::wstring_view(argv[i]) == L"--max-mb") options.maxMegabytes = std::clamp(_wtof(argv[i + 1]), 1.0, 4000.0);
+  }
+  winrt::init_apartment(winrt::apartment_type::multi_threaded);
+  if (FAILED(MFStartup(MF_VERSION))) {
+    log::Error("Export failed: Media Foundation is unavailable");
+    return 1;
+  }
+  const int result = RunExport(options);
+  MFShutdown();
+  return result;
+}
+
+int wmain(int argc, wchar_t** argv) {
+  using namespace clip;
+  if (argc >= 4 && std::wstring_view(argv[1]) == L"--export") return RunExportCommand(argc, argv);
 
   // One copy at a time; two would fight over the hotkey and the GPU encoder.
   HANDLE instance = CreateMutexW(nullptr, TRUE, L"Local\\ClipEngine.SingleInstance");
@@ -51,7 +108,17 @@ int wmain() {
     return 1;
   }
 
-  int result = App(std::move(config)).Run();
+  DetectionRules rules;
+  if (config.detection) {
+    if (EventDetector::IsAvailable()) {
+      rules = LoadDetectionRules(dataDir);
+    } else {
+      log::Warn("Windows text recognition isn't installed, so automatic clips are off. Add English under "
+                "Settings > Time & language > Language to turn them on.");
+    }
+  }
+
+  int result = App(std::move(config), std::move(rules)).Run();
 
   MFShutdown();
   if (instance) CloseHandle(instance);

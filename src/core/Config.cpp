@@ -39,6 +39,19 @@ save_hotkey = F8
 
 # Keep recording the main monitor even when no supported game is running.
 record_without_game = false
+
+# Read the screen for kills, deaths and other moments (rules are in detection.ini).
+detection = true
+
+# Save a clip around each detected moment, and which moments count. Moments close together
+# share one clip.
+auto_clip = true
+auto_clip_events = kill, assist, death, revive, match_start, match_end, highlight
+clip_before_seconds = 10
+clip_after_seconds = 5
+
+# Log everything read off the screen, to see what words a game uses when tuning detection.ini.
+detection_debug = false
 )";
 
 std::string Trim(std::string_view s) {
@@ -189,6 +202,27 @@ Config Config::Load(const std::filesystem::path& file) {
       }
     } else if (key == "record_without_game") {
       setBool(config.recordWithoutGame);
+    } else if (key == "detection") {
+      setBool(config.detection);
+    } else if (key == "detection_debug") {
+      setBool(config.detectionDebug);
+    } else if (key == "auto_clip") {
+      setBool(config.autoClip);
+    } else if (key == "auto_clip_events") {
+      config.autoClipEvents.clear();
+      std::string rest = value;
+      while (!rest.empty()) {
+        const auto comma = rest.find(',');
+        const std::string name = Lower(Trim(rest.substr(0, comma)));
+        rest = comma == std::string::npos ? std::string() : rest.substr(comma + 1);
+        if (name.empty()) continue;
+        if (const auto type = ParseEventType(name)) config.autoClipEvents.insert(*type);
+        else log::Warn("auto_clip_events: '{}' isn't an event this app knows", name);
+      }
+    } else if (key == "clip_before_seconds") {
+      setInt(config.clipBeforeSeconds);
+    } else if (key == "clip_after_seconds") {
+      setInt(config.clipAfterSeconds);
     } else {
       log::Warn("Unknown setting '{}' on line {}", key, lineNumber);
     }
@@ -199,6 +233,8 @@ Config Config::Load(const std::filesystem::path& file) {
   config.clipSeconds = std::clamp(config.clipSeconds, 5, config.bufferSeconds);
   config.fps = std::clamp(config.fps, 0, 360);
   config.bitrateMbps = std::clamp(config.bitrateMbps, 0, 300);
+  config.clipBeforeSeconds = std::clamp(config.clipBeforeSeconds, 0, config.bufferSeconds - 5);
+  config.clipAfterSeconds = std::clamp(config.clipAfterSeconds, 0, 30);
   return config;
 }
 

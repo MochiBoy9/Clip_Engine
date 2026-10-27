@@ -1,0 +1,169 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ClipEngine.Desktop.ViewModels"
+             xmlns:views="using:ClipEngine.Desktop.Views"
+             x:Class="ClipEngine.Desktop.Views.PlayerView"
+             x:DataType="vm:PlayerViewModel"
+             Focusable="True">
+  <DockPanel Margin="18,0,22,18">
+    <!-- Title and what you can do with the clip -->
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,14">
+      <Button Classes="glass" Command="{Binding BackCommand}" VerticalAlignment="Center">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <PathIcon Data="{StaticResource IconBack}" Width="14" Height="14" />
+          <TextBlock Text="{Binding BackLabel}" VerticalAlignment="Center" />
+        </StackPanel>
+      </Button>
+      <StackPanel Grid.Column="1" Margin="16,0" VerticalAlignment="Center" Spacing="2">
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <TextBlock Classes="h1" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+          <Border Classes="pill" VerticalAlignment="Center" Padding="8,2" Background="#338B6CFF" BorderBrush="#668B6CFF"
+                  IsVisible="{Binding Clip.IsAutomatic}" ToolTip.Tip="Saved by itself when moments were detected">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <PathIcon Data="{StaticResource IconSparkle}" Width="10" Height="10" Foreground="White" />
+              <TextBlock Text="AUTO" FontSize="10" FontWeight="Bold" LetterSpacing="1" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+        <TextBlock Classes="caption" Text="{Binding Subtitle}" TextTrimming="CharacterEllipsis" />
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+        <Button Classes="accent" Command="{Binding ShareCommand}" IsEnabled="{Binding !Main.IsSharing}"
+                ToolTip.Tip="{Binding ShareTip}">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <PathIcon Data="{StaticResource IconShare}" Width="14" Height="14" Foreground="White" />
+            <TextBlock Text="Share to Discord" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Button Classes="glass" Command="{Binding CopyCommand}" ToolTip.Tip="Copy the full-quality clip to paste anywhere">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <PathIcon Data="{StaticResource IconCopy}" Width="14" Height="14" />
+            <TextBlock Text="Copy" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Button Classes="icon" Command="{Binding ShowCommand}" ToolTip.Tip="Show in folder">
+          <PathIcon Data="{StaticResource IconFolder}" />
+        </Button>
+        <Button Classes="icon" Command="{Binding OpenExternallyCommand}" ToolTip.Tip="Open in your default video player">
+          <PathIcon Data="{StaticResource IconExternal}" />
+        </Button>
+        <Button Classes="icon danger" Command="{Binding DeleteCommand}" ToolTip.Tip="Delete">
+          <PathIcon Data="{StaticResource IconTrash}" />
+        </Button>
+      </StackPanel>
+    </Grid>
+
+    <!-- Detected moments -->
+    <Border DockPanel.Dock="Right" Classes="glass" Width="300" Margin="14,0,0,0" Padding="18,18,10,12">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Spacing="12" Margin="0,0,8,12">
+          <TextBlock Classes="h2" Text="Moments" />
+          <ItemsControl ItemsSource="{Binding Counts}" IsVisible="{Binding HasMarkers}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:MarkerCount">
+                <Border Classes="pill" Margin="0,0,6,6" Padding="9,3">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Ellipse Width="7" Height="7" Fill="{Binding Brush}" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="SemiBold" />
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+
+        <Panel>
+          <ScrollViewer IsVisible="{Binding HasMarkers}">
+            <ItemsControl ItemsSource="{Binding Markers}" Margin="0,0,8,0">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:MarkerViewModel">
+                  <Button Classes="marker" Command="{Binding SeekCommand}" HorizontalAlignment="Stretch"
+                          HorizontalContentAlignment="Stretch" ToolTip.Tip="{Binding Text}">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                      <Border Width="4" Height="28" CornerRadius="2" Background="{Binding Brush}" Margin="0,0,12,0" />
+                      <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Label}" FontWeight="SemiBold" FontSize="13" />
+                        <TextBlock Text="{Binding Text}" Classes="caption" TextTrimming="CharacterEllipsis" />
+                      </StackPanel>
+                      <TextBlock Grid.Column="2" Text="{Binding TimeText}" Classes="caption" VerticalAlignment="Center"
+                                 FontFeatures="tnum" Margin="8,0,0,0" />
+                    </Grid>
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+          <StackPanel IsVisible="{Binding HasNoMarkers}" Spacing="6" Margin="0,4,8,0">
+            <TextBlock Classes="body" TextWrapping="Wrap"
+                       Text="No moments were detected in this clip." />
+            <TextBlock Classes="caption" TextWrapping="Wrap"
+                       Text="Kills, assists, revives and other moments the engine reads off the screen show up here, so you can jump straight to them." />
+          </StackPanel>
+        </Panel>
+      </DockPanel>
+    </Border>
+
+    <!-- The video and its controls -->
+    <Border Classes="glass" Padding="12">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Bottom" Margin="6,12,6,0" Spacing="6">
+          <views:MarkerTimeline Position="{Binding Position}" Duration="{Binding Duration}" Markers="{Binding Markers}" />
+          <Grid ColumnDefinitions="*,Auto,*">
+            <TextBlock VerticalAlignment="Center" FontFeatures="tnum" FontSize="13">
+              <Run Text="{Binding PositionText}" FontWeight="SemiBold" />
+              <Run Text=" / " Foreground="{StaticResource TextTertiary}" />
+              <Run Text="{Binding DurationText}" Foreground="{StaticResource TextTertiary}" />
+            </TextBlock>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+              <Button Classes="icon" Command="{Binding PreviousMarkerCommand}" ToolTip.Tip="Previous moment">
+                <PathIcon Data="{StaticResource IconPrevMarker}" />
+              </Button>
+              <Button Classes="icon" Command="{Binding SkipBackCommand}" ToolTip.Tip="Back 5 seconds (Left)">
+                <PathIcon Data="{StaticResource IconSkipBack}" />
+              </Button>
+              <Button Classes="accent" Width="48" Height="48" CornerRadius="24" Padding="0"
+                      HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                      Command="{Binding PlayPauseCommand}" ToolTip.Tip="Play or pause (Space)">
+                <Panel>
+                  <PathIcon Data="{StaticResource IconPlay}" Width="18" Height="18" Margin="3,0,0,0" Foreground="White"
+                            IsVisible="{Binding IsPaused}" />
+                  <PathIcon Data="{StaticResource IconPause}" Width="18" Height="18" Foreground="White"
+                            IsVisible="{Binding IsPlaying}" />
+                </Panel>
+              </Button>
+              <Button Classes="icon" Command="{Binding SkipForwardCommand}" ToolTip.Tip="Forward 5 seconds (Right)">
+                <PathIcon Data="{StaticResource IconSkipForward}" />
+              </Button>
+              <Button Classes="icon" Command="{Binding NextMarkerCommand}" ToolTip.Tip="Next moment">
+                <PathIcon Data="{StaticResource IconNextMarker}" />
+              </Button>
+            </StackPanel>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+              <PathIcon Data="{StaticResource IconVolume}" Width="16" Height="16" Foreground="{StaticResource TextSecondary}"
+                        VerticalAlignment="Center" />
+              <Slider Width="110" Minimum="0" Maximum="100" Value="{Binding Volume}" VerticalAlignment="Center" />
+            </StackPanel>
+          </Grid>
+        </StackPanel>
+
+        <Border Background="Black" CornerRadius="16" ClipToBounds="True">
+          <Panel Name="VideoHost">
+            <!-- The preview tool has no video window, so it shows the clip's thumbnail. -->
+            <Image Source="{Binding Clip.Thumbnail}" Stretch="Uniform" IsVisible="{Binding !IsLive}" />
+            <StackPanel IsVisible="{Binding HasError}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Spacing="10" MaxWidth="420">
+              <Border Width="44" Height="44" CornerRadius="14" Background="{StaticResource RecordGradient}"
+                      HorizontalAlignment="Center">
+                <PathIcon Data="{StaticResource IconAlert}" Width="20" Height="20" Foreground="White" />
+              </Border>
+              <TextBlock Classes="body" Text="{Binding Error}" TextWrapping="Wrap" TextAlignment="Center" />
+            </StackPanel>
+          </Panel>
+        </Border>
+      </DockPanel>
+    </Border>
+  </DockPanel>
+</UserControl>

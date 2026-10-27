@@ -9,7 +9,7 @@ public enum Page { Home, Clips, Games, Settings }
 
 public sealed record NavItem(Page Page, string Title, StreamGeometry Icon);
 
-public enum ActivityKind { Info, Recording, Clip, Warning, Error }
+public enum ActivityKind { Info, Recording, Clip, Moment, Warning, Error }
 
 public sealed class ActivityItem(DateTime time, ActivityKind kind, string text)
 {
@@ -17,6 +17,7 @@ public sealed class ActivityItem(DateTime time, ActivityKind kind, string text)
     public ActivityKind Kind { get; } = kind;
     public string Text { get; } = text;
     public bool IsClip => Kind == ActivityKind.Clip;
+    public bool IsMoment => Kind == ActivityKind.Moment;
     public bool IsRecording => Kind == ActivityKind.Recording;
     public bool IsProblem => Kind is ActivityKind.Warning or ActivityKind.Error;
     public bool IsInfo => Kind == ActivityKind.Info;
@@ -33,16 +34,25 @@ public sealed class ClipItemViewModel : ObservableObject
         OpenCommand = new RelayCommand(() => owner?.OpenClipCommand.Execute(this));
         ShowCommand = new RelayCommand(() => owner?.ShowClipCommand.Execute(this));
         DeleteCommand = new RelayCommand(() => owner?.DeleteClipCommand.Execute(this));
+        ShareCommand = new RelayCommand(() => owner?.ShareClipCommand.Execute(this));
     }
 
     public RelayCommand OpenCommand { get; }
     public RelayCommand ShowCommand { get; }
     public RelayCommand DeleteCommand { get; }
+    public RelayCommand ShareCommand { get; }
 
     internal ClipFile File { get; }
     public string Path => File.Path;
     public string Game => File.Game;
     public string Title => System.IO.Path.GetFileNameWithoutExtension(File.Path).Replace('_', ' ');
+
+    // "3 kills, 1 revive" for clips with detected moments.
+    public string Summary => File.Metadata?.Title ?? "";
+    public bool HasSummary => Summary.Length > 0;
+    public bool IsAutomatic => File.Metadata?.IsAutomatic == true;
+    public string Caption => HasSummary ? $"{Summary} · {Size}" : Size;
+    internal IReadOnlyList<ClipEvent> Events => File.Metadata?.Events ?? [];
     public string When => Format.When(File.Created);
     public string Size => Format.Bytes(File.Bytes);
     public string Duration => File.Duration is { } d ? Format.Duration(d) : "";
@@ -60,6 +70,63 @@ public sealed class ClipItemViewModel : ObservableObject
     }
 
     public bool HasThumbnail => _thumbnail is not null;
+}
+
+// A detected moment on the player's timeline.
+public sealed class MarkerViewModel(string type, double seconds, string text, RelayCommand seek)
+{
+    // Jumping to a marker starts a little before it, so you see what led up to it.
+    private const double LeadIn = 2;
+
+    public string Type { get; } = type;
+    public string Label { get; } = EventKinds.Label(type);
+    public string Text { get; } = text;
+    public double Seconds { get; } = seconds;
+    public double SeekSeconds => Math.Max(0, Seconds - LeadIn);
+    public string TimeText { get; } = Format.Duration(TimeSpan.FromSeconds(seconds));
+    public IBrush Brush { get; } = EventKinds.Brush(type);
+    public RelayCommand SeekCommand { get; } = seek;
+}
+
+// Names and colours for the event types in src/detect/GameEvent.h.
+internal static class EventKinds
+{
+    public static string Label(string type) => type switch
+    {
+        "kill" => "Kill",
+        "assist" => "Assist",
+        "death" => "Death",
+        "revive" => "Revive",
+        "match_start" => "Match start",
+        "match_end" => "Match end",
+        "highlight" => "Highlight",
+        _ => type.Length > 0 ? char.ToUpperInvariant(type[0]) + type[1..].Replace('_', ' ') : "Moment",
+    };
+
+    // "1 Kill", "3 Kills".
+    public static string Count(string type, int count) => $"{count} {(count == 1 ? Label(type) : Plural(type))}";
+
+    public static string Plural(string type) => type switch
+    {
+        "kill" => "Kills",
+        "assist" => "Assists",
+        "death" => "Deaths",
+        "revive" => "Revives",
+        "match_start" => "Match starts",
+        "match_end" => "Match ends",
+        "highlight" => "Highlights",
+        _ => Label(type),
+    };
+
+    public static IBrush Brush(string type) => new SolidColorBrush(Color.Parse(type switch
+    {
+        "kill" => "#FF4D7A",
+        "assist" => "#22C8EE",
+        "death" => "#8E97B8",
+        "revive" => "#3EE0A6",
+        "match_start" or "match_end" => "#FFC24B",
+        _ => "#B45CF6",
+    }));
 }
 
 public sealed class GameItemViewModel(string name, int paletteIndex) : ObservableObject

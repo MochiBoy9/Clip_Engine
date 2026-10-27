@@ -1,9 +1,11 @@
 #pragma once
 
 #include "core/Win.h"
+#include "detect/GameEvent.h"
 
 #include <filesystem>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 
@@ -29,6 +31,13 @@ struct Config {
   Hotkey saveHotkey;
   std::string saveHotkeyText = "F8";
   bool recordWithoutGame = false;  // keep a buffer of the main monitor when no game is open
+
+  bool detection = true;          // read the screen for kills, deaths and other moments
+  bool detectionDebug = false;    // log everything read off the screen, for tuning detection.ini
+  bool autoClip = true;           // save a clip around each detected moment
+  std::set<EventType> autoClipEvents{kAllEventTypes.begin(), kAllEventTypes.end()};
+  int clipBeforeSeconds = 10;     // how much of an automatic clip comes before the moment
+  int clipAfterSeconds = 5;       // and after it
 
   // Reads key = value settings, writing a commented default file first if none exists.
   static Config Load(const std::filesystem::path& file);

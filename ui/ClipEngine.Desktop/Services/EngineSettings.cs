@@ -16,6 +16,15 @@ internal sealed class EngineSettings
     public bool MicAudio { get; set; } = true;
     public string SaveHotkey { get; set; } = "F8";
     public bool RecordWithoutGame { get; set; }
+    public bool Detection { get; set; } = true;
+    public bool AutoClip { get; set; } = true;
+    public List<string> AutoClipEvents { get; set; } = [.. AllEvents];
+    public int ClipBeforeSeconds { get; set; } = 10;
+    public int ClipAfterSeconds { get; set; } = 5;
+
+    // The engine's event names (src/detect/GameEvent.h).
+    public static readonly IReadOnlyList<string> AllEvents =
+        ["kill", "assist", "death", "revive", "match_start", "match_end", "highlight"];
 
     public static EngineSettings Load(string file)
     {
@@ -37,6 +46,14 @@ internal sealed class EngineSettings
                 case "mic_audio": settings.MicAudio = ParseBool(value, settings.MicAudio); break;
                 case "save_hotkey": settings.SaveHotkey = value; break;
                 case "record_without_game": settings.RecordWithoutGame = ParseBool(value, settings.RecordWithoutGame); break;
+                case "detection": settings.Detection = ParseBool(value, settings.Detection); break;
+                case "auto_clip": settings.AutoClip = ParseBool(value, settings.AutoClip); break;
+                case "auto_clip_events":
+                    settings.AutoClipEvents = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                                                   .Select(e => e.ToLowerInvariant()).Where(AllEvents.Contains).ToList();
+                    break;
+                case "clip_before_seconds": settings.ClipBeforeSeconds = ParseInt(value, settings.ClipBeforeSeconds); break;
+                case "clip_after_seconds": settings.ClipAfterSeconds = ParseInt(value, settings.ClipAfterSeconds); break;
             }
         }
         return settings;
@@ -56,6 +73,11 @@ internal sealed class EngineSettings
             ["mic_audio"] = Format(MicAudio),
             ["save_hotkey"] = SaveHotkey,
             ["record_without_game"] = Format(RecordWithoutGame),
+            ["detection"] = Format(Detection),
+            ["auto_clip"] = Format(AutoClip),
+            ["auto_clip_events"] = string.Join(", ", AllEvents.Where(AutoClipEvents.Contains)),
+            ["clip_before_seconds"] = Format(ClipBeforeSeconds),
+            ["clip_after_seconds"] = Format(ClipAfterSeconds),
         };
 
         var lines = File.Exists(file) ? File.ReadAllLines(file).ToList() : [];
