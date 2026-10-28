@@ -92,18 +92,9 @@ tbody tr:last-child td { border-bottom: 0; }
 th { font-size: 14px; color: var(--muted); font-weight: 600; }
 .us { color: var(--text); font-weight: 600; background: rgba(180, 92, 246, 0.12); }
 
-.plan { display: flex; flex-direction: column; gap: 12px; position: relative; }
-.plan ul { margin: 4px 0 8px; padding-left: 20px; color: var(--muted); flex: 1; }
-.plan li { margin: 6px 0; }
-.plan .btn { text-align: center; }
-.price { font-size: 38px; font-weight: 700; color: var(--text) !important; letter-spacing: -0.02em; }
-.price span { font-size: 16px; font-weight: 500; color: var(--muted); }
-.featured { border-color: rgba(255, 94, 196, 0.6); background: linear-gradient(180deg, rgba(180, 92, 246, 0.16), rgba(255, 255, 255, 0.04)); }
-.badge {
-  position: absolute; top: -12px; right: 20px; padding: 3px 12px; border-radius: 999px; font-size: 12px; font-weight: 600;
-  color: #fff !important; background: linear-gradient(135deg, #ffb457, var(--pink));
-}
-.pricing + .fine { margin-top: 22px; }
+
+.support { text-align: center; }
+.support-card { max-width: 620px; margin: 30px auto 0; text-align: center; display: flex; flex-direction: column; gap: 12px; align-items: center; }
 
 .download { text-align: center; }
 .download .btn { margin: 26px 0 12px; }
@@ -132,5 +123,4 @@ details p { color: var(--muted); margin: 10px 0 0; }
   .nav nav a:not(.btn) { display: none; }
   .hero { padding-top: 48px; }
   .section { padding-top: 56px; }
-  .featured { order: -1; }
 }

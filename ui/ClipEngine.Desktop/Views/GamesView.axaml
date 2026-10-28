@@ -62,7 +62,7 @@
 
       <Border Classes="glass" Padding="24" Margin="0,0,16,0">
         <Grid ColumnDefinitions="Auto,*">
-          <Border Width="48" Height="48" CornerRadius="16" Background="{StaticResource AccentGradient}"
+          <Border Width="48" Height="48" CornerRadius="16" Background="{DynamicResource AccentGradient}"
                   BoxShadow="{StaticResource AccentGlow}" VerticalAlignment="Top" Margin="0,0,18,0">
             <PathIcon Data="{StaticResource IconSparkle}" Width="22" Height="22" Foreground="White" />
           </Border>

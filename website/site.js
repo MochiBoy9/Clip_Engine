@@ -1,9 +1,7 @@
 // Links the page points at. Fill these in once the accounts exist; anything left empty keeps its in-page link.
 const LINKS = {
-  // A Polar checkout link for each product (Products > the product > Checkout links). Until there is one, Founder
-  // goes to the Clip Engine storefront on Polar.
-  founder: "https://polar.sh/clip-engine",
-  pro: "",
+  // The Clip Engine Patreon page.
+  patreon: "",
   // The latest release in the public downloads repository, e.g.
   // "https://github.com/MochiBoy9/Clip_Engine-downloads/releases/latest"
   download: "",

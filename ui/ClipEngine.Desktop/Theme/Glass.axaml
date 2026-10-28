@@ -30,6 +30,12 @@
         <GradientStop Offset="0.5" Color="#8580FF" />
         <GradientStop Offset="1" Color="#4AD6F3" />
       </LinearGradientBrush>
+      <!-- A faint tint of the accent behind the home screen's hero card. -->
+      <LinearGradientBrush x:Key="AccentWash" StartPoint="0%,0%" EndPoint="100%,100%">
+        <GradientStop Offset="0" Color="#448B5CF6" />
+        <GradientStop Offset="0.55" Color="#1A6C63FF" />
+        <GradientStop Offset="1" Color="#2E22C8EE" />
+      </LinearGradientBrush>
       <LinearGradientBrush x:Key="RecordGradient" StartPoint="0%,0%" EndPoint="100%,100%">
         <GradientStop Offset="0" Color="#FF6A88" />
         <GradientStop Offset="1" Color="#FF3D6E" />
@@ -163,7 +169,7 @@
   </Style>
 
   <Style Selector="Button.accent">
-    <Setter Property="Background" Value="{StaticResource AccentGradient}" />
+    <Setter Property="Background" Value="{DynamicResource AccentGradient}" />
     <Setter Property="BorderBrush" Value="#55FFFFFF" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="16" />
@@ -175,13 +181,13 @@
     <Setter Property="BoxShadow" Value="{StaticResource AccentGlow}" />
   </Style>
   <Style Selector="Button.accent:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource AccentGradientHover}" />
+    <Setter Property="Background" Value="{DynamicResource AccentGradientHover}" />
     <Setter Property="BorderBrush" Value="#80FFFFFF" />
     <Setter Property="Foreground" Value="White" />
     <Setter Property="BoxShadow" Value="{StaticResource AccentGlowStrong}" />
   </Style>
   <Style Selector="Button.accent:pressed /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource AccentGradient}" />
+    <Setter Property="Background" Value="{DynamicResource AccentGradient}" />
     <Setter Property="Foreground" Value="White" />
   </Style>
   <Style Selector="Button.accent:disabled /template/ ContentPresenter#PART_ContentPresenter">
@@ -251,7 +257,7 @@
     <Setter Property="Foreground" Value="White" />
   </Style>
   <Style Selector="RadioButton.segment:checked /template/ Border#PART_Segment">
-    <Setter Property="Background" Value="{StaticResource AccentGradient}" />
+    <Setter Property="Background" Value="{DynamicResource AccentGradient}" />
     <Setter Property="BoxShadow" Value="0 4 14 0 #667C5CFF, inset 0 1 0 0 #66FFFFFF" />
   </Style>
 
@@ -276,7 +282,7 @@
     <Setter Property="Foreground" Value="White" />
   </Style>
   <Style Selector="RadioButton.chip:checked /template/ Border#PART_Chip, ToggleButton.chip:checked /template/ Border#PART_Chip">
-    <Setter Property="Background" Value="{StaticResource AccentGradient}" />
+    <Setter Property="Background" Value="{DynamicResource AccentGradient}" />
     <Setter Property="BorderBrush" Value="#66FFFFFF" />
   </Style>
 
@@ -308,7 +314,7 @@
     <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
   </Style>
   <Style Selector="ListBox.chips ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource AccentGradient}" />
+    <Setter Property="Background" Value="{DynamicResource AccentGradient}" />
     <Setter Property="BorderBrush" Value="#66FFFFFF" />
     <Setter Property="Foreground" Value="White" />
     <Setter Property="BoxShadow" Value="0 6 18 0 #667C5CFF, inset 0 1 0 0 #66FFFFFF" />
@@ -347,7 +353,7 @@
     <Setter Property="Background" Value="Transparent" />
   </Style>
   <Style Selector="ListBox.nav ListBoxItem:selected Border.navGlyph">
-    <Setter Property="Background" Value="{StaticResource AccentGradient}" />
+    <Setter Property="Background" Value="{DynamicResource AccentGradient}" />
     <Setter Property="BoxShadow" Value="0 4 14 0 #807C5CFF" />
   </Style>
 
@@ -363,7 +369,7 @@
     <Setter Property="MinHeight" Value="38" />
   </Style>
   <Style Selector="Slider">
-    <Setter Property="Foreground" Value="{StaticResource AccentGradient}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentGradient}" />
   </Style>
   <Style Selector="ScrollViewer">
     <Setter Property="AllowAutoHide" Value="True" />

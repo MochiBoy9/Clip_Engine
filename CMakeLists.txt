@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(ClipEngine VERSION 0.3.1 LANGUAGES CXX)
+project(ClipEngine VERSION 0.3.2 LANGUAGES CXX)
 
 if(NOT WIN32 OR NOT MSVC)
   message(FATAL_ERROR "Clip Engine builds on Windows with MSVC (Visual Studio 2022 or newer).")

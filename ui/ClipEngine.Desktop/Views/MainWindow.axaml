@@ -116,13 +116,19 @@
         <DockPanel>
           <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="12" Margin="6,2,0,26"
                       IsHitTestVisible="False">
-            <Border Width="38" Height="38" CornerRadius="12" Background="{StaticResource AccentGradient}"
+            <Border Width="38" Height="38" CornerRadius="12" Background="{DynamicResource AccentGradient}"
                     BoxShadow="{StaticResource AccentGlow}">
               <PathIcon Data="{StaticResource IconPlay}" Width="16" Height="16" Foreground="White" Margin="2,0,0,0" />
             </Border>
             <StackPanel VerticalAlignment="Center">
               <TextBlock Text="Clip Engine" FontSize="17" FontWeight="Bold" LetterSpacing="-0.3" />
-              <TextBlock Text="{Binding Version}" Classes="caption" />
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBlock Text="{Binding Version}" Classes="caption" VerticalAlignment="Center" />
+                <Border CornerRadius="6" Padding="6,1" Background="{DynamicResource AccentGradient}"
+                        IsVisible="{Binding Supporter.IsSupporter}" ToolTip.Tip="Thanks for supporting Clip Engine">
+                  <TextBlock Text="SUPPORTER" FontSize="9" FontWeight="Bold" LetterSpacing="0.6" Foreground="White" />
+                </Border>
+              </StackPanel>
             </StackPanel>
           </StackPanel>
 
@@ -176,7 +182,7 @@
     <Border Classes="glass soft" IsVisible="{Binding HasToast}" HorizontalAlignment="Center" VerticalAlignment="Bottom"
             Margin="252,0,0,28" Padding="18,12" CornerRadius="18" Background="#E61B1836">
       <StackPanel Orientation="Horizontal" Spacing="10">
-        <Border Width="24" Height="24" CornerRadius="8" Background="{StaticResource AccentGradient}"
+        <Border Width="24" Height="24" CornerRadius="8" Background="{DynamicResource AccentGradient}"
                 IsVisible="{Binding !ToastIsError}">
           <PathIcon Data="{StaticResource IconCheck}" Width="13" Height="13" Foreground="White" />
         </Border>

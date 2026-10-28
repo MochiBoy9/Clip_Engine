@@ -48,10 +48,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         var engineSettings = live ? EngineSettings.Load(AppPaths.EngineSettingsFile) : new EngineSettings();
         DesktopSettings = live ? DesktopSettings.Load() : new DesktopSettings();
-        License = live
-            ? new LicenseViewModel(LicenseState.Load(AppPaths.LicenseFile), AppPaths.LicenseFile, new PolarLicenseClient())
-            : new LicenseViewModel(new LicenseState(), null, null, purchasesOpen: true);
-        Settings = new SettingsViewModel(engineSettings, DesktopSettings, live ? RestartEngineAsync : null) { License = License };
+        Supporter = live
+            ? new SupporterViewModel(SupporterConfig.PublicKey, AppPaths.SupporterKeyFile, DesktopSettings)
+            : new SupporterViewModel(SupporterConfig.PublicKey, null, DesktopSettings);
+        Settings = new SettingsViewModel(engineSettings, DesktopSettings, live ? RestartEngineAsync : null) { Supporter = Supporter };
         Settings.SidePanelHotkeyChanged += _ => Raise(nameof(SidePanelHotkey));
         _hotkey = engineSettings.SaveHotkey;
         _clipSeconds = engineSettings.ClipSeconds;
@@ -92,8 +92,6 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         if (!live) return;
 
-        License.StartRechecking();
-
         _library = new ClipLibrary { ExtraFolders = DesktopSettings.ImportFolders };
         _library.Changed += () => _ = RefreshClipsAsync();
         _library.Watch(engineSettings.OutputDir);
@@ -115,7 +113,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public ClipsPage ClipsPage { get; }
     public GamesPage GamesPage { get; }
     public SettingsViewModel Settings { get; }
-    public LicenseViewModel License { get; }
+    public SupporterViewModel Supporter { get; }
     internal DesktopSettings DesktopSettings { get; }
 
     public ObservableCollection<ActivityItem> Activity { get; } = [];
@@ -632,7 +630,6 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         _engine?.Dispose();
         _library?.Dispose();
-        License.Dispose();
     }
 }
 

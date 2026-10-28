@@ -65,6 +65,13 @@ var panel = new SidePanelWindow { DataContext = vm, Width = 344, Height = 900 };
 panel.Show();
 Save(panel, "6-side-panel.png");
 
+// A supporter colour theme.
+var ember = AccentThemes.Find("ember");
+AccentThemes.ApplyAccent(ember);
+AccentThemes.ApplyBackground(ember, window.BlobViolet, window.BlobCyan, window.BlobPink, window.BlobBlue);
+vm.ShowPage(vm.Home);
+Save(window, "7-theme-ember.png");
+
 internal static class Sample
 {
     public static void Fill(MainViewModel vm)

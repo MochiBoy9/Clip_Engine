@@ -10,15 +10,7 @@
       <!-- Hero: what the engine is doing right now -->
       <Border Classes="glass" CornerRadius="30" Padding="0">
         <Panel>
-          <Border IsHitTestVisible="False">
-            <Border.Background>
-              <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
-                <GradientStop Offset="0" Color="#448B5CF6" />
-                <GradientStop Offset="0.55" Color="#1A6C63FF" />
-                <GradientStop Offset="1" Color="#2E22C8EE" />
-              </LinearGradientBrush>
-            </Border.Background>
-          </Border>
+          <Border IsHitTestVisible="False" Background="{DynamicResource AccentWash}" />
           <!-- A bright arc in the corner, like light bending through thick glass -->
           <Ellipse Width="420" Height="420" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-210,-120,0"
                    IsHitTestVisible="False">
@@ -170,7 +162,7 @@
                 <DataTemplate x:DataType="vm:ActivityItem">
                   <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,14">
                     <Panel Width="28" Height="28" VerticalAlignment="Top" Margin="0,0,12,0">
-                      <Border CornerRadius="9" Background="{StaticResource AccentGradient}" IsVisible="{Binding IsClip}">
+                      <Border CornerRadius="9" Background="{DynamicResource AccentGradient}" IsVisible="{Binding IsClip}">
                         <PathIcon Data="{StaticResource IconBolt}" Width="13" Height="13" Foreground="White" />
                       </Border>
                       <Border CornerRadius="9" Background="{StaticResource RecordGradient}" IsVisible="{Binding IsRecording}">

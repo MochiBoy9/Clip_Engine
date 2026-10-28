@@ -54,7 +54,7 @@ Run `ClipEngine.exe` and launch a supported game. `clip_engine.exe` can also run
 - Clips: `Videos\Clip_Engine\<Game>\`
 - Detection rules: `detection.ini` next to the app. Copy it to `%LOCALAPPDATA%\Clip_Engine\` to tune it; that copy wins. With `detection_debug = true` in the settings, the log shows what the engine reads from each screen region, which is how rules are tuned.
 - `clip_engine.exe --export <clip.mp4> <out.mp4> --max-mb 10` makes a small copy for sharing.
-- License: `%LOCALAPPDATA%\Clip_Engine\license.json`. Keys are sold and checked through [Polar](https://polar.sh); the organization and benefit ids go in `ui/ClipEngine.Desktop/Services/Licensing.cs`. Until they're filled in, Settings shows paid plans as coming soon.
+- Supporter key: `%LOCALAPPDATA%\Clip_Engine\supporter.key`. Patreon backers get a key that unlocks colour themes, a supporter badge and a place in the thank-you list; every recording feature is free. Keys are made with `dotnet run --project ui/ClipEngine.SupporterKeys -- make "Name"` and checked offline against the public key in `ui/ClipEngine.Desktop/Services/SupporterKey.cs`. Thank-you names live in `ui/ClipEngine.Desktop/Assets/Supporters.txt`.
 
 ## Layout
 
@@ -72,5 +72,6 @@ Run `ClipEngine.exe` and launch a supported game. `clip_engine.exe` can also run
 | `tests` | Tests for the detection rules, matching and clip metadata |
 | `ui/ClipEngine.Desktop` | The desktop app (C#, Avalonia) |
 | `ui/ClipEngine.Desktop.Preview` | Renders the app's screens to PNGs with sample data |
-| `ui/ClipEngine.Desktop.Tests` | Tests for the app's log parsing, settings file, MP4 reading, clip markers, import and licensing |
+| `ui/ClipEngine.Desktop.Tests` | Tests for the app's log parsing, settings file, MP4 reading, clip markers, import and supporter keys |
+| `ui/ClipEngine.SupporterKeys` | Makes supporter keys for Patreon backers (the signing key stays on your PC, never in the repo) |
 | `website` | The landing page (plain HTML, hosted on Cloudflare Pages; see `website/README.md`) |

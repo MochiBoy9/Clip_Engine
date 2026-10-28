@@ -1,13 +1,11 @@
-## Clip Engine 0.3.1
+## Clip Engine 0.3.2
 
-Clip Engine can now be supported with a Founder license.
+Clip Engine is free, for good. The paid Founder and Pro plans are gone; every recording feature is free for everyone, with no ads and no watermark.
 
-- **Founder license.** A one-time $29 purchase that unlocks the Pro features that run on your PC, for life. Buy it from **Settings → Plan → Become a Founder**; the key arrives in your receipt email.
-- **Plan card in Settings.** Shows whether you're on Free, Pro or Founder. Paste your key and press **Activate**. **Remove from this PC** frees it for another PC.
-- **Works offline.** The key is checked when you activate it and about twice a day after that. A paid plan keeps working for 14 days without an internet connection.
-- **Nothing is taken away.** Everything that was free stays free: automatic clips, the clip player, Discord sharing and the side panel. No ads, no watermark.
-
-Payments are handled by Polar, which also takes care of sales tax and VAT.
+- **Support on Patreon instead.** If you'd like to help the project, back it on Patreon. Patrons get a supporter key that works forever, offline, on all their PCs.
+- **Colour themes for supporters.** Ember, Mint, Sakura, Ocean and Gold recolour the buttons, highlights and the glow behind the app. Pick one under **Settings → Support**.
+- **Supporter badge and thank-you list.** Supporters get a badge next to the version in the sidebar, and backers are thanked by name in Settings.
+- **Founder keys bought for 0.3.1** aren't checked any more. If you bought one, get in touch for a supporter key.
 
 ## Install
 
