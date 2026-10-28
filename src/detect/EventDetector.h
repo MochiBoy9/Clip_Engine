@@ -3,6 +3,8 @@
 #include "capture/MonitorCapture.h"
 #include "detect/DetectionRules.h"
 
+#include <winrt/Windows.Media.Ocr.h>
+
 #include <atomic>
 #include <condition_variable>
 #include <functional>
@@ -14,9 +16,12 @@
 namespace clip {
 
 // Reads the parts of the captured screen named by the game's rules a few times a second
-// with Windows' built-in text recognition, and reports kills, deaths and other moments.
-// It copies only those small regions off the GPU, without waiting on it, and runs at
-// low priority so it never competes with the game.
+// with Windows' built-in text recognition, or looks there for an icon, and reports kills,
+// deaths and other moments. It copies only those small regions off the GPU, without waiting
+// on it, and runs at low priority so it never competes with the game. To keep that work
+// small, a region inside another is read as part of it when that's cheaper, a region that
+// hasn't changed since it was last read isn't read again, and banners that stay up for
+// seconds are looked at less often than kill popups.
 class EventDetector {
  public:
   using Sink = std::function<void(const GameEvent&)>;
@@ -34,6 +39,7 @@ class EventDetector {
  private:
   struct Region;
   void Run();
+  void Process(Region& region, int64_t time, const winrt::Windows::Media::Ocr::OcrEngine& ocr);
 
   std::shared_ptr<GpuDevice> gpu_;
   const MonitorCapture& capture_;

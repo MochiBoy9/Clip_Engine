@@ -83,6 +83,34 @@ public class DetectionIniTests
         Assert.Equal(1, ini.ToString().Split("[game.valorant]").Length - 1);
     }
 
+    [Fact]
+    public void KeepsSettingsStudioDoesNotEdit()
+    {
+        var ini = DetectionIni.Parse("""
+            [valorant.kill]
+            region = 0.66, 0.07, 0.33, 0.26
+            words = {player}
+            position = start
+            cooldown_ms = 0
+
+            [valorant.kill.banner]
+            region = 0.42, 0.72, 0.16, 0.16
+            image = valorant_kill.png
+            image_screen = 1440
+            sample_ms = 200
+            """);
+        var rules = ini.Rules;
+        Assert.Equal("start", rules[0].Position);
+        Assert.Equal("anywhere", rules[1].Position);
+        Assert.Equal("valorant_kill.png", rules[1].Image);
+
+        ini.SetGame("valorant", null, rules);
+        var text = ini.ToString();
+        Assert.Contains("words = {player}\ncooldown_ms = 0\nposition = start\n", text);
+        Assert.Contains("[valorant.kill.banner]\nregion = 0.42, 0.72, 0.16, 0.16\nimage = valorant_kill.png\nimage_screen = 1440\nsample_ms = 200\n", text);
+        Assert.Equal("start", DetectionIni.Parse(text).Rules[0].Position);
+    }
+
     [Theory]
     [InlineData("Marvel Rivals", "marvel_rivals")]
     [InlineData("  VALORANT ", "valorant")]

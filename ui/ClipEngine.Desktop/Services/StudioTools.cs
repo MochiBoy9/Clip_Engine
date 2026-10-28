@@ -29,11 +29,22 @@ internal static class StudioTools
         Require();
         string? text = null;
         var matches = 0;
-        string[] args =
+        List<string> args =
         [
             "--read", source, "--at", Number(seconds), "--region", rule.RegionText.Replace(" ", ""),
             "--threshold", rule.Threshold.ToString(CultureInfo.InvariantCulture), "--words", rule.Words, "--exclude", rule.Exclude,
+            "--position", rule.Position,
         ];
+        // Icons are found next to detection.ini, like the engine looks for them.
+        if (rule.Image is { Length: > 0 } image)
+        {
+            var path = Path.IsPathRooted(image)
+                ? image
+                : new[] { AppPaths.DataDir, AppContext.BaseDirectory }.Select(d => Path.Combine(d, image)).FirstOrDefault(File.Exists) ?? image;
+            args.AddRange(["--image", path]);
+            if (rule.Setting("image_match") is { } match) args.AddRange(["--image-match", match]);
+            if (rule.Setting("image_screen") is { } screen) args.AddRange(["--image-screen", screen]);
+        }
         var (exitCode, failure) = await EngineCommand.RunAsync(args, e =>
         {
             if (e is TextRead read) text = read.Text;

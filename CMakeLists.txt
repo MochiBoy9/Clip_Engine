@@ -22,6 +22,7 @@ add_executable(clip_engine
   src/core/Log.cpp
   src/detect/DetectionRules.cpp
   src/detect/EventDetector.cpp
+  src/detect/ImageMatch.cpp
   src/detect/Ocr.cpp
   src/detect/RuleTester.cpp
   src/detect/TextMatcher.cpp
@@ -66,6 +67,7 @@ enable_testing()
 add_executable(clip_engine_tests
   tests/DetectTests.cpp
   src/detect/DetectionRules.cpp
+  src/detect/ImageMatch.cpp
   src/detect/TextMatcher.cpp
   src/media/ClipMetadata.cpp
 )

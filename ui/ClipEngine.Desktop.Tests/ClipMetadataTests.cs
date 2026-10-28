@@ -120,4 +120,24 @@ public class ClipMetadataTests : IDisposable
         Assert.True(back?.Favorite);
         Assert.Equal(3, back?.Match);
     }
+
+    [Fact]
+    public void OneKillReadTwiceIsOneMoment()
+    {
+        var metadata = ClipMetadataFile.Parse("""
+            {
+              "title": "3 kills, 1 assist",
+              "events": [
+                { "type": "kill", "time": 4.0, "text": "ENTERRO ELIMINATED VEX" },
+                { "type": "kill", "time": 6.5, "text": "ENTERRO ELIMINATED VEX" },
+                { "type": "assist", "time": 7.0, "text": "ASSIST VEX" },
+                { "type": "kill", "time": 9.0, "text": "ENTERRO ELIMINATED MIRA" }
+              ]
+            }
+            """)!;
+
+        Assert.Equal(["kill", "assist", "kill"], metadata.Events.Select(e => e.Type));
+        Assert.Equal("2 kills, 1 assist", metadata.Title);
+    }
 }
+

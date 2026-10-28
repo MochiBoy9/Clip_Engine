@@ -3,9 +3,11 @@
 
 #include "app/AutoClipPlanner.h"
 #include "detect/DetectionRules.h"
+#include "detect/ImageMatch.h"
 #include "detect/TextMatcher.h"
 #include "media/ClipMetadata.h"
 
+#include <cmath>
 #include <cstdio>
 #include <fstream>
 #include <sstream>
@@ -180,6 +182,214 @@ void TestTracker() {
   CHECK(cooled.Update(Tokenize("ELIMINATED A"), 6000) == 1);
 }
 
+// One kill stays in the killfeed for seconds while the screen is read several times a second.
+// It must count once, however the reads come back.
+void TestTrackerCountsEachKillOnce() {
+  DetectionRule rule;
+  rule.words = {MakePhrase("ELIMINATED")};
+  rule.position = LinePosition::Start;
+  rule.cooldownMs = 0;
+  RuleTracker tracker(rule);
+  auto rows = [](std::initializer_list<const char*> lines) {
+    std::vector<std::vector<std::string>> result;
+    for (const char* line : lines) result.push_back(Tokenize(line));
+    return result;
+  };
+
+  CHECK(tracker.Update(rows({"ELIMINATED VEX"}), 0) == 1);
+  // OCR loses the line for several reads, then finds it again: still the same kill.
+  CHECK(tracker.Update(rows({}), 250) == 0);
+  CHECK(tracker.Update(rows({}), 500) == 0);
+  CHECK(tracker.Update(rows({}), 750) == 0);
+  CHECK(tracker.Update(rows({"ELIMINATED SHADOW"}), 1000) == 1);
+  CHECK(tracker.Update(rows({"ELIMINATED SHAD0W", "ELIMINATED VEX"}), 1250) == 0);  // misread name
+  CHECK(tracker.Update(rows({"ELIMINATED SHADDW"}), 1400) == 0);
+  // The feed scrolls: the old line leaves as a new one arrives in the same read.
+  CHECK(tracker.Update(rows({"ELIMINATED MIRA"}), 1500) == 1);
+  CHECK(tracker.Update(rows({"ELIMINATED MIRA", "ELIMINATED VEX"}), 1750) == 0);  // VEX flickers back
+  // The same player killed again while the first line still shows: two lines, two kills.
+  CHECK(tracker.Update(rows({"ELIMINATED MIRA", "ELIMINATED MIRA"}), 2000) == 1);
+  CHECK(tracker.Update(rows({"ELIMINATED MIRA"}), 2250) == 0);
+  // Long after the lines are gone, killing that player again counts.
+  CHECK(tracker.Update(rows({}), 3000) == 0);
+  CHECK(tracker.Update(rows({"ELIMINATED VEX"}), 9000) == 1);
+
+  // Text read as one run: the names after each keyword tell the kills apart.
+  DetectionRule run;
+  run.words = {MakePhrase("ELIMINATED")};
+  run.cooldownMs = 0;
+  RuleTracker anywhere(run);
+  CHECK(anywhere.Update(Tokenize("ENTERRO ELIMINATED VEX"), 0) == 1);
+  CHECK(anywhere.Update(Tokenize("ENTERRO ELIMINATED MIRA ENTERRO ELIMINATED VEX"), 250) == 1);
+  CHECK(anywhere.Update(Tokenize("ENTERRO ELIMINATED MIRA"), 500) == 0);
+  CHECK(anywhere.Update(Tokenize("ENTERRO ELIMINATED VEX ENTERRO ELIMINATED MIRA"), 750) == 0);
+}
+
+std::vector<std::vector<std::string>> Rows(std::initializer_list<const char*> lines) {
+  std::vector<std::vector<std::string>> result;
+  for (const char* line : lines) result.push_back(Tokenize(line));
+  return result;
+}
+
+// Exclude cancels the match it belongs to, not every match in the region.
+void TestExcludeOnlyNearby() {
+  DetectionRule rule;
+  rule.words = {MakePhrase("ELIMINATED")};
+  rule.exclude = {MakePhrase("BY"), MakePhrase("YOU WERE")};
+  CHECK(CountMatches(rule, Rows({"ELIMINATED BOB", "DEFUSED BY ANN"})) == 1);  // another popup's "BY"
+  CHECK(CountMatches(rule, Rows({"YOU WERE ELIMINATED"})) == 0);
+  CHECK(CountMatches(rule, Rows({"ELIMINATED", "BY ZED"})) == 0);  // the death banner, wrapped
+  CHECK(CountMatches(rule, Rows({"ZED", "ELIMINATED BY"})) == 0);
+  CHECK(CountMatches(rule, Rows({"ELIMINATED BOB", "YOU WERE ELIMINATED"})) == 1);
+
+  // Multi-kill medals hold the kill word too; excluding them leaves the kill popup alone.
+  DetectionRule kill;
+  kill.words = {MakePhrase("KILL")};
+  kill.exclude = {MakePhrase("DOUBLE KILL")};
+  CHECK(CountMatches(kill, Rows({"KILL 100", "DOUBLE KILL 50"})) == 1);
+}
+
+// Numbers change while a message stays up, and other rows aren't part of it.
+void TestMessageNames() {
+  DetectionRule respawn;
+  respawn.event = EventType::Death;
+  respawn.words = {MakePhrase("RESPAWN IN")};
+  respawn.cooldownMs = 0;
+  RuleTracker death(respawn);
+  CHECK(death.Update(Rows({"RESPAWN IN 10"}), 0) == 1);
+  CHECK(death.Update(Rows({"RESPAWN IN 9"}), 250) == 0);
+  CHECK(death.Update(Rows({"RESPAWN IN 8"}), 500) == 0);
+
+  DetectionRule rule;
+  rule.words = {MakePhrase("ELIMINATED")};
+  rule.cooldownMs = 0;
+  RuleTracker kills(rule);
+  CHECK(kills.Update(Rows({"VEX ELIMINATED", "ROUND TIMER"}), 0) == 1);
+  CHECK(kills.Update(Rows({"VEX ELIMINATED", "SPIKE PLANTED"}), 250) == 0);  // the next row changed, not the kill
+  CHECK(kills.Update(Rows({"VEX ELIMINATED"}), 500) == 0);
+  CHECK(kills.Update(Rows({"ELIMINATED +100"}), 5000) == 1);
+  CHECK(kills.Update(Rows({"ELIMINATED +125"}), 5250) == 0);  // the score ticked up, same popup
+
+  // Popups without names count again once they've been gone a moment.
+  CHECK(kills.Update(Rows({}), 5500) == 0);
+  CHECK(kills.Update(Rows({}), 6000) == 0);
+  CHECK(kills.Update(Rows({}), 6500) == 0);
+  CHECK(kills.Update(Rows({"ELIMINATED +100"}), 6750) == 1);
+}
+
+// A quick double kill inside a rule's cooldown is still two kills; a death screen read twice is one death.
+void TestCooldownKeepsKills() {
+  DetectionRule rule;
+  rule.event = EventType::Kill;
+  rule.words = {MakePhrase("ELIMINATED")};
+  rule.cooldownMs = 1000;
+  RuleTracker kills(rule);
+  CHECK(kills.Update(Rows({"ELIMINATED ANN"}), 0) == 1);
+  CHECK(kills.Update(Rows({"ELIMINATED ANN", "ELIMINATED BOB"}), 250) == 0);  // held for now
+  CHECK(kills.Update(Rows({"ELIMINATED ANN", "ELIMINATED BOB"}), 500) == 0);
+  CHECK(kills.Update(Rows({"ELIMINATED BOB"}), 1000) == 1);  // counted once the cooldown is over
+  CHECK(kills.Update(Rows({"ELIMINATED BOB"}), 2000) == 0);
+
+  DetectionRule screen = rule;
+  screen.event = EventType::Death;
+  screen.words = {MakePhrase("ELIMINATED BY")};
+  screen.cooldownMs = 8000;
+  RuleTracker deaths(screen);
+  CHECK(deaths.Update(Rows({"ELIMINATED BY ZED"}), 0) == 1);
+  CHECK(deaths.Update(Rows({"ELIMINATED BY ZOE"}), 250) == 0);  // misread as another name
+  CHECK(deaths.Update(Rows({}), 9000) == 0);
+}
+
+void TestImageRulesParse() {
+  const auto rules = Parse(R"(
+[detection]
+sample_ms = 200
+
+[valorant.kill.banner]
+region = 0.40, 0.70, 0.20, 0.20
+image = icons/valorant_kill.png
+image_match = 0.85
+image_screen = 1440
+
+[valorant.match_end]
+words = VICTORY
+
+[valorant.death]
+words = KILLED BY
+sample_ms = 300
+
+[valorant.highlight]
+image_match = 2
+
+[valorant.assist]
+words = ASSIST
+image = assist.png
+)");
+  CHECK(rules.rules.size() == 4);
+  CHECK(rules.warnings.size() == 3);  // the bad image_match, then nothing to look for, then both
+  if (rules.rules.size() == 4) {
+    CHECK(rules.rules[3].LooksForImage() && !rules.rules[3].ReadsText());  // one or the other, so a kill counts once
+    CHECK(rules.rules[0].LooksForImage() && !rules.rules[0].ReadsText());
+    CHECK(rules.rules[0].image == "icons/valorant_kill.png");
+    CHECK(rules.rules[0].imageMatch == 0.85);
+    CHECK(rules.rules[0].imageScreen == 1440);
+    CHECK(rules.rules[0].sampleMs == 200);
+    CHECK(rules.rules[1].sampleMs == 1000);  // banners are checked less often
+    CHECK(rules.rules[2].sampleMs == 300);
+  }
+}
+
+// Draws a ring with a dark middle, like a kill icon, into a BGRA buffer.
+void DrawRing(std::vector<uint8_t>& bgra, int width, int cx, int cy, double radius) {
+  const int height = static_cast<int>(bgra.size() / 4 / width);
+  for (int y = 0; y < height; ++y) {
+    for (int x = 0; x < width; ++x) {
+      const double d = std::hypot(x - cx, y - cy);
+      uint8_t* p = &bgra[(static_cast<size_t>(y) * width + x) * 4];
+      if (d > radius * 0.6 && d < radius) p[0] = 40, p[1] = 40, p[2] = 230, p[3] = 255;  // red
+      else if (d <= radius * 0.6) p[0] = p[1] = p[2] = 10, p[3] = 255;
+    }
+  }
+}
+
+std::vector<uint8_t> Noise(int width, int height, unsigned seed) {
+  std::vector<uint8_t> bgra(static_cast<size_t>(width) * height * 4);
+  for (size_t i = 0; i < bgra.size(); i += 4) {
+    seed = seed * 1103515245 + 12345;
+    const uint8_t v = static_cast<uint8_t>(60 + (seed >> 16) % 80);
+    bgra[i] = bgra[i + 1] = bgra[i + 2] = v;
+    bgra[i + 3] = 255;
+  }
+  return bgra;
+}
+
+void TestImageMatch() {
+  // The icon as cut from a 1080p screenshot: a ring on a transparent background.
+  std::vector<uint8_t> icon(40 * 40 * 4, 0);
+  DrawRing(icon, 40, 20, 20, 18);
+  const GrayImage picture = ToGray(icon.data(), 40, 40, 40 * 4, true);
+  CHECK(!picture.mask.empty());
+
+  const ImageMatcher same(picture, 1080, 1080);
+  CHECK(same.Valid());
+  auto screen = Noise(300, 160, 1);
+  CHECK(same.BestMatch(ToGray(screen.data(), 300, 160, 300 * 4, false)) < 0.5);
+  DrawRing(screen, 300, 211, 77, 18);
+  const double found = same.BestMatch(ToGray(screen.data(), 300, 160, 300 * 4, false));
+  CHECK(found > 0.85);
+
+  // The same icon on a 1440p screen shows a third bigger.
+  const ImageMatcher bigger(picture, 1080, 1440);
+  auto large = Noise(400, 210, 2);
+  DrawRing(large, 400, 150, 120, 24);
+  CHECK(bigger.BestMatch(ToGray(large.data(), 400, 210, 400 * 4, false)) > 0.8);
+  CHECK(same.BestMatch(ToGray(large.data(), 400, 210, 400 * 4, false)) < bigger.BestMatch(ToGray(large.data(), 400, 210, 400 * 4, false)));
+
+  // A flat picture would match any flat patch, so it's refused.
+  std::vector<uint8_t> flat(20 * 20 * 4, 200);
+  CHECK(!ImageMatcher(ToGray(flat.data(), 20, 20, 20 * 4, false), 0, 1080).Valid());
+}
+
 void TestPlanner() {
   AutoClipPlanner planner(10, 5, 40);
   planner.Add(100);  // wants 90..105
@@ -295,6 +505,12 @@ int main(int argc, char** argv) {
   TestParse();
   TestCustomGames();
   TestTracker();
+  TestTrackerCountsEachKillOnce();
+  TestExcludeOnlyNearby();
+  TestMessageNames();
+  TestCooldownKeepsKills();
+  TestImageRulesParse();
+  TestImageMatch();
   TestPlanner();
   TestMetadata();
   TestMetadataRoundTrip();
