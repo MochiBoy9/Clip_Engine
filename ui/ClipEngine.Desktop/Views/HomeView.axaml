@@ -51,6 +51,14 @@
                 </StackPanel>
               </Button>
               <TextBlock Text="{Binding Main.SaveHint}" Classes="caption" HorizontalAlignment="Center" />
+              <Button Classes="glass" Command="{Binding Main.ToggleLongRecordingCommand}" Height="44" MinWidth="210"
+                      CornerRadius="16" HorizontalContentAlignment="Center" Margin="0,6,0,0">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                  <Ellipse Classes="liveDot" Classes.pulsing="{Binding Main.IsLongRecording}" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding Main.LongRecordingButton}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <TextBlock Text="{Binding Main.LongRecordingHint}" Classes="caption" HorizontalAlignment="Center" />
             </StackPanel>
           </Grid>
         </Panel>

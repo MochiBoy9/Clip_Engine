@@ -18,7 +18,18 @@ OcrEngine CreateOcrEngine() {
   return OcrEngine::TryCreateFromUserProfileLanguages();
 }
 
+namespace {
+
+// A region too big for text recognition (a whole scoreboard on a 4K screen) is shrunk to fit.
+UINT ShrinkToFit(UINT width, UINT height, UINT shrink) {
+  const UINT maxDimension = OcrEngine::MaxImageDimension();
+  return std::max({shrink, 1u, (std::max(width, height) + maxDimension - 1) / maxDimension});
+}
+
+}  // namespace
+
 double OcrScale(UINT width, UINT height, UINT shrink) {
+  shrink = ShrinkToFit(width, height, shrink);
   if (shrink > 1) return 1.0 / shrink;
   const UINT maxDimension = OcrEngine::MaxImageDimension();
   return height < 120 && width * 2 <= maxDimension && height * 2 <= maxDimension ? 2.0 : 1.0;
@@ -26,7 +37,7 @@ double OcrScale(UINT width, UINT height, UINT shrink) {
 
 SoftwareBitmap PrepareForOcr(const std::vector<uint8_t>& bgra, UINT width, UINT height, int threshold, UINT shrink) {
   const UINT maxDimension = OcrEngine::MaxImageDimension();
-  shrink = std::max(shrink, 1u);
+  shrink = ShrinkToFit(width, height, shrink);
   const UINT grow = OcrScale(width, height, shrink) > 1 ? 2 : 1;
   const UINT outWidth = std::min(width * grow / shrink, maxDimension);
   const UINT outHeight = std::min(height * grow / shrink, maxDimension);

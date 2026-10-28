@@ -1,0 +1,192 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ClipEngine.Desktop.ViewModels"
+             x:Class="ClipEngine.Desktop.Views.RecordsView"
+             x:DataType="vm:RecordsViewModel">
+  <ScrollViewer>
+    <StackPanel Margin="18,0,22,24" Spacing="18">
+      <StackPanel Spacing="2">
+        <TextBlock Classes="h1" Text="Records" />
+        <TextBlock Classes="caption" Text="{Binding Summary}" TextWrapping="Wrap" />
+      </StackPanel>
+
+      <!-- The match being played, against the player's best in that game -->
+      <Border Classes="glass" Padding="0" IsVisible="{Binding HasLiveMatch}">
+        <Panel>
+          <Border IsHitTestVisible="False" Background="{DynamicResource AccentWash}" />
+          <Grid ColumnDefinitions="*,Auto" Margin="26,22">
+            <StackPanel Spacing="6" VerticalAlignment="Center">
+              <Border Classes="pill" HorizontalAlignment="Left">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Ellipse Classes="liveDot pulsing" Fill="{StaticResource RecordBrush}" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding LiveTitle}" FontSize="11" FontWeight="Bold" LetterSpacing="1.1" />
+                </StackPanel>
+              </Border>
+              <TextBlock Classes="h2" Text="{Binding LiveComparison}" TextWrapping="Wrap" />
+              <TextBlock Classes="caption" Text="Counting from the game's own scoreboard" IsVisible="{Binding LiveFromScoreboard}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="26" Margin="24,0,0,0" VerticalAlignment="Center">
+              <StackPanel>
+                <TextBlock Classes="stat" Text="{Binding LiveKills}" HorizontalAlignment="Center" />
+                <TextBlock Classes="caption" Text="Kills" HorizontalAlignment="Center" />
+              </StackPanel>
+              <StackPanel>
+                <TextBlock Classes="stat" Text="{Binding LiveDeaths}" HorizontalAlignment="Center" />
+                <TextBlock Classes="caption" Text="Deaths" HorizontalAlignment="Center" />
+              </StackPanel>
+              <StackPanel>
+                <TextBlock Classes="stat" Text="{Binding LiveAssists}" HorizontalAlignment="Center" />
+                <TextBlock Classes="caption" Text="Assists" HorizontalAlignment="Center" />
+              </StackPanel>
+              <StackPanel>
+                <TextBlock Classes="stat" Text="{Binding LiveRevives}" HorizontalAlignment="Center" />
+                <TextBlock Classes="caption" Text="Revives" HorizontalAlignment="Center" />
+              </StackPanel>
+            </StackPanel>
+          </Grid>
+        </Panel>
+      </Border>
+
+      <Border Classes="glass" Padding="28" IsVisible="{Binding HasNoRecords}">
+        <StackPanel Spacing="8" HorizontalAlignment="Center">
+          <PathIcon Data="{StaticResource IconTrophy}" Width="34" Height="34" Foreground="{StaticResource TextTertiary}" />
+          <TextBlock Classes="h2" Text="No records yet" HorizontalAlignment="Center" />
+          <TextBlock Classes="caption" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="460"
+                     Text="Every kill, assist, death and revive the engine sees is kept, clipped or not, and games' scoreboards fill in the exact numbers. Add your in-game name on the Games page so scoreboards can be read." />
+        </StackPanel>
+      </Border>
+
+      <!-- Lifetime totals -->
+      <ItemsControl ItemsSource="{Binding Totals}" IsVisible="{Binding HasRecords}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate><UniformGrid Columns="6" /></ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:TotalTile">
+            <Border Classes="glass soft" Padding="16,14" Margin="0,0,12,0">
+              <StackPanel Spacing="4">
+                <Border Height="3" Width="22" CornerRadius="2" Background="{Binding Brush}" HorizontalAlignment="Left" />
+                <TextBlock Classes="stat" Text="{Binding Value}" />
+                <TextBlock Classes="caption" Text="{Binding Label}" />
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <!-- Personal bests across every game -->
+      <StackPanel Spacing="12" IsVisible="{Binding HasRecords}">
+        <TextBlock Classes="h2" Text="Personal bests" />
+        <ItemsControl ItemsSource="{Binding Records}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate><UniformGrid Columns="3" /></ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:RecordCard">
+              <Border Classes="glass" Padding="0" Margin="0,0,14,14" CornerRadius="22">
+                <Panel>
+                  <Border Background="{Binding Gradient}" Opacity="0.28" IsHitTestVisible="False">
+                    <Border.OpacityMask>
+                      <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                        <GradientStop Offset="0" Color="#FF000000" />
+                        <GradientStop Offset="0.8" Color="#00000000" />
+                      </LinearGradientBrush>
+                    </Border.OpacityMask>
+                  </Border>
+                  <StackPanel Margin="20,18" Spacing="4">
+                    <TextBlock Classes="eyebrow" Text="{Binding Title}" />
+                    <TextBlock Text="{Binding Value}" FontSize="34" FontWeight="Black" LetterSpacing="-0.8" />
+                    <TextBlock Classes="body" Text="{Binding ValueText}" />
+                    <TextBlock Classes="caption" Text="{Binding Detail}" />
+                  </StackPanel>
+                </Panel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+
+      <Grid ColumnDefinitions="*,18,*" IsVisible="{Binding HasRecords}">
+        <!-- Totals per game -->
+        <Border Classes="glass" Padding="20">
+          <StackPanel Spacing="12">
+            <TextBlock Classes="h2" Text="By game" />
+            <ItemsControl ItemsSource="{Binding GameTotals}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:GameTotalsRow">
+                  <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,12">
+                    <Border Width="38" Height="38" CornerRadius="12" Background="{Binding Gradient}" Margin="0,0,12,0">
+                      <TextBlock Text="{Binding Initials}" FontWeight="Black" Foreground="White"
+                                 HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                      <TextBlock Text="{Binding Game}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Classes="caption" Text="{Binding Caption}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="18" VerticalAlignment="Center">
+                      <StackPanel>
+                        <TextBlock Text="{Binding Kills}" FontWeight="Bold" HorizontalAlignment="Right" />
+                        <TextBlock Classes="caption" Text="kills" HorizontalAlignment="Right" />
+                      </StackPanel>
+                      <StackPanel>
+                        <TextBlock Text="{Binding KillDeath}" FontWeight="Bold" HorizontalAlignment="Right" />
+                        <TextBlock Classes="caption" Text="K/D" HorizontalAlignment="Right" />
+                      </StackPanel>
+                      <StackPanel MinWidth="64">
+                        <TextBlock Text="{Binding Best}" FontWeight="Bold" HorizontalAlignment="Right" />
+                        <TextBlock Classes="caption" Text="best match" HorizontalAlignment="Right" />
+                      </StackPanel>
+                    </StackPanel>
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+
+        <!-- Recent matches -->
+        <Border Grid.Column="2" Classes="glass" Padding="20">
+          <StackPanel Spacing="12">
+            <TextBlock Classes="h2" Text="Recent matches" />
+            <ItemsControl ItemsSource="{Binding RecentMatches}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:MatchRow">
+                  <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,12" ToolTip.Tip="{Binding Source}">
+                    <Border Width="38" Height="38" CornerRadius="12" Background="{Binding Gradient}" Margin="0,0,12,0">
+                      <TextBlock Text="{Binding Initials}" FontWeight="Black" Foreground="White"
+                                 HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                      <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="{Binding Game}" FontWeight="SemiBold" />
+                        <Border Classes="pill" Padding="7,1" Background="#33FFC24B" BorderBrush="#80FFC24B"
+                                IsVisible="{Binding IsRecord}">
+                          <TextBlock Text="RECORD" FontSize="10" FontWeight="Bold" LetterSpacing="0.8" />
+                        </Border>
+                      </StackPanel>
+                      <TextBlock Classes="caption" Text="{Binding When}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="1">
+                      <TextBlock Text="{Binding Line}" FontWeight="Bold" HorizontalAlignment="Right" />
+                      <TextBlock Classes="caption" Text="{Binding Result}" IsVisible="{Binding HasResult}" HorizontalAlignment="Right"
+                                 Classes.win="{Binding IsWin}" Classes.loss="{Binding IsLoss}" />
+                    </StackPanel>
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+      </Grid>
+    </StackPanel>
+  </ScrollViewer>
+
+  <UserControl.Styles>
+    <Style Selector="TextBlock.caption.win">
+      <Setter Property="Foreground" Value="{StaticResource SuccessBrush}" />
+    </Style>
+    <Style Selector="TextBlock.caption.loss">
+      <Setter Property="Foreground" Value="{StaticResource RecordBrush}" />
+    </Style>
+  </UserControl.Styles>
+</UserControl>

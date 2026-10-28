@@ -35,6 +35,9 @@ struct Config {
   bool micAudio = true;
   Hotkey saveHotkey;
   std::string saveHotkeyText = "F8";
+  // Starts a recording that runs until it's pressed again (a "long recording"), however long that is.
+  Hotkey recordHotkey{0, VK_F9};
+  std::string recordHotkeyText = "F9";
   bool recordWithoutGame = false;  // keep a buffer of the main monitor when no game is open
 
   bool detection = true;          // read the screen for kills, deaths and other moments

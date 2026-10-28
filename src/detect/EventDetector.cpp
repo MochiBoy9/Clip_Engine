@@ -67,7 +67,8 @@ double Area(const D3D11_BOX& box) { return static_cast<double>(box.right - box.l
 
 }  // namespace
 
-// One part of the screen, read once per look for every rule that looks at it.
+// One part of the screen, read once per look for every rule that looks at it, or a game's
+// scoreboard, read every few seconds.
 struct EventDetector::Region {
   std::string name;
   D3D11_BOX box{};
@@ -87,6 +88,9 @@ struct EventDetector::Region {
   };
   std::vector<Icon> icons;
 
+  const ScoreboardRule* board = nullptr;
+  ScoreboardTracker boardTracker;
+
   // A region inside this one, read from this one's words instead of on its own.
   Region* within = nullptr;
   std::vector<Region*> inside;
@@ -102,7 +106,7 @@ struct EventDetector::Region {
   std::vector<WordBox> words;  // from the last read
   std::string lastText;
 
-  bool ReadsText() const { return !textRules.empty() || !inside.empty(); }
+  bool ReadsText() const { return !textRules.empty() || !inside.empty() || board; }
 };
 
 bool EventDetector::IsAvailable() {
@@ -114,22 +118,43 @@ bool EventDetector::IsAvailable() {
 }
 
 EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCapture& capture,
-                             std::vector<DetectionRule> rules, int sampleMs, bool debug, Sink sink)
+                             std::vector<DetectionRule> rules, std::vector<ScoreboardRule> scoreboards,
+                             std::vector<std::string> playerNames, int sampleMs, bool debug, Sink sink,
+                             ScoreboardSink scoreboardSink)
     : gpu_(std::move(gpu)),
       capture_(capture),
       rules_(std::move(rules)),
+      scoreboards_(std::move(scoreboards)),
+      playerNames_(std::move(playerNames)),
       sampleMs_(sampleMs),
       debug_(debug),
-      sink_(std::move(sink)) {
+      sink_(std::move(sink)),
+      scoreboardSink_(std::move(scoreboardSink)) {
   const double screenW = capture_.Width();
   const double screenH = capture_.Height();
-  for (const auto& rule : rules_) {
+  auto boxFor = [&](const ScreenRegion& r) {
     D3D11_BOX box{};
-    box.left = static_cast<UINT>(std::floor(rule.region.left * screenW));
-    box.top = static_cast<UINT>(std::floor(rule.region.top * screenH));
-    box.right = std::min(capture_.Width(), static_cast<UINT>(std::ceil((rule.region.left + rule.region.width) * screenW)));
-    box.bottom = std::min(capture_.Height(), static_cast<UINT>(std::ceil((rule.region.top + rule.region.height) * screenH)));
+    box.left = static_cast<UINT>(std::floor(r.left * screenW));
+    box.top = static_cast<UINT>(std::floor(r.top * screenH));
+    box.right = std::min(capture_.Width(), static_cast<UINT>(std::ceil((r.left + r.width) * screenW)));
+    box.bottom = std::min(capture_.Height(), static_cast<UINT>(std::ceil((r.top + r.height) * screenH)));
     box.back = 1;
+    return box;
+  };
+  auto addRegion = [&](const std::string& name, const D3D11_BOX& box, int threshold) {
+    auto created = std::make_unique<Region>();
+    created->name = name;
+    created->box = box;
+    created->width = box.right - box.left;
+    created->height = box.bottom - box.top;
+    created->threshold = threshold;
+    created->intervalMs = INT_MAX;
+    regions_.push_back(std::move(created));
+    return regions_.back().get();
+  };
+
+  for (const auto& rule : rules_) {
+    const D3D11_BOX box = boxFor(rule.region);
     if (box.right < box.left + 8 || box.bottom < box.top + 8) {
       log::Warn("Detection rule {} covers too little of the screen; skipping it", rule.name);
       continue;
@@ -156,24 +181,30 @@ EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCaptur
       return r->box.left == box.left && r->box.top == box.top && r->box.right == box.right &&
              r->box.bottom == box.bottom && r->threshold == rule.threshold;
     });
-    Region* region = existing != regions_.end() ? existing->get() : nullptr;
-    if (!region) {
-      auto created = std::make_unique<Region>();
-      created->name = rule.name;
-      created->box = box;
-      created->width = box.right - box.left;
-      created->height = box.bottom - box.top;
-      created->threshold = rule.threshold;
-      created->intervalMs = INT_MAX;
-      region = created.get();
-      regions_.push_back(std::move(created));
-    }
+    Region* region = existing != regions_.end() ? existing->get() : addRegion(rule.name, box, rule.threshold);
     region->intervalMs = std::min(region->intervalMs, rule.sampleMs > 0 ? rule.sampleMs : sampleMs_);
     const bool banner = rule.position == LinePosition::Anywhere && rule.event != EventType::Kill &&
                         rule.event != EventType::Assist && rule.event != EventType::Revive;
     region->banner &= banner;
     if (rule.ReadsText()) region->textRules.emplace_back(rule);
     if (matcher) region->icons.push_back({RuleTracker(rule), std::move(*matcher), rule.imageMatch});
+  }
+
+  if (!scoreboards_.empty() && playerNames_.empty()) {
+    log::Info("Add your in-game name on the Games page to have the scoreboard read for your records");
+  } else {
+    for (const auto& board : scoreboards_) {
+      const D3D11_BOX box = boxFor(board.region);
+      if (box.right < box.left + 32 || box.bottom < box.top + 32) {
+        log::Warn("Scoreboard {} covers too little of the screen; skipping it", board.name);
+        continue;
+      }
+      // A scoreboard always gets a region of its own: it's read seldom, and in full.
+      Region* region = addRegion(board.name, box, board.threshold);
+      region->board = &board;
+      region->banner = false;
+      region->intervalMs = std::max(sampleMs_, board.sampleMs);
+    }
   }
 
   for (auto& region : regions_) {
@@ -188,10 +219,11 @@ EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCaptur
   for (auto& region : regions_) order.push_back(region.get());
   std::ranges::sort(order, [](const Region* a, const Region* b) { return Area(a->box) < Area(b->box); });
   for (Region* inner : order) {
-    if (!inner->icons.empty() || inner->textRules.empty()) continue;  // icons need the region's own pixels
+    // Icons need the region's own pixels; a scoreboard is read on its own schedule.
+    if (!inner->icons.empty() || inner->board || inner->textRules.empty()) continue;
     Region* best = nullptr;
     for (Region* outer : order) {
-      if (outer == inner || outer->within || !outer->ReadsText() || outer->threshold != inner->threshold) continue;
+      if (outer == inner || outer->within || outer->board || !outer->ReadsText() || outer->threshold != inner->threshold) continue;
       if (!Contains(outer->box, inner->box) || Area(outer->box) <= Area(inner->box)) continue;
       // Text must be read at the same size either way.
       if (OcrScale(outer->width, outer->height, outer->shrink) != OcrScale(inner->width, inner->height, inner->shrink)) continue;
@@ -351,6 +383,18 @@ void EventDetector::Process(Region& region, int64_t time, const OcrEngine& ocr) 
       for (int i = 0; i < fresh; ++i) sink_(GameEvent{tracker.Rule().event, time, Shorten(text, 80)});
     }
   };
+  if (region.board) {
+    if (!ocr) return;
+    std::string text;
+    for (const auto& word : region.words) text += (text.empty() ? "" : " ") + word.text;
+    if (debug_ && text != region.lastText && !text.empty()) log::Info("Read [{}]: {}", region.name, Shorten(text, 160));
+    region.lastText = text;
+    std::optional<Stats> read;
+    if (!region.words.empty()) read = ReadScoreboard(*region.board, region.words, playerNames_);
+    if (const auto stats = region.boardTracker.Update(read)) scoreboardSink_(Scoreboard{time, "screen", *stats});
+    return;
+  }
+
   if (region.ReadsText() && ocr) {
     feed(region, region.words);
     for (Region* inner : region.inside) {

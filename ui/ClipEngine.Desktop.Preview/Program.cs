@@ -54,6 +54,7 @@ Capture(Page.Home, "1-home.png");
 Capture(Page.Clips, "2-clips.png");
 Capture(Page.Games, "3-games.png");
 Capture(Page.Settings, "4-settings.png");
+Capture(Page.Records, "11-records.png");
 
 // The player, opened on the newest clip partway through.
 vm.SelectedNav = vm.Nav.First(n => n.Page == Page.Clips);
@@ -80,6 +81,12 @@ Save(window, "9-studio.png");
 var panel = new SidePanelWindow { DataContext = vm, Width = 344, Height = 900 };
 panel.Show();
 Save(panel, "6-side-panel.png");
+
+// A long recording running, with moments still being marked.
+vm.SimulateEngine(EngineState.Running, new LongRecordingStarted("The Finals"));
+vm.ShowPage(vm.Home);
+Save(window, "12-long-recording.png");
+vm.SimulateEngine(EngineState.Running, new LongRecordingStopped(754, null));
 
 // A supporter colour theme.
 var ember = AccentThemes.Find("ember");
@@ -119,6 +126,7 @@ internal static class Sample
     public static void Fill(MainViewModel vm)
     {
         var now = DateTime.Now;
+        vm.SampleTimelines = Timelines(now);
         vm.SetSupportedGames(["The Finals", "Overwatch", "Battlefield 6", "Counter-Strike 2", "Dota 2", "League of Legends",
                               "Rocket League", "Valorant", "Fortnite", "Apex Legends", "PUBG", "Marvel Rivals",
                               "Rainbow Six Siege", "Call of Duty", "ARC Raiders", "Delta Force"]);
@@ -149,7 +157,12 @@ internal static class Sample
             new EngineStarted("0.2.0"),
             new SaveHotkey("F8", 30),
             new GameDetected("The Finals"),
-            new RecordingStarted("The Finals", 2560, 1440, 165, "HEVC", 60, "NVIDIA HEVC Encoder MFT"));
+            new RecordingStarted("The Finals", 2560, 1440, 165, "HEVC", 60, "NVIDIA HEVC Encoder MFT"),
+            new MomentDetected("kill", "The Finals", "ELIMINATED Vortex"),
+            new MomentDetected("assist", "The Finals", "ASSIST Kintsugi"),
+            new MomentDetected("kill", "The Finals", "ELIMINATED Rook"),
+            new MomentDetected("revive", "The Finals", "REVIVED Mochi"),
+            new ScoreboardRead("The Finals", new Dictionary<string, int> { ["kills"] = 9, ["assists"] = 4, ["deaths"] = 3, ["revives"] = 2 }));
 
         vm.Activity.Clear();
         vm.AddActivity(ActivityKind.Moment, "Kill in The Finals", now.AddMinutes(-6));
@@ -161,6 +174,48 @@ internal static class Sample
         vm.AddActivity(ActivityKind.Clip, "Saved a 30 s clip (198.0 MB)", now.AddMinutes(-26));
         vm.AddActivity(ActivityKind.Clip, "Saved a 30 s clip (212.0 MB)", now.AddMinutes(-4));
         vm.ShowToast("Clip saved · 30 s · 212.0 MB");
+    }
+
+    // A few weeks of recordings, as the engine's timelines would have them, for the Records page.
+    private static IReadOnlyList<Timeline> Timelines(DateTime now)
+    {
+        var random = new Random(7);
+        var games = new (string Game, int MaxKills, bool Board)[]
+        {
+            ("Valorant", 26, true), ("The Finals", 14, true), ("Overwatch", 31, true), ("Counter-Strike 2", 29, true),
+            ("Apex Legends", 9, false), ("Battlefield 6", 38, true),
+        };
+        var timelines = new List<Timeline>();
+        for (var day = 1; day <= 24; day += 1 + random.Next(2))
+        {
+            var (game, maxKills, board) = games[random.Next(games.Length)];
+            var start = now.Date.AddDays(-day).AddHours(18 + random.Next(4));
+            var lines = new List<string> { $$"""{"session": "{{start:yyyy-MM-dd'T'HH:mm:ss}}", "game": "{{game}}", "version": 1}""" };
+            var t = 30;
+            for (var match = 1; match <= 1 + random.Next(3); match++)
+            {
+                lines.Add($$"""{"t": {{t}}, "match": {{match}}, "type": "match_start", "text": "MATCH START"}""");
+                int kills = 0, deaths = 0, assists = 0;
+                var target = 3 + random.Next(maxKills);
+                while (kills < target)
+                {
+                    t += 5 + random.Next(60);
+                    var roll = random.Next(10);
+                    var type = roll < 6 ? "kill" : roll < 8 ? "death" : "assist";
+                    if (type == "kill") kills++;
+                    else if (type == "death") deaths++;
+                    else assists++;
+                    lines.Add($$"""{"t": {{t}}, "match": {{match}}, "type": "{{type}}", "text": ""}""");
+                    if (board && random.Next(4) == 0)
+                        lines.Add($$"""{"t": {{t}}, "match": {{match}}, "source": "api", "stats": {"kills": {{kills}}, "deaths": {{deaths}}, "assists": {{assists}} """ + "}}");
+                }
+                t += 60;
+                lines.Add($$"""{"t": {{t}}, "match": {{match}}, "type": "match_end", "text": "{{(random.Next(5) < 3 ? "VICTORY" : "DEFEAT")}}"}""");
+                t += 120;
+            }
+            if (Timeline.Parse(lines) is { } timeline) timelines.Add(timeline);
+        }
+        return timelines;
     }
 
     // Detected moments for some of the sample clips, like the engine writes into each clip.

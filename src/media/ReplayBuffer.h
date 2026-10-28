@@ -4,6 +4,7 @@
 
 #include <array>
 #include <deque>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -35,12 +36,21 @@ class ReplayBuffer {
 
   size_t Bytes() const;
 
+  // Also hands every packet pushed from now on to tap, for a recording longer than the buffer.
+  // Returns the formats and the buffered packets from the most recent video keyframe on, so the
+  // recording opens on a picture right away, or nothing before the first keyframe. tap is called
+  // with the buffer locked, from the encoders' threads, so it must be quick. One tap at a time.
+  using Tap = std::function<void(const PacketPtr&)>;
+  std::optional<Clip> StartTap(Tap tap);
+  void StopTap();
+
  private:
   mutable std::mutex mutex_;
   const int64_t maxDuration_;
   std::array<std::deque<PacketPtr>, kStreamCount> streams_;
   std::array<winrt::com_ptr<IMFMediaType>, kStreamCount> formats_;
   size_t bytes_ = 0;
+  Tap tap_;
 };
 
 }  // namespace clip

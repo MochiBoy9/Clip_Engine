@@ -1,6 +1,8 @@
 #pragma once
 
 #include "detect/GameEvent.h"
+#include "detect/Scoreboard.h"
+#include "detect/ScreenRegion.h"
 #include "detect/TextMatcher.h"
 
 #include <cstdint>
@@ -10,16 +12,6 @@
 #include <vector>
 
 namespace clip {
-
-// Part of the screen, as fractions of its width and height so one rule fits every resolution.
-struct ScreenRegion {
-  double left = 0;
-  double top = 0;
-  double width = 1;
-  double height = 1;
-
-  bool operator==(const ScreenRegion&) const = default;
-};
 
 // Where on a row of text the words must be.
 enum class LinePosition {
@@ -77,16 +69,18 @@ struct DetectionRules {
   int sampleMs = 250;  // how often the screen is read
   std::vector<CustomGame> games;
   std::vector<DetectionRule> rules;
+  std::vector<ScoreboardRule> scoreboards;
   std::vector<std::string> warnings;
 
   // The game's rules, with {player} filled in from playerNames. Rules that need a name are left
   // out when there are none, and their names added to needingName.
   std::vector<DetectionRule> ForGame(const std::string& game, const std::vector<std::string>& playerNames = {},
                                      std::vector<std::string>* needingName = nullptr) const;
+  std::vector<ScoreboardRule> ScoreboardsForGame(const std::string& game) const;
 };
 
 // Reads detection.ini. Sections are named [<game id>.<event>] or [<game id>.<event>.<anything>],
-// and [game.<id>] adds a game.
+// [<game id>.scoreboard] says where the game's scoreboard is, and [game.<id>] adds a game.
 DetectionRules ParseDetectionRules(std::istream& in);
 
 // "A | B" as phrases, as the words and exclude settings are read. Phrases mentioning {player} are left out.

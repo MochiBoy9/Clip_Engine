@@ -82,4 +82,29 @@ public class EngineLogParserTests
         var e = Assert.IsType<Trimmed>(Parse(@"Trimmed 12.48s from 3.97s to C:\Videos\Clip_Engine\The Finals\The Finals_2026_trim.mp4"));
         Assert.Equal((12.48, 3.97, @"C:\Videos\Clip_Engine\The Finals\The Finals_2026_trim.mp4"), (e.Seconds, e.From, e.Path));
     }
+
+    [Fact]
+    public void LongRecording()
+    {
+        Assert.Equal("F9", Assert.IsType<RecordHotkey>(Parse("Press F9 to start or stop a long recording")).Hotkey);
+        Assert.Equal("Rainbow Six Siege",
+                     Assert.IsType<LongRecordingStarted>(Parse("Long recording started in Rainbow Six Siege; press Alt+F9 again to stop it")).Game);
+        var stopped = Assert.IsType<LongRecordingStopped>(Parse("Long recording stopped after 3725s"));
+        Assert.Equal((3725.0, (string?)null), (stopped.Seconds, stopped.Reason));
+        Assert.Equal("the drive is nearly full",
+                     Assert.IsType<LongRecordingStopped>(Parse("Long recording stopped after 12s because the drive is nearly full")).Reason);
+        var saved = Assert.IsType<LongRecordingSaved>(Parse(@"Saved 3725s long recording (8123.4 MB) to C:\Videos\Clip_Engine\Valorant\Valorant_2026-10-28_20-01-02_long.mp4"));
+        Assert.Equal((3725.0, 8123.4, @"C:\Videos\Clip_Engine\Valorant\Valorant_2026-10-28_20-01-02_long.mp4"),
+                     (saved.Seconds, saved.Megabytes, saved.Path));
+    }
+
+    [Fact]
+    public void Scoreboard()
+    {
+        var read = Assert.IsType<ScoreboardRead>(Parse("Scoreboard in Counter-Strike 2: kills 12, deaths 3, assists 4, mvps 2, score 31"));
+        Assert.Equal("Counter-Strike 2", read.Game);
+        Assert.Equal(12, read.Stats["kills"]);
+        Assert.Equal(31, read.Stats["score"]);
+        Assert.Equal(5, read.Stats.Count);
+    }
 }

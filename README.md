@@ -11,6 +11,9 @@ Proprietary software. All rights reserved; see [LICENSE](LICENSE).
 - Encodes on the GPU (NVIDIA, AMD or Intel) with H.264, switching to HEVC when the resolution and frame rate need it.
 - Keeps the last 60 seconds in memory; press **F8** to save the last 30 seconds as an MP4 with separate game and mic audio tracks.
 
+- Long recordings: press **F9** (or the button on Home) to record for as long as you like, until you press it again. Detection keeps running, so every kill, death and other moment is marked on its timeline, and automatic clips carry on meanwhile. It streams to disk as it records, so memory use doesn't grow, and it stops by itself before the drive fills up.
+- Player records: a Records page with lifetime kills, deaths, assists, revives, K/D and wins, personal bests across every game (most kills in a match, longest kill streak, biggest multi-kill, most kills without dying, best K/D, most kills in a day, longest win streak and more), totals per game and recent matches. While you play, it shows the current match against your best in that game. Every moment the engine sees counts, clipped or not.
+- Reads games' own scoreboards for exact totals: from CS2, Dota 2, League of Legends and Rocket League's APIs, and in Valorant, Overwatch, Marvel Rivals, Rainbow Six Siege, The Finals, Battlefield 6, Call of Duty and Delta Force from the Tab scoreboard on screen, by finding your name and the column headers.
 - Spots kills, assists, deaths, revives, match start and end, and highlights, and saves a clip around them by itself: from the game's own live events where the game has them, and otherwise by reading the HUD with Windows text recognition. Each clip carries its moments, in a `.json` next to it and inside the MP4.
 - A desktop app (`ClipEngine.exe`) with a liquid-glass look: live recording status, a Save clip button, a clip gallery with thumbnails, the supported games and all the settings. It runs the engine for you and keeps recording from the tray.
 - A clip player in the app with the detected moments on the timeline.
@@ -70,8 +73,10 @@ Run `ClipEngine.exe` and launch a supported game. `clip_engine.exe` can also run
 
 - Settings: `%LOCALAPPDATA%\Clip_Engine\clip_engine.ini` (created on first run, with comments)
 - Log: `%LOCALAPPDATA%\Clip_Engine\clip_engine.log`
+- Timelines (what the records are built from): `%LOCALAPPDATA%\Clip_Engine\timeline\`, one JSON-lines file per recording with every moment and scoreboard reading
+- Long recordings: next to clips, named `<Game>_<date>_long.mp4`. Change the hotkey with `record_hotkey` in the settings or on the Settings page.
 - Clips: `Videos\Clip_Engine\<Game>\`
-- Detection rules: `detection.ini` next to the app. Copy it to `%LOCALAPPDATA%\Clip_Engine\` to tune it; that copy wins. With `detection_debug = true` in the settings, the log shows what the engine reads from each screen region, which is how rules are tuned.
+- Detection rules: `detection.ini` next to the app. Copy it to `%LOCALAPPDATA%\Clip_Engine\` to tune it; that copy wins. `[<game>.scoreboard]` sections say which column headers a game's scoreboard uses for kills, deaths and the rest. With `detection_debug = true` in the settings, the log shows what the engine reads from each screen region, which is how rules are tuned.
 - `clip_engine.exe --export <clip.mp4> <out.mp4> --max-mb 10` makes a small copy for sharing.
 - Supporter key: `%LOCALAPPDATA%\Clip_Engine\supporter.key`. Patreon backers get a key that unlocks colour themes, a supporter badge and a place in the thank-you list; every recording feature is free. Keys are made with `dotnet run --project ui/ClipEngine.SupporterKeys -- make "Name"` and checked offline against the public key in `ui/ClipEngine.Desktop/Services/SupporterKey.cs`. Thank-you names live in `ui/ClipEngine.Desktop/Assets/Supporters.txt`.
 - `clip_engine.exe --frame <clip.mp4 or image> <out.png> --at 12.5` saves one frame as a PNG, and `clip_engine.exe --read <clip.mp4 or image> --at 12.5 --region 0.65,0.12,0.33,0.05 --words "ELIMINATED|KNOCKED OUT"` reads that box the way detection does and prints the text and how many times the words matched; `--position start|end` reads it as a killfeed, and `--image icon.png` also says how alike the box is to an icon. Detection Studio uses both.
@@ -94,6 +99,6 @@ Run `ClipEngine.exe` and launch a supported game. `clip_engine.exe` can also run
 | `tests` | Tests for the detection rules, matching, clip metadata, game API events and killfeed rules |
 | `ui/ClipEngine.Desktop` | The desktop app (C#, Avalonia) |
 | `ui/ClipEngine.Desktop.Preview` | Renders the app's screens to PNGs with sample data |
-| `ui/ClipEngine.Desktop.Tests` | Tests for the app's log parsing, settings file, MP4 reading, clip markers, import, supporter keys, match grouping and storage cleanup |
+| `ui/ClipEngine.Desktop.Tests` | Tests for the app's log parsing, settings file, MP4 reading, clip markers, import, supporter keys, match grouping, storage cleanup and player records |
 | `ui/ClipEngine.SupporterKeys` | Makes supporter keys for Patreon backers (the signing key stays on your PC, never in the repo) |
 | `website` | The landing page (plain HTML, hosted on Cloudflare Pages; see `website/README.md`) |
