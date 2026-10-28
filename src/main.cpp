@@ -48,6 +48,20 @@ clip::DetectionRules LoadDetectionRules(const std::filesystem::path& dataDir) {
     if (!in) continue;
     auto rules = ParseDetectionRules(in);
     for (const auto& warning : rules.warnings) log::Warn("detection.ini {}", warning);
+    // Icons are found next to the detection.ini that names them, then in the other places
+    // it can be.
+    for (auto& rule : rules.rules) {
+      if (!rule.LooksForImage()) continue;
+      const std::filesystem::path image(winrt::to_hstring(rule.image).c_str());
+      if (image.is_absolute()) continue;
+      for (const auto& folder : {file.parent_path(), dataDir, ExeDir()}) {
+        std::error_code ec;
+        if (std::filesystem::exists(folder / image, ec)) {
+          rule.image = winrt::to_string((folder / image).wstring());
+          break;
+        }
+      }
+    }
     log::Info("Detection rules: {} ({} rules)", winrt::to_string(file.wstring()), rules.rules.size());
     return rules;
   }
@@ -101,6 +115,7 @@ int RunTrimCommand(int argc, wchar_t** argv) {
 
 // clip_engine.exe --frame <clip or image> <out.png> [--at seconds]
 // clip_engine.exe --read <clip or image> [--at seconds] --region l,t,w,h [--threshold n] [--words "A|B"] [--exclude "C"]
+//                 [--position start|end] [--image icon.png] [--image-match 0.85] [--image-screen 1440]
 // Detection Studio's helpers: grab a frame to draw on, and read a box of it the way detection does.
 int RunStudioCommand(int argc, wchar_t** argv) {
   using namespace clip;
@@ -115,6 +130,10 @@ int RunStudioCommand(int argc, wchar_t** argv) {
     if (flag == L"--threshold") rule.threshold = std::clamp(_wtoi(argv[i + 1]), 0, 255);
     if (flag == L"--words") rule.words = ParsePhrases(value);
     if (flag == L"--exclude") rule.exclude = ParsePhrases(value);
+    if (flag == L"--position") rule.position = value == "start" ? LinePosition::Start : value == "end" ? LinePosition::End : LinePosition::Anywhere;
+    if (flag == L"--image") rule.image = value;
+    if (flag == L"--image-match") rule.imageMatch = std::clamp(_wtof(argv[i + 1]), 0.05, 1.0);
+    if (flag == L"--image-screen") rule.imageScreen = std::max(0, _wtoi(argv[i + 1]));
     if (flag == L"--region") {
       double l = 0, t = 0, w = 0, h = 0;
       if (swscanf_s(argv[i + 1], L"%lf,%lf,%lf,%lf", &l, &t, &w, &h) == 4) rule.region = {l, t, w, h};
@@ -169,9 +188,9 @@ int wmain(int argc, wchar_t** argv) {
   // Always read, for the games added there; the rules themselves only matter with detection on.
   DetectionRules rules = LoadDetectionRules(dataDir);
   if (config.detection && !EventDetector::IsAvailable()) {
-    log::Warn("Windows text recognition isn't installed, so automatic clips are off. Add English under "
-              "Settings > Time & language > Language to turn them on.");
-    rules.rules.clear();
+    log::Warn("Windows text recognition isn't installed, so the screen is only checked for icons. Add English under "
+              "Settings > Time & language > Language to read kills and other moments off the screen too.");
+    std::erase_if(rules.rules, [](const DetectionRule& rule) { return !rule.LooksForImage(); });
   } else if (!config.detection) {
     rules.rules.clear();
   }

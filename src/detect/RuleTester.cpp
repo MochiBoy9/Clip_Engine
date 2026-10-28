@@ -2,6 +2,7 @@
 
 #include "core/Clock.h"
 #include "core/Log.h"
+#include "detect/ImageMatch.h"
 #include "detect/Ocr.h"
 
 #include <mferror.h>
@@ -18,12 +19,6 @@
 namespace clip {
 namespace {
 
-struct Frame {
-  UINT width = 0;
-  UINT height = 0;
-  std::vector<uint8_t> bgra;  // width * height * 4, top row first
-};
-
 bool IsImage(const std::filesystem::path& path) {
   std::wstring ext = path.extension().wstring();
   std::ranges::transform(ext, ext.begin(), [](wchar_t c) { return static_cast<wchar_t>(std::towlower(c)); });
@@ -37,7 +32,9 @@ winrt::com_ptr<IWICImagingFactory> Wic() {
   return factory;
 }
 
-Frame LoadPicture(const std::filesystem::path& path) {
+}  // namespace
+
+Picture LoadPicture(const std::filesystem::path& path) {
   const auto wic = Wic();
   winrt::com_ptr<IWICBitmapDecoder> decoder;
   winrt::check_hresult(wic->CreateDecoderFromFilename(path.c_str(), nullptr, GENERIC_READ, WICDecodeMetadataCacheOnDemand,
@@ -48,15 +45,17 @@ Frame LoadPicture(const std::filesystem::path& path) {
   winrt::check_hresult(wic->CreateFormatConverter(converter.put()));
   winrt::check_hresult(converter->Initialize(source.get(), GUID_WICPixelFormat32bppBGRA, WICBitmapDitherTypeNone, nullptr,
                                              0, WICBitmapPaletteTypeCustom));
-  Frame frame;
+  Picture frame;
   winrt::check_hresult(converter->GetSize(&frame.width, &frame.height));
   frame.bgra.resize(static_cast<size_t>(frame.width) * frame.height * 4);
   winrt::check_hresult(converter->CopyPixels(nullptr, frame.width * 4, static_cast<UINT>(frame.bgra.size()), frame.bgra.data()));
   return frame;
 }
 
+namespace {
+
 // Decodes the frame showing at `seconds` (or the last one, past the end).
-Frame LoadVideoFrame(const std::filesystem::path& path, double seconds) {
+Picture LoadVideoFrame(const std::filesystem::path& path, double seconds) {
   winrt::com_ptr<IMFAttributes> attributes;
   winrt::check_hresult(MFCreateAttributes(attributes.put(), 1));
   winrt::check_hresult(attributes->SetUINT32(MF_SOURCE_READER_ENABLE_VIDEO_PROCESSING, TRUE));
@@ -75,7 +74,7 @@ Frame LoadVideoFrame(const std::filesystem::path& path, double seconds) {
   }
   winrt::com_ptr<IMFMediaType> current;
   winrt::check_hresult(reader->GetCurrentMediaType(video, current.put()));
-  Frame frame;
+  Picture frame;
   winrt::check_hresult(MFGetAttributeSize(current.get(), MF_MT_FRAME_SIZE, &frame.width, &frame.height));
   const auto stride = static_cast<INT32>(MFGetAttributeUINT32(current.get(), MF_MT_DEFAULT_STRIDE, frame.width * 4));
 
@@ -116,11 +115,11 @@ Frame LoadVideoFrame(const std::filesystem::path& path, double seconds) {
   return frame;
 }
 
-Frame LoadFrame(const std::filesystem::path& path, double seconds) {
+Picture LoadFrame(const std::filesystem::path& path, double seconds) {
   return IsImage(path) ? LoadPicture(path) : LoadVideoFrame(path, seconds);
 }
 
-void SavePng(const Frame& frame, const std::filesystem::path& path) {
+void SavePng(const Picture& frame, const std::filesystem::path& path) {
   const auto wic = Wic();
   winrt::com_ptr<IWICStream> stream;
   winrt::check_hresult(wic->CreateStream(stream.put()));
@@ -144,7 +143,7 @@ void SavePng(const Frame& frame, const std::filesystem::path& path) {
 
 int RunFrameCommand(const std::filesystem::path& input, const std::filesystem::path& output, double seconds) {
   try {
-    const Frame frame = LoadFrame(input, seconds);
+    const Picture frame = LoadFrame(input, seconds);
     if (output.has_parent_path()) std::filesystem::create_directories(output.parent_path());
     SavePng(frame, output);
     log::Info("Frame {}x{} saved to {}", frame.width, frame.height, winrt::to_string(output.wstring()));
@@ -164,7 +163,7 @@ int RunReadCommand(const std::filesystem::path& input, double seconds, const Det
       log::Error("Read failed: Windows text recognition isn't installed. Add English under Settings > Time & language > Language.");
       return 1;
     }
-    const Frame frame = LoadFrame(input, seconds);
+    const Picture frame = LoadFrame(input, seconds);
     const auto left = static_cast<UINT>(std::floor(rule.region.left * frame.width));
     const auto top = static_cast<UINT>(std::floor(rule.region.top * frame.height));
     const auto right = std::min(frame.width, static_cast<UINT>(std::ceil((rule.region.left + rule.region.width) * frame.width)));
@@ -182,16 +181,27 @@ int RunReadCommand(const std::filesystem::path& input, double seconds, const Det
       std::memcpy(pixels.data() + static_cast<size_t>(y) * width * 4,
                   frame.bgra.data() + (static_cast<size_t>(top + y) * frame.width + left) * 4, static_cast<size_t>(width) * 4);
     }
-    const auto result = ocr.RecognizeAsync(PrepareForOcr(pixels, width, height, rule.threshold)).get();
-    std::vector<WordBox> words;
-    for (const auto& line : result.Lines()) {
-      for (const auto& word : line.Words()) {
-        const auto box = word.BoundingRect();
-        words.push_back({winrt::to_string(word.Text()), box.X, box.Y, box.Width, box.Height});
+    std::vector<WordBox> words = ReadWords(ocr, pixels, width, height, rule.threshold);
+    std::string text;
+    for (const auto& word : words) text += (text.empty() ? "" : " ") + word.text;
+    log::Info("Read: {}", text);
+    int matches = rule.ReadsText() ? CountMatches(rule, GroupIntoRows(std::move(words))) : 0;
+
+    if (rule.LooksForImage()) {
+      const Picture icon = LoadPicture(std::filesystem::path(winrt::to_hstring(rule.image).c_str()));
+      const ImageMatcher matcher(ToGray(icon.bgra.data(), static_cast<int>(icon.width), static_cast<int>(icon.height),
+                                        icon.width * 4, true),
+                                 rule.imageScreen, static_cast<int>(frame.height));
+      if (!matcher.Valid()) {
+        log::Error("Read failed: the image is one flat color, so it would match anything flat");
+        return 1;
       }
+      const double alike = matcher.BestMatch(
+          ToGray(pixels.data(), static_cast<int>(width), static_cast<int>(height), static_cast<size_t>(width) * 4, false));
+      log::Info("Image: {:.2f}", alike);
+      if (alike >= rule.imageMatch) ++matches;
     }
-    log::Info("Read: {}", winrt::to_string(result.Text()));
-    log::Info("Matches: {}", CountMatches(rule, GroupIntoRows(std::move(words))));
+    log::Info("Matches: {}", matches);
     return 0;
   } catch (const winrt::hresult_error& e) {
     log::Error("Read failed: {}", Describe(e));

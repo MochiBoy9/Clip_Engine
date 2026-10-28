@@ -18,21 +18,37 @@ OcrEngine CreateOcrEngine() {
   return OcrEngine::TryCreateFromUserProfileLanguages();
 }
 
-SoftwareBitmap PrepareForOcr(const std::vector<uint8_t>& bgra, UINT width, UINT height, int threshold) {
+double OcrScale(UINT width, UINT height, UINT shrink) {
+  if (shrink > 1) return 1.0 / shrink;
   const UINT maxDimension = OcrEngine::MaxImageDimension();
-  UINT scale = height < 120 ? 2 : 1;  // small text reads better a little larger
-  if (width * scale > maxDimension || height * scale > maxDimension) scale = 1;
-  const UINT outWidth = std::min(width * scale, maxDimension);
-  const UINT outHeight = std::min(height * scale, maxDimension);
+  return height < 120 && width * 2 <= maxDimension && height * 2 <= maxDimension ? 2.0 : 1.0;
+}
+
+SoftwareBitmap PrepareForOcr(const std::vector<uint8_t>& bgra, UINT width, UINT height, int threshold, UINT shrink) {
+  const UINT maxDimension = OcrEngine::MaxImageDimension();
+  shrink = std::max(shrink, 1u);
+  const UINT grow = OcrScale(width, height, shrink) > 1 ? 2 : 1;
+  const UINT outWidth = std::min(width * grow / shrink, maxDimension);
+  const UINT outHeight = std::min(height * grow / shrink, maxDimension);
 
   winrt::Windows::Storage::Streams::Buffer buffer(outWidth * outHeight * 4);
   buffer.Length(outWidth * outHeight * 4);
   uint8_t* out = buffer.data();
+  auto brightness = [&](UINT x, UINT y) {
+    const uint8_t* p = bgra.data() + (static_cast<size_t>(y) * width + x) * 4;
+    return std::max({p[0], p[1], p[2]});
+  };
   for (UINT y = 0; y < outHeight; ++y) {
-    const uint8_t* row = bgra.data() + static_cast<size_t>(y / scale) * width * 4;
     for (UINT x = 0; x < outWidth; ++x) {
-      const uint8_t* p = row + static_cast<size_t>(x / scale) * 4;
-      const uint8_t bright = std::max({p[0], p[1], p[2]});
+      uint8_t bright = 0;
+      if (shrink == 1) {
+        bright = brightness(x / grow, y / grow);
+      } else {
+        // Shrinking keeps the brightest pixel of each block, so thin bright strokes survive.
+        for (UINT sy = y * shrink; sy < std::min(height, (y + 1) * shrink); ++sy) {
+          for (UINT sx = x * shrink; sx < std::min(width, (x + 1) * shrink); ++sx) bright = std::max(bright, brightness(sx, sy));
+        }
+      }
       const uint8_t v = threshold > 0 ? (bright >= threshold ? 0 : 255) : static_cast<uint8_t>(255 - bright);
       out[0] = out[1] = out[2] = v;
       out[3] = 255;
@@ -41,6 +57,20 @@ SoftwareBitmap PrepareForOcr(const std::vector<uint8_t>& bgra, UINT width, UINT 
   }
   return SoftwareBitmap::CreateCopyFromBuffer(buffer, BitmapPixelFormat::Bgra8, static_cast<int32_t>(outWidth),
                                               static_cast<int32_t>(outHeight), BitmapAlphaMode::Premultiplied);
+}
+
+std::vector<WordBox> ReadWords(const OcrEngine& ocr, const std::vector<uint8_t>& bgra, UINT width, UINT height,
+                               int threshold, UINT shrink) {
+  const double scale = OcrScale(width, height, shrink);
+  const auto result = ocr.RecognizeAsync(PrepareForOcr(bgra, width, height, threshold, shrink)).get();
+  std::vector<WordBox> words;
+  for (const auto& line : result.Lines()) {
+    for (const auto& word : line.Words()) {
+      const auto box = word.BoundingRect();
+      words.push_back({winrt::to_string(word.Text()), box.X / scale, box.Y / scale, box.Width / scale, box.Height / scale});
+    }
+  }
+  return words;
 }
 
 }  // namespace clip
