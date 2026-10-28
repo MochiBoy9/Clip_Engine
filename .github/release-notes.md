@@ -1,18 +1,16 @@
-## Clip Engine 0.4.1
+## Clip Engine 0.5.0
 
-Clip Engine is free, for good, and this update brings trimming, matches and Detection Studio.
+This update counts your kills properly, records whole sessions and keeps your records.
 
-- **Every feature is free.** The paid Founder and Pro plans are gone. There are no ads and no watermark. If you'd like to help, back Clip Engine on Patreon. Patrons get a supporter key that works forever, offline, on all their PCs.
-- **Trim in the player.** Press **Trim** (or I and O), drag the yellow handles and save. The part you keep is saved as a new clip next to the original, instantly and at full quality.
-- **Clips grouped by match.** A Clips / Matches switch on the Clips page shows each match's result, its kills, assists, deaths and revives, and its best clips.
-- **Favorites.** Star a clip from its card or from the player, and filter the list to favorites.
-- **Storage cleanup.** Remove old clips by age or by size. It's off by default, never touches favorites, and shows what it would remove before deleting anything.
-- **"Clip saved" notice over the game.** It's kept out of your recordings.
-- **Detection Studio.** Add any game, or fix how one is read: pick a frame from a clip, draw a box over the kill feed, type the words it shows and test it before saving. Find it on the Games page.
-- **Colour themes for supporters.** Ember, Mint, Sakura, Ocean and Gold recolour the buttons, highlights and the glow behind the app. Supporters also get a badge in the sidebar and their name in the thank-you list.
-- **Founder keys bought for 0.3.1** aren't checked any more. If you bought one, get in touch for a supporter key.
+- **Each kill counts once.** A kill feed line is remembered by the names on it, so it counts once however long it stays up or flickers, and quick multi-kills are no longer lost. Scores, countdowns and medals like `DOUBLE KILL` no longer count as extra kills. Older clips with repeated moments are tidied when they load.
+- **Icons, not just words.** A detection rule can now look for a picture cut from a screenshot, like a kill banner or a skull, at any resolution.
+- **Lighter on your PC.** Parts of the screen that haven't changed aren't read again, deaths and match banners are checked less often, and big banners on 4K screens are read at half size.
+- **Long recording.** Press **F9** (or the button on Home) to record until you press it again. Nothing is re-encoded, detection keeps marking your moments, and auto clips carry on. It stops on its own when the game closes or your drive gets low.
+- **Records.** A new Records page shows your lifetime kills, deaths, assists, revives, K/D and wins, your personal bests, totals per game, your recent matches and a live card for the match you're playing. Scoreboards are read in CS2, Dota 2, League and Rocket League, and from the screen in Valorant, Overwatch, Marvel Rivals, Siege, The Finals, Battlefield 6, Call of Duty and Delta Force. Add your in-game name on the Games page.
+- **Detection Studio fixes.** Saving a game in Studio no longer loses settings it doesn't show, which had turned some kill feed rules into rules that counted every line with your name, or deletes the game's scoreboard.
+- **New rules** for Black Ops 6 medals, Overwatch round starts and Valorant's team ace.
 
-Everything from 0.4.0 is included: automatic clips in 16 games, with official game events in Counter-Strike 2, Dota 2, League of Legends and Rocket League.
+Everything from 0.4.1 is included: every feature free, trimming, matches, favorites and Detection Studio.
 
 ## Install
 
