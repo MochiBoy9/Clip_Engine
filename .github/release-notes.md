@@ -1,7 +1,8 @@
 ## Clip Engine 0.5.0
 
-This update counts your kills properly, records whole sessions and keeps your records.
+This update brings a new look, counts your kills properly, records whole sessions and keeps your records.
 
+- **A new look.** The glassy UI is replaced by a flat, rugged amber-on-gunmetal design that is lighter to draw, so the app stays out of your game's way.
 - **Each kill counts once.** A kill feed line is remembered by the names on it, so it counts once however long it stays up or flickers, and quick multi-kills are no longer lost. Scores, countdowns and medals like `DOUBLE KILL` no longer count as extra kills. Older clips with repeated moments are tidied when they load.
 - **Icons, not just words.** A detection rule can now look for a picture cut from a screenshot, like a kill banner or a skull, at any resolution.
 - **Lighter on your PC.** Parts of the screen that haven't changed aren't read again, deaths and match banners are checked less often, and big banners on 4K screens are read at half size.
