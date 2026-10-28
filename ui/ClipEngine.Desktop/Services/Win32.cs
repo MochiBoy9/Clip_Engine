@@ -174,4 +174,55 @@ internal static unsafe partial class Win32
             CloseClipboard();
         }
     }
+
+    private const int GWL_EXSTYLE = -20;
+    private const uint WS_EX_TRANSPARENT = 0x00000020;
+    private const uint WS_EX_NOACTIVATE = 0x08000000;
+    private const uint WDA_EXCLUDEFROMCAPTURE = 0x11;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Rect
+    {
+        public int Left, Top, Right, Bottom;
+    }
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool SetWindowDisplayAffinity(nint hwnd, uint affinity);
+
+    [LibraryImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
+    private static partial nint GetWindowLongPtr(nint hwnd, int index);
+
+    [LibraryImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
+    private static partial nint SetWindowLongPtr(nint hwnd, int index, nint value);
+
+    [LibraryImport("user32.dll")]
+    private static partial nint GetForegroundWindow();
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool GetWindowRect(nint hwnd, out Rect rect);
+
+    // Our windows over the game (the side panel, the "Clip saved" notice) would otherwise be
+    // recorded into clips, since the engine captures the whole monitor. Windows 10 2004 and newer
+    // can leave a window out of screen captures; older versions would show a black box instead,
+    // so there it returns false and the window stays as it is.
+    public static bool KeepOutOfCaptures(nint hwnd) =>
+        hwnd != 0 && OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041) && SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
+
+    // A notice that never takes focus from the game and lets clicks through to it.
+    public static void MakeOverlay(nint hwnd)
+    {
+        if (hwnd == 0) return;
+        var style = (nint)((uint)GetWindowLongPtr(hwnd, GWL_EXSTYLE) | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW);
+        SetWindowLongPtr(hwnd, GWL_EXSTYLE, style);
+    }
+
+    // The middle of the window in front, in screen pixels: where the game is when one is playing.
+    public static (int X, int Y)? ForegroundCenter()
+    {
+        var hwnd = GetForegroundWindow();
+        if (hwnd == 0 || !GetWindowRect(hwnd, out var r)) return null;
+        return ((r.Left + r.Right) / 2, (r.Top + r.Bottom) / 2);
+    }
 }

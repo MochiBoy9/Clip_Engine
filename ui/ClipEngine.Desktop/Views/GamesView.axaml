@@ -61,15 +61,24 @@
       </ItemsControl>
 
       <Border Classes="glass" Padding="24" Margin="0,0,16,0">
-        <Grid ColumnDefinitions="Auto,*">
+        <Grid ColumnDefinitions="Auto,*,Auto">
           <Border Width="48" Height="48" CornerRadius="16" Background="{StaticResource AccentGradient}"
                   BoxShadow="{StaticResource AccentGlow}" VerticalAlignment="Top" Margin="0,0,18,0">
-            <PathIcon Data="{StaticResource IconSparkle}" Width="22" Height="22" Foreground="White" />
+            <PathIcon Data="{StaticResource IconScan}" Width="22" Height="22" Foreground="White" />
           </Border>
-          <StackPanel Grid.Column="1" Spacing="6">
-            <TextBlock Classes="h2" Text="Coming next: automatic moments" />
+          <StackPanel Grid.Column="1" Spacing="6" Margin="0,0,18,0">
+            <TextBlock Classes="h2" Text="Detection Studio" />
             <TextBlock Classes="body" TextWrapping="Wrap"
-                       Text="Clips for every kill, assist, death, revive and round win, saved without pressing anything. Until then, the save hotkey keeps the last stretch of gameplay." />
+                       Text="Add any game, or fix how one is read. Pick a frame from a clip, draw a box over the kill feed, type the words it shows, and test it before saving." />
+          </StackPanel>
+          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <Button Classes="glass" Command="{Binding Main.OpenStudioCommand}" CommandParameter="add"
+                    ToolTip.Tip="Record and detect moments in a game Clip Engine doesn't know yet">
+              <TextBlock Text="Add a game" />
+            </Button>
+            <Button Classes="accent" Command="{Binding Main.OpenStudioCommand}">
+              <TextBlock Text="Open Studio" />
+            </Button>
           </StackPanel>
         </Grid>
       </Border>

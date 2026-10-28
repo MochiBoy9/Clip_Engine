@@ -2,6 +2,8 @@
 
 #include <tlhelp32.h>
 
+#include <algorithm>
+
 namespace clip {
 
 const std::vector<GameProfile>& BuiltInGames() {
@@ -38,16 +40,27 @@ BOOL CALLBACK FindLargestWindow(HWND hwnd, LPARAM param) {
   return TRUE;
 }
 
-const GameProfile* MatchExecutable(const wchar_t* exeName) {
-  for (const auto& game : BuiltInGames()) {
+}  // namespace
+
+GameDetector::GameDetector(const std::vector<GameProfile>& custom) : games_(BuiltInGames()) {
+  for (const auto& game : custom) {
+    auto known = std::ranges::find(games_, game.id, &GameProfile::id);
+    if (known == games_.end()) {
+      games_.push_back(game);
+    } else {
+      known->executables.insert(known->executables.end(), game.executables.begin(), game.executables.end());
+    }
+  }
+}
+
+const GameProfile* GameDetector::MatchExecutable(const wchar_t* exeName) const {
+  for (const auto& game : games_) {
     for (const auto& exe : game.executables) {
       if (_wcsicmp(exe.c_str(), exeName) == 0) return &game;
     }
   }
   return nullptr;
 }
-
-}  // namespace
 
 std::optional<DetectedGame> GameDetector::Find() const {
   const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);

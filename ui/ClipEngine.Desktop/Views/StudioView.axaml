@@ -1,0 +1,247 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ClipEngine.Desktop.ViewModels"
+             xmlns:views="using:ClipEngine.Desktop.Views"
+             x:Class="ClipEngine.Desktop.Views.StudioView"
+             x:DataType="vm:StudioViewModel">
+  <DockPanel Margin="18,0,22,18">
+    <!-- Title, the game, and saving -->
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,14">
+      <Button Classes="glass" Command="{Binding BackCommand}" VerticalAlignment="Center">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <PathIcon Data="{StaticResource IconBack}" Width="14" Height="14" />
+          <TextBlock Text="{Binding BackLabel}" VerticalAlignment="Center" />
+        </StackPanel>
+      </Button>
+      <StackPanel Grid.Column="1" Margin="16,0" VerticalAlignment="Center" Spacing="2">
+        <TextBlock Classes="h1" Text="Detection Studio" />
+        <TextBlock Classes="caption" Text="{Binding GameCaption}" TextTrimming="CharacterEllipsis" />
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+        <ComboBox Width="200" ItemsSource="{Binding Games}" SelectedItem="{Binding SelectedGame}"
+                  ToolTip.Tip="The game to make rules for" />
+        <Button Classes="glass" Command="{Binding StartAddGameCommand}"
+                ToolTip.Tip="Record and detect moments in a game Clip Engine doesn't know yet">
+          <TextBlock Text="Add a game" />
+        </Button>
+        <Button Classes="accent" Command="{Binding SaveCommand}"
+                ToolTip.Tip="Save these rules; the engine restarts to use them">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <PathIcon Data="{StaticResource IconCheck}" Width="14" Height="14" Foreground="White" />
+            <TextBlock Text="Save rules" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+      </StackPanel>
+    </Grid>
+
+    <!-- Adding a game: its name and the program it runs as -->
+    <Border DockPanel.Dock="Top" Classes="glass" Padding="18" Margin="0,0,0,14" IsVisible="{Binding IsAddingGame}">
+      <StackPanel Spacing="12">
+        <StackPanel Spacing="2">
+          <TextBlock Classes="h2" Text="Add a game" />
+          <TextBlock Classes="caption" TextWrapping="Wrap"
+                     Text="Start the game, then pick it below. Clip Engine records whenever that program runs, and uses the rules you draw to save its moments." />
+        </StackPanel>
+        <Grid ColumnDefinitions="*,14,*,14,180,14,Auto">
+          <StackPanel Spacing="6">
+            <TextBlock Classes="caption" Text="Running programs" />
+            <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding RunningPrograms}"
+                      SelectedItem="{Binding NewGameProgram}" PlaceholderText="Pick the game's window" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" Spacing="6">
+            <TextBlock Classes="caption" Text="Name" />
+            <TextBox Text="{Binding NewGameName}" Watermark="Marvel Rivals" />
+          </StackPanel>
+          <StackPanel Grid.Column="4" Spacing="6">
+            <TextBlock Classes="caption" Text="Program" />
+            <TextBox Text="{Binding NewGameExe}" Watermark="Game.exe" />
+          </StackPanel>
+          <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
+            <Button Classes="glass" Content="Cancel" Command="{Binding CancelAddGameCommand}" />
+            <Button Classes="accent" Content="Add game" Command="{Binding ConfirmAddGameCommand}" />
+          </StackPanel>
+        </Grid>
+      </StackPanel>
+    </Border>
+
+    <!-- What went wrong, or what just happened -->
+    <Border DockPanel.Dock="Top" Classes="inset" CornerRadius="14" Padding="14,9" Margin="0,0,0,14"
+            IsVisible="{Binding HasStatus}">
+      <StackPanel Orientation="Horizontal" Spacing="10">
+        <PathIcon Data="{StaticResource IconAlert}" Width="14" Height="14" Foreground="{StaticResource WarnBrush}"
+                  IsVisible="{Binding StatusIsError}" />
+        <PathIcon Data="{StaticResource IconCheck}" Width="14" Height="14" Foreground="{StaticResource SuccessBrush}"
+                  IsVisible="{Binding !StatusIsError}" />
+        <TextBlock Classes="body" Text="{Binding Status}" TextWrapping="Wrap" FontSize="13" />
+      </StackPanel>
+    </Border>
+
+    <!-- The rules, and the picked one's settings -->
+    <Border DockPanel.Dock="Right" Classes="glass" Width="340" Margin="14,0,0,0" Padding="18,18,18,16">
+      <DockPanel>
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+          <TextBlock Classes="h2" Text="Rules" VerticalAlignment="Center" />
+          <Button Grid.Column="1" Classes="glass" Command="{Binding AddRuleCommand}" Padding="12,6"
+                  ToolTip.Tip="Add a rule, then draw its box on the frame">
+            <TextBlock Text="+ Add rule" FontSize="13" />
+          </Button>
+        </Grid>
+
+        <TextBlock DockPanel.Dock="Top" Classes="caption" TextWrapping="Wrap" Margin="0,0,0,10"
+                   IsVisible="{Binding !HasRules}"
+                   Text="No rules for this game yet. Add one, draw a box where the game shows a kill (or any moment), and type the words it shows." />
+
+        <ListBox DockPanel.Dock="Top" Classes="rules" ItemsSource="{Binding Rules}" SelectedItem="{Binding SelectedRule}"
+                 MaxHeight="190" Margin="0,0,0,12" IsVisible="{Binding HasRules}">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:StudioRuleViewModel">
+              <Grid ColumnDefinitions="Auto,*">
+                <Border Width="4" Height="30" CornerRadius="2" Background="{Binding Brush}" Margin="0,0,12,0" />
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                  <TextBlock Text="{Binding Label}" FontWeight="SemiBold" FontSize="13" />
+                  <TextBlock Text="{Binding Summary}" Classes="caption" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+
+        <Border DockPanel.Dock="Top" Height="1" Background="{StaticResource Divider}" Margin="0,0,0,14"
+                IsVisible="{Binding HasSelectedRule}" />
+
+        <ScrollViewer IsVisible="{Binding HasSelectedRule}">
+          <StackPanel DataContext="{Binding SelectedRule}" x:DataType="vm:StudioRuleViewModel" Spacing="14" Margin="0,0,6,0">
+            <StackPanel Spacing="6">
+              <TextBlock Classes="caption" Text="Saves a clip moment for" />
+              <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Events}" SelectedItem="{Binding EventOption}" />
+            </StackPanel>
+            <StackPanel Spacing="6">
+              <TextBlock Classes="caption" Text="When the box shows any of these" />
+              <TextBox Text="{Binding Words}" Watermark="ELIMINATED | KNOCKED OUT" />
+              <TextBlock Classes="caption" FontSize="11" TextWrapping="Wrap"
+                         Text="Separate choices with |. Close misreads still count, so ELIMINATED matches ELIMINATEO." />
+            </StackPanel>
+            <StackPanel Spacing="6">
+              <TextBlock Classes="caption" Text="But not when it also shows" />
+              <TextBox Text="{Binding Exclude}" Watermark="Optional, e.g. BY" />
+            </StackPanel>
+            <StackPanel Spacing="4">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="caption" Text="Brightness filter" />
+                <TextBlock Grid.Column="1" Classes="caption" Text="{Binding ThresholdText}" FontFeatures="tnum" />
+              </Grid>
+              <Slider Minimum="0" Maximum="250" Value="{Binding Threshold}"
+                      ToolTip.Tip="Keeps only bright pixels: turn it up when the text sits on a busy background" />
+            </StackPanel>
+            <StackPanel Spacing="4">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="caption" Text="Wait before counting again" />
+                <TextBlock Grid.Column="1" Classes="caption" Text="{Binding CooldownText}" FontFeatures="tnum" />
+              </Grid>
+              <Slider Minimum="0" Maximum="60" Value="{Binding CooldownSeconds}"
+                      ToolTip.Tip="How long after a match before the same rule can match again" />
+            </StackPanel>
+            <TextBlock Classes="caption" FontSize="11" Text="{Binding RegionText}" TextWrapping="Wrap" />
+          </StackPanel>
+        </ScrollViewer>
+      </DockPanel>
+    </Border>
+
+    <!-- The frame, where to take it from, and the test -->
+    <Border Classes="glass" Padding="12">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Bottom" Margin="6,12,6,0" Spacing="10">
+          <!-- Test result for the picked rule -->
+          <Border Classes="inset" CornerRadius="14" Padding="12,8" IsVisible="{Binding HasSelectedRule}">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Button Classes="accent" Command="{Binding TestCommand}"
+                      ToolTip.Tip="Read the box on this frame the way the engine does in game">
+                <TextBlock Text="Test on this frame" />
+              </Button>
+              <StackPanel Grid.Column="1" Margin="14,0" VerticalAlignment="Center" Spacing="1">
+                <TextBlock Classes="caption" Text="Reads" IsVisible="{Binding HasReadText}" />
+                <TextBlock Text="{Binding ReadText}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                           IsVisible="{Binding HasReadText}" />
+                <TextBlock Classes="caption" TextWrapping="Wrap" IsVisible="{Binding !HasReadText}"
+                           Text="Find a frame where the game shows the moment, then test: you'll see what the engine reads in the box." />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <Border Classes="pill" Background="#3330D158" BorderBrush="#8030D158" IsVisible="{Binding IsMatch}">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <PathIcon Data="{StaticResource IconCheck}" Width="11" Height="11" Foreground="White" />
+                    <TextBlock Text="Match" FontSize="12" FontWeight="Bold" />
+                  </StackPanel>
+                </Border>
+                <Border Classes="pill" Background="#33FF9F0A" BorderBrush="#80FF9F0A" IsVisible="{Binding IsNoMatch}">
+                  <TextBlock Text="No match" FontSize="12" FontWeight="Bold" />
+                </Border>
+              </Panel>
+            </Grid>
+          </Border>
+
+          <!-- Where the frame comes from -->
+          <Grid ColumnDefinitions="260,14,*,14,Auto">
+            <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Sources}" SelectedItem="{Binding SelectedSource}"
+                      PlaceholderText="No clips of this game yet" VerticalAlignment="Center">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:ClipItemViewModel">
+                  <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <Grid Grid.Column="2" ColumnDefinitions="*,Auto" IsVisible="{Binding IsClipSource}" VerticalAlignment="Center">
+              <Slider Minimum="0" Maximum="{Binding SourceDuration}" Value="{Binding FrameSeconds}" VerticalAlignment="Center"
+                      ToolTip.Tip="Move through the clip to find a frame showing the moment" />
+              <TextBlock Grid.Column="1" Text="{Binding FrameTimeText}" FontFeatures="tnum" FontSize="13" FontWeight="SemiBold"
+                         VerticalAlignment="Center" Margin="12,0,0,0" />
+            </Grid>
+            <Button Grid.Column="4" Classes="glass" Command="{Binding OpenImageCommand}" VerticalAlignment="Center"
+                    ToolTip.Tip="Use a screenshot of the game instead of a clip">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <PathIcon Data="{StaticResource IconImport}" Width="14" Height="14" />
+                <TextBlock Text="Use a screenshot" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </Grid>
+
+          <!-- Jump to a moment the clip already has -->
+          <ItemsControl ItemsSource="{Binding SourceMoments}" IsVisible="{Binding IsClipSource}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:MarkerViewModel">
+                <Button Classes="glass" Command="{Binding SeekCommand}" Padding="10,4" Margin="0,0,6,6"
+                        ToolTip.Tip="{Binding Text}">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Ellipse Width="7" Height="7" Fill="{Binding Brush}" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding TimeText}" FontSize="12" Foreground="{StaticResource TextTertiary}"
+                               FontFeatures="tnum" />
+                  </StackPanel>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+
+        <Border Background="Black" CornerRadius="16" ClipToBounds="True">
+          <Panel>
+            <views:StudioCanvas Frame="{Binding Frame}" Rules="{Binding Rules}" SelectedRule="{Binding SelectedRule}"
+                                RegionsVersion="{Binding RegionsVersion}" Margin="8" />
+            <StackPanel IsVisible="{Binding !HasFrame}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Spacing="8" MaxWidth="380" IsHitTestVisible="False">
+              <TextBlock Classes="h2" Text="No frame yet" HorizontalAlignment="Center" />
+              <TextBlock Classes="body" TextWrapping="Wrap" TextAlignment="Center"
+                         Text="Pick a clip of this game below, or use a screenshot. Then draw a box over the part of the screen that shows the moment." />
+            </StackPanel>
+            <Border IsVisible="{Binding IsBusy}" Classes="pill" HorizontalAlignment="Right" VerticalAlignment="Top"
+                    Margin="16" IsHitTestVisible="False">
+              <TextBlock Text="Working…" FontSize="12" FontWeight="SemiBold" />
+            </Border>
+          </Panel>
+        </Border>
+      </DockPanel>
+    </Border>
+  </DockPanel>
+</UserControl>

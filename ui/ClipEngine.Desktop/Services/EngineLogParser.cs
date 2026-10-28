@@ -22,6 +22,10 @@ internal sealed record ClipSaved(string Path, double Seconds, double Megabytes) 
 internal sealed record MomentDetected(string Type, string Game, string Text) : EngineEvent;
 internal sealed record ExportProgress(int Percent) : EngineEvent;
 internal sealed record Exported(string Path, double Megabytes) : EngineEvent;
+internal sealed record Trimmed(string Path, double Seconds, double From) : EngineEvent;
+internal sealed record FrameSaved(string Path, int Width, int Height) : EngineEvent;
+internal sealed record TextRead(string Text) : EngineEvent;
+internal sealed record RuleMatches(int Count) : EngineEvent;
 
 // Reads the lines clip_engine.exe writes, in the format of src/core/Log.cpp.
 internal static partial class EngineLogParser
@@ -58,6 +62,18 @@ internal static partial class EngineLogParser
 
     [GeneratedRegex(@"^Exported ([\d.]+) MB to (.+)$")]
     private static partial Regex ExportedRegex();
+
+    [GeneratedRegex(@"^Trimmed ([\d.]+)s from ([\d.]+)s to (.+)$")]
+    private static partial Regex TrimmedRegex();
+
+    [GeneratedRegex(@"^Frame (\d+)x(\d+) saved to (.+)$")]
+    private static partial Regex FrameRegex();
+
+    [GeneratedRegex(@"^Read: ?(.*)$")]
+    private static partial Regex ReadRegex();
+
+    [GeneratedRegex(@"^Matches: (\d+)$")]
+    private static partial Regex MatchesRegex();
 
     [GeneratedRegex(@"^(.+) (detected|closed)$")]
     private static partial Regex GameRegex();
@@ -96,6 +112,10 @@ internal static partial class EngineLogParser
         if ((m = MomentRegex().Match(text)).Success) return new MomentDetected(m.Groups[1].Value, m.Groups[2].Value, m.Groups[3].Value);
         if ((m = ExportProgressRegex().Match(text)).Success) return new ExportProgress(Int(m.Groups[1]));
         if ((m = ExportedRegex().Match(text)).Success) return new Exported(m.Groups[2].Value, Double(m.Groups[1]));
+        if ((m = TrimmedRegex().Match(text)).Success) return new Trimmed(m.Groups[3].Value, Double(m.Groups[1]), Double(m.Groups[2]));
+        if ((m = FrameRegex().Match(text)).Success) return new FrameSaved(m.Groups[3].Value, Int(m.Groups[1]), Int(m.Groups[2]));
+        if ((m = ReadRegex().Match(text)).Success) return new TextRead(m.Groups[1].Value);
+        if ((m = MatchesRegex().Match(text)).Success) return new RuleMatches(Int(m.Groups[1]));
         if ((m = GameRegex().Match(text)).Success)
             return m.Groups[2].Value == "detected" ? new GameDetected(m.Groups[1].Value) : new GameClosed(m.Groups[1].Value);
         return null;

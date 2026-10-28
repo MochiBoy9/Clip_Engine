@@ -1,10 +1,12 @@
 #include "media/ClipMetadata.h"
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstring>
 #include <format>
 #include <fstream>
+#include <sstream>
 
 namespace clip {
 namespace {
@@ -48,11 +50,150 @@ std::string_view Plural(EventType type, int count) {
   }
 }
 
+// Just enough JSON to read clip metadata back: objects, arrays, strings, numbers, true, false, null.
+class JsonReader {
+ public:
+  explicit JsonReader(std::string_view text) : s_(text) {}
+
+  bool Done() {
+    SkipSpace();
+    return i_ == s_.size();
+  }
+
+  // Calls onField(name) for each field of an object; onField reads the value or skips it.
+  template <class Fn>
+  bool Object(Fn&& onField) {
+    if (!Eat('{')) return false;
+    if (Eat('}')) return true;
+    do {
+      std::string name;
+      if (!String(name) || !Eat(':') || !onField(name)) return false;
+    } while (Eat(','));
+    return Eat('}');
+  }
+
+  template <class Fn>
+  bool Array(Fn&& onItem) {
+    if (!Eat('[')) return false;
+    if (Eat(']')) return true;
+    do {
+      if (!onItem()) return false;
+    } while (Eat(','));
+    return Eat(']');
+  }
+
+  bool String(std::string& out) {
+    if (!Eat('"')) return false;
+    out.clear();
+    while (i_ < s_.size()) {
+      const char c = s_[i_++];
+      if (c == '"') return true;
+      if (c != '\\') {
+        out += c;
+        continue;
+      }
+      if (i_ >= s_.size()) return false;
+      const char e = s_[i_++];
+      switch (e) {
+        case 'n': out += '\n'; break;
+        case 'r': out += '\r'; break;
+        case 't': out += '\t'; break;
+        case 'b': out += '\b'; break;
+        case 'f': out += '\f'; break;
+        case 'u': {
+          if (i_ + 4 > s_.size()) return false;
+          unsigned code = 0;
+          for (int k = 0; k < 4; ++k) {
+            const char h = s_[i_++];
+            code <<= 4;
+            if (h >= '0' && h <= '9') code |= h - '0';
+            else if (h >= 'a' && h <= 'f') code |= h - 'a' + 10;
+            else if (h >= 'A' && h <= 'F') code |= h - 'A' + 10;
+            else return false;
+          }
+          // UTF-8; a surrogate pair half comes out as its own (invalid) code point, which only
+          // matters for text read off the screen.
+          if (code < 0x80) {
+            out += static_cast<char>(code);
+          } else if (code < 0x800) {
+            out += static_cast<char>(0xC0 | (code >> 6));
+            out += static_cast<char>(0x80 | (code & 0x3F));
+          } else {
+            out += static_cast<char>(0xE0 | (code >> 12));
+            out += static_cast<char>(0x80 | ((code >> 6) & 0x3F));
+            out += static_cast<char>(0x80 | (code & 0x3F));
+          }
+          break;
+        }
+        default: out += e;  // \" \\ \/
+      }
+    }
+    return false;
+  }
+
+  bool Number(double& out) {
+    SkipSpace();
+    const size_t begin = i_;
+    while (i_ < s_.size() && std::string_view("+-0123456789.eE").find(s_[i_]) != std::string_view::npos) ++i_;
+    if (i_ == begin) return false;
+    try {
+      out = std::stod(std::string(s_.substr(begin, i_ - begin)));
+    } catch (const std::exception&) {
+      return false;
+    }
+    return true;
+  }
+
+  bool Skip() {
+    SkipSpace();
+    if (i_ >= s_.size()) return false;
+    switch (s_[i_]) {
+      case '{': return Object([&](const std::string&) { return Skip(); });
+      case '[': return Array([&] { return Skip(); });
+      case '"': {
+        std::string ignored;
+        return String(ignored);
+      }
+      default: {
+        for (std::string_view word : {"true", "false", "null"}) {
+          if (s_.substr(i_, word.size()) == word) {
+            i_ += word.size();
+            return true;
+          }
+        }
+        double ignored = 0;
+        return Number(ignored);
+      }
+    }
+  }
+
+ private:
+  void SkipSpace() {
+    while (i_ < s_.size() && (s_[i_] == ' ' || s_[i_] == '\n' || s_[i_] == '\r' || s_[i_] == '\t')) ++i_;
+  }
+
+  bool Eat(char c) {
+    SkipSpace();
+    if (i_ < s_.size() && s_[i_] == c) {
+      ++i_;
+      return true;
+    }
+    return false;
+  }
+
+  std::string_view s_;
+  size_t i_ = 0;
+};
+
 }  // namespace
 
 std::string ToJson(const ClipMetadata& metadata) {
-  std::string json = std::format("{{\n  \"version\": 1,\n  \"game\": \"{}\",\n  \"trigger\": \"{}\",\n  \"seconds\": {:.2f},\n",
+  std::string json = std::format("{{\n  \"version\": 2,\n  \"game\": \"{}\",\n  \"trigger\": \"{}\",\n  \"seconds\": {:.2f},\n",
                                  Escape(metadata.game), Escape(metadata.trigger), metadata.seconds);
+  if (!metadata.session.empty()) {
+    json += std::format("  \"session\": \"{}\",\n  \"session_seconds\": {:.2f},\n  \"match\": {},\n",
+                        Escape(metadata.session), metadata.sessionSeconds, metadata.match);
+  }
   json += std::format("  \"title\": \"{}\",\n  \"events\": [", Escape(Summarize(metadata.markers)));
   for (size_t i = 0; i < metadata.markers.size(); ++i) {
     const auto& m = metadata.markers[i];
@@ -75,6 +216,52 @@ std::string Summarize(const std::vector<ClipMetadata::Marker>& markers) {
   return summary;
 }
 
+std::optional<ClipMetadata> ParseMetadataJson(std::string_view json) {
+  ClipMetadata m;
+  JsonReader r(json);
+  const bool ok = r.Object([&](const std::string& field) {
+    double number = 0;
+    if (field == "game") return r.String(m.game);
+    if (field == "trigger") return r.String(m.trigger);
+    if (field == "session") return r.String(m.session);
+    if (field == "seconds") return r.Number(m.seconds);
+    if (field == "session_seconds") return r.Number(m.sessionSeconds);
+    if (field == "match") {
+      if (!r.Number(number)) return false;
+      m.match = static_cast<int>(number);
+      return true;
+    }
+    if (field != "events") return r.Skip();
+    return r.Array([&] {
+      ClipMetadata::Marker marker{EventType::Highlight, 0, {}};
+      std::string type;
+      if (!r.Object([&](const std::string& name) {
+            if (name == "type") return r.String(type);
+            if (name == "time") return r.Number(marker.seconds);
+            if (name == "text") return r.String(marker.text);
+            return r.Skip();
+          })) {
+        return false;
+      }
+      marker.type = ParseEventType(type).value_or(EventType::Highlight);
+      m.markers.push_back(std::move(marker));
+      return true;
+    });
+  });
+  if (!ok || !r.Done()) return std::nullopt;
+  return m;
+}
+
+ClipMetadata Trimmed(const ClipMetadata& metadata, double from, double to) {
+  ClipMetadata out = metadata;
+  out.seconds = std::max(0.0, to - from);
+  if (out.sessionSeconds >= 0) out.sessionSeconds += from;
+  out.markers.clear();
+  for (const auto& m : metadata.markers) {
+    if (m.seconds >= from && m.seconds <= to) out.markers.push_back({m.type, m.seconds - from, m.text});
+  }
+  return out;
+}
 
 bool AppendMetadataBox(const std::filesystem::path& mp4, const std::string& json) {
   std::ofstream out(mp4, std::ios::binary | std::ios::app);
@@ -122,6 +309,18 @@ std::optional<std::string> ReadMetadataBox(const std::filesystem::path& mp4) {
     position += size;
   }
   return std::nullopt;
+}
+
+std::optional<std::string> ReadClipMetadataJson(const std::filesystem::path& mp4) {
+  // The .json wins, like in the desktop app, since that's the copy the app edits.
+  auto sidecar = mp4;
+  sidecar.replace_extension(".json");
+  if (std::ifstream in(sidecar, std::ios::binary); in) {
+    std::stringstream text;
+    text << in.rdbuf();
+    return text.str();
+  }
+  return ReadMetadataBox(mp4);
 }
 
 }  // namespace clip

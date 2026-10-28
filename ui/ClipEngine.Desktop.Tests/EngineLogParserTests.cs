@@ -75,4 +75,11 @@ public class EngineLogParserTests
         Assert.Equal(9.4, done.Megabytes);
         Assert.EndsWith("a_10MB.mp4", done.Path);
     }
+
+    [Fact]
+    public void Trimmed()
+    {
+        var e = Assert.IsType<Trimmed>(Parse(@"Trimmed 12.48s from 3.97s to C:\Videos\Clip_Engine\The Finals\The Finals_2026_trim.mp4"));
+        Assert.Equal((12.48, 3.97, @"C:\Videos\Clip_Engine\The Finals\The Finals_2026_trim.mp4"), (e.Seconds, e.From, e.Path));
+    }
 }

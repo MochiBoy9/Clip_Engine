@@ -12,8 +12,6 @@
 
 #include <algorithm>
 #include <cstring>
-#include <fstream>
-#include <sstream>
 #include <vector>
 
 namespace clip {
@@ -287,18 +285,6 @@ void Encode(const std::filesystem::path& input, const std::filesystem::path& out
   winrt::check_hresult(writer->Finalize());
 }
 
-// The clip's markers, from inside the file or from the .json next to it.
-std::optional<std::string> SourceMetadata(const std::filesystem::path& input) {
-  if (auto json = ReadMetadataBox(input)) return json;
-  auto sidecar = input;
-  sidecar.replace_extension(L".json");
-  std::ifstream in(sidecar, std::ios::binary);
-  if (!in) return std::nullopt;
-  std::stringstream text;
-  text << in.rdbuf();
-  return text.str();
-}
-
 }  // namespace
 
 int RunExport(const ExportOptions& options) {
@@ -323,7 +309,7 @@ int RunExport(const ExportOptions& options) {
 
       const auto size = static_cast<double>(std::filesystem::file_size(options.output));
       if (size <= limitBytes || attempt == 3) {
-        if (auto json = SourceMetadata(options.input)) AppendMetadataBox(options.output, *json);
+        if (auto json = ReadClipMetadataJson(options.input)) AppendMetadataBox(options.output, *json);
         log::Info("Export progress 100%");
         log::Info("Exported {:.1f} MB to {}", size / (1024 * 1024), winrt::to_string(options.output.wstring()));
         if (size > limitBytes) log::Warn("The export is a little over {:.0f} MB; this clip is too long to fit", options.maxMegabytes);

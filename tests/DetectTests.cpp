@@ -100,6 +100,39 @@ region = 0.9, 0.9, 0.5, 0.5
   CHECK(rules.ForGame("the_finals").empty());
 }
 
+void TestCustomGames() {
+  const auto rules = Parse(R"(
+[game.valorant]
+name = VALORANT
+exe = VALORANT-Win64-Shipping.exe | VALORANT.exe
+
+[valorant.kill]
+region = 0.7, 0.05, 0.3, 0.2
+words = ELIMINATED
+exclude = BY
+
+[game.half]
+name = Missing exe
+
+[game.bad id!]
+name = X
+exe = x.exe
+)");
+  CHECK(rules.games.size() == 1);
+  if (!rules.games.empty()) {
+    CHECK(rules.games[0].id == "valorant");
+    CHECK(rules.games[0].name == "VALORANT");
+    CHECK(rules.games[0].executables.size() == 2);
+    CHECK(rules.games[0].executables.size() == 2 && rules.games[0].executables[0] == "VALORANT-Win64-Shipping.exe");
+  }
+  CHECK(rules.ForGame("valorant").size() == 1);
+  CHECK(rules.warnings.size() == 2);  // the game without an exe, and the bad id
+
+  const auto& kill = rules.rules[0];
+  CHECK(CountMatches(kill, Tokenize("ELIMINATED Jett  ELIMINATED Sage")) == 2);
+  CHECK(CountMatches(kill, Tokenize("ELIMINATED BY Reyna")) == 0);
+}
+
 void TestShippedRulesParse(const char* path) {
   std::ifstream in(path);
   CHECK(in.good());
@@ -180,6 +213,62 @@ void TestMetadata() {
   CHECK(ToJson(ClipMetadata{}).find(R"("events": [])") != std::string::npos);
 }
 
+void TestMetadataRoundTrip() {
+  ClipMetadata m;
+  m.game = "Battlefield 6";
+  m.trigger = "hotkey";
+  m.seconds = 30;
+  m.session = "2026-10-27T20:41:05";
+  m.sessionSeconds = 812.5;
+  m.match = 3;
+  m.markers = {{EventType::Kill, 4.5, "KILLED \"X\"\n"}, {EventType::MatchEnd, 29, "VICTORY"}};
+  const auto json = ToJson(m);
+  CHECK(json.find(R"("match": 3)") != std::string::npos);
+
+  const auto back = ParseMetadataJson(json);
+  CHECK(back.has_value());
+  if (back) {
+    CHECK(back->game == "Battlefield 6");
+    CHECK(back->trigger == "hotkey");
+    CHECK(back->session == m.session);
+    CHECK(back->sessionSeconds == 812.5);
+    CHECK(back->match == 3);
+    CHECK(back->markers.size() == 2);
+    CHECK(back->markers.size() == 2 && back->markers[0].text == "KILLED \"X\"\n");
+    CHECK(back->markers.size() == 2 && back->markers[1].type == EventType::MatchEnd);
+  }
+
+  // What the desktop app writes: compact, with fields this side doesn't know.
+  const auto app = ParseMetadataJson(
+      R"({"version":1,"game":"Overwatch","trigger":"auto","seconds":15.2,"title":"1 kill","favorite":true,)"
+      R"("tags":["a",{"b":null}],"events":[{"type":"kill","time":3.25,"text":"\u00c9LIMIN\u00c9"},{"type":"nope","time":1,"text":""}]})");
+  CHECK(app.has_value());
+  if (app) {
+    CHECK(app->game == "Overwatch");
+    CHECK(app->sessionSeconds < 0);
+    CHECK(app->markers.size() == 2);
+    CHECK(app->markers.size() == 2 && app->markers[0].text == "\xC3\x89LIMIN\xC3\x89");
+    CHECK(app->markers.size() == 2 && app->markers[1].type == EventType::Highlight);
+  }
+  CHECK(!ParseMetadataJson("{\"game\": ").has_value());
+  CHECK(!ParseMetadataJson("not json").has_value());
+}
+
+void TestTrimmed() {
+  ClipMetadata m;
+  m.seconds = 30;
+  m.sessionSeconds = 100;
+  m.markers = {{EventType::Kill, 4, "A"}, {EventType::Kill, 12, "B"}, {EventType::Death, 20, "C"}};
+  const auto t = Trimmed(m, 10, 18);
+  CHECK(t.seconds == 8);
+  CHECK(t.sessionSeconds == 110);
+  CHECK(t.markers.size() == 1);
+  CHECK(t.markers.size() == 1 && t.markers[0].seconds == 2 && t.markers[0].text == "B");
+
+  ClipMetadata old;  // a clip from before sessions were recorded keeps "unknown"
+  CHECK(Trimmed(old, 5, 6).sessionSeconds < 0);
+}
+
 void TestMetadataBox(const char* scratch) {
   const std::string path = std::string(scratch) + "/metadata_test.mp4";
   {
@@ -204,9 +293,12 @@ int main(int argc, char** argv) {
   TestWordsMatch();
   TestCountPhrase();
   TestParse();
+  TestCustomGames();
   TestTracker();
   TestPlanner();
   TestMetadata();
+  TestMetadataRoundTrip();
+  TestTrimmed();
   if (argc > 1) TestShippedRulesParse(argv[1]);
   if (argc > 2) TestMetadataBox(argv[2]);
   if (g_failures == 0) std::printf("All detection tests passed\n");

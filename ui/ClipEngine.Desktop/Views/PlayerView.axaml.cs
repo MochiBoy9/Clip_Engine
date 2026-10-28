@@ -65,6 +65,9 @@ public partial class PlayerView : UserControl
             Key.Right or Key.L => _vm.SkipForwardCommand,
             Key.OemComma or Key.Up => _vm.PreviousMarkerCommand,
             Key.OemPeriod or Key.Down => _vm.NextMarkerCommand,
+            Key.I => _vm.SetTrimStartCommand,
+            Key.O => _vm.SetTrimEndCommand,
+            Key.Escape when _vm.IsTrimming => _vm.CancelTrimCommand,
             Key.Escape or Key.Back => _vm.BackCommand,
             _ => null,
         };
