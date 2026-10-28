@@ -58,7 +58,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         var engineSettings = live ? EngineSettings.Load(AppPaths.EngineSettingsFile) : new EngineSettings();
         DesktopSettings = live ? DesktopSettings.Load() : new DesktopSettings();
-        Settings = new SettingsViewModel(engineSettings, DesktopSettings, live ? RestartEngineAsync : null);
+        License = live
+            ? new LicenseViewModel(LicenseState.Load(AppPaths.LicenseFile), AppPaths.LicenseFile, new PolarLicenseClient())
+            : new LicenseViewModel(new LicenseState(), null, null, purchasesOpen: true);
+        Settings = new SettingsViewModel(engineSettings, DesktopSettings, live ? RestartEngineAsync : null) { License = License };
         Settings.SidePanelHotkeyChanged += _ => Raise(nameof(SidePanelHotkey));
         Settings.StorageRulesChanged += OnStorageRulesChanged;
         Settings.CleanUpNowRequested += () => _ = CleanUpAsync();
@@ -113,6 +116,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (!live) return;
         _cleanupTimer.Start();
 
+        License.StartRechecking();
+
         _library = new ClipLibrary { ExtraFolders = DesktopSettings.ImportFolders };
         _library.Changed += () => _ = RefreshClipsAsync();
         _library.Watch(engineSettings.OutputDir);
@@ -134,6 +139,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public ClipsPage ClipsPage { get; }
     public GamesPage GamesPage { get; }
     public SettingsViewModel Settings { get; }
+    public LicenseViewModel License { get; }
     internal DesktopSettings DesktopSettings { get; }
 
     public ObservableCollection<ActivityItem> Activity { get; } = [];
@@ -799,6 +805,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         _engine?.Dispose();
         _library?.Dispose();
+        License.Dispose();
     }
 }
 
