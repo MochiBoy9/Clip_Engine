@@ -32,16 +32,32 @@ struct DetectionRule {
   int threshold = 0;            // 1-255 keeps only pixels at least this bright; 0 reads the region as is
 };
 
+// A game added in detection.ini as [game.<id>] with a name and its executables, so games
+// Clip Engine doesn't know yet can be recorded and given rules.
+struct CustomGame {
+  std::string id;
+  std::string name;
+  std::vector<std::string> executables;  // file names like "VALORANT-Win64-Shipping.exe"
+};
+
 struct DetectionRules {
   int sampleMs = 250;  // how often the screen is read
+  std::vector<CustomGame> games;
   std::vector<DetectionRule> rules;
   std::vector<std::string> warnings;
 
   std::vector<DetectionRule> ForGame(const std::string& game) const;
 };
 
-// Reads detection.ini. Sections are named [<game id>.<event>] or [<game id>.<event>.<anything>].
+// Reads detection.ini. Sections are named [<game id>.<event>] or [<game id>.<event>.<anything>],
+// and [game.<id>] adds a game.
 DetectionRules ParseDetectionRules(std::istream& in);
+
+// "A | B" as phrases, as the words and exclude settings are read.
+std::vector<Phrase> ParsePhrases(const std::string& value);
+
+// How many times the rule's words appear in what was read, or 0 when an excluded word is there too.
+int CountMatches(const DetectionRule& rule, const std::vector<std::string>& tokens);
 
 // Turns what one rule sees in successive screen reads into new events. A message that
 // stays on screen for several reads counts once; a second line appearing counts again.

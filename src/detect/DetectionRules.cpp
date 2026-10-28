@@ -43,6 +43,12 @@ bool ParseInt(const std::string& s, int& out) {
   return ec == std::errc() && ptr == s.data() + s.size();
 }
 
+bool IsId(std::string_view id) {
+  return !id.empty() && std::ranges::all_of(id, [](unsigned char c) { return std::isalnum(c) || c == '_' || c == '-'; });
+}
+
+}  // namespace
+
 std::vector<Phrase> ParsePhrases(const std::string& value) {
   std::vector<Phrase> phrases;
   for (const auto& part : Split(value, '|')) {
@@ -52,7 +58,12 @@ std::vector<Phrase> ParsePhrases(const std::string& value) {
   return phrases;
 }
 
-}  // namespace
+int CountMatches(const DetectionRule& rule, const std::vector<std::string>& tokens) {
+  if (std::ranges::any_of(rule.exclude, [&](const Phrase& p) { return CountPhrase(tokens, p) > 0; })) return 0;
+  int count = 0;
+  for (const auto& phrase : rule.words) count += CountPhrase(tokens, phrase);
+  return count;
+}
 
 std::vector<DetectionRule> DetectionRules::ForGame(const std::string& game) const {
   std::vector<DetectionRule> result;
@@ -63,6 +74,7 @@ std::vector<DetectionRule> DetectionRules::ForGame(const std::string& game) cons
 DetectionRules ParseDetectionRules(std::istream& in) {
   DetectionRules result;
   DetectionRule* rule = nullptr;
+  CustomGame* game = nullptr;
   bool inGlobal = false;
   bool skipping = false;
   std::string line;
@@ -74,7 +86,12 @@ DetectionRules ParseDetectionRules(std::istream& in) {
       warn(std::format("[{}] has no words, so it can never match; ignoring it", rule->name));
       result.rules.pop_back();
     }
+    if (game && (game->name.empty() || game->executables.empty())) {
+      warn(std::format("[game.{}] needs a name and an exe; ignoring it", game->id));
+      result.games.pop_back();
+    }
     rule = nullptr;
+    game = nullptr;
   };
 
   while (std::getline(in, line)) {
@@ -97,6 +114,17 @@ DetectionRules ParseDetectionRules(std::istream& in) {
         continue;
       }
       const auto parts = Split(name, '.');
+      if (parts.size() == 2 && parts[0] == "game") {
+        if (!IsId(parts[1])) {
+          warn(std::format("[{}]: a game id may only use letters, digits, _ and -", name));
+          skipping = true;
+          continue;
+        }
+        std::erase_if(result.games, [&](const CustomGame& g) { return g.id == parts[1]; });
+        game = &result.games.emplace_back();
+        game->id = parts[1];
+        continue;
+      }
       const auto event = parts.size() >= 2 ? ParseEventType(parts[1]) : std::nullopt;
       if (parts.size() < 2 || parts[0].empty() || !event) {
         warn(std::format("[{}] should be [<game>.<event>], with event one of kill, assist, death, revive, "
@@ -126,6 +154,18 @@ DetectionRules ParseDetectionRules(std::istream& in) {
       int ms = 0;
       if (key == "sample_ms" && ParseInt(value, ms)) result.sampleMs = std::clamp(ms, 100, 2000);
       else warn(std::format("unknown setting '{}' in [detection]", key));
+      continue;
+    }
+    if (game) {
+      if (key == "name") {
+        game->name = value;
+      } else if (key == "exe") {
+        for (auto& exe : Split(value, '|')) {
+          if (!exe.empty()) game->executables.push_back(std::move(exe));
+        }
+      } else {
+        warn(std::format("[game.{}] unknown setting '{}'", game->id, key));
+      }
       continue;
     }
     if (!rule) {
@@ -164,11 +204,7 @@ DetectionRules ParseDetectionRules(std::istream& in) {
 }
 
 int RuleTracker::Update(const std::vector<std::string>& tokens, int64_t nowMs) {
-  int count = 0;
-  const bool excluded = std::ranges::any_of(rule_->exclude, [&](const Phrase& p) { return CountPhrase(tokens, p) > 0; });
-  if (!excluded) {
-    for (const auto& phrase : rule_->words) count += CountPhrase(tokens, phrase);
-  }
+  const int count = CountMatches(*rule_, tokens);
 
   if (count > shown_) {
     const int fresh = count - shown_;

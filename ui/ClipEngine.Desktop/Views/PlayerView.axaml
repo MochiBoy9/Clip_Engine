@@ -35,11 +35,28 @@
             <TextBlock Text="Share to Discord" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
+        <Button Classes="glass" Command="{Binding TrimCommand}" Classes.active="{Binding IsTrimming}"
+                ToolTip.Tip="Keep just part of the clip, saved as a new clip (I and O set the start and end)">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <PathIcon Data="{StaticResource IconTrim}" Width="14" Height="14" />
+            <TextBlock Text="Trim" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
         <Button Classes="glass" Command="{Binding CopyCommand}" ToolTip.Tip="Copy the full-quality clip to paste anywhere">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <PathIcon Data="{StaticResource IconCopy}" Width="14" Height="14" />
             <TextBlock Text="Copy" VerticalAlignment="Center" />
           </StackPanel>
+        </Button>
+        <Button Classes="icon" Command="{Binding FavoriteCommand}" ToolTip.Tip="{Binding Clip.FavoriteTip}">
+          <Panel>
+            <PathIcon Data="{StaticResource IconStarOutline}" IsVisible="{Binding !Clip.IsFavorite}" />
+            <PathIcon Data="{StaticResource IconStar}" Foreground="#FFC24B" IsVisible="{Binding Clip.IsFavorite}" />
+          </Panel>
+        </Button>
+        <Button Classes="icon" Command="{Binding StudioCommand}"
+                ToolTip.Tip="Teach Clip Engine to spot a moment from this frame (Detection Studio)">
+          <PathIcon Data="{StaticResource IconScan}" />
         </Button>
         <Button Classes="icon" Command="{Binding ShowCommand}" ToolTip.Tip="Show in folder">
           <PathIcon Data="{StaticResource IconFolder}" />
@@ -110,7 +127,36 @@
     <Border Classes="glass" Padding="12">
       <DockPanel>
         <StackPanel DockPanel.Dock="Bottom" Margin="6,12,6,0" Spacing="6">
-          <views:MarkerTimeline Position="{Binding Position}" Duration="{Binding Duration}" Markers="{Binding Markers}" />
+          <!-- Trimming: what's kept, and saving it as a new clip -->
+          <Border IsVisible="{Binding IsTrimming}" Classes="inset" CornerRadius="14" Padding="12,8" Margin="0,0,0,4">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <Button Classes="glass" Command="{Binding SetTrimStartCommand}" ToolTip.Tip="Start the trimmed clip at the playhead (I)">
+                  <TextBlock Text="Set start · I" />
+                </Button>
+                <Button Classes="glass" Command="{Binding SetTrimEndCommand}" ToolTip.Tip="End the trimmed clip at the playhead (O)">
+                  <TextBlock Text="Set end · O" />
+                </Button>
+              </StackPanel>
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center"
+                          VerticalAlignment="Center">
+                <PathIcon Data="{StaticResource IconTrim}" Width="14" Height="14" Foreground="#FFC24B" />
+                <TextBlock Text="{Binding TrimText}" FontFeatures="tnum" FontWeight="SemiBold" FontSize="13" />
+              </StackPanel>
+              <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <Button Classes="glass" Content="Cancel" Command="{Binding CancelTrimCommand}" />
+                <Button Classes="accent" Command="{Binding SaveTrimCommand}"
+                        ToolTip.Tip="Saves this part as a new clip next to the original, at full quality">
+                  <Panel>
+                    <TextBlock Text="Save trimmed clip" IsVisible="{Binding !IsSavingTrim}" />
+                    <TextBlock Text="Saving…" IsVisible="{Binding IsSavingTrim}" />
+                  </Panel>
+                </Button>
+              </StackPanel>
+            </Grid>
+          </Border>
+          <views:MarkerTimeline Position="{Binding Position}" Duration="{Binding Duration}" Markers="{Binding Markers}"
+                                IsTrimming="{Binding IsTrimming}" TrimStart="{Binding TrimStart}" TrimEnd="{Binding TrimEnd}" />
           <Grid ColumnDefinitions="*,Auto,*">
             <TextBlock VerticalAlignment="Center" FontFeatures="tnum" FontSize="13">
               <Run Text="{Binding PositionText}" FontWeight="SemiBold" />

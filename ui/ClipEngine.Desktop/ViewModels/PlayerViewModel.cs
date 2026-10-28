@@ -19,6 +19,10 @@ public sealed class PlayerViewModel : ObservableObject
     private double _volume;
     private string? _error;
     private DateTime _holdPositionUntil;
+    private bool _isTrimming;
+    private double _trimStart;
+    private double _trimEnd;
+    private bool _isSavingTrim;
 
     internal PlayerViewModel(MainViewModel main, ClipItemViewModel clip, object returnTo)
     {
@@ -48,7 +52,19 @@ public sealed class PlayerViewModel : ObservableObject
         NextMarkerCommand = new RelayCommand(NextMarker, () => HasMarkers);
         ShareCommand = new RelayCommand(() => _main.ShareClipCommand.Execute(Clip));
         CopyCommand = new RelayCommand(() => _main.CopyClipCommand.Execute(Clip));
+        FavoriteCommand = new RelayCommand(() => _main.FavoriteClipCommand.Execute(Clip));
+        TrimCommand = new RelayCommand(() => { if (IsTrimming) CancelTrim(); else StartTrim(); });
+        SetTrimStartCommand = new RelayCommand(() => SetTrimFromPosition(start: true));
+        SetTrimEndCommand = new RelayCommand(() => SetTrimFromPosition(start: false));
+        CancelTrimCommand = new RelayCommand(CancelTrim);
+        SaveTrimCommand = new RelayCommand(() => _ = SaveTrimAsync(), () => IsTrimming && !IsSavingTrim && TrimLength >= 0.5);
         ShowCommand = new RelayCommand(() => _main.ShowClipCommand.Execute(Clip));
+        StudioCommand = new RelayCommand(() =>
+        {
+            _player?.Pause();
+            IsPlaying = false;
+            _main.OpenStudio(clip: Clip, seconds: Position);
+        });
         OpenExternallyCommand = new RelayCommand(() =>
         {
             _player?.Pause();
@@ -79,12 +95,19 @@ public sealed class PlayerViewModel : ObservableObject
 
     public RelayCommand PlayPauseCommand { get; }
     public RelayCommand BackCommand { get; }
+    public RelayCommand StudioCommand { get; }
     public RelayCommand SkipBackCommand { get; }
     public RelayCommand SkipForwardCommand { get; }
     public RelayCommand PreviousMarkerCommand { get; }
     public RelayCommand NextMarkerCommand { get; }
     public RelayCommand ShareCommand { get; }
     public RelayCommand CopyCommand { get; }
+    public RelayCommand FavoriteCommand { get; }
+    public RelayCommand TrimCommand { get; }
+    public RelayCommand SetTrimStartCommand { get; }
+    public RelayCommand SetTrimEndCommand { get; }
+    public RelayCommand CancelTrimCommand { get; }
+    public RelayCommand SaveTrimCommand { get; }
     public RelayCommand ShowCommand { get; }
     public RelayCommand OpenExternallyCommand { get; }
     public RelayCommand DeleteCommand { get; }
@@ -225,11 +248,119 @@ public sealed class PlayerViewModel : ObservableObject
         }
     }
 
+    // Trimming: pick a start and an end on the timeline (drag the handles, or I and O at the
+    // playhead), then save that part as a new clip. The original stays as it is.
+    public bool IsTrimming
+    {
+        get => _isTrimming;
+        private set
+        {
+            if (!Set(ref _isTrimming, value)) return;
+            Raise(nameof(IsNotTrimming));
+            SaveTrimCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    public bool IsNotTrimming => !_isTrimming;
+
+    public double TrimStart
+    {
+        get => _trimStart;
+        set
+        {
+            value = Math.Clamp(value, 0, Math.Max(0, _trimEnd - MinTrim));
+            if (Set(ref _trimStart, value)) TrimChanged();
+        }
+    }
+
+    public double TrimEnd
+    {
+        get => _trimEnd;
+        set
+        {
+            value = Math.Clamp(value, Math.Min(_duration, _trimStart + MinTrim), _duration);
+            if (Set(ref _trimEnd, value)) TrimChanged();
+        }
+    }
+
+    public double TrimLength => Math.Max(0, _trimEnd - _trimStart);
+    public string TrimText =>
+        $"{Format.Duration(TimeSpan.FromSeconds(_trimStart))} – {Format.Duration(TimeSpan.FromSeconds(_trimEnd))} · {TrimLength:0.0} s";
+
+    public bool IsSavingTrim
+    {
+        get => _isSavingTrim;
+        private set
+        {
+            if (Set(ref _isSavingTrim, value)) SaveTrimCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    private const double MinTrim = 0.5;
+
+    private void StartTrim()
+    {
+        if (_duration <= 0) return;
+        // Start with the moments if there are any, with a little room either side; otherwise the whole clip.
+        _trimStart = HasMarkers ? Math.Max(0, Markers[0].Seconds - 3) : 0;
+        _trimEnd = HasMarkers ? Math.Min(_duration, Markers[^1].Seconds + 3) : _duration;
+        if (_trimEnd - _trimStart < MinTrim) (_trimStart, _trimEnd) = (0, _duration);
+        IsTrimming = true;
+        Raise(nameof(TrimStart));
+        Raise(nameof(TrimEnd));
+        TrimChanged();
+    }
+
+    private void CancelTrim() => IsTrimming = false;
+
+    private void SetTrimFromPosition(bool start)
+    {
+        if (!IsTrimming) StartTrim();
+        if (!IsTrimming) return;
+        if (start)
+        {
+            // Setting a start past the end moves the end out of the way.
+            if (_position > _trimEnd - MinTrim) TrimEnd = _duration;
+            TrimStart = _position;
+        }
+        else
+        {
+            if (_position < _trimStart + MinTrim) TrimStart = 0;
+            TrimEnd = _position;
+        }
+    }
+
+    private void TrimChanged()
+    {
+        Raise(nameof(TrimLength));
+        Raise(nameof(TrimText));
+        SaveTrimCommand.NotifyCanExecuteChanged();
+    }
+
+    private async Task SaveTrimAsync()
+    {
+        IsSavingTrim = true;
+        _player?.Pause();
+        IsPlaying = false;
+        var trimmed = await _main.TrimClipAsync(Clip, _trimStart, _trimEnd);
+        IsSavingTrim = false;
+        if (trimmed is null) return;
+        IsTrimming = false;
+        _main.OpenPlayer(trimmed);
+    }
+
     // For the preview tool's screenshot.
     internal void ShowAt(double seconds, bool playing)
     {
         SetPosition(seconds);
         IsPlaying = playing;
+    }
+
+    internal void ShowTrim(double start, double end)
+    {
+        StartTrim();
+        TrimEnd = end;
+        TrimStart = start;
     }
 }
 

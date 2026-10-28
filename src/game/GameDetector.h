@@ -26,8 +26,19 @@ struct DetectedGame {
 
 class GameDetector {
  public:
+  // custom: games added in detection.ini. One with a built-in game's id adds executables to it.
+  explicit GameDetector(const std::vector<GameProfile>& custom = {});
+
+  // Every game it looks for, built-in ones first.
+  const std::vector<GameProfile>& Games() const { return games_; }
+
   // Returns the first supported game that is running and has a visible window.
   std::optional<DetectedGame> Find() const;
+
+ private:
+  const GameProfile* MatchExecutable(const wchar_t* exeName) const;
+
+  std::vector<GameProfile> games_;
 };
 
 }  // namespace clip

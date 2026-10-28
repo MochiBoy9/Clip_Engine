@@ -10,10 +10,16 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 {
     private const int MaxActivity = 60;
 
+    // The storage cleanup waits a while after starting or after its rules change, so there's
+    // time to star clips to keep, then runs every hour.
+    private static readonly TimeSpan CleanupDelay = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan CleanupInterval = TimeSpan.FromHours(1);
+
     private readonly EngineHost? _engine;
     private readonly ClipLibrary? _library;
     private readonly DispatcherTimer _toastTimer;
     private readonly DispatcherTimer _saveDesktopTimer;
+    private readonly DispatcherTimer _cleanupTimer;
     private NavItem _selectedNav;
     private object _currentPage;
     private EngineState _engineState = EngineState.Stopped;
@@ -30,8 +36,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private long _libraryBytes;
     private int _clipsToday;
     private bool _isSharing;
+    private bool _showMatches;
+    private string? _freeSpace;
+    private IReadOnlyList<ClipFile> _files = [];
 
     public const string AllGames = "All clips";
+    public const string FavoritesFilter = "Favorites";
 
     // live: start the engine and watch the clips folder. The preview tool passes false and fills in sample data.
     public MainViewModel(bool live = true)
@@ -53,6 +63,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             : new SupporterViewModel(SupporterConfig.PublicKey, null, DesktopSettings);
         Settings = new SettingsViewModel(engineSettings, DesktopSettings, live ? RestartEngineAsync : null) { Supporter = Supporter };
         Settings.SidePanelHotkeyChanged += _ => Raise(nameof(SidePanelHotkey));
+        Settings.StorageRulesChanged += OnStorageRulesChanged;
+        Settings.CleanUpNowRequested += () => _ = CleanUpAsync();
+        _showMatches = DesktopSettings.ShowMatches;
         _hotkey = engineSettings.SaveHotkey;
         _clipSeconds = engineSettings.ClipSeconds;
         _bufferSeconds = engineSettings.BufferSeconds;
@@ -71,9 +84,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         DeleteClipCommand = new RelayCommand(p => { if (p is ClipItemViewModel c) DeleteClip(c); });
         ShareClipCommand = new RelayCommand(p => { if (p is ClipItemViewModel c) _ = ShareClipAsync(c); });
         CopyClipCommand = new RelayCommand(p => { if (p is ClipItemViewModel c) CopyClip(c); });
+        FavoriteClipCommand = new RelayCommand(p => { if (p is ClipItemViewModel c) ToggleFavorite(c); });
+        ShowClipsGridCommand = new RelayCommand(() => ShowMatches = false);
+        ShowMatchesCommand = new RelayCommand(() => ShowMatches = true);
         ImportClipCommand = new RelayCommand(() => _ = ImportClipAsync(null));
         ToggleSidePanelCommand = new RelayCommand(() => SidePanelToggleRequested?.Invoke());
         ShowMainWindowCommand = new RelayCommand(() => ShowMainWindowRequested?.Invoke());
+        OpenStudioCommand = new RelayCommand(p =>
+        {
+            var studio = OpenStudio();
+            if (p is "add") studio.StartAddGameCommand.Execute(null);
+        });
         GoToCommand = new RelayCommand(p => { if (p is Page page) SelectedNav = Nav.First(n => n.Page == page); });
 
         _toastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
@@ -90,7 +111,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             SaveDesktopSettings();
         };
 
+        _cleanupTimer = new DispatcherTimer { Interval = CleanupDelay };
+        _cleanupTimer.Tick += (_, _) =>
+        {
+            _cleanupTimer.Interval = CleanupInterval;
+            _ = CleanUpAsync();
+        };
+
         if (!live) return;
+        _cleanupTimer.Start();
 
         _library = new ClipLibrary { ExtraFolders = DesktopSettings.ImportFolders };
         _library.Changed += () => _ = RefreshClipsAsync();
@@ -122,6 +151,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public ObservableCollection<ClipItemViewModel> Clips { get; } = [];
     public ObservableCollection<ClipItemViewModel> RecentClips { get; } = [];
     public ObservableCollection<ClipItemViewModel> FilteredClips { get; } = [];
+    public ObservableCollection<MatchViewModel> Matches { get; } = [];
     public ObservableCollection<string> Filters { get; } = [AllGames];
     public ObservableCollection<GameItemViewModel> Games { get; } = [];
 
@@ -130,10 +160,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public RelayCommand OpenLogCommand { get; }
     public RelayCommand RestartEngineCommand { get; }
     public RelayCommand OpenClipCommand { get; }
+    public RelayCommand OpenStudioCommand { get; }
     public RelayCommand ShowClipCommand { get; }
     public RelayCommand DeleteClipCommand { get; }
     public RelayCommand ShareClipCommand { get; }
     public RelayCommand CopyClipCommand { get; }
+    public RelayCommand FavoriteClipCommand { get; }
+    public RelayCommand ShowClipsGridCommand { get; }
+    public RelayCommand ShowMatchesCommand { get; }
     public RelayCommand ImportClipCommand { get; }
     public RelayCommand ToggleSidePanelCommand { get; }
     public RelayCommand ShowMainWindowCommand { get; }
@@ -147,6 +181,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     internal event Action? SidePanelToggleRequested;
     internal event Action? ShowMainWindowRequested;
+    // A short notice to show over the game, like "Clip saved · 2 kills".
+    internal event Action<string>? GameNoticeRequested;
 
     public NavItem SelectedNav
     {
@@ -185,6 +221,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ShowPage(player);
         ShowMainWindowRequested?.Invoke();
         return player;
+    }
+
+    // Detection Studio, for making or fixing the rules that spot moments in a game.
+    internal StudioViewModel OpenStudio(string? gameName = null, ClipItemViewModel? clip = null, double seconds = 0)
+    {
+        var studio = new StudioViewModel(this, CurrentPage, gameName, clip, seconds);
+        ShowPage(studio);
+        return studio;
     }
 
     public bool IsSharing { get => _isSharing; private set => Set(ref _isSharing, value); }
@@ -258,6 +302,25 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public bool HasClips => Clips.Count > 0;
     public bool HasNoClips => Clips.Count == 0;
     public bool HasFilteredClips => FilteredClips.Count > 0;
+    public bool HasMatches => Matches.Count > 0;
+
+    // The Clips page shows single clips in a grid, or whole matches.
+    public bool ShowMatches
+    {
+        get => _showMatches;
+        set
+        {
+            if (!Set(ref _showMatches, value)) return;
+            Raise(nameof(ShowClipsGrid));
+            DesktopSettings.ShowMatches = value;
+            SaveDesktopSettingsSoon();
+        }
+    }
+
+    public bool ShowClipsGrid => !_showMatches;
+
+    // "12.4 GB · 230 GB free" for the clips folder's drive.
+    public string StorageText => _freeSpace is null ? LibrarySize : $"{LibrarySize} · {_freeSpace} free";
 
     public string Filter
     {
@@ -294,7 +357,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public Task StopEngineAsync() => _engine?.StopAsync() ?? Task.CompletedTask;
 
-    private async Task RestartEngineAsync()
+    internal async Task RestartEngineAsync()
     {
         if (_engine is null) return;
         var settings = Settings.ToEngineSettings();
@@ -497,6 +560,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             case ClipSaved s:
                 AddActivity(ActivityKind.Clip, $"Saved a {s.Seconds:0} s clip ({s.Megabytes:0.0} MB)");
                 ShowToast($"Clip saved · {s.Seconds:0} s · {s.Megabytes:0.0} MB");
+                if (DesktopSettings.GameNotifications && IsRecording)
+                {
+                    var summary = ClipMetadataFile.ReadSidecar(s.Path)?.Title;
+                    GameNoticeRequested?.Invoke(string.IsNullOrEmpty(summary) ? $"Clip saved · {s.Seconds:0} s" : $"Clip saved · {summary}");
+                }
                 _ = RefreshClipsAsync();
                 break;
             case MomentDetected m:
@@ -550,7 +618,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Clips.Clear();
         foreach (var file in files)
         {
-            if (!existing.TryGetValue(file.Path, out var clip))
+            if (existing.TryGetValue(file.Path, out var clip))
+            {
+                clip.File = file;
+            }
+            else
             {
                 clip = new ClipItemViewModel(file, Palettes.IndexFor(file.Game), this);
                 _ = LoadThumbnailAsync(clip);
@@ -564,19 +636,32 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var games = Clips.Select(c => c.Game).Distinct(StringComparer.OrdinalIgnoreCase).Order().ToList();
         for (var i = Filters.Count - 1; i >= 1; i--)
         {
-            if (!games.Contains(Filters[i], StringComparer.OrdinalIgnoreCase)) Filters.RemoveAt(i);
+            if (Filters[i] != FavoritesFilter && !games.Contains(Filters[i], StringComparer.OrdinalIgnoreCase)) Filters.RemoveAt(i);
         }
         foreach (var game in games)
         {
             if (!Filters.Contains(game)) Filters.Add(game);
         }
+        if (Clips.Any(c => c.IsFavorite))
+        {
+            if (!Filters.Contains(FavoritesFilter)) Filters.Insert(1, FavoritesFilter);
+        }
+        else if (Filters.Remove(FavoritesFilter) && _filter == FavoritesFilter)
+        {
+            _filter = AllGames;
+            Raise(nameof(Filter));
+        }
         if (!Filters.Contains(_filter)) Filter = AllGames;
+        Settings.CleanupPreview = DescribeCleanup();
 
+        _files = files;
         _libraryBytes = files.Sum(f => f.Bytes);
+        _freeSpace = IsLive ? FreeSpace(ClipsFolder) : null;
         ClipsToday = files.Count(f => f.Created.Date == DateTime.Today);
         ApplyFilter();
         UpdateGames();
         Raise(nameof(LibrarySize));
+        Raise(nameof(StorageText));
         Raise(nameof(ClipCount));
         Raise(nameof(HasClips));
         Raise(nameof(HasNoClips));
@@ -593,13 +678,115 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         FilteredClips.Clear();
         foreach (var clip in Clips)
         {
-            if (_filter != AllGames && !string.Equals(clip.Game, _filter, StringComparison.OrdinalIgnoreCase)) continue;
+            if (_filter == FavoritesFilter ? !clip.IsFavorite
+                : _filter != AllGames && !string.Equals(clip.Game, _filter, StringComparison.OrdinalIgnoreCase)) continue;
             if (_search.Length > 0 && !clip.Title.Contains(_search, StringComparison.OrdinalIgnoreCase)
                 && !clip.When.Contains(_search, StringComparison.OrdinalIgnoreCase)
                 && !clip.Summary.Contains(_search, StringComparison.OrdinalIgnoreCase)) continue;
             FilteredClips.Add(clip);
         }
+
+        // Matches are made of the clips that pass the filter, so filtering by game or searching
+        // "revive" narrows the matches too.
+        Matches.Clear();
+        var byPath = FilteredClips.ToDictionary(c => c.Path, StringComparer.OrdinalIgnoreCase);
+        foreach (var match in MatchGrouping.Group(FilteredClips.Select(c => c.File)))
+            Matches.Add(new MatchViewModel(match, match.Clips.Select(f => byPath[f.Path]).ToList()));
         Raise(nameof(HasFilteredClips));
+        Raise(nameof(HasMatches));
+    }
+
+    private void ToggleFavorite(ClipItemViewModel clip)
+    {
+        var metadata = clip.File.Metadata ?? new ClipMetadata
+        {
+            Game = clip.Game,
+            Trigger = "hotkey",
+            Seconds = clip.File.Duration?.TotalSeconds ?? 0,
+        };
+        metadata.Favorite = !clip.IsFavorite;
+        try
+        {
+            ClipMetadataFile.WriteSidecar(clip.Path, metadata);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            metadata.Favorite = !metadata.Favorite;
+            ShowToast($"Couldn't star the clip: {e.Message}", isError: true);
+            return;
+        }
+        clip.File = clip.File with { Metadata = metadata };
+        ShowToast(metadata.Favorite ? "Added to favorites. Favorites are never cleaned up." : "Removed from favorites");
+        SetClips(_files.Select(f => string.Equals(f.Path, clip.Path, StringComparison.OrdinalIgnoreCase) ? clip.File : f).ToList());
+    }
+
+    // Saves part of a clip as a new clip and returns it, or null if that failed (with a toast saying why).
+    internal async Task<ClipItemViewModel?> TrimClipAsync(ClipItemViewModel clip, double start, double end)
+    {
+        string path;
+        try
+        {
+            path = await ClipEditing.TrimAsync(clip.Path, start, end);
+        }
+        catch (EditFailedException e)
+        {
+            ShowToast(e.Message, isError: true);
+            return null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+        {
+            ShowToast($"Couldn't trim the clip: {e.Message}", isError: true);
+            return null;
+        }
+        await RefreshClipsAsync();
+        AddActivity(ActivityKind.Clip, $"Trimmed a {clip.Game} clip to {Format.Duration(TimeSpan.FromSeconds(end - start))}");
+        ShowToast("Trimmed copy saved next to the original");
+        return Clips.FirstOrDefault(c => string.Equals(c.Path, path, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private IReadOnlyList<ClipFile> PlanCleanup() =>
+        StorageCleanup.Plan(_files, ClipsFolder, DesktopSettings.ImportFolders, DateTime.Now,
+                            DesktopSettings.DeleteAfterDays, DesktopSettings.MaxLibraryGb);
+
+    private string? DescribeCleanup()
+    {
+        if (DesktopSettings.DeleteAfterDays <= 0 && DesktopSettings.MaxLibraryGb <= 0) return null;
+        var plan = PlanCleanup();
+        return plan.Count == 0
+            ? "Nothing to clean up right now. Starred clips are always kept."
+            : $"{(plan.Count == 1 ? "1 clip" : $"{plan.Count} clips")} ({Format.Bytes(plan.Sum(c => c.Bytes))}) will be removed at the next cleanup. Star any you want to keep.";
+    }
+
+    private void OnStorageRulesChanged()
+    {
+        Settings.CleanupPreview = DescribeCleanup();
+        _cleanupTimer.Stop();
+        _cleanupTimer.Interval = CleanupDelay;
+        if (IsLive) _cleanupTimer.Start();
+    }
+
+    private async Task CleanUpAsync()
+    {
+        if (!IsLive) return;
+        var plan = PlanCleanup();
+        if (plan.Count == 0) return;
+        var (count, bytes) = await Task.Run(() => StorageCleanup.Delete(plan));
+        if (count == 0) return;
+        AddActivity(ActivityKind.Info, $"Storage cleanup removed {(count == 1 ? "1 old clip" : $"{count} old clips")} ({Format.Bytes(bytes)})");
+        await RefreshClipsAsync();
+    }
+
+    private static string? FreeSpace(string folder)
+    {
+        try
+        {
+            var root = Path.GetPathRoot(Path.GetFullPath(folder));
+            return string.IsNullOrEmpty(root) ? null : Format.Bytes(new DriveInfo(root).AvailableFreeSpace);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return null;
+        }
     }
 
     // Lets the preview tool show the app as it looks mid-game.

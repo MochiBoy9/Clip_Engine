@@ -36,6 +36,11 @@ class App {
   GameDetector detector_;
   std::unique_ptr<RecordingSession> session_;
   std::string sessionGameId_;
+  // When the current recording started, and the match starts detected in it, for grouping
+  // clips by match.
+  std::string sessionId_;
+  int64_t sessionStart_ = 0;
+  std::vector<int64_t> matchStarts_;
   AutoClipPlanner planner_;
   int64_t retryAt_ = 0;
   std::string lastGame_;

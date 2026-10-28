@@ -1,6 +1,3 @@
-using System.Diagnostics;
-using System.Text;
-
 namespace ClipEngine.Desktop.Services;
 
 internal sealed class ShareFailedException(string message) : Exception(message);
@@ -28,57 +25,26 @@ internal static class ClipSharing
         CleanUp();
         var output = Path.Combine(SharedDir, $"{Path.GetFileNameWithoutExtension(clip)}_{limitMb}MB.mp4");
 
-        var info = new ProcessStartInfo(AppPaths.EngineExe)
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8,
-            WorkingDirectory = AppContext.BaseDirectory,
-        };
-        info.ArgumentList.Add("--export");
-        info.ArgumentList.Add(clip);
-        info.ArgumentList.Add(output);
-        info.ArgumentList.Add("--max-mb");
-        info.ArgumentList.Add(limitMb.ToString(System.Globalization.CultureInfo.InvariantCulture));
-
-        using var process = new Process { StartInfo = info };
-        string? failure = null;
         Exported? exported = null;
-        void OnLine(string? data)
-        {
-            if (data is null || EngineLogParser.ParseLine(data) is not { } line) return;
-            if (line.Level == LogLevel.Error) failure ??= line.Message;
-            switch (EngineLogParser.ParseEvent(line))
+        var (exitCode, failure) = await EngineCommand.RunAsync(
+            ["--export", clip, output, "--max-mb", limitMb.ToString(System.Globalization.CultureInfo.InvariantCulture)],
+            e =>
             {
-                case ExportProgress p:
-                    progress.Report(p.Percent);
-                    break;
-                case Exported e:
-                    exported = e;
-                    break;
-            }
-        }
-        process.OutputDataReceived += (_, e) => OnLine(e.Data);
-        process.ErrorDataReceived += (_, e) => OnLine(e.Data);
-        process.Start();
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-        try
-        {
-            await process.WaitForExitAsync(cancel);
-        }
-        catch (OperationCanceledException)
-        {
-            try { process.Kill(); } catch (InvalidOperationException) { }
-            throw;
-        }
+                switch (e)
+                {
+                    case ExportProgress p:
+                        progress.Report(p.Percent);
+                        break;
+                    case Exported done:
+                        exported = done;
+                        break;
+                }
+            },
+            cancel);
 
-        if (process.ExitCode != 0 || exported is null || !File.Exists(output))
+        if (exitCode != 0 || exported is null || !File.Exists(output))
         {
-            var reason = failure?.Replace("Export failed: ", "") ?? $"the engine exited with code {process.ExitCode}";
+            var reason = failure?.Replace("Export failed: ", "") ?? $"the engine exited with code {exitCode}";
             throw new ShareFailedException($"Couldn't make the share copy: {reason}");
         }
         return (output, exported.Megabytes);
@@ -110,7 +76,7 @@ internal static class ClipSharing
         return target;
     }
 
-    private static string UniquePath(string folder, string name)
+    internal static string UniquePath(string folder, string name)
     {
         var path = Path.Combine(folder, name);
         var stem = Path.GetFileNameWithoutExtension(name);
