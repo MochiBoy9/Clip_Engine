@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 
 namespace clip {
 namespace {
@@ -96,6 +97,66 @@ int CountPhrase(const std::vector<std::string>& tokens, const Phrase& phrase) {
     }
   }
   return count;
+}
+
+namespace {
+
+bool MatchesAt(const std::vector<std::string>& row, const Phrase& phrase, size_t at) {
+  if (at + phrase.words.size() > row.size()) return false;
+  for (size_t k = 0; k < phrase.words.size(); ++k) {
+    if (!WordsMatch(row[at + k], phrase.words[k])) return false;
+  }
+  return true;
+}
+
+}  // namespace
+
+bool PhraseAtStart(const std::vector<std::string>& row, const Phrase& phrase) {
+  if (phrase.words.empty()) return false;
+  if (MatchesAt(row, phrase, 0)) return true;
+  return !row.empty() && row[0].size() <= 2 && MatchesAt(row, phrase, 1);
+}
+
+bool PhraseAtEnd(const std::vector<std::string>& row, const Phrase& phrase) {
+  const size_t n = phrase.words.size();
+  if (n == 0 || row.size() < n) return false;
+  if (MatchesAt(row, phrase, row.size() - n)) return true;
+  return row.size() > n && row.back().size() <= 2 && MatchesAt(row, phrase, row.size() - n - 1);
+}
+
+std::vector<std::vector<std::string>> GroupIntoRows(std::vector<WordBox> words) {
+  std::ranges::sort(words, [](const WordBox& a, const WordBox& b) { return a.y + a.height / 2 < b.y + b.height / 2; });
+
+  struct Row {
+    double center = 0;
+    double height = 0;
+    std::vector<WordBox> words;
+  };
+  std::vector<Row> rows;
+  for (auto& word : words) {
+    const double center = word.y + word.height / 2;
+    if (rows.empty() || std::abs(center - rows.back().center) > std::max(word.height, rows.back().height) / 2) {
+      rows.push_back({center, word.height, {}});
+    }
+    Row& row = rows.back();
+    row.words.push_back(std::move(word));
+    // Keep the row's center as the average of its words, so a slightly taller word doesn't drag it.
+    double sum = 0;
+    for (const auto& w : row.words) sum += w.y + w.height / 2;
+    row.center = sum / static_cast<double>(row.words.size());
+    row.height = std::max(row.height, row.words.back().height);
+  }
+
+  std::vector<std::vector<std::string>> result;
+  for (auto& row : rows) {
+    std::ranges::sort(row.words, [](const WordBox& a, const WordBox& b) { return a.x < b.x; });
+    std::vector<std::string> tokens;
+    for (const auto& word : row.words) {
+      for (auto& token : Tokenize(word.text)) tokens.push_back(std::move(token));
+    }
+    if (!tokens.empty()) result.push_back(std::move(tokens));
+  }
+  return result;
 }
 
 }  // namespace clip

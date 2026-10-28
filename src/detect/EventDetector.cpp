@@ -177,13 +177,21 @@ void EventDetector::Run() {
         for (auto& region : regions_) {
           if (!region->ready) continue;
           const auto bitmap = PrepareForOcr(region->pixels, region->width, region->height, region->threshold);
-          const std::string text = winrt::to_string(ocr.RecognizeAsync(bitmap).get().Text());
+          const auto result = ocr.RecognizeAsync(bitmap).get();
+          const std::string text = winrt::to_string(result.Text());
           if (debug_ && text != region->lastText && !text.empty()) log::Info("Read [{}]: {}", region->name, Shorten(text, 160));
           region->lastText = text;
 
-          const auto tokens = Tokenize(text);
+          std::vector<WordBox> words;
+          for (const auto& line : result.Lines()) {
+            for (const auto& word : line.Words()) {
+              const auto box = word.BoundingRect();
+              words.push_back({winrt::to_string(word.Text()), box.X, box.Y, box.Width, box.Height});
+            }
+          }
+          const auto rows = GroupIntoRows(std::move(words));
           for (auto& tracker : region->trackers) {
-            const int fresh = tracker.Update(tokens, sampleMs);
+            const int fresh = tracker.Update(rows, sampleMs);
             for (int i = 0; i < fresh; ++i) sink_(GameEvent{tracker.Rule().event, previousTime, Shorten(text, 80)});
           }
         }

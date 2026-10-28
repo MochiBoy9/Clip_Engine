@@ -182,9 +182,16 @@ int RunReadCommand(const std::filesystem::path& input, double seconds, const Det
       std::memcpy(pixels.data() + static_cast<size_t>(y) * width * 4,
                   frame.bgra.data() + (static_cast<size_t>(top + y) * frame.width + left) * 4, static_cast<size_t>(width) * 4);
     }
-    const std::string text = winrt::to_string(ocr.RecognizeAsync(PrepareForOcr(pixels, width, height, rule.threshold)).get().Text());
-    log::Info("Read: {}", text);
-    log::Info("Matches: {}", CountMatches(rule, Tokenize(text)));
+    const auto result = ocr.RecognizeAsync(PrepareForOcr(pixels, width, height, rule.threshold)).get();
+    std::vector<WordBox> words;
+    for (const auto& line : result.Lines()) {
+      for (const auto& word : line.Words()) {
+        const auto box = word.BoundingRect();
+        words.push_back({winrt::to_string(word.Text()), box.X, box.Y, box.Width, box.Height});
+      }
+    }
+    log::Info("Read: {}", winrt::to_string(result.Text()));
+    log::Info("Matches: {}", CountMatches(rule, GroupIntoRows(std::move(words))));
     return 0;
   } catch (const winrt::hresult_error& e) {
     log::Error("Read failed: {}", Describe(e));

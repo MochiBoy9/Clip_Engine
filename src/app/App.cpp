@@ -2,6 +2,7 @@
 
 #include "core/Clock.h"
 #include "core/Log.h"
+#include "integrations/IntegrationSetup.h"
 #include "media/ClipMetadata.h"
 #include "media/Mp4Writer.h"
 
@@ -87,6 +88,7 @@ int App::Run() {
   std::string supported;
   for (const auto& game : detector_.Games()) supported += (supported.empty() ? "" : ", ") + game.name;
   log::Info("Waiting for a supported game: {}", supported);
+  if (config_.detection) PrepareGameIntegrations();
 
   const HANDLE events[] = {CreateEventW(nullptr, FALSE, FALSE, kSaveEventName),
                            CreateEventW(nullptr, FALSE, FALSE, kQuitEventName)};
@@ -118,6 +120,7 @@ int App::Run() {
       DispatchMessageW(&msg);
     }
 
+    PumpIntegrationEvents();
     HandleEvents();
     SaveReadyAutoClips(false);
     if (NowHns() >= nextPoll) {
@@ -157,8 +160,10 @@ void App::Poll() {
   if (!session_ && monitor && NowHns() >= retryAt_) {
     std::vector<DetectionRule> rules;
     if (config_.detection && !gameId.empty()) {
-      rules = rules_.ForGame(gameId);
-      if (rules.empty()) log::Info("No detection rules for {}, so only the hotkey saves clips", label);
+      std::vector<std::string> needingName;
+      rules = rules_.ForGame(gameId, ReadPlayerNames(config_.file), &needingName);
+      if (!needingName.empty()) log::Warn("Add your {} name on the Games page to catch your kills in its killfeed", label);
+      if (rules.empty() && game->profile->api == GameApi::None) log::Info("No detection rules for {}, so only the hotkey saves clips", label);
     }
     try {
       session_ = std::make_unique<RecordingSession>(config_, monitor, label, std::move(rules), rules_.sampleMs);
@@ -172,6 +177,30 @@ void App::Poll() {
       retryAt_ = NowHns() + kRetryDelay;
     }
   }
+
+  SyncIntegration(game ? &*game : nullptr);
+}
+
+void App::SyncIntegration(const DetectedGame* game) {
+  const bool wanted = game && config_.detection && game->profile->api != GameApi::None;
+  if (wanted && integration_ && integrationGame_ == game->profile && integrationProcess_ == game->processId) return;
+  integration_.reset();
+  integrationGame_ = nullptr;
+  integrationProcess_ = 0;
+  if (!wanted) return;
+  integration_ = StartGameIntegration(*game);
+  if (!integration_) return;
+  integrationGame_ = game->profile;
+  integrationProcess_ = game->processId;
+  log::Info("Reading {}'s own game events for kills, deaths and match results", game->profile->name);
+}
+
+void App::PumpIntegrationEvents() {
+  if (!integration_) return;
+  auto events = integration_->TakeEvents();
+  // Only moments from the game being recorded belong in its clips.
+  if (!session_ || session_->Label() != integrationGame_->name) return;
+  for (auto& event : events) session_->AddEvent(event);
 }
 
 void App::StopSession() {
