@@ -7,10 +7,9 @@ namespace ClipEngine.Desktop.Services;
 internal sealed class DesktopSettings
 {
     public bool CloseToTray { get; set; } = true;
-    public bool AnimatedBackground { get; set; } = true;
 
     // The colour theme, from AccentThemes. Only supporters can pick one other than the default.
-    public string AccentTheme { get; set; } = "aurora";
+    public string AccentTheme { get; set; } = "volt";
 
     // The side panel that docks to the edge of the screen.
     public string SidePanelEdge { get; set; } = "right";

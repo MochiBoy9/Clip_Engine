@@ -12,7 +12,7 @@ Proprietary software. All rights reserved; see [LICENSE](LICENSE).
 - Keeps the last 60 seconds in memory; press **F8** to save the last 30 seconds as an MP4 with separate game and mic audio tracks.
 
 - Spots kills, assists, deaths, revives, match start and end, and highlights, and saves a clip around them by itself: from the game's own live events where the game has them, and otherwise by reading the HUD with Windows text recognition. Each clip carries its moments, in a `.json` next to it and inside the MP4.
-- A desktop app (`ClipEngine.exe`) with a liquid-glass look: live recording status, a Save clip button, a clip gallery with thumbnails, the supported games and all the settings. It runs the engine for you and keeps recording from the tray.
+- A desktop app (`ClipEngine.exe`) with a flat, dark look that stays light on the GPU: live recording status, a Save clip button, a clip gallery with thumbnails, the supported games and all the settings. It runs the engine for you and keeps recording from the tray.
 - A clip player in the app with the detected moments on the timeline.
 - Share to Discord: a copy that fits the upload limit, put on the clipboard. Clips friends send can be dropped on the window to import them, moments included.
 - A side panel (Alt+Shift+C) on the edge of the screen, over the game. It and the "Clip saved" notice are left out of recordings.

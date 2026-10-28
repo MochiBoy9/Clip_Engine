@@ -4,10 +4,10 @@
              xmlns:views="using:ClipEngine.Desktop.Views"
              x:Class="ClipEngine.Desktop.Views.StudioView"
              x:DataType="vm:StudioViewModel">
-  <DockPanel Margin="18,0,22,18">
+  <DockPanel Margin="0,0,0,24">
     <!-- Title, the game, and saving -->
     <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,14">
-      <Button Classes="glass" Command="{Binding BackCommand}" VerticalAlignment="Center">
+      <Button Classes="secondary" Command="{Binding BackCommand}" VerticalAlignment="Center">
         <StackPanel Orientation="Horizontal" Spacing="8">
           <PathIcon Data="{StaticResource IconBack}" Width="14" Height="14" />
           <TextBlock Text="{Binding BackLabel}" VerticalAlignment="Center" />
@@ -20,14 +20,14 @@
       <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
         <ComboBox Width="200" ItemsSource="{Binding Games}" SelectedItem="{Binding SelectedGame}"
                   ToolTip.Tip="The game to make rules for" />
-        <Button Classes="glass" Command="{Binding StartAddGameCommand}"
+        <Button Classes="secondary" Command="{Binding StartAddGameCommand}"
                 ToolTip.Tip="Record and detect moments in a game Clip Engine doesn't know yet">
           <TextBlock Text="Add a game" />
         </Button>
         <Button Classes="accent" Command="{Binding SaveCommand}"
                 ToolTip.Tip="Save these rules; the engine restarts to use them">
           <StackPanel Orientation="Horizontal" Spacing="8">
-            <PathIcon Data="{StaticResource IconCheck}" Width="14" Height="14" Foreground="White" />
+            <PathIcon Data="{StaticResource IconCheck}" Width="14" Height="14" />
             <TextBlock Text="Save rules" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
@@ -35,7 +35,7 @@
     </Grid>
 
     <!-- Adding a game: its name and the program it runs as -->
-    <Border DockPanel.Dock="Top" Classes="glass" Padding="18" Margin="0,0,0,14" IsVisible="{Binding IsAddingGame}">
+    <Border DockPanel.Dock="Top" Classes="card" Padding="18" Margin="0,0,0,14" IsVisible="{Binding IsAddingGame}">
       <StackPanel Spacing="12">
         <StackPanel Spacing="2">
           <TextBlock Classes="h2" Text="Add a game" />
@@ -57,7 +57,7 @@
             <TextBox Text="{Binding NewGameExe}" Watermark="Game.exe" />
           </StackPanel>
           <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
-            <Button Classes="glass" Content="Cancel" Command="{Binding CancelAddGameCommand}" />
+            <Button Classes="secondary" Content="Cancel" Command="{Binding CancelAddGameCommand}" />
             <Button Classes="accent" Content="Add game" Command="{Binding ConfirmAddGameCommand}" />
           </StackPanel>
         </Grid>
@@ -65,7 +65,7 @@
     </Border>
 
     <!-- What went wrong, or what just happened -->
-    <Border DockPanel.Dock="Top" Classes="inset" CornerRadius="14" Padding="14,9" Margin="0,0,0,14"
+    <Border DockPanel.Dock="Top" Classes="inset" Padding="14,9" Margin="0,0,0,14"
             IsVisible="{Binding HasStatus}">
       <StackPanel Orientation="Horizontal" Spacing="10">
         <PathIcon Data="{StaticResource IconAlert}" Width="14" Height="14" Foreground="{StaticResource WarnBrush}"
@@ -77,11 +77,11 @@
     </Border>
 
     <!-- The rules, and the picked one's settings -->
-    <Border DockPanel.Dock="Right" Classes="glass" Width="340" Margin="14,0,0,0" Padding="18,18,18,16">
+    <Border DockPanel.Dock="Right" Classes="card" Width="340" Margin="12,0,0,0" Padding="16">
       <DockPanel>
         <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
           <TextBlock Classes="h2" Text="Rules" VerticalAlignment="Center" />
-          <Button Grid.Column="1" Classes="glass" Command="{Binding AddRuleCommand}" Padding="12,6"
+          <Button Grid.Column="1" Classes="secondary" Command="{Binding AddRuleCommand}" Padding="12,6"
                   ToolTip.Tip="Add a rule, then draw its box on the frame">
             <TextBlock Text="+ Add rule" FontSize="13" />
           </Button>
@@ -148,11 +148,11 @@
     </Border>
 
     <!-- The frame, where to take it from, and the test -->
-    <Border Classes="glass" Padding="12">
+    <Border Classes="card" Padding="10">
       <DockPanel>
         <StackPanel DockPanel.Dock="Bottom" Margin="6,12,6,0" Spacing="10">
           <!-- Test result for the picked rule -->
-          <Border Classes="inset" CornerRadius="14" Padding="12,8" IsVisible="{Binding HasSelectedRule}">
+          <Border Classes="inset" Padding="12,8" IsVisible="{Binding HasSelectedRule}">
             <Grid ColumnDefinitions="Auto,*,Auto">
               <Button Classes="accent" Command="{Binding TestCommand}"
                       ToolTip.Tip="Read the box on this frame the way the engine does in game">
@@ -166,13 +166,13 @@
                            Text="Find a frame where the game shows the moment, then test: you'll see what the engine reads in the box." />
               </StackPanel>
               <Panel Grid.Column="2" VerticalAlignment="Center">
-                <Border Classes="pill" Background="#3330D158" BorderBrush="#8030D158" IsVisible="{Binding IsMatch}">
+                <Border Classes="pill" Background="{StaticResource SuccessSoftBrush}" BorderBrush="#803DDC97" IsVisible="{Binding IsMatch}">
                   <StackPanel Orientation="Horizontal" Spacing="6">
-                    <PathIcon Data="{StaticResource IconCheck}" Width="11" Height="11" Foreground="White" />
+                    <PathIcon Data="{StaticResource IconCheck}" Width="11" Height="11" Foreground="{StaticResource SuccessBrush}" />
                     <TextBlock Text="Match" FontSize="12" FontWeight="Bold" />
                   </StackPanel>
                 </Border>
-                <Border Classes="pill" Background="#33FF9F0A" BorderBrush="#80FF9F0A" IsVisible="{Binding IsNoMatch}">
+                <Border Classes="pill" Background="{StaticResource WarnSoftBrush}" BorderBrush="#80FFB547" IsVisible="{Binding IsNoMatch}">
                   <TextBlock Text="No match" FontSize="12" FontWeight="Bold" />
                 </Border>
               </Panel>
@@ -195,7 +195,7 @@
               <TextBlock Grid.Column="1" Text="{Binding FrameTimeText}" FontFeatures="tnum" FontSize="13" FontWeight="SemiBold"
                          VerticalAlignment="Center" Margin="12,0,0,0" />
             </Grid>
-            <Button Grid.Column="4" Classes="glass" Command="{Binding OpenImageCommand}" VerticalAlignment="Center"
+            <Button Grid.Column="4" Classes="secondary" Command="{Binding OpenImageCommand}" VerticalAlignment="Center"
                     ToolTip.Tip="Use a screenshot of the game instead of a clip">
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <PathIcon Data="{StaticResource IconImport}" Width="14" Height="14" />
@@ -211,7 +211,7 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:MarkerViewModel">
-                <Button Classes="glass" Command="{Binding SeekCommand}" Padding="10,4" Margin="0,0,6,6"
+                <Button Classes="secondary" Command="{Binding SeekCommand}" Padding="10,4" Margin="0,0,6,6"
                         ToolTip.Tip="{Binding Text}">
                   <StackPanel Orientation="Horizontal" Spacing="6">
                     <Ellipse Width="7" Height="7" Fill="{Binding Brush}" VerticalAlignment="Center" />
@@ -225,7 +225,7 @@
           </ItemsControl>
         </StackPanel>
 
-        <Border Background="Black" CornerRadius="16" ClipToBounds="True">
+        <Border Background="Black" CornerRadius="8" ClipToBounds="True">
           <Panel>
             <views:StudioCanvas Frame="{Binding Frame}" Rules="{Binding Rules}" SelectedRule="{Binding SelectedRule}"
                                 RegionsVersion="{Binding RegionsVersion}" Margin="8" />

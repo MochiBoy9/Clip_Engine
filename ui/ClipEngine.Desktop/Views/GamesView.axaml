@@ -4,18 +4,17 @@
              x:Class="ClipEngine.Desktop.Views.GamesView"
              x:DataType="vm:GamesPage">
   <ScrollViewer>
-    <StackPanel Margin="18,0,22,24" Spacing="18">
+    <StackPanel Margin="0,0,0,24" Spacing="14">
       <StackPanel Spacing="2">
         <TextBlock Classes="h1" Text="Games" />
         <TextBlock Classes="caption" Text="Clip Engine starts recording as soon as one of these opens, on the monitor it's on." />
       </StackPanel>
 
       <!-- Killfeed games need the player's name to tell their kills from everyone else's. -->
-      <Border x:Name="NameCard" x:DataType="vm:PlayerNamesViewModel" Classes="glass" Padding="24" Margin="0,0,16,0">
+      <Border x:Name="NameCard" x:DataType="vm:PlayerNamesViewModel" Classes="card" Padding="20" Margin="0,0,12,0">
         <Grid ColumnDefinitions="Auto,*">
-          <Border Width="48" Height="48" CornerRadius="16" Background="{DynamicResource AccentGradient}"
-                  BoxShadow="{StaticResource AccentGlow}" VerticalAlignment="Top" Margin="0,0,18,0">
-            <PathIcon Data="{StaticResource IconSparkle}" Width="22" Height="22" Foreground="White" />
+          <Border Classes="tile" Width="40" Height="40" CornerRadius="10" VerticalAlignment="Top" Margin="0,0,16,0">
+            <PathIcon Data="{StaticResource IconSparkle}" Width="18" Height="18" />
           </Border>
           <StackPanel Grid.Column="1" Spacing="6">
             <TextBlock Classes="h2" Text="Your in-game name" />
@@ -36,55 +35,41 @@
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:GameItemViewModel">
-            <Border Classes="glass" Padding="0" Margin="0,0,16,16" CornerRadius="26">
-              <Panel>
-                <!-- Tinted wash of the game's colours across the top of the card -->
-                <Border Background="{Binding Gradient}" Opacity="0.4" IsHitTestVisible="False">
-                  <Border.OpacityMask>
-                    <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
-                      <GradientStop Offset="0" Color="#FF000000" />
-                      <GradientStop Offset="0.75" Color="#00000000" />
-                    </LinearGradientBrush>
-                  </Border.OpacityMask>
-                </Border>
-                <StackPanel Margin="22" Spacing="16">
-                  <Grid ColumnDefinitions="Auto,*">
-                    <Border Width="64" Height="64" CornerRadius="20" Background="{Binding Gradient}"
-                            BorderBrush="#66FFFFFF" BorderThickness="1"
-                            BoxShadow="0 10 26 0 #55000010, inset 0 1 0 0 #80FFFFFF">
-                      <TextBlock Text="{Binding Initials}" FontSize="22" FontWeight="Black" Foreground="White"
-                                 HorizontalAlignment="Center" VerticalAlignment="Center" />
-                    </Border>
-                    <Border Grid.Column="1" Classes="pill" HorizontalAlignment="Right" VerticalAlignment="Top"
-                            Background="#33FF4D7A" BorderBrush="#80FF4D7A" IsVisible="{Binding IsRecording}">
-                      <StackPanel Orientation="Horizontal" Spacing="6">
-                        <Ellipse Classes="liveDot pulsing" Width="7" Height="7" VerticalAlignment="Center" />
-                        <TextBlock Text="REC" FontSize="11" FontWeight="Bold" LetterSpacing="1" />
-                      </StackPanel>
-                    </Border>
-                  </Grid>
-                  <StackPanel Spacing="4">
-                    <TextBlock Classes="h2" Text="{Binding Name}" FontSize="19" />
-                    <TextBlock Classes="body" Text="{Binding Status}" FontSize="13" />
+            <Border Classes="card" Padding="18" Margin="0,0,12,12">
+              <StackPanel Spacing="14">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                  <Border Width="48" Height="48" CornerRadius="10" Background="{Binding Gradient}">
+                    <TextBlock Text="{Binding Initials}" FontSize="17" FontWeight="Black" Foreground="White"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  </Border>
+                  <StackPanel Grid.Column="1" Margin="14,0,8,0" VerticalAlignment="Center" Spacing="2">
+                    <TextBlock Classes="h2" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Classes="caption" Text="{Binding Status}" />
                   </StackPanel>
-                  <Border Height="1" Background="{StaticResource Divider}" />
-                  <Grid ColumnDefinitions="*,Auto">
-                    <TextBlock Classes="caption" Text="{Binding ClipCountText}" VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="1" Classes="caption" Text="{Binding DetectionText}" VerticalAlignment="Center"
-                               Foreground="{StaticResource SuccessBrush}" />
-                  </Grid>
-                </StackPanel>
-              </Panel>
+                  <Border Grid.Column="2" Classes="pill record" Padding="8,2" VerticalAlignment="Top"
+                          IsVisible="{Binding IsRecording}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <Ellipse Classes="liveDot pulsing" Width="6" Height="6" VerticalAlignment="Center" />
+                      <TextBlock Text="REC" FontSize="10" FontWeight="Bold" LetterSpacing="1" />
+                    </StackPanel>
+                  </Border>
+                </Grid>
+                <Border Height="1" Background="{StaticResource Divider}" />
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Classes="caption" Text="{Binding ClipCountText}" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" Classes="caption" Text="{Binding DetectionText}" VerticalAlignment="Center"
+                             Foreground="{StaticResource TextSecondary}" />
+                </Grid>
+              </StackPanel>
             </Border>
           </DataTemplate>
         </ItemsControl.ItemTemplate>
       </ItemsControl>
 
-      <Border Classes="glass" Padding="24" Margin="0,0,16,0">
+      <Border Classes="card" Padding="20" Margin="0,0,12,0">
         <Grid ColumnDefinitions="Auto,*,Auto">
-          <Border Width="48" Height="48" CornerRadius="16" Background="{DynamicResource AccentGradient}"
-                  BoxShadow="{StaticResource AccentGlow}" VerticalAlignment="Top" Margin="0,0,18,0">
-            <PathIcon Data="{StaticResource IconScan}" Width="22" Height="22" Foreground="White" />
+          <Border Classes="tile" Width="40" Height="40" CornerRadius="10" VerticalAlignment="Top" Margin="0,0,16,0">
+            <PathIcon Data="{StaticResource IconScan}" Width="18" Height="18" />
           </Border>
           <StackPanel Grid.Column="1" Spacing="6" Margin="0,0,18,0">
             <TextBlock Classes="h2" Text="Detection Studio" />
@@ -92,7 +77,7 @@
                        Text="Add any game, or fix how one is read. Pick a frame from a clip, draw a box over the kill feed, type the words it shows, and test it before saving." />
           </StackPanel>
           <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-            <Button Classes="glass" Command="{Binding Main.OpenStudioCommand}" CommandParameter="add"
+            <Button Classes="secondary" Command="{Binding Main.OpenStudioCommand}" CommandParameter="add"
                     ToolTip.Tip="Record and detect moments in a game Clip Engine doesn't know yet">
               <TextBlock Text="Add a game" />
             </Button>

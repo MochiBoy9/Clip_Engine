@@ -23,7 +23,6 @@ Sample.Fill(vm);
 
 var window = new MainWindow { DataContext = vm, Width = 1440, Height = 900 };
 window.Show();
-window.ForceAnimated(false);
 
 void Settle()
 {
@@ -84,7 +83,6 @@ Save(panel, "6-side-panel.png");
 // A supporter colour theme.
 var ember = AccentThemes.Find("ember");
 AccentThemes.ApplyAccent(ember);
-AccentThemes.ApplyBackground(ember, window.BlobViolet, window.BlobCyan, window.BlobPink, window.BlobBlue);
 vm.ShowPage(vm.Home);
 Save(window, "10-theme-ember.png");
 

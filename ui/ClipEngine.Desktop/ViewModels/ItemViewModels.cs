@@ -1,5 +1,6 @@
 using System.Globalization;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using Avalonia.Media.Imaging;
 using ClipEngine.Desktop.Services;
 
@@ -145,15 +146,23 @@ internal static class EventKinds
         _ => Label(type),
     };
 
-    public static IBrush Brush(string type) => new SolidColorBrush(Color.Parse(type switch
+    // One shared brush per kind: the same few are drawn thousands of times across the library.
+    private static readonly IBrush Kill = new ImmutableSolidColorBrush(Color.Parse("#FF4D6A"));
+    private static readonly IBrush Assist = new ImmutableSolidColorBrush(Color.Parse("#3FB4FF"));
+    private static readonly IBrush Death = new ImmutableSolidColorBrush(Color.Parse("#7D8394"));
+    private static readonly IBrush Revive = new ImmutableSolidColorBrush(Color.Parse("#3DDC97"));
+    private static readonly IBrush Match = new ImmutableSolidColorBrush(Color.Parse("#FFB547"));
+    private static readonly IBrush Other = new ImmutableSolidColorBrush(Color.Parse("#A98BFF"));
+
+    public static IBrush Brush(string type) => type switch
     {
-        "kill" => "#FF4D7A",
-        "assist" => "#22C8EE",
-        "death" => "#8E97B8",
-        "revive" => "#3EE0A6",
-        "match_start" or "match_end" => "#FFC24B",
-        _ => "#B45CF6",
-    }));
+        "kill" => Kill,
+        "assist" => Assist,
+        "death" => Death,
+        "revive" => Revive,
+        "match_start" or "match_end" => Match,
+        _ => Other,
+    };
 }
 
 public sealed class GameItemViewModel(string name, int paletteIndex) : ObservableObject

@@ -5,132 +5,93 @@
              x:Class="ClipEngine.Desktop.Views.HomeView"
              x:DataType="vm:HomePage">
   <ScrollViewer>
-    <StackPanel Margin="18,0,22,24" Spacing="18">
+    <StackPanel Margin="0,0,0,24" Spacing="14">
 
-      <!-- Hero: what the engine is doing right now -->
-      <Border Classes="glass" CornerRadius="30" Padding="0">
-        <Panel>
-          <Border IsHitTestVisible="False" Background="{DynamicResource AccentWash}" />
-          <!-- A bright arc in the corner, like light bending through thick glass -->
-          <Ellipse Width="420" Height="420" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-210,-120,0"
-                   IsHitTestVisible="False">
-            <Ellipse.Fill>
-              <RadialGradientBrush>
-                <GradientStop Offset="0" Color="#33FFFFFF" />
-                <GradientStop Offset="1" Color="#00FFFFFF" />
-              </RadialGradientBrush>
-            </Ellipse.Fill>
-          </Ellipse>
-
-          <Grid ColumnDefinitions="*,Auto" Margin="32,30,30,30">
-            <StackPanel Spacing="10" VerticalAlignment="Center">
-              <Border Classes="pill" HorizontalAlignment="Left">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                  <Ellipse Classes="liveDot" Classes.pulsing="{Binding Main.IsRecording}" Fill="{Binding Main.StatusBrush}"
-                           VerticalAlignment="Center" />
-                  <TextBlock Text="{Binding Main.StatusEyebrow}" FontSize="11" FontWeight="Bold" LetterSpacing="1.1" />
-                </StackPanel>
-              </Border>
-              <TextBlock Classes="display" Text="{Binding Main.StatusTitle}" TextTrimming="CharacterEllipsis" />
-              <TextBlock Classes="body" Text="{Binding Main.StatusDetail}" TextWrapping="Wrap" MaxWidth="560"
-                         HorizontalAlignment="Left" />
-              <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,8,0,0"
-                          IsVisible="{Binding Main.HasEngineProblem}">
-                <Button Classes="glass" Content="Restart engine" Command="{Binding Main.RestartEngineCommand}" />
-                <Button Classes="glass" Content="Open log" Command="{Binding Main.OpenLogCommand}" />
+      <!-- What the engine is doing right now, and saving a clip -->
+      <Border Classes="card" Padding="24,22">
+        <Grid ColumnDefinitions="*,Auto">
+          <StackPanel Spacing="8" VerticalAlignment="Center">
+            <Border Classes="pill" HorizontalAlignment="Left" Padding="9,3">
+              <StackPanel Orientation="Horizontal" Spacing="7">
+                <Ellipse Classes="liveDot" Classes.pulsing="{Binding Main.IsRecording}" Fill="{Binding Main.StatusBrush}"
+                         VerticalAlignment="Center" />
+                <TextBlock Text="{Binding Main.StatusEyebrow}" FontSize="10" FontWeight="Bold" LetterSpacing="1"
+                           Foreground="{StaticResource TextSecondary}" />
               </StackPanel>
+            </Border>
+            <TextBlock Classes="display" Text="{Binding Main.StatusTitle}" TextTrimming="CharacterEllipsis" Margin="0,4,0,0" />
+            <TextBlock Classes="body" Text="{Binding Main.StatusDetail}" TextWrapping="Wrap" MaxWidth="560"
+                       HorizontalAlignment="Left" FontFeatures="tnum" />
+            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0"
+                        IsVisible="{Binding Main.HasEngineProblem}">
+              <Button Classes="secondary" Content="Restart engine" Command="{Binding Main.RestartEngineCommand}" />
+              <Button Classes="secondary" Content="Open log" Command="{Binding Main.OpenLogCommand}" />
             </StackPanel>
+          </StackPanel>
 
-            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="10" Margin="24,0,0,0">
-              <Button Classes="accent" Command="{Binding Main.SaveClipCommand}" Height="68" MinWidth="210"
-                      CornerRadius="22" HorizontalContentAlignment="Center">
-                <StackPanel Orientation="Horizontal" Spacing="12">
-                  <PathIcon Data="{StaticResource IconBolt}" Width="20" Height="20" Foreground="White" />
-                  <TextBlock Text="Save clip" FontSize="18" FontWeight="Bold" Foreground="White"
-                             VerticalAlignment="Center" />
+          <!-- Recording controls. Room for more next to Save clip, like starting a long recording. -->
+          <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="8" Margin="24,0,0,0">
+            <StackPanel Name="RecordingControls" Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+              <Button Classes="accent" Command="{Binding Main.SaveClipCommand}" Height="48" Padding="22,0"
+                      VerticalContentAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                  <PathIcon Data="{StaticResource IconBolt}" Width="16" Height="16" />
+                  <TextBlock Text="Save clip" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" />
                 </StackPanel>
               </Button>
-              <TextBlock Text="{Binding Main.SaveHint}" Classes="caption" HorizontalAlignment="Center" />
             </StackPanel>
-          </Grid>
-        </Panel>
+            <TextBlock Text="{Binding Main.SaveHint}" Classes="caption" HorizontalAlignment="Right" />
+          </StackPanel>
+        </Grid>
       </Border>
 
       <!-- Numbers at a glance -->
       <UniformGrid Columns="4">
-        <Border Classes="glass soft" Padding="18" Margin="0,0,9,0">
-          <StackPanel Spacing="12">
-            <Border Width="36" Height="36" CornerRadius="11" HorizontalAlignment="Left">
-              <Border.Background>
-                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
-                  <GradientStop Offset="0" Color="#B45CF6" /><GradientStop Offset="1" Color="#6C63FF" />
-                </LinearGradientBrush>
-              </Border.Background>
-              <PathIcon Data="{StaticResource IconClock}" Width="17" Height="17" Foreground="White" />
-            </Border>
-            <StackPanel Spacing="2">
-              <TextBlock Classes="stat" Text="{Binding Main.BufferText}" />
-              <TextBlock Classes="caption" Text="Replay buffer" />
+        <Border Classes="card" Padding="16" Margin="0,0,9,0">
+          <Grid ColumnDefinitions="Auto,*">
+            <Border Classes="tile" VerticalAlignment="Center"><PathIcon Data="{StaticResource IconClock}" /></Border>
+            <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+              <TextBlock Classes="stat" FontSize="20" Text="{Binding Main.BufferText}" />
+              <TextBlock Classes="caption" Text="Replay buffer" TextTrimming="CharacterEllipsis" />
             </StackPanel>
-          </StackPanel>
+          </Grid>
         </Border>
-        <Border Classes="glass soft" Padding="18" Margin="3,0,6,0">
-          <StackPanel Spacing="12">
-            <Border Width="36" Height="36" CornerRadius="11" HorizontalAlignment="Left">
-              <Border.Background>
-                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
-                  <GradientStop Offset="0" Color="#FF5E9C" /><GradientStop Offset="1" Color="#FFB457" />
-                </LinearGradientBrush>
-              </Border.Background>
-              <PathIcon Data="{StaticResource IconBolt}" Width="17" Height="17" Foreground="White" />
-            </Border>
-            <StackPanel Spacing="2">
-              <TextBlock Classes="stat" Text="{Binding Main.ClipsToday}" />
-              <TextBlock Classes="caption" Text="Clips today" />
+        <Border Classes="card" Padding="16" Margin="3,0,6,0">
+          <Grid ColumnDefinitions="Auto,*">
+            <Border Classes="tile" VerticalAlignment="Center"><PathIcon Data="{StaticResource IconClips}" /></Border>
+            <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+              <TextBlock Classes="stat" FontSize="20" Text="{Binding Main.ClipsToday}" />
+              <TextBlock Classes="caption" Text="Clips today" TextTrimming="CharacterEllipsis" />
             </StackPanel>
-          </StackPanel>
+          </Grid>
         </Border>
-        <Border Classes="glass soft" Padding="18" Margin="6,0,3,0">
-          <StackPanel Spacing="12">
-            <Border Width="36" Height="36" CornerRadius="11" HorizontalAlignment="Left">
-              <Border.Background>
-                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
-                  <GradientStop Offset="0" Color="#22C8EE" /><GradientStop Offset="1" Color="#3EE0A6" />
-                </LinearGradientBrush>
-              </Border.Background>
-              <PathIcon Data="{StaticResource IconDrive}" Width="17" Height="17" Foreground="White" />
-            </Border>
-            <StackPanel Spacing="2">
-              <TextBlock Classes="stat" Text="{Binding Main.LibrarySize}" />
-              <TextBlock Classes="caption" Text="Clip library" />
+        <Border Classes="card" Padding="16" Margin="6,0,3,0">
+          <Grid ColumnDefinitions="Auto,*">
+            <Border Classes="tile" VerticalAlignment="Center"><PathIcon Data="{StaticResource IconDrive}" /></Border>
+            <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+              <TextBlock Classes="stat" FontSize="20" Text="{Binding Main.LibrarySize}" />
+              <TextBlock Classes="caption" Text="Clip library" TextTrimming="CharacterEllipsis" />
             </StackPanel>
-          </StackPanel>
+          </Grid>
         </Border>
-        <Border Classes="glass soft" Padding="18" Margin="9,0,0,0">
-          <StackPanel Spacing="12">
-            <Border Width="36" Height="36" CornerRadius="11" HorizontalAlignment="Left">
-              <Border.Background>
-                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
-                  <GradientStop Offset="0" Color="#2F7BFF" /><GradientStop Offset="1" Color="#7C6CFF" />
-                </LinearGradientBrush>
-              </Border.Background>
-              <PathIcon Data="{StaticResource IconGames}" Width="17" Height="17" Foreground="White" />
-            </Border>
-            <StackPanel Spacing="2">
-              <TextBlock Classes="stat" Text="{Binding Main.GamesSupported}" />
-              <TextBlock Classes="caption" Text="Games detected automatically" />
+        <Border Classes="card" Padding="16" Margin="9,0,0,0">
+          <Grid ColumnDefinitions="Auto,*">
+            <Border Classes="tile" VerticalAlignment="Center"><PathIcon Data="{StaticResource IconGames}" /></Border>
+            <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+              <TextBlock Classes="stat" FontSize="20" Text="{Binding Main.GamesSupported}" />
+              <TextBlock Classes="caption" Text="Games detected automatically" TextTrimming="CharacterEllipsis" />
             </StackPanel>
-          </StackPanel>
+          </Grid>
         </Border>
       </UniformGrid>
 
-      <Grid ColumnDefinitions="1.7*,18,*">
+      <Grid ColumnDefinitions="1.7*,14,*">
         <!-- Recent clips -->
-        <Border Classes="glass" Padding="20">
-          <StackPanel Spacing="16">
+        <Border Classes="card" Padding="18">
+          <StackPanel Spacing="14">
             <Grid ColumnDefinitions="*,Auto">
               <TextBlock Classes="h2" Text="Recent clips" VerticalAlignment="Center" />
-              <Button Grid.Column="1" Classes="glass" Padding="12,6" Content="View all"
+              <Button Grid.Column="1" Classes="secondary" Padding="12,5" FontSize="13" Content="View all"
                       Command="{Binding Main.GoToCommand}" CommandParameter="{x:Static vm:Page.Clips}" />
             </Grid>
             <ItemsControl ItemsSource="{Binding Main.RecentClips}" IsVisible="{Binding Main.HasClips}">
@@ -139,7 +100,7 @@
               </ItemsControl.ItemsPanel>
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:ClipItemViewModel">
-                  <views:ClipCard Margin="0,0,10,10" ThumbnailHeight="128" />
+                  <views:ClipCard Margin="0,0,10,10" ThumbnailHeight="124" />
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
@@ -153,7 +114,7 @@
         </Border>
 
         <!-- Activity -->
-        <Border Grid.Column="2" Classes="glass" Padding="20">
+        <Border Grid.Column="2" Classes="card" Padding="18">
           <StackPanel Spacing="14">
             <TextBlock Classes="h2" Text="Activity" />
             <ScrollViewer MaxHeight="440">
@@ -161,23 +122,21 @@
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:ActivityItem">
                   <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,14">
-                    <Panel Width="28" Height="28" VerticalAlignment="Top" Margin="0,0,12,0">
-                      <Border CornerRadius="9" Background="{DynamicResource AccentGradient}" IsVisible="{Binding IsClip}">
-                        <PathIcon Data="{StaticResource IconBolt}" Width="13" Height="13" Foreground="White" />
+                    <Panel VerticalAlignment="Top" Margin="0,0,12,0">
+                      <Border Classes="tile small" IsVisible="{Binding IsClip}">
+                        <PathIcon Data="{StaticResource IconBolt}" />
                       </Border>
-                      <Border CornerRadius="9" Background="{StaticResource RecordGradient}" IsVisible="{Binding IsRecording}">
-                        <PathIcon Data="{StaticResource IconRecord}" Width="10" Height="10" Foreground="White" />
+                      <Border Classes="tile small record" IsVisible="{Binding IsRecording}">
+                        <PathIcon Data="{StaticResource IconRecord}" Width="9" Height="9" />
                       </Border>
-                      <Border CornerRadius="9" Background="#26FFC24B" IsVisible="{Binding IsProblem}">
-                        <PathIcon Data="{StaticResource IconAlert}" Width="13" Height="13"
-                                  Foreground="{StaticResource WarnBrush}" />
+                      <Border Classes="tile small warn" IsVisible="{Binding IsProblem}">
+                        <PathIcon Data="{StaticResource IconAlert}" />
                       </Border>
-                      <Border CornerRadius="9" Background="#338B6CFF" IsVisible="{Binding IsMoment}">
-                        <PathIcon Data="{StaticResource IconSparkle}" Width="12" Height="12" Foreground="#D6C9FF" />
+                      <Border Classes="tile small" IsVisible="{Binding IsMoment}">
+                        <PathIcon Data="{StaticResource IconSparkle}" />
                       </Border>
-                      <Border CornerRadius="9" Background="#1FFFFFFF" IsVisible="{Binding IsInfo}">
-                        <PathIcon Data="{StaticResource IconGames}" Width="14" Height="14"
-                                  Foreground="{StaticResource TextSecondary}" />
+                      <Border Classes="tile small neutral" IsVisible="{Binding IsInfo}">
+                        <PathIcon Data="{StaticResource IconGames}" />
                       </Border>
                     </Panel>
                     <StackPanel Grid.Column="1" Spacing="1">
