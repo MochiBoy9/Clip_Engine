@@ -147,7 +147,7 @@
 
       <Border Classes="glass" Padding="40" VerticalAlignment="Top" IsVisible="{Binding !Main.HasFilteredClips}">
         <StackPanel Spacing="10" HorizontalAlignment="Center">
-          <Border Width="56" Height="56" CornerRadius="18" Background="{StaticResource AccentGradient}"
+          <Border Width="56" Height="56" CornerRadius="18" Background="{DynamicResource AccentGradient}"
                   HorizontalAlignment="Center" BoxShadow="{StaticResource AccentGlow}">
             <PathIcon Data="{StaticResource IconClips}" Width="24" Height="24" Foreground="White" />
           </Border>

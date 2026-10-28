@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>SupporterKeys</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The same code the app checks keys with. -->
+    <Compile Include="..\ClipEngine.Desktop\Services\SupporterKey.cs" Link="SupporterKey.cs" />
+  </ItemGroup>
+
+</Project>

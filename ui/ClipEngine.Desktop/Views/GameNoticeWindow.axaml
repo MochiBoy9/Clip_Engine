@@ -16,7 +16,7 @@
   <Border Margin="10" HorizontalAlignment="Right" CornerRadius="16" BorderThickness="1" BorderBrush="{StaticResource GlassStroke}" Padding="14,10"
           BoxShadow="0 10 28 0 #66000010, inset 0 1 0 0 #40FFFFFF" Background="#F21B1836" IsHitTestVisible="False">
     <StackPanel Orientation="Horizontal" Spacing="10">
-      <Border Width="24" Height="24" CornerRadius="8" Background="{StaticResource AccentGradient}">
+      <Border Width="24" Height="24" CornerRadius="8" Background="{DynamicResource AccentGradient}">
         <PathIcon Data="{StaticResource IconCheck}" Width="13" Height="13" Foreground="White" />
       </Border>
       <TextBlock Name="Message" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="14" Foreground="White"

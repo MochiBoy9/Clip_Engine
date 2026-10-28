@@ -81,6 +81,13 @@ var panel = new SidePanelWindow { DataContext = vm, Width = 344, Height = 900 };
 panel.Show();
 Save(panel, "6-side-panel.png");
 
+// A supporter colour theme.
+var ember = AccentThemes.Find("ember");
+AccentThemes.ApplyAccent(ember);
+AccentThemes.ApplyBackground(ember, window.BlobViolet, window.BlobCyan, window.BlobPink, window.BlobBlue);
+vm.ShowPage(vm.Home);
+Save(window, "10-theme-ember.png");
+
 // A frame of the sample game with a kill message in its feed, as a clip would show it.
 static Bitmap SampleFrame()
 {
@@ -112,7 +119,9 @@ internal static class Sample
     public static void Fill(MainViewModel vm)
     {
         var now = DateTime.Now;
-        vm.SetSupportedGames(["The Finals", "Overwatch", "Battlefield 6"]);
+        vm.SetSupportedGames(["The Finals", "Overwatch", "Battlefield 6", "Counter-Strike 2", "Dota 2", "League of Legends",
+                              "Rocket League", "Valorant", "Fortnite", "Apex Legends", "PUBG", "Marvel Rivals",
+                              "Rainbow Six Siege", "Call of Duty", "ARC Raiders", "Delta Force"]);
 
         var clips = new (string Game, string Thumb, double MinutesAgo, int Seconds, long Mb)[]
         {

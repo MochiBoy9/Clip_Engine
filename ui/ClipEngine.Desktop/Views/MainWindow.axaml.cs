@@ -25,7 +25,12 @@ public partial class MainWindow : Window, IAppDialogs
         Deactivated += (_, _) => UpdateAnimation();
         DataContextChanged += (_, _) =>
         {
-            if (DataContext is MainViewModel vm) vm.Settings.AnimatedBackgroundChanged += _ => UpdateAnimation();
+            if (DataContext is MainViewModel vm)
+            {
+                vm.Settings.AnimatedBackgroundChanged += _ => UpdateAnimation();
+                vm.Supporter.ThemeChanged += ApplyTheme;
+                ApplyTheme(vm.Supporter.Theme);
+            }
             UpdateAnimation();
         };
     }
@@ -142,4 +147,10 @@ public partial class MainWindow : Window, IAppDialogs
     }
 
     internal void ForceAnimated(bool on) => Root.Classes.Set("animated", on);
+
+    private void ApplyTheme(AccentTheme theme)
+    {
+        AccentThemes.ApplyAccent(theme);
+        AccentThemes.ApplyBackground(theme, BlobViolet, BlobCyan, BlobPink, BlobBlue);
+    }
 }

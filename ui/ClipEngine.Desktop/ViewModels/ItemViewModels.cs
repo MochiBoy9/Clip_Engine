@@ -165,6 +165,8 @@ public sealed class GameItemViewModel(string name, int paletteIndex) : Observabl
     public string Name { get; } = name;
     public string Initials { get; } = Format.Initials(name);
     public IBrush Gradient { get; } = Palettes.Gradient(paletteIndex);
+    // How moments are found in this game: its own API, its killfeed or the rest of the screen.
+    public string DetectionText { get; } = GameCatalog.Describe(name);
 
     public bool IsRunning
     {

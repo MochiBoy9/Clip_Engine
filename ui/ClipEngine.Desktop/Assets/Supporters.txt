@@ -1,0 +1,1 @@
+# Supporters thanked in Settings, one name per line. Lines starting with # are ignored.

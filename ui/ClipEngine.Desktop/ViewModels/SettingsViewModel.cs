@@ -58,8 +58,8 @@ public sealed class SettingsViewModel : ObservableObject
     public RelayCommand RevertCommand { get; }
     public RelayCommand CleanUpNowCommand { get; }
 
-    // The plan card at the top of the right column.
-    public LicenseViewModel? License { get; init; }
+    // The support card at the top of the right column.
+    public SupporterViewModel? Supporter { get; init; }
 
     public event Action<bool>? AnimatedBackgroundChanged;
     public event Action<string>? SidePanelHotkeyChanged;

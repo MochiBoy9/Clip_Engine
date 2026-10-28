@@ -24,4 +24,20 @@ bool WordsMatch(std::string_view token, std::string_view word);
 // How many separate times the phrase appears in the tokens.
 int CountPhrase(const std::vector<std::string>& tokens, const Phrase& phrase);
 
+// Whether the phrase starts (or ends) a row of text. One stray token of one or two characters
+// before (or after) it is allowed, since icons next to names tend to read as a letter or two.
+bool PhraseAtStart(const std::vector<std::string>& row, const Phrase& phrase);
+bool PhraseAtEnd(const std::vector<std::string>& row, const Phrase& phrase);
+
+// A word read off the screen and where it was, in pixels.
+struct WordBox {
+  std::string text;
+  double x = 0, y = 0, width = 0, height = 0;
+};
+
+// Puts words that sit side by side into one row, top to bottom and each row left to right,
+// and tokenizes each row. Text recognition sometimes splits one line of a killfeed in two
+// where an icon sits between the names; this joins them back up.
+std::vector<std::vector<std::string>> GroupIntoRows(std::vector<WordBox> words);
+
 }  // namespace clip

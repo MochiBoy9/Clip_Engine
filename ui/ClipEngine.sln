@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClipEngine.Desktop.Preview"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClipEngine.Desktop.Tests", "ClipEngine.Desktop.Tests\ClipEngine.Desktop.Tests.csproj", "{FBCDD939-1C32-4301-8191-DB69810ED063}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClipEngine.SupporterKeys", "ClipEngine.SupporterKeys\ClipEngine.SupporterKeys.csproj", "{8DF3DD39-7386-4BB4-A107-2B9C1729FF64}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -30,5 +32,9 @@ Global
 		{FBCDD939-1C32-4301-8191-DB69810ED063}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{FBCDD939-1C32-4301-8191-DB69810ED063}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{FBCDD939-1C32-4301-8191-DB69810ED063}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8DF3DD39-7386-4BB4-A107-2B9C1729FF64}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8DF3DD39-7386-4BB4-A107-2B9C1729FF64}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8DF3DD39-7386-4BB4-A107-2B9C1729FF64}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8DF3DD39-7386-4BB4-A107-2B9C1729FF64}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

@@ -8,6 +8,7 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace clip {
 
@@ -15,6 +16,10 @@ struct Hotkey {
   UINT modifiers = 0;  // MOD_ALT | MOD_CONTROL | MOD_SHIFT | MOD_WIN
   UINT key = VK_F8;
 };
+
+// The player_names setting from the file as it is now. The desktop app can change it while the
+// engine runs, so it's read again each time a game starts.
+std::vector<std::string> ReadPlayerNames(const std::filesystem::path& file);
 
 // Parses "F8", "Alt+F10", "Ctrl+Shift+S" and similar.
 std::optional<Hotkey> ParseHotkey(std::string_view text);
@@ -38,6 +43,9 @@ struct Config {
   std::set<EventType> autoClipEvents{kAllEventTypes.begin(), kAllEventTypes.end()};
   int clipBeforeSeconds = 10;     // how much of an automatic clip comes before the moment
   int clipAfterSeconds = 5;       // and after it
+  std::vector<std::string> playerNames;  // the player's in-game names, for reading killfeeds
+
+  std::filesystem::path file;  // where these came from
 
   // Reads key = value settings, writing a commented default file first if none exists.
   static Config Load(const std::filesystem::path& file);
