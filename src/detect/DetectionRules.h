@@ -76,6 +76,11 @@ DetectionRules ParseDetectionRules(std::istream& in);
 // "A | B" as phrases, as the words and exclude settings are read. Phrases mentioning {player} are left out.
 std::vector<Phrase> ParsePhrases(const std::string& value);
 
+// What the rule matches in one read of its region, given as rows of tokens: one entry per
+// match, holding the other words around it (in a killfeed, the player names) so the same
+// message can be recognized in the next read. Entries are empty when the words stand alone.
+std::vector<std::string> FindMatches(const DetectionRule& rule, const std::vector<std::vector<std::string>>& rows);
+
 // How many times the rule's words show in one read of its region, given as rows of tokens.
 int CountMatches(const DetectionRule& rule, const std::vector<std::vector<std::string>>& rows);
 // The same for one run of tokens, read as a single row.
@@ -83,8 +88,11 @@ inline int CountMatches(const DetectionRule& rule, const std::vector<std::string
   return CountMatches(rule, std::vector<std::vector<std::string>>{tokens});
 }
 
-// Turns what one rule sees in successive screen reads into new events. A message that
-// stays on screen for several reads counts once; a second line appearing counts again.
+// Turns what one rule sees in successive screen reads into new events. Each message is
+// remembered by the names in it, so a killfeed line counts once however long it stays, even
+// when OCR misses it for a few reads or the feed scrolls. A message with new names counts,
+// and so does a second line with the same names (the same player killed twice); once a name
+// has been gone from the screen for a few seconds, it can count again.
 class RuleTracker {
  public:
   explicit RuleTracker(const DetectionRule& rule) : rule_(&rule) {}
@@ -99,9 +107,17 @@ class RuleTracker {
   const DetectionRule& Rule() const { return *rule_; }
 
  private:
+  // How long a message must be gone before the same names count as a new event.
+  static constexpr int64_t kForgetMs = 3000;
+
+  struct Seen {
+    std::string key;
+    int count = 0;  // most lines with these names on screen at once
+    int64_t lastSeenMs = 0;
+  };
+
   const DetectionRule* rule_;
-  int shown_ = 0;
-  int lowerReads_ = 0;
+  std::vector<Seen> seen_;
   int64_t lastFiredMs_ = INT64_MIN / 2;
 };
 

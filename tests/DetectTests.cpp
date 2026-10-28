@@ -180,6 +180,49 @@ void TestTracker() {
   CHECK(cooled.Update(Tokenize("ELIMINATED A"), 6000) == 1);
 }
 
+// One kill stays in the killfeed for seconds while the screen is read several times a second.
+// It must count once, however the reads come back.
+void TestTrackerCountsEachKillOnce() {
+  DetectionRule rule;
+  rule.words = {MakePhrase("ELIMINATED")};
+  rule.position = LinePosition::Start;
+  rule.cooldownMs = 0;
+  RuleTracker tracker(rule);
+  auto rows = [](std::initializer_list<const char*> lines) {
+    std::vector<std::vector<std::string>> result;
+    for (const char* line : lines) result.push_back(Tokenize(line));
+    return result;
+  };
+
+  CHECK(tracker.Update(rows({"ELIMINATED VEX"}), 0) == 1);
+  // OCR loses the line for several reads, then finds it again: still the same kill.
+  CHECK(tracker.Update(rows({}), 250) == 0);
+  CHECK(tracker.Update(rows({}), 500) == 0);
+  CHECK(tracker.Update(rows({}), 750) == 0);
+  CHECK(tracker.Update(rows({"ELIMINATED SHADOW"}), 1000) == 1);
+  CHECK(tracker.Update(rows({"ELIMINATED SHAD0W", "ELIMINATED VEX"}), 1250) == 0);  // misread name
+  CHECK(tracker.Update(rows({"ELIMINATED SHADDW"}), 1400) == 0);
+  // The feed scrolls: the old line leaves as a new one arrives in the same read.
+  CHECK(tracker.Update(rows({"ELIMINATED MIRA"}), 1500) == 1);
+  CHECK(tracker.Update(rows({"ELIMINATED MIRA", "ELIMINATED VEX"}), 1750) == 0);  // VEX flickers back
+  // The same player killed again while the first line still shows: two lines, two kills.
+  CHECK(tracker.Update(rows({"ELIMINATED MIRA", "ELIMINATED MIRA"}), 2000) == 1);
+  CHECK(tracker.Update(rows({"ELIMINATED MIRA"}), 2250) == 0);
+  // Long after the lines are gone, killing that player again counts.
+  CHECK(tracker.Update(rows({}), 3000) == 0);
+  CHECK(tracker.Update(rows({"ELIMINATED VEX"}), 9000) == 1);
+
+  // Text read as one run: the names after each keyword tell the kills apart.
+  DetectionRule run;
+  run.words = {MakePhrase("ELIMINATED")};
+  run.cooldownMs = 0;
+  RuleTracker anywhere(run);
+  CHECK(anywhere.Update(Tokenize("ENTERRO ELIMINATED VEX"), 0) == 1);
+  CHECK(anywhere.Update(Tokenize("ENTERRO ELIMINATED MIRA ENTERRO ELIMINATED VEX"), 250) == 1);
+  CHECK(anywhere.Update(Tokenize("ENTERRO ELIMINATED MIRA"), 500) == 0);
+  CHECK(anywhere.Update(Tokenize("ENTERRO ELIMINATED VEX ENTERRO ELIMINATED MIRA"), 750) == 0);
+}
+
 void TestPlanner() {
   AutoClipPlanner planner(10, 5, 40);
   planner.Add(100);  // wants 90..105
@@ -295,6 +338,7 @@ int main(int argc, char** argv) {
   TestParse();
   TestCustomGames();
   TestTracker();
+  TestTrackerCountsEachKillOnce();
   TestPlanner();
   TestMetadata();
   TestMetadataRoundTrip();

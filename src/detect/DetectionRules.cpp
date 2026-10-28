@@ -4,6 +4,7 @@
 #include <cctype>
 #include <charconv>
 #include <format>
+#include <span>
 #include <sstream>
 
 namespace clip {
@@ -244,56 +245,114 @@ DetectionRules ParseDetectionRules(std::istream& in) {
   return result;
 }
 
-int CountMatches(const DetectionRule& rule, const std::vector<std::vector<std::string>>& rows) {
+namespace {
+
+// The words of a match other than the rule's own, joined: what tells one message from another.
+std::string MatchKey(const DetectionRule& rule, std::span<const std::string> tokens) {
+  std::string key;
+  for (const auto& token : tokens) {
+    if (token.size() < 2) continue;  // icons tend to read as a stray letter
+    const bool ruleWord = std::ranges::any_of(rule.words, [&](const Phrase& p) {
+      return std::ranges::any_of(p.words, [&](const std::string& w) { return WordsMatch(token, w); });
+    });
+    if (ruleWord) continue;
+    if (!key.empty()) key += ' ';
+    key += token;
+  }
+  return key;
+}
+
+}  // namespace
+
+std::vector<std::string> FindMatches(const DetectionRule& rule, const std::vector<std::vector<std::string>>& rows) {
   auto excludedIn = [&](const std::vector<std::string>& tokens) {
     return std::ranges::any_of(rule.exclude, [&](const Phrase& p) { return CountPhrase(tokens, p) > 0; });
   };
+  std::vector<std::string> matches;
 
   if (rule.position == LinePosition::Anywhere) {
     // The whole region as one run of text: a phrase may wrap onto the next row.
     std::vector<std::string> tokens;
     for (const auto& row : rows) tokens.insert(tokens.end(), row.begin(), row.end());
-    if (excludedIn(tokens)) return 0;
-    int count = 0;
-    for (const auto& phrase : rule.words) count += CountPhrase(tokens, phrase);
-    return count;
+    if (excludedIn(tokens)) return {};
+
+    // Where each match starts and ends, left to right.
+    std::vector<std::pair<size_t, size_t>> spans;
+    for (size_t i = 0; i < tokens.size();) {
+      size_t length = 0;
+      for (const auto& phrase : rule.words) {
+        const size_t n = phrase.words.size();
+        if (n == 0 || i + n > tokens.size()) continue;
+        bool match = true;
+        for (size_t k = 0; k < n && match; ++k) match = WordsMatch(tokens[i + k], phrase.words[k]);
+        if (match) {
+          length = n;
+          break;
+        }
+      }
+      if (length > 0) {
+        spans.emplace_back(i, i + length);
+        i += length;
+      } else {
+        ++i;
+      }
+    }
+    // A match's name is the word after it, since the word before the next match is usually
+    // that match's own first name; or the word before it when nothing follows ("BOB ELIMINATED").
+    for (size_t m = 0; m < spans.size(); ++m) {
+      const size_t from = spans[m].second;
+      const size_t to = std::min(m + 1 < spans.size() ? spans[m + 1].first : tokens.size(), from + 1);
+      std::string key = MatchKey(rule, std::span(tokens).subspan(from, to - from));
+      const size_t before = m > 0 ? spans[m - 1].second : 0;
+      if (key.empty() && spans[m].first > before) key = MatchKey(rule, std::span(tokens).subspan(spans[m].first - 1, 1));
+      matches.push_back(std::move(key));
+    }
+    return matches;
   }
 
   // Row by row, as in a killfeed: each row that starts (or ends) with the words counts once,
   // and exclude only cancels the rows it's on.
-  int count = 0;
   for (const auto& row : rows) {
     if (excludedIn(row)) continue;
     const bool match = std::ranges::any_of(rule.words, [&](const Phrase& p) {
       return rule.position == LinePosition::Start ? PhraseAtStart(row, p) : PhraseAtEnd(row, p);
     });
-    if (match) ++count;
+    if (match) matches.push_back(MatchKey(rule, row));
   }
-  return count;
+  return matches;
+}
+
+int CountMatches(const DetectionRule& rule, const std::vector<std::vector<std::string>>& rows) {
+  return static_cast<int>(FindMatches(rule, rows).size());
 }
 
 int RuleTracker::Update(const std::vector<std::vector<std::string>>& rows, int64_t nowMs) {
-  const int count = CountMatches(*rule_, rows);
+  // Group this read's matches by names, then compare each group with what's been seen.
+  std::vector<std::pair<std::string, int>> read;
+  for (auto& key : FindMatches(*rule_, rows)) {
+    auto same = std::ranges::find_if(read, [&](const auto& r) { return SameText(r.first, key); });
+    if (same != read.end()) ++same->second;
+    else read.emplace_back(std::move(key), 1);
+  }
 
-  if (count > shown_) {
-    const int fresh = count - shown_;
-    shown_ = count;
-    lowerReads_ = 0;
-    if (nowMs - lastFiredMs_ < rule_->cooldownMs) return 0;
-    lastFiredMs_ = nowMs;
-    return std::min(fresh, 5);
-  }
-  // OCR misses text now and then. Only believe a message is gone after two reads without it,
-  // so a flicker doesn't count the same kill twice.
-  if (count < shown_) {
-    if (++lowerReads_ >= 2) {
-      shown_ = count;
-      lowerReads_ = 0;
+  std::erase_if(seen_, [&](const Seen& s) { return nowMs - s.lastSeenMs > kForgetMs; });
+  int fresh = 0;
+  for (auto& [key, count] : read) {
+    auto known = std::ranges::find_if(seen_, [&](const Seen& s) { return SameText(s.key, key); });
+    if (known == seen_.end()) {
+      seen_.push_back({std::move(key), count, nowMs});
+      fresh += count;
+      continue;
     }
-  } else {
-    lowerReads_ = 0;
+    // More lines with these names than ever at once: the same player again.
+    fresh += std::max(0, count - known->count);
+    known->count = std::max(known->count, count);
+    known->lastSeenMs = nowMs;
   }
-  return 0;
+
+  if (fresh == 0 || nowMs - lastFiredMs_ < rule_->cooldownMs) return 0;
+  lastFiredMs_ = nowMs;
+  return std::min(fresh, 5);
 }
 
 }  // namespace clip
