@@ -2,8 +2,10 @@
 // Rocket League's own APIs, the stream readers behind them, killfeed rules, and the shipped
 // rules for every game that's read off the screen.
 
+#include "app/Timeline.h"
 #include "core/Json.h"
 #include "detect/DetectionRules.h"
+#include "detect/Scoreboard.h"
 #include "detect/TextMatcher.h"
 #include "integrations/GameStateTrackers.h"
 #include "integrations/StreamReaders.h"
@@ -321,8 +323,123 @@ void TestShippedRules(const char* path) {
     if (!(kill && death && end)) std::printf("%s is missing a kill, death or match end rule\n", game);
     CHECK(kill && death && end);
   }
+  // Every scoreboard rule reads kills, and only games that have a scoreboard get one.
+  for (const auto& board : rules.scoreboards) {
+    CHECK(board.columns.size() >= 2 && board.columns[0].first == "kills");
+  }
   // Games read through their own APIs have no screen rules.
   for (const char* game : {"cs2", "dota2", "league_of_legends", "rocket_league"}) CHECK(rules.ForGame(game).empty());
+}
+
+
+void TestTrackerBoards() {
+  Cs2Tracker cs;
+  cs.Update(J(Cs2("live", 3, "765", 7, 2, 4, 1, 0, 0)));
+  CHECK(StatValue(cs.Board(), "kills") == 7);
+  CHECK(StatValue(cs.Board(), "deaths") == 4);
+  CHECK(StatValue(cs.Board(), "assists") == 2);
+  // Spectating someone else leaves the player's own totals alone.
+  cs.Update(J(Cs2("live", 3, "999", 20, 5, 9, 4, 0, 0)));
+  CHECK(StatValue(cs.Board(), "kills") == 7);
+  cs.Update(J(R"({"provider": {"steamid": "765"}})"));
+  CHECK(cs.Board().empty());
+
+  Dota2Tracker dota;
+  dota.Update(J(Dota("DOTA_GAMERULES_STATE_GAME_IN_PROGRESS", 5, 2, 9)), 0);
+  CHECK(StatValue(dota.Board(), "kills") == 5 && StatValue(dota.Board(), "assists") == 9);
+
+  LeagueTracker league;
+  league.Update(J(R"({"gameData": {"gameTime": 600}, "activePlayer": {"riotId": "Mochi#EUW"},
+    "allPlayers": [{"riotId": "Other#NA", "scores": {"kills": 9}},
+                   {"riotId": "Mochi#EUW", "scores": {"kills": 4, "deaths": 1, "assists": 7, "creepScore": 88, "wardScore": 12.6}}],
+    "events": {"Events": []}})"));
+  CHECK(StatValue(league.Board(), "kills") == 4);
+  CHECK(StatValue(league.Board(), "creep_score") == 88);
+
+  RocketLeagueTracker rl;
+  rl.Update(J(R"({"Event": "UpdateState", "Data": {"Game": {"bHasTarget": true, "bReplay": false,
+    "Target": {"Name": "Mochi", "TeamNum": 0}},
+    "Players": [{"Name": "Mochi", "Goals": 2, "Assists": 1, "Saves": 3, "Shots": 5, "Demos": 1, "Score": 420}]}})"));
+  CHECK(StatValue(rl.Board(), "goals") == 2 && StatValue(rl.Board(), "score") == 420);
+}
+
+WordBox W(const std::string& text, double x, double y, double width = 20, double height = 16) {
+  return {text, x, y, width, height};
+}
+
+void TestScoreboardRules() {
+  std::istringstream ini(R"(
+[valorant.scoreboard]
+region = 0.1, 0.1, 0.8, 0.8
+kills = K | KILLS
+deaths = D
+assists = A
+score = ACS
+sample_ms = 1500
+
+[valorant.scoreboard.empty]
+region = 0.1, 0.1, 0.8, 0.8
+)");
+  const auto rules = ParseDetectionRules(ini);
+  CHECK(rules.scoreboards.size() == 1);
+  CHECK(rules.warnings.size() == 1);  // the one without columns
+  const auto boards = rules.ScoreboardsForGame("valorant");
+  CHECK(boards.size() == 1 && boards[0].columns.size() == 4 && boards[0].sampleMs == 1500);
+  CHECK(boards.size() == 1 && boards[0].region.left == 0.1);
+  CHECK(rules.ScoreboardsForGame("fortnite").empty());
+}
+
+void TestReadScoreboard() {
+  ScoreboardRule rule;
+  rule.columns = {{"kills", {"K"}}, {"deaths", {"D"}}, {"assists", {"A"}}, {"score", {"ACS"}}};
+
+  // Headers out of the rule's order, an extra column, a teammate's row above the player's, and
+  // numbers a little off-center under their headers.
+  const std::vector<WordBox> board = {
+      W("MATCH", 10, 5, 60), W("ACS", 300, 40, 40), W("K", 400, 40, 12), W("D", 450, 40, 12), W("A", 500, 40, 12),
+      W("ECON", 560, 40, 40),
+      W("Teammate", 60, 80, 90), W("250", 302, 80, 36), W("20", 398, 80, 20), W("11", 448, 80, 20), W("3", 502, 80, 10),
+      W("Mochi", 60, 120, 60), W("312", 302, 120, 36), W("14", 401, 120, 20), W("6", 452, 120, 10), W("O", 503, 120, 10),
+      W("88", 565, 120, 20),
+  };
+  const auto stats = ReadScoreboard(rule, board, {"Mochi"});
+  CHECK(stats.has_value());
+  if (stats) {
+    CHECK(StatValue(*stats, "kills") == 14);
+    CHECK(StatValue(*stats, "deaths") == 6);
+    CHECK(StatValue(*stats, "assists") == 0);  // "O" read for 0
+    CHECK(StatValue(*stats, "score") == 312);
+    CHECK(DescribeStats(*stats) == "kills 14, deaths 6, assists 0, score 312");
+  }
+
+  // Not the player's board, or no board at all.
+  CHECK(!ReadScoreboard(rule, board, {"Somebody"}).has_value());
+  CHECK(!ReadScoreboard(rule, {W("A", 10, 10), W("4", 30, 30)}, {"Mochi"}).has_value());
+  // A row of digits isn't a header row ("4" looks like "A").
+  CHECK(!ReadScoreboard(rule, {W("Mochi", 10, 10, 60), W("4", 400, 10), W("4", 450, 10)}, {"Mochi"}).has_value());
+
+  ScoreboardTracker tracker;
+  const Stats a = {{"kills", 3}};
+  const Stats b = {{"kills", 4}};
+  CHECK(!tracker.Update(a).has_value());  // once could be a misread
+  CHECK(tracker.Update(a) == a);
+  CHECK(!tracker.Update(a).has_value());  // already reported
+  CHECK(!tracker.Update(b).has_value());
+  CHECK(!tracker.Update(std::nullopt).has_value());
+  CHECK(!tracker.Update(b).has_value());  // the board closed in between
+  CHECK(tracker.Update(b) == b);
+}
+
+void TestTimeline() {
+  CHECK(TimelineHeader("2026-10-27T20:41:05", "Valorant") ==
+        R"({"session": "2026-10-27T20:41:05", "game": "Valorant", "version": 1})");
+  CHECK(TimelineEvent(12.345, 1, {EventType::Kill, 0, "Mochi \"ELIMINATED\" Bot"}) ==
+        R"({"t": 12.35, "match": 1, "type": "kill", "text": "Mochi \"ELIMINATED\" Bot"})");
+  CHECK(TimelineScores(40, 2, {0, "api", {{"kills", 12}, {"deaths", 3}}}) ==
+        R"({"t": 40.00, "match": 2, "source": "api", "stats": {"kills": 12, "deaths": 3}})");
+  CHECK(TimelineFileName("2026-10-27T20:41:05", "A/B") == std::filesystem::path("2026-10-27T20-41-05 A-B.jsonl"));
+  // Every line reads back as JSON.
+  CHECK(Json::Parse(TimelineEvent(1, 0, {EventType::Death, 0, "tab\there"})).has_value());
 }
 
 }  // namespace
@@ -337,6 +454,10 @@ int main(int argc, char** argv) {
   TestWebSocketReader();
   TestRows();
   TestKillfeedRules();
+  TestTrackerBoards();
+  TestScoreboardRules();
+  TestReadScoreboard();
+  TestTimeline();
   if (argc > 1) TestShippedRules(argv[1]);
   if (g_failures == 0) std::printf("All game support tests passed\n");
   return g_failures == 0 ? 0 : 1;

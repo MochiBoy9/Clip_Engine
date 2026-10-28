@@ -6,11 +6,11 @@
   <Application.Styles>
     <FluentTheme>
       <FluentTheme.Palettes>
-        <ColorPaletteResources x:Key="Dark" Accent="#8B6CFF" AltHigh="#0B0A1C" RegionColor="#141228"
-                               ChromeMediumLow="#1C1A33" BaseHigh="#F4F6FF" />
+        <ColorPaletteResources x:Key="Dark" Accent="#FFC21A" AltHigh="#0B0C0E" RegionColor="#08090A"
+                               ChromeMediumLow="#1C1E23" BaseHigh="#EEECE6" />
       </FluentTheme.Palettes>
     </FluentTheme>
-    <StyleInclude Source="avares://ClipEngine/Theme/Glass.axaml" />
+    <StyleInclude Source="avares://ClipEngine/Theme/Theme.axaml" />
   </Application.Styles>
 
   <TrayIcon.Icons>

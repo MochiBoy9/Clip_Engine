@@ -37,6 +37,10 @@ mic_audio = true
 # Examples: F8, Alt+F10, Ctrl+Shift+S
 save_hotkey = F8
 
+# Starts a long recording, which keeps going until this is pressed again and still marks every
+# kill, death and other moment on its timeline. Automatic clips carry on as usual meanwhile.
+record_hotkey = F9
+
 # Keep recording the main monitor even when no supported game is running.
 record_without_game = false
 
@@ -230,6 +234,14 @@ Config Config::Load(const std::filesystem::path& file) {
       } else {
         log::Warn("Setting save_hotkey '{}' isn't a key this app understands, keeping {}", value,
                   config.saveHotkeyText);
+      }
+    } else if (key == "record_hotkey") {
+      if (const auto hk = ParseHotkey(value)) {
+        config.recordHotkey = *hk;
+        config.recordHotkeyText = value;
+      } else {
+        log::Warn("Setting record_hotkey '{}' isn't a key this app understands, keeping {}", value,
+                  config.recordHotkeyText);
       }
     } else if (key == "record_without_game") {
       setBool(config.recordWithoutGame);

@@ -48,4 +48,7 @@ class Json {
   std::vector<std::pair<std::string, Json>> members_;
 };
 
+// The text as a quoted JSON string.
+std::string JsonString(std::string_view text);
+
 }  // namespace clip

@@ -82,6 +82,17 @@ bool WordsMatch(std::string_view token, std::string_view word) {
   return false;
 }
 
+bool SameText(std::string_view rawA, std::string_view rawB) {
+  if (rawA == rawB) return true;
+  std::string a(rawA), b(rawB);
+  std::ranges::transform(a, a.begin(), AsLetter);
+  std::ranges::transform(b, b.begin(), AsLetter);
+  if (a == b) return true;
+  const size_t shorter = std::min(a.size(), b.size());
+  const int tolerance = shorter >= 9 ? 2 : shorter >= 4 ? 1 : 0;
+  return tolerance > 0 && EditDistance(a, b, tolerance) <= tolerance;
+}
+
 int CountPhrase(const std::vector<std::string>& tokens, const Phrase& phrase) {
   const size_t n = phrase.words.size();
   if (n == 0 || tokens.size() < n) return 0;

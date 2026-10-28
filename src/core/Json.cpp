@@ -251,4 +251,28 @@ std::string Json::Str() const {
   return {};
 }
 
+std::string JsonString(std::string_view text) {
+  std::string out = "\"";
+  for (char c : text) {
+    switch (c) {
+      case '"': out += "\\\""; break;
+      case '\\': out += "\\\\"; break;
+      case '\n': out += "\\n"; break;
+      case '\r': out += "\\r"; break;
+      case '\t': out += "\\t"; break;
+      default:
+        if (static_cast<unsigned char>(c) < 0x20) {
+          static constexpr char kHex[] = "0123456789abcdef";
+          out += "\\u00";
+          out += kHex[(c >> 4) & 0xf];
+          out += kHex[c & 0xf];
+        } else {
+          out += c;
+        }
+    }
+  }
+  out += '"';
+  return out;
+}
+
 }  // namespace clip

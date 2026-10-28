@@ -5,10 +5,10 @@
              x:Class="ClipEngine.Desktop.Views.PlayerView"
              x:DataType="vm:PlayerViewModel"
              Focusable="True">
-  <DockPanel Margin="18,0,22,18">
+  <DockPanel Margin="0,0,0,24">
     <!-- Title and what you can do with the clip -->
     <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,14">
-      <Button Classes="glass" Command="{Binding BackCommand}" VerticalAlignment="Center">
+      <Button Classes="secondary" Command="{Binding BackCommand}" VerticalAlignment="Center">
         <StackPanel Orientation="Horizontal" Spacing="8">
           <PathIcon Data="{StaticResource IconBack}" Width="14" Height="14" />
           <TextBlock Text="{Binding BackLabel}" VerticalAlignment="Center" />
@@ -17,10 +17,10 @@
       <StackPanel Grid.Column="1" Margin="16,0" VerticalAlignment="Center" Spacing="2">
         <StackPanel Orientation="Horizontal" Spacing="10">
           <TextBlock Classes="h1" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
-          <Border Classes="pill" VerticalAlignment="Center" Padding="8,2" Background="#338B6CFF" BorderBrush="#668B6CFF"
+          <Border Classes="pill accent" VerticalAlignment="Center" Padding="8,2"
                   IsVisible="{Binding Clip.IsAutomatic}" ToolTip.Tip="Saved by itself when moments were detected">
             <StackPanel Orientation="Horizontal" Spacing="5">
-              <PathIcon Data="{StaticResource IconSparkle}" Width="10" Height="10" Foreground="White" />
+              <PathIcon Data="{StaticResource IconSparkle}" Width="10" Height="10" />
               <TextBlock Text="AUTO" FontSize="10" FontWeight="Bold" LetterSpacing="1" />
             </StackPanel>
           </Border>
@@ -31,18 +31,18 @@
         <Button Classes="accent" Command="{Binding ShareCommand}" IsEnabled="{Binding !Main.IsSharing}"
                 ToolTip.Tip="{Binding ShareTip}">
           <StackPanel Orientation="Horizontal" Spacing="8">
-            <PathIcon Data="{StaticResource IconShare}" Width="14" Height="14" Foreground="White" />
+            <PathIcon Data="{StaticResource IconShare}" Width="14" Height="14" />
             <TextBlock Text="Share to Discord" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
-        <Button Classes="glass" Command="{Binding TrimCommand}" Classes.active="{Binding IsTrimming}"
+        <Button Classes="secondary" Command="{Binding TrimCommand}" Classes.active="{Binding IsTrimming}"
                 ToolTip.Tip="Keep just part of the clip, saved as a new clip (I and O set the start and end)">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <PathIcon Data="{StaticResource IconTrim}" Width="14" Height="14" />
             <TextBlock Text="Trim" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
-        <Button Classes="glass" Command="{Binding CopyCommand}" ToolTip.Tip="Copy the full-quality clip to paste anywhere">
+        <Button Classes="secondary" Command="{Binding CopyCommand}" ToolTip.Tip="Copy the full-quality clip to paste anywhere">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <PathIcon Data="{StaticResource IconCopy}" Width="14" Height="14" />
             <TextBlock Text="Copy" VerticalAlignment="Center" />
@@ -51,7 +51,7 @@
         <Button Classes="icon" Command="{Binding FavoriteCommand}" ToolTip.Tip="{Binding Clip.FavoriteTip}">
           <Panel>
             <PathIcon Data="{StaticResource IconStarOutline}" IsVisible="{Binding !Clip.IsFavorite}" />
-            <PathIcon Data="{StaticResource IconStar}" Foreground="#FFC24B" IsVisible="{Binding Clip.IsFavorite}" />
+            <PathIcon Data="{StaticResource IconStar}" Foreground="{DynamicResource AccentBrush}" IsVisible="{Binding Clip.IsFavorite}" />
           </Panel>
         </Button>
         <Button Classes="icon" Command="{Binding StudioCommand}"
@@ -71,7 +71,7 @@
     </Grid>
 
     <!-- Detected moments -->
-    <Border DockPanel.Dock="Right" Classes="glass" Width="300" Margin="14,0,0,0" Padding="18,18,10,12">
+    <views:Plate DockPanel.Dock="Right" Classes="card" Width="300" Margin="12,0,0,0" Padding="16,16,8,12">
       <DockPanel>
         <StackPanel DockPanel.Dock="Top" Spacing="12" Margin="0,0,8,12">
           <TextBlock Classes="h2" Text="Moments" />
@@ -81,7 +81,7 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:MarkerCount">
-                <Border Classes="pill" Margin="0,0,6,6" Padding="9,3">
+                <Border Classes="pill" Margin="0,0,6,6" Padding="9,2">
                   <StackPanel Orientation="Horizontal" Spacing="6">
                     <Ellipse Width="7" Height="7" Fill="{Binding Brush}" VerticalAlignment="Center" />
                     <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="SemiBold" />
@@ -100,7 +100,7 @@
                   <Button Classes="marker" Command="{Binding SeekCommand}" HorizontalAlignment="Stretch"
                           HorizontalContentAlignment="Stretch" ToolTip.Tip="{Binding Text}">
                     <Grid ColumnDefinitions="Auto,*,Auto">
-                      <Border Width="4" Height="28" CornerRadius="2" Background="{Binding Brush}" Margin="0,0,12,0" />
+                      <Border Width="3" Height="26" CornerRadius="0" Background="{Binding Brush}" Margin="0,0,12,0" />
                       <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock Text="{Binding Label}" FontWeight="SemiBold" FontSize="13" />
                         <TextBlock Text="{Binding Text}" Classes="caption" TextTrimming="CharacterEllipsis" />
@@ -121,30 +121,30 @@
           </StackPanel>
         </Panel>
       </DockPanel>
-    </Border>
+    </views:Plate>
 
     <!-- The video and its controls -->
-    <Border Classes="glass" Padding="12">
+    <views:Plate Classes="card" Padding="10">
       <DockPanel>
         <StackPanel DockPanel.Dock="Bottom" Margin="6,12,6,0" Spacing="6">
           <!-- Trimming: what's kept, and saving it as a new clip -->
-          <Border IsVisible="{Binding IsTrimming}" Classes="inset" CornerRadius="14" Padding="12,8" Margin="0,0,0,4">
+          <Border IsVisible="{Binding IsTrimming}" Classes="inset" Padding="10,8" Margin="0,0,0,4">
             <Grid ColumnDefinitions="Auto,*,Auto">
               <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                <Button Classes="glass" Command="{Binding SetTrimStartCommand}" ToolTip.Tip="Start the trimmed clip at the playhead (I)">
+                <Button Classes="secondary" Command="{Binding SetTrimStartCommand}" ToolTip.Tip="Start the trimmed clip at the playhead (I)">
                   <TextBlock Text="Set start · I" />
                 </Button>
-                <Button Classes="glass" Command="{Binding SetTrimEndCommand}" ToolTip.Tip="End the trimmed clip at the playhead (O)">
+                <Button Classes="secondary" Command="{Binding SetTrimEndCommand}" ToolTip.Tip="End the trimmed clip at the playhead (O)">
                   <TextBlock Text="Set end · O" />
                 </Button>
               </StackPanel>
               <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center"
                           VerticalAlignment="Center">
-                <PathIcon Data="{StaticResource IconTrim}" Width="14" Height="14" Foreground="#FFC24B" />
+                <PathIcon Data="{StaticResource IconTrim}" Width="14" Height="14" Foreground="{DynamicResource AccentBrush}" />
                 <TextBlock Text="{Binding TrimText}" FontFeatures="tnum" FontWeight="SemiBold" FontSize="13" />
               </StackPanel>
               <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                <Button Classes="glass" Content="Cancel" Command="{Binding CancelTrimCommand}" />
+                <Button Classes="secondary" Content="Cancel" Command="{Binding CancelTrimCommand}" />
                 <Button Classes="accent" Command="{Binding SaveTrimCommand}"
                         ToolTip.Tip="Saves this part as a new clip next to the original, at full quality">
                   <Panel>
@@ -174,9 +174,9 @@
                       HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                       Command="{Binding PlayPauseCommand}" ToolTip.Tip="Play or pause (Space)">
                 <Panel>
-                  <PathIcon Data="{StaticResource IconPlay}" Width="18" Height="18" Margin="3,0,0,0" Foreground="White"
+                  <PathIcon Data="{StaticResource IconPlay}" Width="18" Height="18" Margin="3,0,0,0"
                             IsVisible="{Binding IsPaused}" />
-                  <PathIcon Data="{StaticResource IconPause}" Width="18" Height="18" Foreground="White"
+                  <PathIcon Data="{StaticResource IconPause}" Width="18" Height="18"
                             IsVisible="{Binding IsPlaying}" />
                 </Panel>
               </Button>
@@ -195,21 +195,20 @@
           </Grid>
         </StackPanel>
 
-        <Border Background="Black" CornerRadius="16" ClipToBounds="True">
+        <Border Background="Black" CornerRadius="0" ClipToBounds="True">
           <Panel Name="VideoHost">
             <!-- The preview tool has no video window, so it shows the clip's thumbnail. -->
             <Image Source="{Binding Clip.Thumbnail}" Stretch="Uniform" IsVisible="{Binding !IsLive}" />
             <StackPanel IsVisible="{Binding HasError}" HorizontalAlignment="Center" VerticalAlignment="Center"
                         Spacing="10" MaxWidth="420">
-              <Border Width="44" Height="44" CornerRadius="14" Background="{StaticResource RecordGradient}"
-                      HorizontalAlignment="Center">
-                <PathIcon Data="{StaticResource IconAlert}" Width="20" Height="20" Foreground="White" />
+              <Border Classes="tile record" Width="44" Height="44" HorizontalAlignment="Center">
+                <PathIcon Data="{StaticResource IconAlert}" Width="20" Height="20" />
               </Border>
               <TextBlock Classes="body" Text="{Binding Error}" TextWrapping="Wrap" TextAlignment="Center" />
             </StackPanel>
           </Panel>
         </Border>
       </DockPanel>
-    </Border>
+    </views:Plate>
   </DockPanel>
 </UserControl>

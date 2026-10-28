@@ -54,6 +54,18 @@ std::vector<GameEvent> GameIntegration::TakeEvents() {
   return std::exchange(events_, {});
 }
 
+std::optional<Scoreboard> GameIntegration::TakeScoreboard() {
+  std::lock_guard lock(mutex_);
+  return std::exchange(newBoard_, std::nullopt);
+}
+
+void GameIntegration::Report(const Stats& board) {
+  std::lock_guard lock(mutex_);
+  if (board.empty() || board == board_) return;
+  board_ = board;
+  newBoard_ = Scoreboard{NowHns(), "api", board};
+}
+
 void GameIntegration::Emit(const std::vector<ApiEvent>& events) {
   if (events.empty()) return;
   const int64_t now = NowHns();
@@ -106,7 +118,8 @@ std::string Lower(std::string s) {
 // whole state as JSON whenever something changes.
 class GsiIntegration final : public GameIntegration {
  public:
-  using Handler = std::function<std::vector<ApiEvent>(const Json&, double)>;
+  // Turns one state post into moments, and gives the player's totals as they stand.
+  using Handler = std::function<std::pair<std::vector<ApiEvent>, Stats>(const Json&, double)>;
 
   GsiIntegration(std::string gameName, std::string hint, Handler handler)
       : GameIntegration(std::move(gameName)), hint_(std::move(hint)), handler_(std::move(handler)) {
@@ -179,7 +192,9 @@ class GsiIntegration final : public GameIntegration {
     received_ = true;
     Connected();
     const double now = std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
-    Emit(handler_(*state, now));
+    auto [events, board] = handler_(*state, now);
+    Emit(events);
+    Report(board);
   }
 
   std::string hint_;
@@ -209,6 +224,7 @@ class LeagueIntegration final : public GameIntegration {
       if (!data || !data->Has("activePlayer")) continue;
       Connected();
       Emit(tracker_.Update(*data));
+      Report(tracker_.Board());
     }
     if (connection) WinHttpCloseHandle(connection);
     WinHttpCloseHandle(session);
@@ -357,6 +373,7 @@ class RocketLeagueIntegration final : public GameIntegration {
     received_ = true;
     Connected();
     Emit(tracker_.Update(*message));
+    Report(tracker_.Board());
   }
 
   unsigned short port_;
@@ -375,7 +392,10 @@ std::unique_ptr<GameIntegration> StartGameIntegration(const DetectedGame& game) 
       auto tracker = std::make_shared<Cs2Tracker>();
       return std::make_unique<GsiIntegration>(
           profile.name, "If Clip Engine just turned them on, restart Counter-Strike 2 once.",
-          [tracker](const Json& state, double) { return tracker->Update(state); });
+          [tracker](const Json& state, double) {
+            auto events = tracker->Update(state);
+            return std::pair(std::move(events), tracker->Board());
+          });
     }
     case GameApi::Dota2Gsi: {
       if (!exe.empty()) InstallDota2Config(exe);
@@ -384,7 +404,10 @@ std::unique_ptr<GameIntegration> StartGameIntegration(const DetectedGame& game) 
           profile.name,
           "Restart Dota 2 once, and if that doesn't help add -gamestateintegration to its launch options in Steam "
           "(Properties > General).",
-          [tracker](const Json& state, double now) { return tracker->Update(state, now); });
+          [tracker](const Json& state, double now) {
+            auto events = tracker->Update(state, now);
+            return std::pair(std::move(events), tracker->Board());
+          });
     }
     case GameApi::LeagueLiveClient:
       return std::make_unique<LeagueIntegration>();

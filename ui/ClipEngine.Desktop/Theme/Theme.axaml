@@ -1,0 +1,649 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="using:ClipEngine.Desktop.Views">
+
+  <!-- Hazard: gunmetal panels with cut corners, an amber accent, an angular display face and monospace numbers.
+       Everything is opaque and flat (no blur, transparency, gradients or soft shadows), so redraws stay cheap and
+       the app stays out of the game's way. -->
+  <Styles.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="avares://ClipEngine/Theme/Icons.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+
+      <!-- Type: Chakra Petch for headings, labels and buttons, JetBrains Mono for numbers, Inter for reading -->
+      <FontFamily x:Key="DisplayFont">avares://ClipEngine/Assets/Fonts#Chakra Petch</FontFamily>
+      <FontFamily x:Key="MonoFont">avares://ClipEngine/Assets/Fonts#JetBrains Mono</FontFamily>
+
+      <!-- Surfaces, from the back of the window to the front -->
+      <SolidColorBrush x:Key="WindowBrush" Color="#0B0C0E" />
+      <SolidColorBrush x:Key="RailBrush" Color="#08090A" />
+      <SolidColorBrush x:Key="SurfaceBrush" Color="#131418" />
+      <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#191A1F" />
+      <SolidColorBrush x:Key="InsetBrush" Color="#0D0E11" />
+      <SolidColorBrush x:Key="ControlBrush" Color="#1C1E23" />
+      <SolidColorBrush x:Key="ControlHoverBrush" Color="#26282F" />
+      <SolidColorBrush x:Key="ControlPressedBrush" Color="#16171B" />
+      <SolidColorBrush x:Key="OverlayBrush" Color="#F5101114" />
+      <SolidColorBrush x:Key="MediaBrush" Color="#D90B0C0E" />
+
+      <!-- Lines -->
+      <SolidColorBrush x:Key="BorderBrush" Color="#25272D" />
+      <SolidColorBrush x:Key="BorderStrongBrush" Color="#363942" />
+      <SolidColorBrush x:Key="Divider" Color="#202227" />
+
+      <!-- Text -->
+      <SolidColorBrush x:Key="TextPrimary" Color="#EEECE6" />
+      <SolidColorBrush x:Key="TextSecondary" Color="#A7A59D" />
+      <SolidColorBrush x:Key="TextTertiary" Color="#706F69" />
+
+      <!-- States -->
+      <Color x:Key="RecordColor">#FF3D52</Color>
+      <SolidColorBrush x:Key="RecordBrush" Color="#FF3D52" />
+      <SolidColorBrush x:Key="RecordSoftBrush" Color="#26FF3D52" />
+      <SolidColorBrush x:Key="SuccessBrush" Color="#34D17D" />
+      <SolidColorBrush x:Key="SuccessSoftBrush" Color="#2234D17D" />
+      <SolidColorBrush x:Key="WarnBrush" Color="#FF8A2B" />
+      <SolidColorBrush x:Key="WarnSoftBrush" Color="#26FF8A2B" />
+      <SolidColorBrush x:Key="IdleBrush" Color="#7F8088" />
+
+      <!-- The accent. Services/AccentThemes.cs swaps these for a supporter's colour theme, so they're looked up as
+           dynamic resources. Hazard amber is the default. -->
+      <Color x:Key="AccentColor">#FFC21A</Color>
+      <SolidColorBrush x:Key="AccentBrush" Color="#FFC21A" />
+      <SolidColorBrush x:Key="AccentHoverBrush" Color="#FFD04D" />
+      <SolidColorBrush x:Key="AccentPressedBrush" Color="#E0A900" />
+      <SolidColorBrush x:Key="AccentSoftBrush" Color="#1FFFC21A" />
+      <SolidColorBrush x:Key="AccentStripeBrush" Color="#2EFFC21A" />
+      <SolidColorBrush x:Key="AccentForegroundBrush" Color="#0B0C0E" />
+
+      <!-- The only shadow left: things that float over other content -->
+      <BoxShadows x:Key="FloatShadow">0 8 24 0 #80000000</BoxShadows>
+
+      <!-- Fluent theme resources, made flat and square to match -->
+      <SolidColorBrush x:Key="TextControlBackground" Color="#0D0E11" />
+      <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#111215" />
+      <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#111215" />
+      <SolidColorBrush x:Key="TextControlBorderBrush" Color="#2C2E35" />
+      <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#3D4049" />
+      <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#EEECE6" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#706F69" />
+      <SolidColorBrush x:Key="ComboBoxBackground" Color="#1C1E23" />
+      <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#26282F" />
+      <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="#16171B" />
+      <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="#363942" />
+      <SolidColorBrush x:Key="ComboBoxBorderBrushPointerOver" Color="#464A54" />
+      <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#15161A" />
+      <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="#363942" />
+      <SolidColorBrush x:Key="ToggleSwitchFillOff" Color="#1C1E23" />
+      <SolidColorBrush x:Key="ToggleSwitchFillOffPointerOver" Color="#26282F" />
+      <SolidColorBrush x:Key="ToggleSwitchStrokeOff" Color="#464A54" />
+      <SolidColorBrush x:Key="ToggleSwitchStrokeOffPointerOver" Color="#5A5F6B" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOff" Color="#A7A59D" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOffPointerOver" Color="#EEECE6" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOn" Color="#0B0C0E" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPointerOver" Color="#0B0C0E" />
+      <SolidColorBrush x:Key="SliderTrackFill" Color="#2C2E35" />
+      <SolidColorBrush x:Key="SliderTrackFillPointerOver" Color="#363942" />
+      <CornerRadius x:Key="ControlCornerRadius">2</CornerRadius>
+      <CornerRadius x:Key="OverlayCornerRadius">2</CornerRadius>
+      <CornerRadius x:Key="SliderThumbCornerRadius">1</CornerRadius>
+    </ResourceDictionary>
+  </Styles.Resources>
+
+  <!-- Type -->
+  <Style Selector="TextBlock">
+    <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+  </Style>
+  <Style Selector="TextBlock.display">
+    <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
+    <Setter Property="FontSize" Value="32" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="LetterSpacing" Value="-0.4" />
+  </Style>
+  <Style Selector="TextBlock.h1">
+    <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
+    <Setter Property="FontSize" Value="26" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="LetterSpacing" Value="-0.2" />
+  </Style>
+  <Style Selector="TextBlock.h2">
+    <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.body">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+  </Style>
+  <Style Selector="TextBlock.caption">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{StaticResource TextTertiary}" />
+  </Style>
+  <Style Selector="TextBlock.eyebrow">
+    <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="LetterSpacing" Value="1.6" />
+    <Setter Property="Foreground" Value="{StaticResource TextTertiary}" />
+  </Style>
+  <Style Selector="TextBlock.stat">
+    <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+    <Setter Property="FontSize" Value="24" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="LetterSpacing" Value="-0.5" />
+  </Style>
+  <Style Selector="TextBlock.mono">
+    <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+  </Style>
+  <Style Selector="TextBlock.label">
+    <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.accentText">
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+  </Style>
+
+  <!-- Surfaces -->
+  <Style Selector="views|Plate.card">
+    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+    <Setter Property="Cut" Value="12" />
+  </Style>
+  <!-- A card that leads its page, marked with a tab of the accent in its corner -->
+  <Style Selector="views|Plate.card.lead">
+    <Setter Property="Marker" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Cut" Value="16" />
+  </Style>
+  <Style Selector="Border.inset">
+    <Setter Property="Background" Value="{StaticResource InsetBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="2" />
+  </Style>
+  <Style Selector="Border.pill">
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="Padding" Value="8,3" />
+    <Setter Property="Background" Value="{StaticResource ControlBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="Border.pill TextBlock">
+    <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
+  </Style>
+  <!-- A tag laid over a thumbnail or video -->
+  <Style Selector="Border.pill.onMedia">
+    <Setter Property="Background" Value="{StaticResource MediaBrush}" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="Border.pill.accent">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="Border.pill.accent TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.pill.accent PathIcon">
+    <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.pill.record">
+    <Setter Property="Background" Value="{StaticResource RecordSoftBrush}" />
+    <Setter Property="BorderBrush" Value="#80FF3D52" />
+  </Style>
+  <!-- A key on the keyboard, for hotkeys -->
+  <Style Selector="Border.kbd">
+    <Setter Property="Background" Value="{StaticResource ControlBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}" />
+    <Setter Property="BorderThickness" Value="1,1,1,3" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="Padding" Value="6,1,6,0" />
+  </Style>
+  <Style Selector="Border.kbd TextBlock">
+    <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+  </Style>
+  <!-- A square with an icon in the accent colour, in front of a setting or a number -->
+  <Style Selector="Border.tile">
+    <Setter Property="Width" Value="34" />
+    <Setter Property="Height" Value="34" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="BorderThickness" Value="0,0,0,2" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+  </Style>
+  <Style Selector="Border.tile > PathIcon">
+    <Setter Property="Width" Value="17" />
+    <Setter Property="Height" Value="17" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector="Border.tile.neutral">
+    <Setter Property="Background" Value="{StaticResource ControlBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}" />
+  </Style>
+  <Style Selector="Border.tile.neutral > PathIcon">
+    <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+  </Style>
+  <Style Selector="Border.tile.record">
+    <Setter Property="Background" Value="{StaticResource RecordSoftBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource RecordBrush}" />
+  </Style>
+  <Style Selector="Border.tile.record > PathIcon">
+    <Setter Property="Foreground" Value="{StaticResource RecordBrush}" />
+  </Style>
+  <Style Selector="Border.tile.warn">
+    <Setter Property="Background" Value="{StaticResource WarnSoftBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource WarnBrush}" />
+  </Style>
+  <Style Selector="Border.tile.warn > PathIcon">
+    <Setter Property="Foreground" Value="{StaticResource WarnBrush}" />
+  </Style>
+  <Style Selector="Border.tile.small">
+    <Setter Property="Width" Value="26" />
+    <Setter Property="Height" Value="26" />
+  </Style>
+  <Style Selector="Border.tile.small > PathIcon">
+    <Setter Property="Width" Value="13" />
+    <Setter Property="Height" Value="13" />
+  </Style>
+
+  <!-- Buttons: a cut-corner plate, labelled in the display face -->
+  <Style Selector="Button.accent, Button.secondary, Button.record, Button.icon">
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <views:Plate Name="PART_Plate" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                     Cut="7" Padding="{TemplateBinding Padding}">
+          <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+        </views:Plate>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <!-- The plate draws the button, so Fluent's own hover and press fills stay out of it -->
+  <Style Selector="Button.accent /template/ ContentPresenter#PART_ContentPresenter, Button.secondary /template/ ContentPresenter#PART_ContentPresenter, Button.record /template/ ContentPresenter#PART_ContentPresenter, Button.icon /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="Button.accent:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.secondary:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.record:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.icon:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.accent:pressed /template/ ContentPresenter#PART_ContentPresenter, Button.secondary:pressed /template/ ContentPresenter#PART_ContentPresenter, Button.record:pressed /template/ ContentPresenter#PART_ContentPresenter, Button.icon:pressed /template/ ContentPresenter#PART_ContentPresenter, Button.accent:disabled /template/ ContentPresenter#PART_ContentPresenter, Button.secondary:disabled /template/ ContentPresenter#PART_ContentPresenter, Button.icon:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="Button.accent">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="BorderBrush" Value="{x:Null}" />
+    <Setter Property="Padding" Value="18,9" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
+  </Style>
+  <Style Selector="Button.accent:pointerover">
+    <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
+  </Style>
+  <Style Selector="Button.accent:pressed">
+    <Setter Property="Background" Value="{DynamicResource AccentPressedBrush}" />
+  </Style>
+  <Style Selector="Button.accent:disabled">
+    <Setter Property="Background" Value="{StaticResource ControlBrush}" />
+  </Style>
+  <Style Selector="Button.accent TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
+  </Style>
+  <Style Selector="Button.accent PathIcon">
+    <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
+  </Style>
+  <Style Selector="Button.accent:disabled TextBlock">
+    <Setter Property="Foreground" Value="{StaticResource TextTertiary}" />
+  </Style>
+  <Style Selector="Button.accent:disabled PathIcon">
+    <Setter Property="Foreground" Value="{StaticResource TextTertiary}" />
+  </Style>
+
+  <Style Selector="Button.secondary">
+    <Setter Property="Background" Value="{StaticResource ControlBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}" />
+    <Setter Property="Padding" Value="14,8" />
+  </Style>
+  <Style Selector="Button.secondary:pointerover">
+    <Setter Property="Background" Value="{StaticResource ControlHoverBrush}" />
+    <Setter Property="BorderBrush" Value="#4A4E58" />
+  </Style>
+  <Style Selector="Button.secondary:pressed">
+    <Setter Property="Background" Value="{StaticResource ControlPressedBrush}" />
+  </Style>
+  <Style Selector="Button.secondary:disabled TextBlock">
+    <Setter Property="Foreground" Value="{StaticResource TextTertiary}" />
+  </Style>
+  <!-- A button whose mode is on, like Trim while trimming -->
+  <Style Selector="Button.secondary.active">
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+  </Style>
+
+  <!-- Starts or stops something that records, like a long recording. Red outline while idle, solid red while on. -->
+  <Style Selector="Button.record">
+    <Setter Property="Background" Value="{StaticResource RecordSoftBrush}" />
+    <Setter Property="BorderBrush" Value="#99FF3D52" />
+    <Setter Property="Padding" Value="14,8" />
+  </Style>
+  <Style Selector="Button.record:pointerover">
+    <Setter Property="Background" Value="#40FF3D52" />
+    <Setter Property="BorderBrush" Value="{StaticResource RecordBrush}" />
+  </Style>
+  <Style Selector="Button.record PathIcon">
+    <Setter Property="Foreground" Value="{StaticResource RecordBrush}" />
+  </Style>
+  <Style Selector="Button.record.active">
+    <Setter Property="Background" Value="{StaticResource RecordBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource RecordBrush}" />
+  </Style>
+  <Style Selector="Button.record.active PathIcon">
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+  <Style Selector="Button.record.active TextBlock">
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+
+  <Style Selector="Button.icon">
+    <Setter Property="Background" Value="{StaticResource ControlBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}" />
+    <Setter Property="Width" Value="36" />
+    <Setter Property="Height" Value="36" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+  <Style Selector="Button.icon /template/ views|Plate#PART_Plate">
+    <Setter Property="Cut" Value="6" />
+  </Style>
+  <Style Selector="Button.icon:pointerover">
+    <Setter Property="Background" Value="{StaticResource ControlHoverBrush}" />
+    <Setter Property="BorderBrush" Value="#4A4E58" />
+  </Style>
+  <Style Selector="Button.icon:pressed">
+    <Setter Property="Background" Value="{StaticResource ControlPressedBrush}" />
+  </Style>
+  <Style Selector="Button.icon.danger:pointerover">
+    <Setter Property="Background" Value="{StaticResource RecordBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource RecordBrush}" />
+  </Style>
+  <!-- Icon buttons laid over a thumbnail -->
+  <Style Selector="Button.icon.onMedia">
+    <Setter Property="Background" Value="{StaticResource MediaBrush}" />
+    <Setter Property="BorderBrush" Value="#40FFFFFF" />
+  </Style>
+  <Style Selector="Button.icon PathIcon">
+    <Setter Property="Width" Value="17" />
+    <Setter Property="Height" Value="17" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+  </Style>
+
+  <!-- Segmented choice, like the codec: the picked one gets an accent underline -->
+  <Style Selector="RadioButton.segment">
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="PART_Segment" Background="Transparent" BorderThickness="0,0,0,2" BorderBrush="Transparent"
+                Padding="13,5,13,4">
+          <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Center"
+                            TextElement.FontWeight="SemiBold" TextElement.FontSize="13"
+                            TextElement.FontFamily="{StaticResource DisplayFont}" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+  </Style>
+  <Style Selector="RadioButton.segment:pointerover">
+    <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+  </Style>
+  <Style Selector="RadioButton.segment:checked">
+    <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+  </Style>
+  <Style Selector="RadioButton.segment:checked /template/ Border#PART_Segment">
+    <Setter Property="Background" Value="{StaticResource ControlHoverBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector="RadioButton.segment:checked PathIcon">
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <!-- The box segments sit in -->
+  <Style Selector="Border.segments">
+    <Setter Property="Background" Value="{StaticResource InsetBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="Padding" Value="3" />
+  </Style>
+
+  <!-- Filter chips: small cut-corner plates -->
+  <Style Selector="RadioButton.chip, ToggleButton.chip">
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <views:Plate Name="PART_Chip" Background="{StaticResource ControlBrush}" BorderBrush="{StaticResource BorderStrongBrush}"
+                     Cut="5" Padding="12,5,12,4">
+          <ContentPresenter Content="{TemplateBinding Content}" TextElement.FontSize="13" TextElement.FontWeight="SemiBold"
+                            TextElement.FontFamily="{StaticResource DisplayFont}" />
+        </views:Plate>
+      </ControlTemplate>
+    </Setter>
+    <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+  </Style>
+  <Style Selector="RadioButton.chip:pointerover /template/ views|Plate#PART_Chip, ToggleButton.chip:pointerover /template/ views|Plate#PART_Chip">
+    <Setter Property="Background" Value="{StaticResource ControlHoverBrush}" />
+  </Style>
+  <Style Selector="RadioButton.chip:checked, ToggleButton.chip:checked">
+    <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
+  </Style>
+  <Style Selector="RadioButton.chip:checked /template/ views|Plate#PART_Chip, ToggleButton.chip:checked /template/ views|Plate#PART_Chip">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="BorderBrush" Value="{x:Null}" />
+  </Style>
+
+  <!-- Filter chips as a horizontal list -->
+  <Style Selector="ListBox.chips">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="ItemsPanel">
+      <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="6" /></ItemsPanelTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="ListBox.chips ListBoxItem">
+    <Setter Property="Padding" Value="12,5,12,4" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
+    <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+    <Setter Property="Background" Value="{StaticResource ControlBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <views:Plate Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" Cut="5"
+                     Padding="{TemplateBinding Padding}">
+          <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}" />
+        </views:Plate>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="ListBox.chips ListBoxItem /template/ ContentPresenter#PART_ContentPresenter, ListBox.chips ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter, ListBox.chips ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter, ListBox.chips ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="ListBox.chips ListBoxItem:pointerover">
+    <Setter Property="Background" Value="{StaticResource ControlHoverBrush}" />
+  </Style>
+  <Style Selector="ListBox.chips ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+  </Style>
+  <Style Selector="ListBox.chips ListBoxItem:selected">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="BorderBrush" Value="{x:Null}" />
+  </Style>
+  <Style Selector="ListBox.chips ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter, ListBox.chips ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
+  </Style>
+
+  <!-- Detection Studio's rule list -->
+  <Style Selector="ListBox.rules">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+  <Style Selector="ListBox.rules ListBoxItem">
+    <Setter Property="Padding" Value="10,7" />
+    <Setter Property="Margin" Value="0,0,0,4" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="ListBox.rules ListBoxItem /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="ListBox.rules ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+  </Style>
+  <Style Selector="ListBox.rules ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource ControlBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}" />
+  </Style>
+
+  <!-- The navigation rail: square slots, the current one lit in the accent with a bar on its left edge -->
+  <Style Selector="ListBox.nav">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+  <Style Selector="ListBox.nav ListBoxItem">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Margin" Value="0,0,0,4" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="Foreground" Value="{StaticResource TextTertiary}" />
+  </Style>
+  <Style Selector="ListBox.nav ListBoxItem /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="ListBox.nav ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+  </Style>
+  <Style Selector="ListBox.nav ListBoxItem:pointerover">
+    <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+  </Style>
+  <Style Selector="ListBox.nav ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter, ListBox.nav ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+  </Style>
+  <Style Selector="ListBox.nav ListBoxItem:selected">
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector="ListBox.nav ListBoxItem Border.navBar">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="ListBox.nav ListBoxItem:selected Border.navBar">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector="ListBox.nav ListBoxItem PathIcon.navIcon">
+    <Setter Property="Foreground" Value="{StaticResource TextTertiary}" />
+  </Style>
+  <Style Selector="ListBox.nav ListBoxItem:pointerover PathIcon.navIcon">
+    <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+  </Style>
+  <Style Selector="ListBox.nav ListBoxItem:selected PathIcon.navIcon">
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+  </Style>
+
+  <!-- Inputs -->
+  <Style Selector="TextBox">
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="Padding" Value="12,8" />
+    <Setter Property="MinHeight" Value="36" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="BorderThickness" Value="0,0,0,2" />
+  </Style>
+  <Style Selector="ComboBox">
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="MinHeight" Value="36" />
+  </Style>
+  <Style Selector="Slider">
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector="ToggleSwitch /template/ Border#OuterBorder">
+    <Setter Property="CornerRadius" Value="2" />
+  </Style>
+  <Style Selector="ToggleSwitch /template/ Border#SwitchKnobBounds">
+    <Setter Property="CornerRadius" Value="2" />
+  </Style>
+  <Style Selector="ToggleSwitch /template/ Border#SwitchKnobOn">
+    <Setter Property="CornerRadius" Value="1" />
+  </Style>
+  <Style Selector="ToggleSwitch /template/ Border#SwitchKnobOff">
+    <Setter Property="CornerRadius" Value="1" />
+  </Style>
+  <Style Selector="ScrollViewer">
+    <Setter Property="AllowAutoHide" Value="True" />
+  </Style>
+
+  <!-- A blinking red light while recording. Only its opacity animates, which is cheap to redraw. -->
+  <Style Selector="Ellipse.liveDot">
+    <Setter Property="Width" Value="8" />
+    <Setter Property="Height" Value="8" />
+    <Setter Property="Fill" Value="{StaticResource RecordBrush}" />
+  </Style>
+  <Style Selector="Ellipse.liveDot.pulsing">
+    <Style.Animations>
+      <Animation Duration="0:0:1.2" IterationCount="Infinite" PlaybackDirection="Alternate">
+        <KeyFrame Cue="0%"><Setter Property="Opacity" Value="1" /></KeyFrame>
+        <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.25" /></KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+
+  <!-- Clip cards light their edge in the accent and show their actions on hover -->
+  <Style Selector="views|Plate.clipCard">
+    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+    <Setter Property="Cut" Value="10" />
+  </Style>
+  <Style Selector="views|Plate.clipCard:pointerover">
+    <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector="views|Plate.clipCard Panel.hoverActions">
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.1" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="views|Plate.clipCard:pointerover Panel.hoverActions, views|Plate.clipCard.showActions Panel.hoverActions">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+
+  <!-- Rows in the player's list of moments -->
+  <Style Selector="Button.marker">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="Padding" Value="10,8" />
+    <Setter Property="Margin" Value="0,0,0,2" />
+  </Style>
+  <Style Selector="Button.marker:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+  </Style>
+  <Style Selector="Button.marker:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource ControlBrush}" />
+  </Style>
+</Styles>

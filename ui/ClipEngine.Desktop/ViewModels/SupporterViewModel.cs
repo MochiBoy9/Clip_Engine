@@ -48,7 +48,7 @@ public sealed class SupporterViewModel : ObservableObject
     // The theme in use: the saved choice for supporters, the default for everyone else.
     internal AccentTheme Theme => IsSupporter ? AccentThemes.Find(_desktop?.AccentTheme) : AccentThemes.Default;
 
-    public string ThemeCaption => IsSupporter ? "Changes the accent colour and the glow behind the app." : "Unlocked with a supporter key.";
+    public string ThemeCaption => IsSupporter ? "Changes the accent colour across the app." : "Unlocked with a supporter key.";
 
     public string PatreonUrl { get; }
     public bool HasPatreon => PatreonUrl.Length > 0;

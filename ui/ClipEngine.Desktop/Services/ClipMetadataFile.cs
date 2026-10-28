@@ -31,6 +31,29 @@ internal sealed class ClipMetadata
     // Starred in the app. Favorites are never removed by the storage cleanup.
     [JsonPropertyName("favorite")] public bool Favorite { get; set; }
 
+    // Two reads of one killfeed line used to be saved as two moments: a repeat of the same
+    // moment with the same text a few seconds later is the same kill, so it's dropped (and the
+    // title recounted). Clips saved by newer engines don't have these.
+    private const double RepeatSeconds = 8;
+
+    internal void MergeRepeats()
+    {
+        var kept = new List<ClipEvent>();
+        foreach (var e in Events.OrderBy(e => e.Time))
+        {
+            var text = e.Text.Trim();
+            var repeat = text.Length > 0 && kept.Any(k => k.Type == e.Type && e.Time - k.Time <= RepeatSeconds
+                                                         && string.Equals(k.Text.Trim(), text, StringComparison.OrdinalIgnoreCase));
+            if (!repeat) kept.Add(e);
+        }
+        if (kept.Count == Events.Count) return;
+        Events = kept;
+        Title = string.Join(", ", EngineSettings.AllEvents
+            .Select(type => (type, count: kept.Count(e => e.Type == type)))
+            .Where(t => t.count > 0)
+            .Select(t => ViewModels.EventKinds.Count(t.type, t.count).ToLowerInvariant()));
+    }
+
     public bool IsAutomatic => Trigger == "auto";
     public bool HasSession => Session.Length > 0 && SessionSeconds >= 0;
 }
@@ -67,7 +90,9 @@ internal static class ClipMetadataFile
     {
         try
         {
-            return JsonSerializer.Deserialize(json, ClipMetadataJson.Default.ClipMetadata);
+            var metadata = JsonSerializer.Deserialize(json, ClipMetadataJson.Default.ClipMetadata);
+            metadata?.MergeRepeats();
+            return metadata;
         }
         catch (JsonException)
         {

@@ -15,6 +15,7 @@ internal sealed class EngineSettings
     public bool GameAudio { get; set; } = true;
     public bool MicAudio { get; set; } = true;
     public string SaveHotkey { get; set; } = "F8";
+    public string RecordHotkey { get; set; } = "F9";
     public bool RecordWithoutGame { get; set; }
     public bool Detection { get; set; } = true;
     public bool AutoClip { get; set; } = true;
@@ -45,6 +46,7 @@ internal sealed class EngineSettings
                 case "game_audio": settings.GameAudio = ParseBool(value, settings.GameAudio); break;
                 case "mic_audio": settings.MicAudio = ParseBool(value, settings.MicAudio); break;
                 case "save_hotkey": settings.SaveHotkey = value; break;
+                case "record_hotkey": settings.RecordHotkey = value; break;
                 case "record_without_game": settings.RecordWithoutGame = ParseBool(value, settings.RecordWithoutGame); break;
                 case "detection": settings.Detection = ParseBool(value, settings.Detection); break;
                 case "auto_clip": settings.AutoClip = ParseBool(value, settings.AutoClip); break;
@@ -72,6 +74,7 @@ internal sealed class EngineSettings
             ["game_audio"] = Format(GameAudio),
             ["mic_audio"] = Format(MicAudio),
             ["save_hotkey"] = SaveHotkey,
+            ["record_hotkey"] = RecordHotkey,
             ["record_without_game"] = Format(RecordWithoutGame),
             ["detection"] = Format(Detection),
             ["auto_clip"] = Format(AutoClip),

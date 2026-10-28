@@ -21,6 +21,10 @@ Phrase MakePhrase(std::string_view text);
 // True when an OCR'd word is close enough to the expected word.
 bool WordsMatch(std::string_view token, std::string_view word);
 
+// True when two runs of OCR'd text, such as player names, are close enough to be the same
+// text read twice: equal, or a letter or two off for longer text.
+bool SameText(std::string_view a, std::string_view b);
+
 // How many separate times the phrase appears in the tokens.
 int CountPhrase(const std::vector<std::string>& tokens, const Phrase& phrase);
 

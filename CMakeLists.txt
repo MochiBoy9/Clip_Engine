@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(ClipEngine VERSION 0.4.1 LANGUAGES CXX)
+project(ClipEngine VERSION 0.5.0 LANGUAGES CXX)
 
 if(NOT WIN32 OR NOT MSVC)
   message(FATAL_ERROR "Clip Engine builds on Windows with MSVC (Visual Studio 2022 or newer).")
@@ -13,6 +13,7 @@ add_executable(clip_engine
   src/main.cpp
   src/app/App.cpp
   src/app/RecordingSession.cpp
+  src/app/Timeline.cpp
   src/audio/AacEncoder.cpp
   src/audio/AudioCapture.cpp
   src/capture/GpuDevice.cpp
@@ -22,8 +23,10 @@ add_executable(clip_engine
   src/core/Log.cpp
   src/detect/DetectionRules.cpp
   src/detect/EventDetector.cpp
+  src/detect/ImageMatch.cpp
   src/detect/Ocr.cpp
   src/detect/RuleTester.cpp
+  src/detect/Scoreboard.cpp
   src/detect/TextMatcher.cpp
   src/game/GameDetector.cpp
   src/integrations/GameIntegration.cpp
@@ -32,6 +35,7 @@ add_executable(clip_engine
   src/integrations/StreamReaders.cpp
   src/media/ClipMetadata.cpp
   src/media/Exporter.cpp
+  src/media/LongRecorder.cpp
   src/media/MediaUtil.cpp
   src/media/Mp4Writer.cpp
   src/media/ReplayBuffer.cpp
@@ -66,6 +70,8 @@ enable_testing()
 add_executable(clip_engine_tests
   tests/DetectTests.cpp
   src/detect/DetectionRules.cpp
+  src/detect/ImageMatch.cpp
+  src/detect/Scoreboard.cpp
   src/detect/TextMatcher.cpp
   src/media/ClipMetadata.cpp
 )
@@ -74,11 +80,14 @@ target_compile_options(clip_engine_tests PRIVATE /W4 /permissive- /utf-8 /EHsc)
 add_test(NAME detection COMMAND clip_engine_tests ${CMAKE_SOURCE_DIR}/assets/detection.ini ${CMAKE_CURRENT_BINARY_DIR})
 
 # Tests for the games added in 0.4: their own APIs (CS2, Dota 2, League of Legends, Rocket
-# League), killfeed rules and the shipped rules for every screen-read game.
+# League), killfeed rules and the shipped rules for every screen-read game, plus scoreboard
+# reading and the timeline the player's records come from.
 add_executable(clip_engine_game_tests
   tests/GameSupportTests.cpp
+  src/app/Timeline.cpp
   src/core/Json.cpp
   src/detect/DetectionRules.cpp
+  src/detect/Scoreboard.cpp
   src/detect/TextMatcher.cpp
   src/integrations/GameStateTrackers.cpp
   src/integrations/StreamReaders.cpp

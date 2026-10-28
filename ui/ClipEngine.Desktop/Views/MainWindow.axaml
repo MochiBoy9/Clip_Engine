@@ -8,191 +8,118 @@
         Icon="avares://ClipEngine/Assets/ClipEngine.ico"
         Width="1280" Height="820" MinWidth="1040" MinHeight="660"
         WindowStartupLocation="CenterScreen"
-        Background="Transparent"
-        TransparencyLevelHint="AcrylicBlur, Mica, None"
+        Background="{StaticResource WindowBrush}"
         ExtendClientAreaToDecorationsHint="True"
         ExtendClientAreaChromeHints="PreferSystemChrome"
-        ExtendClientAreaTitleBarHeightHint="44">
+        ExtendClientAreaTitleBarHeightHint="40">
 
   <Window.DataTemplates>
     <DataTemplate DataType="vm:HomePage"><views:HomeView /></DataTemplate>
     <DataTemplate DataType="vm:ClipsPage"><views:ClipsView /></DataTemplate>
     <DataTemplate DataType="vm:GamesPage"><views:GamesView /></DataTemplate>
+    <DataTemplate DataType="vm:RecordsViewModel"><views:RecordsView /></DataTemplate>
     <DataTemplate DataType="vm:SettingsViewModel"><views:SettingsView /></DataTemplate>
     <DataTemplate DataType="vm:PlayerViewModel"><views:PlayerView /></DataTemplate>
     <DataTemplate DataType="vm:StudioViewModel"><views:StudioView /></DataTemplate>
   </Window.DataTemplates>
 
-  <Window.Styles>
-    <!-- Slow drifting colour behind the glass. Only runs while the window is active. -->
-    <Style Selector="Panel#Root.animated Ellipse#BlobViolet">
-      <Style.Animations>
-        <Animation Duration="0:0:22" IterationCount="Infinite" PlaybackDirection="Alternate" Easing="SineEaseInOut">
-          <KeyFrame Cue="0%"><Setter Property="Canvas.Left" Value="-160" /><Setter Property="Canvas.Top" Value="-260" /></KeyFrame>
-          <KeyFrame Cue="100%"><Setter Property="Canvas.Left" Value="20" /><Setter Property="Canvas.Top" Value="-140" /></KeyFrame>
-        </Animation>
-      </Style.Animations>
-    </Style>
-    <Style Selector="Panel#Root.animated Ellipse#BlobCyan">
-      <Style.Animations>
-        <Animation Duration="0:0:26" IterationCount="Infinite" PlaybackDirection="Alternate" Easing="SineEaseInOut">
-          <KeyFrame Cue="0%"><Setter Property="Canvas.Left" Value="760" /><Setter Property="Canvas.Top" Value="380" /></KeyFrame>
-          <KeyFrame Cue="100%"><Setter Property="Canvas.Left" Value="540" /><Setter Property="Canvas.Top" Value="290" /></KeyFrame>
-        </Animation>
-      </Style.Animations>
-    </Style>
-    <Style Selector="Panel#Root.animated Ellipse#BlobPink">
-      <Style.Animations>
-        <Animation Duration="0:0:30" IterationCount="Infinite" PlaybackDirection="Alternate" Easing="SineEaseInOut">
-          <KeyFrame Cue="0%"><Setter Property="Canvas.Left" Value="820" /><Setter Property="Canvas.Top" Value="-240" /></KeyFrame>
-          <KeyFrame Cue="100%"><Setter Property="Canvas.Left" Value="660" /><Setter Property="Canvas.Top" Value="-100" /></KeyFrame>
-        </Animation>
-      </Style.Animations>
-    </Style>
-    <Style Selector="Panel#Root.animated Ellipse#BlobBlue">
-      <Style.Animations>
-        <Animation Duration="0:0:24" IterationCount="Infinite" PlaybackDirection="Alternate" Easing="SineEaseInOut">
-          <KeyFrame Cue="0%"><Setter Property="Canvas.Left" Value="120" /><Setter Property="Canvas.Top" Value="480" /></KeyFrame>
-          <KeyFrame Cue="100%"><Setter Property="Canvas.Left" Value="320" /><Setter Property="Canvas.Top" Value="340" /></KeyFrame>
-        </Animation>
-      </Style.Animations>
-    </Style>
-  </Window.Styles>
-
   <Panel Name="Root">
-    <!-- Deep base gradient. Partly see-through when Windows provides acrylic behind the window. -->
-    <Border Name="BaseLayer">
-      <Border.Background>
-        <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
-          <GradientStop Offset="0" Color="#0E0B24" />
-          <GradientStop Offset="0.55" Color="#120E2C" />
-          <GradientStop Offset="1" Color="#081A2E" />
-        </LinearGradientBrush>
-      </Border.Background>
-    </Border>
-
-    <!-- Soft colour blobs. Radial gradients are already soft, so no blur effect is needed. -->
-    <Canvas IsHitTestVisible="False" ClipToBounds="True">
-      <Ellipse Name="BlobViolet" Width="760" Height="760" Canvas.Left="-160" Canvas.Top="-260">
-        <Ellipse.Fill>
-          <RadialGradientBrush>
-            <GradientStop Offset="0" Color="#B88B5CF6" />
-            <GradientStop Offset="0.55" Color="#408B5CF6" />
-            <GradientStop Offset="1" Color="#008B5CF6" />
-          </RadialGradientBrush>
-        </Ellipse.Fill>
-      </Ellipse>
-      <Ellipse Name="BlobCyan" Width="720" Height="720" Canvas.Left="760" Canvas.Top="380">
-        <Ellipse.Fill>
-          <RadialGradientBrush>
-            <GradientStop Offset="0" Color="#9922C8EE" />
-            <GradientStop Offset="0.55" Color="#3322C8EE" />
-            <GradientStop Offset="1" Color="#0022C8EE" />
-          </RadialGradientBrush>
-        </Ellipse.Fill>
-      </Ellipse>
-      <Ellipse Name="BlobPink" Width="620" Height="620" Canvas.Left="820" Canvas.Top="-240">
-        <Ellipse.Fill>
-          <RadialGradientBrush>
-            <GradientStop Offset="0" Color="#A0FF4FA3" />
-            <GradientStop Offset="0.55" Color="#30FF4FA3" />
-            <GradientStop Offset="1" Color="#00FF4FA3" />
-          </RadialGradientBrush>
-        </Ellipse.Fill>
-      </Ellipse>
-      <Ellipse Name="BlobBlue" Width="680" Height="680" Canvas.Left="120" Canvas.Top="480">
-        <Ellipse.Fill>
-          <RadialGradientBrush>
-            <GradientStop Offset="0" Color="#902F6BFF" />
-            <GradientStop Offset="0.55" Color="#302F6BFF" />
-            <GradientStop Offset="1" Color="#002F6BFF" />
-          </RadialGradientBrush>
-        </Ellipse.Fill>
-      </Ellipse>
-    </Canvas>
-
-    <Grid ColumnDefinitions="252,*">
-      <!-- Sidebar -->
-      <Border Classes="glass" Margin="14,14,0,14" Padding="14,18,14,14" CornerRadius="28">
+    <Grid ColumnDefinitions="76,*">
+      <!-- The navigation rail -->
+      <Border Background="{StaticResource RailBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
         <DockPanel>
-          <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="12" Margin="6,2,0,26"
-                      IsHitTestVisible="False">
-            <Border Width="38" Height="38" CornerRadius="12" Background="{DynamicResource AccentGradient}"
-                    BoxShadow="{StaticResource AccentGlow}">
-              <PathIcon Data="{StaticResource IconPlay}" Width="16" Height="16" Foreground="White" Margin="2,0,0,0" />
-            </Border>
-            <StackPanel VerticalAlignment="Center">
-              <TextBlock Text="Clip Engine" FontSize="17" FontWeight="Bold" LetterSpacing="-0.3" />
-              <StackPanel Orientation="Horizontal" Spacing="6">
-                <TextBlock Text="{Binding Version}" Classes="caption" VerticalAlignment="Center" />
-                <Border CornerRadius="6" Padding="6,1" Background="{DynamicResource AccentGradient}"
-                        IsVisible="{Binding Supporter.IsSupporter}" ToolTip.Tip="Thanks for supporting Clip Engine">
-                  <TextBlock Text="SUPPORTER" FontSize="9" FontWeight="Bold" LetterSpacing="0.6" Foreground="White" />
-                </Border>
-              </StackPanel>
-            </StackPanel>
+          <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,14,0,22" HorizontalAlignment="Center" IsHitTestVisible="False">
+            <views:Plate Width="40" Height="40" Cut="9" Background="{DynamicResource AccentBrush}">
+              <PathIcon Data="{StaticResource IconPlay}" Width="20" Height="20" Margin="2,0,0,0"
+                        Foreground="{DynamicResource AccentForegroundBrush}" />
+            </views:Plate>
+            <views:Stripes Width="40" Height="5" Spacing="6" Fill="{DynamicResource AccentBrush}" Opacity="0.55" />
           </StackPanel>
 
-          <!-- Engine status, always visible -->
-          <Border DockPanel.Dock="Bottom" Classes="inset" Padding="14,12" CornerRadius="18">
-            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
-              <Panel Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,10,0">
+          <!-- Engine status and the side panel, always in reach -->
+          <StackPanel DockPanel.Dock="Bottom" Spacing="12" Margin="0,0,0,14" HorizontalAlignment="Center">
+            <Button Classes="icon" Width="40" Height="40" Command="{Binding ToggleSidePanelCommand}"
+                    ToolTip.Tip="{Binding SidePanelHotkey, StringFormat='Side panel over your game ({0})'}">
+              <PathIcon Data="{StaticResource IconPanel}" />
+            </Button>
+            <StackPanel Spacing="5" HorizontalAlignment="Center" ToolTip.Tip="{Binding SaveHint}" Background="Transparent">
+              <Panel Width="8" Height="8" HorizontalAlignment="Center">
                 <Ellipse Fill="{Binding StatusBrush}" Classes="liveDot" Classes.pulsing="{Binding IsRecording}" />
               </Panel>
-              <TextBlock Grid.Column="1" Text="{Binding SidebarStatus}" FontWeight="SemiBold" FontSize="13" />
-              <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SaveHint}" Classes="caption" Margin="0,3,0,0"
-                         TextTrimming="CharacterEllipsis" />
-            </Grid>
-          </Border>
-
-          <!-- The slim panel that docks over the game -->
-          <Button DockPanel.Dock="Bottom" Classes="glass" HorizontalAlignment="Stretch" Margin="0,0,0,10" Padding="12,9"
-                  Command="{Binding ToggleSidePanelCommand}" ToolTip.Tip="A slim panel on the edge of the screen, over your game">
-            <Grid ColumnDefinitions="Auto,*,Auto">
-              <PathIcon Data="{StaticResource IconPanel}" Width="15" Height="15" Margin="2,0,10,0" />
-              <TextBlock Grid.Column="1" Text="Side panel" VerticalAlignment="Center" FontSize="13" />
-              <TextBlock Grid.Column="2" Text="{Binding SidePanelHotkey}" Classes="caption" VerticalAlignment="Center" />
-            </Grid>
-          </Button>
+              <TextBlock Text="{Binding SidebarStatus}" FontFamily="{StaticResource DisplayFont}" FontSize="10"
+                         FontWeight="SemiBold" Foreground="{StaticResource TextSecondary}" HorizontalAlignment="Center"
+                         TextTrimming="CharacterEllipsis" MaxWidth="68" />
+            </StackPanel>
+          </StackPanel>
 
           <ListBox Classes="nav" ItemsSource="{Binding Nav}" SelectedItem="{Binding SelectedNav}">
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="vm:NavItem">
-                <StackPanel Orientation="Horizontal" Spacing="12">
-                  <Border Classes="navGlyph" Width="32" Height="32" CornerRadius="10">
-                    <PathIcon Data="{Binding Icon}" Width="17" Height="17"
-                              Foreground="{Binding $parent[ListBoxItem].Foreground}" />
-                  </Border>
-                  <TextBlock Text="{Binding Title}" VerticalAlignment="Center" FontSize="14" FontWeight="SemiBold"
-                             Foreground="{Binding $parent[ListBoxItem].Foreground}" />
-                </StackPanel>
+                <Grid ColumnDefinitions="3,*" Height="58">
+                  <Border Classes="navBar" />
+                  <StackPanel Grid.Column="1" Spacing="4" HorizontalAlignment="Center" VerticalAlignment="Center"
+                              Margin="0,0,3,0">
+                    <PathIcon Classes="navIcon" Data="{Binding Icon}" Width="21" Height="21" />
+                    <TextBlock Text="{Binding Title}" FontFamily="{StaticResource DisplayFont}" FontSize="11"
+                               FontWeight="SemiBold" HorizontalAlignment="Center"
+                               Foreground="{Binding $parent[ListBoxItem].Foreground}" />
+                  </StackPanel>
+                </Grid>
               </DataTemplate>
             </ListBox.ItemTemplate>
           </ListBox>
         </DockPanel>
       </Border>
 
-      <TransitioningContentControl Grid.Column="1" Content="{Binding CurrentPage}" Margin="0,44,0,0">
-        <TransitioningContentControl.PageTransition>
-          <CrossFade Duration="0:0:0.18" />
-        </TransitioningContentControl.PageTransition>
-      </TransitioningContentControl>
+      <Grid Grid.Column="1" RowDefinitions="40,*">
+        <!-- The title bar: where you are and what the engine is doing. Not clickable, so it drags the window. -->
+        <Grid ColumnDefinitions="*,Auto" Margin="28,0,150,0" IsHitTestVisible="False">
+          <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <TextBlock Text="CLIP ENGINE" FontFamily="{StaticResource DisplayFont}" FontSize="12" FontWeight="Bold"
+                       LetterSpacing="1.8" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
+            <TextBlock Text="//" FontFamily="{StaticResource MonoFont}" FontSize="12" Foreground="{StaticResource TextTertiary}"
+                       VerticalAlignment="Center" />
+            <TextBlock Text="{Binding SelectedNav.Title}" FontFamily="{StaticResource DisplayFont}" FontSize="12"
+                       FontWeight="SemiBold" LetterSpacing="1.2" Foreground="{StaticResource TextSecondary}"
+                       VerticalAlignment="Center" />
+            <TextBlock Text="{Binding Version}" Classes="mono caption" FontSize="11" VerticalAlignment="Center"
+                       Margin="8,0,0,0" />
+            <Border Classes="pill accent" Padding="6,1" VerticalAlignment="Center" IsVisible="{Binding Supporter.IsSupporter}">
+              <TextBlock Text="SUPPORTER" FontSize="9" FontWeight="Bold" LetterSpacing="1" />
+            </Border>
+          </StackPanel>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <Ellipse Fill="{Binding StatusBrush}" Classes="liveDot" Classes.pulsing="{Binding IsRecording}" Width="7" Height="7"
+                     VerticalAlignment="Center" />
+            <TextBlock Text="{Binding StatusTitle}" FontFamily="{StaticResource MonoFont}" FontSize="11" FontWeight="Bold"
+                       Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                       MaxWidth="320" />
+          </StackPanel>
+        </Grid>
+        <Border Height="1" VerticalAlignment="Bottom" Background="{StaticResource Divider}" IsHitTestVisible="False" />
+
+        <TransitioningContentControl Grid.Row="1" Content="{Binding CurrentPage}" Margin="28,22,28,0">
+          <TransitioningContentControl.PageTransition>
+            <CrossFade Duration="0:0:0.1" />
+          </TransitioningContentControl.PageTransition>
+        </TransitioningContentControl>
+      </Grid>
     </Grid>
 
     <!-- Toast -->
-    <Border Classes="glass soft" IsVisible="{Binding HasToast}" HorizontalAlignment="Center" VerticalAlignment="Bottom"
-            Margin="252,0,0,28" Padding="18,12" CornerRadius="18" Background="#E61B1836">
+    <views:Plate IsVisible="{Binding HasToast}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Cut="8"
+                 Margin="76,0,0,24" Padding="12,9,16,9" Background="{StaticResource OverlayBrush}"
+                 BorderBrush="{DynamicResource AccentBrush}">
       <StackPanel Orientation="Horizontal" Spacing="10">
-        <Border Width="24" Height="24" CornerRadius="8" Background="{DynamicResource AccentGradient}"
-                IsVisible="{Binding !ToastIsError}">
-          <PathIcon Data="{StaticResource IconCheck}" Width="13" Height="13" Foreground="White" />
+        <Border Classes="tile small" IsVisible="{Binding !ToastIsError}">
+          <PathIcon Data="{StaticResource IconCheck}" />
         </Border>
-        <Border Width="24" Height="24" CornerRadius="8" Background="{StaticResource RecordGradient}"
-                IsVisible="{Binding ToastIsError}">
-          <PathIcon Data="{StaticResource IconAlert}" Width="13" Height="13" Foreground="White" />
+        <Border Classes="tile small record" IsVisible="{Binding ToastIsError}">
+          <PathIcon Data="{StaticResource IconAlert}" />
         </Border>
-        <TextBlock Text="{Binding Toast}" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="14" />
+        <TextBlock Text="{Binding Toast}" VerticalAlignment="Center" FontFamily="{StaticResource DisplayFont}"
+                   FontWeight="SemiBold" FontSize="14" />
       </StackPanel>
-    </Border>
+    </views:Plate>
   </Panel>
 </Window>

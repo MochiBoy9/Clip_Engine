@@ -8,6 +8,7 @@
 #include <condition_variable>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <thread>
 #include <vector>
 
@@ -26,6 +27,8 @@ class GameIntegration {
 
   // Moments reported since the last call, timed on the engine's clock.
   std::vector<GameEvent> TakeEvents();
+  // The player's totals for the match, when they changed since the last call.
+  std::optional<Scoreboard> TakeScoreboard();
 
  protected:
   explicit GameIntegration(std::string gameName) : gameName_(std::move(gameName)) {}
@@ -40,6 +43,8 @@ class GameIntegration {
   bool Wait(int ms);
 
   void Emit(const std::vector<ApiEvent>& events);
+  // The tracker's current totals; kept when they differ from the last ones.
+  void Report(const Stats& board);
   // Logs once that the game is talking to us.
   void Connected();
 
@@ -50,6 +55,8 @@ class GameIntegration {
   std::mutex mutex_;
   std::condition_variable wake_;
   std::vector<GameEvent> events_;
+  Stats board_;
+  std::optional<Scoreboard> newBoard_;
   bool connected_ = false;
   std::thread thread_;
 };

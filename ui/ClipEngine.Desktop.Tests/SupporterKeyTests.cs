@@ -84,7 +84,7 @@ public class SupporterKeyTests : IDisposable
         var desktop = new DesktopSettings { AccentTheme = "ember" };
         var vm = new SupporterViewModel(PublicKey, null, desktop, credits: []);
         // A saved theme only applies while a key is active.
-        Assert.Equal("aurora", vm.Theme.Id);
+        Assert.Equal("hazard", vm.Theme.Id);
 
         vm.Themes[2].IsSelected = true;
         Assert.Equal("ember", desktop.AccentTheme);
@@ -101,6 +101,6 @@ public class SupporterKeyTests : IDisposable
         Assert.False(vm.Themes.Single(t => t.Name == "Ember").IsSelected);
 
         vm.Remove();
-        Assert.Equal("aurora", applied?.Id);
+        Assert.Equal("hazard", applied?.Id);
     }
 }

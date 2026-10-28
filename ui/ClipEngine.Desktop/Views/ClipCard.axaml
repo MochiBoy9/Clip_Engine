@@ -4,9 +4,9 @@
              xmlns:views="using:ClipEngine.Desktop.Views"
              x:Class="ClipEngine.Desktop.Views.ClipCard"
              x:DataType="vm:ClipItemViewModel">
-  <Border Classes="glass soft clipCard" Padding="8" CornerRadius="22" VerticalAlignment="Top">
-    <StackPanel Spacing="10">
-      <Border Name="Thumb" CornerRadius="15" ClipToBounds="True" Height="{Binding $parent[views:ClipCard].ThumbnailHeight}"
+  <views:Plate Classes="clipCard" Padding="6" VerticalAlignment="Top">
+    <StackPanel Spacing="9">
+      <Border Name="Thumb" CornerRadius="0" ClipToBounds="True" Height="{Binding $parent[views:ClipCard].ThumbnailHeight}"
               Background="{Binding Placeholder}">
         <Panel>
           <!-- Without a thumbnail yet, show the game's initials on its gradient -->
@@ -14,79 +14,67 @@
                      Foreground="#59FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" LetterSpacing="-1" />
           <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" IsVisible="{Binding HasThumbnail}" />
 
-          <!-- Sheen along the top edge, like the other glass -->
-          <Border IsHitTestVisible="False">
-            <Border.Background>
-              <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
-                <GradientStop Offset="0" Color="#33FFFFFF" />
-                <GradientStop Offset="0.35" Color="#00FFFFFF" />
-                <GradientStop Offset="0.65" Color="#00000000" />
-                <GradientStop Offset="1" Color="#73000000" />
-              </LinearGradientBrush>
-            </Border.Background>
-          </Border>
-
           <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8">
-            <Border Classes="pill" Background="#59000000" BorderBrush="#33FFFFFF" Padding="9,3">
+            <Border Classes="pill onMedia" Padding="8,2">
               <TextBlock Text="{Binding Game}" FontSize="11" FontWeight="SemiBold" />
             </Border>
-            <Border Classes="pill" Background="#998B6CFF" BorderBrush="#808B6CFF" Padding="7,3"
+            <Border Classes="pill accent" Padding="7,2"
                     IsVisible="{Binding IsAutomatic}" ToolTip.Tip="Saved by itself when moments were detected">
               <StackPanel Orientation="Horizontal" Spacing="4">
-                <PathIcon Data="{StaticResource IconSparkle}" Width="9" Height="9" Foreground="White" />
+                <PathIcon Data="{StaticResource IconSparkle}" Width="9" Height="9" />
                 <TextBlock Text="AUTO" FontSize="10" FontWeight="Bold" LetterSpacing="0.8" />
               </StackPanel>
             </Border>
           </StackPanel>
-          <Border Classes="pill" Background="#73000000" BorderBrush="#33FFFFFF" HorizontalAlignment="Right"
-                  VerticalAlignment="Bottom" Margin="8" Padding="8,2" IsVisible="{Binding HasDuration}">
-            <TextBlock Text="{Binding Duration}" FontSize="11" FontWeight="SemiBold" />
+          <Border Classes="pill onMedia" HorizontalAlignment="Right"
+                  VerticalAlignment="Bottom" Margin="8" Padding="7,2" IsVisible="{Binding HasDuration}">
+            <TextBlock Text="{Binding Duration}" FontSize="11" FontWeight="SemiBold" FontFeatures="tnum" />
           </Border>
-          <Border Classes="pill" Background="#73000000" BorderBrush="#66FFC24B" HorizontalAlignment="Left"
+          <Border Classes="pill onMedia" HorizontalAlignment="Left"
                   VerticalAlignment="Bottom" Margin="8" Padding="6,3" IsVisible="{Binding IsFavorite}"
                   ToolTip.Tip="Favorite: never cleaned up">
-            <PathIcon Data="{StaticResource IconStar}" Width="11" Height="11" Foreground="#FFC24B" />
+            <PathIcon Data="{StaticResource IconStar}" Width="11" Height="11" Foreground="{DynamicResource AccentBrush}" />
           </Border>
 
           <Panel Classes="hoverActions">
-            <Button Classes="icon" Width="52" Height="52" CornerRadius="26" HorizontalAlignment="Center"
-                    VerticalAlignment="Center" Background="#40FFFFFF" BorderBrush="#80FFFFFF"
+            <Button Classes="accent" Width="46" Height="46" CornerRadius="23" Padding="0" HorizontalAlignment="Center"
+                    VerticalAlignment="Center" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                     Command="{Binding OpenCommand}" ToolTip.Tip="Play">
-              <PathIcon Data="{StaticResource IconPlay}" Width="20" Height="20" Margin="3,0,0,0" />
+              <PathIcon Data="{StaticResource IconPlay}" Width="18" Height="18" Margin="3,0,0,0" />
             </Button>
             <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right" VerticalAlignment="Top"
                         Margin="8">
-              <Button Classes="icon" Width="30" Height="30" CornerRadius="10" Command="{Binding FavoriteCommand}"
+              <Button Classes="icon onMedia" Width="28" Height="28" CornerRadius="7" Command="{Binding FavoriteCommand}"
                       ToolTip.Tip="{Binding FavoriteTip}">
                 <Panel>
-                  <PathIcon Data="{StaticResource IconStarOutline}" Width="14" Height="14" IsVisible="{Binding !IsFavorite}" />
-                  <PathIcon Data="{StaticResource IconStar}" Width="14" Height="14" Foreground="#FFC24B"
+                  <PathIcon Data="{StaticResource IconStarOutline}" Width="13" Height="13" IsVisible="{Binding !IsFavorite}" />
+                  <PathIcon Data="{StaticResource IconStar}" Width="13" Height="13" Foreground="{DynamicResource AccentBrush}"
                             IsVisible="{Binding IsFavorite}" />
                 </Panel>
               </Button>
-              <Button Classes="icon" Width="30" Height="30" CornerRadius="10" Command="{Binding ShareCommand}"
+              <Button Classes="icon onMedia" Width="28" Height="28" CornerRadius="7" Command="{Binding ShareCommand}"
                       ToolTip.Tip="Share to Discord">
-                <PathIcon Data="{StaticResource IconShare}" Width="14" Height="14" />
+                <PathIcon Data="{StaticResource IconShare}" Width="13" Height="13" />
               </Button>
-              <Button Classes="icon" Width="30" Height="30" CornerRadius="10" Command="{Binding ShowCommand}"
+              <Button Classes="icon onMedia" Width="28" Height="28" CornerRadius="7" Command="{Binding ShowCommand}"
                       ToolTip.Tip="Show in folder">
-                <PathIcon Data="{StaticResource IconFolder}" Width="14" Height="14" />
+                <PathIcon Data="{StaticResource IconFolder}" Width="13" Height="13" />
               </Button>
-              <Button Classes="icon danger" Width="30" Height="30" CornerRadius="10" Command="{Binding DeleteCommand}"
+              <Button Classes="icon onMedia danger" Width="28" Height="28" CornerRadius="7" Command="{Binding DeleteCommand}"
                       ToolTip.Tip="Delete">
-                <PathIcon Data="{StaticResource IconTrash}" Width="14" Height="14" />
+                <PathIcon Data="{StaticResource IconTrash}" Width="13" Height="13" />
               </Button>
             </StackPanel>
           </Panel>
         </Panel>
       </Border>
       <!-- The clip's moments along its length -->
-      <views:EventRibbon Ticks="{Binding Ribbon}" Height="8" Margin="6,0" IsVisible="{Binding HasRibbon}" />
-      <StackPanel Margin="6,0,6,6" Spacing="2">
+      <views:EventRibbon Ticks="{Binding Ribbon}" Height="8" Margin="4,0" IsVisible="{Binding HasRibbon}" />
+      <StackPanel Margin="4,0,4,5" Spacing="1">
         <TextBlock Text="{Binding When}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis"
                    ToolTip.Tip="{Binding Title}" />
         <TextBlock Text="{Binding Caption}" Classes="caption" TextTrimming="CharacterEllipsis" />
       </StackPanel>
     </StackPanel>
-  </Border>
+  </views:Plate>
 </UserControl>

@@ -26,6 +26,12 @@ internal sealed record Trimmed(string Path, double Seconds, double From) : Engin
 internal sealed record FrameSaved(string Path, int Width, int Height) : EngineEvent;
 internal sealed record TextRead(string Text) : EngineEvent;
 internal sealed record RuleMatches(int Count) : EngineEvent;
+internal sealed record RecordHotkey(string Hotkey) : EngineEvent;
+internal sealed record LongRecordingStarted(string Game) : EngineEvent;
+internal sealed record LongRecordingStopped(double Seconds, string? Reason) : EngineEvent;
+internal sealed record LongRecordingSaved(string Path, double Seconds, double Megabytes) : EngineEvent;
+// The player's totals in the match, from the game's API or its scoreboard.
+internal sealed record ScoreboardRead(string Game, IReadOnlyDictionary<string, int> Stats) : EngineEvent;
 
 // Reads the lines clip_engine.exe writes, in the format of src/core/Log.cpp.
 internal static partial class EngineLogParser
@@ -75,6 +81,24 @@ internal static partial class EngineLogParser
     [GeneratedRegex(@"^Matches: (\d+)$")]
     private static partial Regex MatchesRegex();
 
+    [GeneratedRegex(@"^Press (.+) to start or stop a long recording$")]
+    private static partial Regex RecordHotkeyRegex();
+
+    [GeneratedRegex(@"^Long recording started in (.+); press .+ again to stop it$")]
+    private static partial Regex LongStartedRegex();
+
+    [GeneratedRegex(@"^Long recording stopped after (\d+)s(?: because (.+))?$")]
+    private static partial Regex LongStoppedRegex();
+
+    [GeneratedRegex(@"^Saved ([\d.]+)s long recording \(([\d.]+) MB\) to (.+)$")]
+    private static partial Regex LongSavedRegex();
+
+    [GeneratedRegex(@"^Scoreboard in (.+?): (.+)$")]
+    private static partial Regex ScoreboardRegex();
+
+    [GeneratedRegex(@"^([a-z0-9_]+) (-?\d+)$")]
+    private static partial Regex StatRegex();
+
     [GeneratedRegex(@"^(.+) (detected|closed)$")]
     private static partial Regex GameRegex();
 
@@ -116,6 +140,22 @@ internal static partial class EngineLogParser
         if ((m = FrameRegex().Match(text)).Success) return new FrameSaved(m.Groups[3].Value, Int(m.Groups[1]), Int(m.Groups[2]));
         if ((m = ReadRegex().Match(text)).Success) return new TextRead(m.Groups[1].Value);
         if ((m = MatchesRegex().Match(text)).Success) return new RuleMatches(Int(m.Groups[1]));
+        if ((m = RecordHotkeyRegex().Match(text)).Success) return new RecordHotkey(m.Groups[1].Value);
+        if ((m = LongStartedRegex().Match(text)).Success) return new LongRecordingStarted(m.Groups[1].Value);
+        if ((m = LongStoppedRegex().Match(text)).Success)
+            return new LongRecordingStopped(Double(m.Groups[1]), m.Groups[2].Success ? m.Groups[2].Value : null);
+        if ((m = LongSavedRegex().Match(text)).Success)
+            return new LongRecordingSaved(m.Groups[3].Value, Double(m.Groups[1]), Double(m.Groups[2]));
+        if ((m = ScoreboardRegex().Match(text)).Success)
+        {
+            var stats = new Dictionary<string, int>();
+            foreach (var part in m.Groups[2].Value.Split(", "))
+            {
+                var stat = StatRegex().Match(part);
+                if (stat.Success) stats[stat.Groups[1].Value] = Int(stat.Groups[2]);
+            }
+            if (stats.Count > 0) return new ScoreboardRead(m.Groups[1].Value, stats);
+        }
         if ((m = GameRegex().Match(text)).Success)
             return m.Groups[2].Value == "detected" ? new GameDetected(m.Groups[1].Value) : new GameClosed(m.Groups[1].Value);
         return null;

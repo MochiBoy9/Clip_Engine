@@ -17,6 +17,15 @@ internal sealed class StudioRule
     public string Exclude { get; set; } = "";
     public int CooldownMs { get; set; } = 1000;
     public int Threshold { get; set; }
+    // Settings Studio doesn't edit (position, sample_ms, image and the like), kept as they were
+    // so that saving a game in Studio doesn't lose them. Losing position turned killfeed rules
+    // into "anywhere" rules, which counted every line with your name as a kill and a death.
+    public List<KeyValuePair<string, string>> Other { get; } = [];
+
+    public string Position => Setting("position") ?? "anywhere";
+    public string? Image => Setting("image");
+
+    public string? Setting(string key) => Other.LastOrDefault(kv => kv.Key == key).Value;
 
     public string Section => Suffix.Length > 0 ? $"{Game}.{Event}.{Suffix}" : $"{Game}.{Event}";
     public string RegionText => string.Join(", ", new[] { Left, Top, Width, Height }.Select(Number));
@@ -86,6 +95,7 @@ internal sealed class DetectionIni
                         case "exclude": rule.Exclude = value; break;
                         case "cooldown_ms": if (int.TryParse(value, CultureInfo.InvariantCulture, out var ms)) rule.CooldownMs = ms; break;
                         case "threshold": if (int.TryParse(value, CultureInfo.InvariantCulture, out var t)) rule.Threshold = t; break;
+                        default: rule.Other.Add(new(key, value)); break;
                     }
                 }
                 rules.Add(rule);
@@ -104,9 +114,12 @@ internal sealed class DetectionIni
                   .ToList();
 
     // Replaces every rule of the game (and its [game.<id>] section, when game is given) with these.
+    // Its scoreboard sections aren't rules the Studio edits, so they stay.
     public void SetGame(string gameId, StudioGame? game, IEnumerable<StudioRule> rules)
     {
-        RemoveSections(name => name.StartsWith(gameId + ".", StringComparison.Ordinal) || (game is not null && name == "game." + gameId));
+        RemoveSections(name => (name.StartsWith(gameId + ".", StringComparison.Ordinal)
+                                && !name.StartsWith(gameId + ".scoreboard", StringComparison.Ordinal))
+                               || (game is not null && name == "game." + gameId));
 
         var block = new StringBuilder();
         block.Append('\n').Append($"# ---------------------------------------------------------------------- {game?.Name ?? gameId}").Append('\n');
@@ -117,10 +130,12 @@ internal sealed class DetectionIni
         }
         foreach (var rule in rules)
         {
-            block.Append($"\n[{rule.Section}]\nregion = {rule.RegionText}\nwords = {rule.Words.Trim()}\n");
+            block.Append($"\n[{rule.Section}]\nregion = {rule.RegionText}\n");
+            if (rule.Words.Trim().Length > 0 || rule.Image is null) block.Append($"words = {rule.Words.Trim()}\n");
             if (rule.Exclude.Trim().Length > 0) block.Append($"exclude = {rule.Exclude.Trim()}\n");
             if (rule.CooldownMs != 1000) block.Append($"cooldown_ms = {rule.CooldownMs}\n");
             if (rule.Threshold > 0) block.Append($"threshold = {rule.Threshold}\n");
+            foreach (var (key, value) in rule.Other) block.Append($"{key} = {value}\n");
         }
         while (_lines.Count > 0 && _lines[^1].Trim().Length == 0) _lines.RemoveAt(_lines.Count - 1);
         _lines.AddRange(block.ToString().TrimEnd('\n').Split('\n'));

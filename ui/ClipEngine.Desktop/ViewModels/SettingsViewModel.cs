@@ -15,6 +15,7 @@ public sealed class SettingsViewModel : ObservableObject
     private bool _gameAudio = true;
     private bool _micAudio = true;
     private string _saveHotkey = "F8";
+    private string _recordHotkey = "F9";
     private bool _recordWithoutGame;
     private bool _detection;
     private bool _autoClip;
@@ -22,7 +23,6 @@ public sealed class SettingsViewModel : ObservableObject
     private double _clipAfterSeconds;
     private string _sidePanelHotkey;
     private bool _closeToTray;
-    private bool _animatedBackground;
     private bool _hasChanges;
     private string? _savedMessage;
     private string? _cleanupPreview;
@@ -37,7 +37,6 @@ public sealed class SettingsViewModel : ObservableObject
             .ToList();
         Load(engine);
         _closeToTray = desktop.CloseToTray;
-        _animatedBackground = desktop.AnimatedBackground;
         _sidePanelHotkey = desktop.SidePanelHotkey;
         CleanUpNowCommand = new RelayCommand(() => CleanUpNowRequested?.Invoke());
         SaveCommand = new RelayCommand(() => _ = SaveAsync(), () => HasChanges);
@@ -61,7 +60,6 @@ public sealed class SettingsViewModel : ObservableObject
     // The support card at the top of the right column.
     public SupporterViewModel? Supporter { get; init; }
 
-    public event Action<bool>? AnimatedBackgroundChanged;
     public event Action<string>? SidePanelHotkeyChanged;
     public event Action? StorageRulesChanged;
     public event Action? CleanUpNowRequested;
@@ -112,6 +110,7 @@ public sealed class SettingsViewModel : ObservableObject
     public bool GameAudio { get => _gameAudio; set => Change(ref _gameAudio, value); }
     public bool MicAudio { get => _micAudio; set => Change(ref _micAudio, value); }
     public string SaveHotkey { get => _saveHotkey; set => Change(ref _saveHotkey, value); }
+    public string RecordHotkey { get => _recordHotkey; set => Change(ref _recordHotkey, value); }
     public bool RecordWithoutGame { get => _recordWithoutGame; set => Change(ref _recordWithoutGame, value); }
 
     // Reading kills and other moments off the screen, and saving clips around them.
@@ -143,18 +142,6 @@ public sealed class SettingsViewModel : ObservableObject
             if (!Set(ref _closeToTray, value)) return;
             _desktop.CloseToTray = value;
             TrySaveDesktop();
-        }
-    }
-
-    public bool AnimatedBackground
-    {
-        get => _animatedBackground;
-        set
-        {
-            if (!Set(ref _animatedBackground, value)) return;
-            _desktop.AnimatedBackground = value;
-            TrySaveDesktop();
-            AnimatedBackgroundChanged?.Invoke(value);
         }
     }
 
@@ -240,6 +227,7 @@ public sealed class SettingsViewModel : ObservableObject
         GameAudio = GameAudio,
         MicAudio = MicAudio,
         SaveHotkey = string.IsNullOrWhiteSpace(SaveHotkey) ? "F8" : SaveHotkey.Trim(),
+        RecordHotkey = string.IsNullOrWhiteSpace(RecordHotkey) ? "F9" : RecordHotkey.Trim(),
         RecordWithoutGame = RecordWithoutGame,
         Detection = Detection,
         AutoClip = AutoClip,
@@ -275,6 +263,7 @@ public sealed class SettingsViewModel : ObservableObject
         _gameAudio = s.GameAudio;
         _micAudio = s.MicAudio;
         _saveHotkey = s.SaveHotkey;
+        _recordHotkey = s.RecordHotkey;
         _recordWithoutGame = s.RecordWithoutGame;
         _detection = s.Detection;
         _autoClip = s.AutoClip;

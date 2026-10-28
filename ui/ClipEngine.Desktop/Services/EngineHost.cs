@@ -10,6 +10,7 @@ internal sealed class EngineHost : IDisposable
     // Must match the names in src/app/App.cpp.
     private const string SaveEventName = @"Local\ClipEngine.SaveClip";
     private const string QuitEventName = @"Local\ClipEngine.Quit";
+    private const string RecordEventName = @"Local\ClipEngine.ToggleRecording";
 
     private readonly object _gate = new();
     private Process? _process;
@@ -93,6 +94,9 @@ internal sealed class EngineHost : IDisposable
     }
 
     public bool SaveClip() => Signal(SaveEventName);
+
+    // Starts a long recording, or stops the one running.
+    public bool ToggleLongRecording() => Signal(RecordEventName);
 
     private static bool Signal(string name)
     {

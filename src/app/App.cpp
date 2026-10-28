@@ -14,10 +14,14 @@ namespace clip {
 namespace {
 
 constexpr int kSaveHotkeyId = 1;
+constexpr int kRecordHotkeyId = 2;
 
-// The desktop app signals these to save a clip or to shut down cleanly.
+// The desktop app signals these to save a clip, start or stop a long recording, or shut down cleanly.
 constexpr wchar_t kSaveEventName[] = L"Local\\ClipEngine.SaveClip";
 constexpr wchar_t kQuitEventName[] = L"Local\\ClipEngine.Quit";
+constexpr wchar_t kRecordEventName[] = L"Local\\ClipEngine.ToggleRecording";
+// A long recording stops before the drive is this full, so the PC doesn't run out of space.
+constexpr uint64_t kMinFreeBytes = 2ull << 30;
 constexpr int64_t kPollInterval = 2 * kHnsPerSecond;
 constexpr int64_t kRetryDelay = 10 * kHnsPerSecond;
 // How long the main loop sleeps between checks for detected events and finished clips.
@@ -80,6 +84,13 @@ int App::Run() {
   } else {
     log::Info("Press {} to save the last {} seconds", config_.saveHotkeyText, config_.clipSeconds);
   }
+  if (!RegisterHotKey(nullptr, kRecordHotkeyId, config_.recordHotkey.modifiers | MOD_NOREPEAT, config_.recordHotkey.key)) {
+    log::Error("Couldn't register the long recording hotkey {}; another app may be using it. Change record_hotkey in "
+               "the settings.",
+               config_.recordHotkeyText);
+  } else {
+    log::Info("Press {} to start or stop a long recording", config_.recordHotkeyText);
+  }
   if (config_.detection && config_.autoClip) {
     log::Info("Automatic clips: {} s before and {} s after each moment", config_.clipBeforeSeconds,
               config_.clipAfterSeconds);
@@ -91,13 +102,15 @@ int App::Run() {
   if (config_.detection) PrepareGameIntegrations();
 
   const HANDLE events[] = {CreateEventW(nullptr, FALSE, FALSE, kSaveEventName),
-                           CreateEventW(nullptr, FALSE, FALSE, kQuitEventName)};
-  const bool haveEvents = events[0] && events[1];
+                           CreateEventW(nullptr, FALSE, FALSE, kQuitEventName),
+                           CreateEventW(nullptr, FALSE, FALSE, kRecordEventName)};
+  const bool haveEvents = events[0] && events[1] && events[2];
   if (!haveEvents) log::Warn("Couldn't create the events the desktop app uses; only the hotkey will save clips");
 
   auto shutDown = [&] {
     log::Info("Shutting down");
     UnregisterHotKey(nullptr, kSaveHotkeyId);
+    UnregisterHotKey(nullptr, kRecordHotkeyId);
     StopSession();
     for (auto& save : saves_) save.wait();
     for (HANDLE event : events) {
@@ -108,22 +121,26 @@ int App::Run() {
 
   int64_t nextPoll = 0;
   while (true) {
-    const DWORD wait = MsgWaitForMultipleObjects(haveEvents ? 2 : 0, haveEvents ? events : nullptr, FALSE,
+    const DWORD wait = MsgWaitForMultipleObjects(haveEvents ? 3 : 0, haveEvents ? events : nullptr, FALSE,
                                                  kLoopWaitMs, QS_ALLINPUT);
     if (haveEvents && wait == WAIT_OBJECT_0) SaveHotkeyClip();
     if (haveEvents && wait == WAIT_OBJECT_0 + 1) return shutDown();
+    if (haveEvents && wait == WAIT_OBJECT_0 + 2) ToggleLongRecording();
     MSG msg;
     while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
       if (msg.message == WM_QUIT) return shutDown();
       if (msg.message == WM_HOTKEY && msg.wParam == kSaveHotkeyId) SaveHotkeyClip();
+      if (msg.message == WM_HOTKEY && msg.wParam == kRecordHotkeyId) ToggleLongRecording();
       TranslateMessage(&msg);
       DispatchMessageW(&msg);
     }
 
     PumpIntegrationEvents();
     HandleEvents();
+    PumpScoreboards();
     SaveReadyAutoClips(false);
     if (NowHns() >= nextPoll) {
+      CheckLongRecording();
       Poll();
       nextPoll = NowHns() + kPollInterval;
     }
@@ -159,18 +176,28 @@ void App::Poll() {
 
   if (!session_ && monitor && NowHns() >= retryAt_) {
     std::vector<DetectionRule> rules;
+    std::vector<ScoreboardRule> scoreboards;
+    std::vector<std::string> playerNames;
     if (config_.detection && !gameId.empty()) {
       std::vector<std::string> needingName;
-      rules = rules_.ForGame(gameId, ReadPlayerNames(config_.file), &needingName);
+      playerNames = ReadPlayerNames(config_.file);
+      rules = rules_.ForGame(gameId, playerNames, &needingName);
+      scoreboards = rules_.ScoreboardsForGame(gameId);
       if (!needingName.empty()) log::Warn("Add your {} name on the Games page to catch your kills in its killfeed", label);
       if (rules.empty() && game->profile->api == GameApi::None) log::Info("No detection rules for {}, so only the hotkey saves clips", label);
     }
     try {
-      session_ = std::make_unique<RecordingSession>(config_, monitor, label, std::move(rules), rules_.sampleMs);
+      session_ = std::make_unique<RecordingSession>(config_, monitor, label, std::move(rules), std::move(scoreboards),
+                                                    std::move(playerNames), rules_.sampleMs);
       sessionGameId_ = gameId;
       sessionId_ = LocalTimestamp();
       sessionStart_ = NowHns();
       matchStarts_.clear();
+      // Only games have moments worth keeping for the records.
+      if (config_.detection && !gameId.empty()) {
+        timeline_ = std::make_unique<TimelineWriter>(config_.file.parent_path() / L"timeline", sessionId_, label);
+        if (!timeline_->Ok()) timeline_.reset();
+      }
     } catch (const winrt::hresult_error& e) {
       log::Error("Couldn't start recording {}: {}. Trying again in 10 seconds.", label, Describe(e));
       session_.reset();
@@ -203,14 +230,38 @@ void App::PumpIntegrationEvents() {
   for (auto& event : events) session_->AddEvent(event);
 }
 
+void App::PumpScoreboards() {
+  std::vector<Scoreboard> boards;
+  if (session_) boards = session_->TakeScoreboards();
+  if (integration_) {
+    auto board = integration_->TakeScoreboard();
+    if (board && session_ && session_->Label() == integrationGame_->name) boards.push_back(std::move(*board));
+  }
+  for (const auto& board : boards) {
+    log::Info("Scoreboard in {}: {}", session_->Label(), DescribeStats(board.stats));
+    if (timeline_) timeline_->Write(TimelineScores(SessionSeconds(board.time), MatchAt(board.time), board));
+  }
+}
+
+double App::SessionSeconds(int64_t time) const { return static_cast<double>(time - sessionStart_) / kHnsPerSecond; }
+
+int App::MatchAt(int64_t time) const {
+  return static_cast<int>(std::ranges::count_if(matchStarts_, [&](int64_t t) { return t <= time; }));
+}
+
 void App::StopSession() {
   if (!session_) return;
   // Keep the moments that happened just before the game closed.
+  PumpIntegrationEvents();
   HandleEvents();
+  PumpScoreboards();
   SaveReadyAutoClips(true);
+  // The long recording reads from this session's buffer, so it ends with it.
+  if (longRecording_) FinishLongRecording("the recording it was part of ended");
   log::Info("Stopped recording {}", session_->Label());
   session_.reset();
   sessionGameId_.clear();
+  timeline_.reset();
 }
 
 void App::HandleEvents() {
@@ -218,6 +269,8 @@ void App::HandleEvents() {
   for (const auto& event : session_->TakeNewEvents()) {
     log::Info("Detected {} in {}: {}", EventName(event.type), session_->Label(), event.text);
     if (event.type == EventType::MatchStart) matchStarts_.push_back(event.time);
+    if (timeline_) timeline_->Write(TimelineEvent(SessionSeconds(event.time), MatchAt(event.time), event));
+    if (longRecording_ && event.time >= longRecording_->Start()) longEvents_.push_back(event);
     if (config_.autoClip && config_.autoClipEvents.contains(event.type)) planner_.Add(event.time);
   }
 }
@@ -243,13 +296,13 @@ void App::SaveHotkeyClip() {
   }
 }
 
-std::filesystem::path App::ClipPath() {
+std::filesystem::path App::ClipPath(std::string_view suffix) {
   SYSTEMTIME t;
   GetLocalTime(&t);
   const std::string label = SafeFileName(session_->Label());
   const auto folder = config_.outputDir / winrt::to_hstring(label).c_str();
-  const std::string stem = std::format("{}_{:04}-{:02}-{:02}_{:02}-{:02}-{:02}", label, t.wYear, t.wMonth, t.wDay,
-                                       t.wHour, t.wMinute, t.wSecond);
+  const std::string stem = std::format("{}_{:04}-{:02}-{:02}_{:02}-{:02}-{:02}{}", label, t.wYear, t.wMonth, t.wDay,
+                                       t.wHour, t.wMinute, t.wSecond, suffix);
   // Two clips can start saving in the same second (a hotkey save during an automatic one),
   // before either file exists on disk.
   int n = stem == lastStem_ ? lastStemCount_ + 1 : 1;
@@ -277,7 +330,7 @@ bool App::SaveRange(int64_t start, int64_t end, const char* trigger) {
   metadata.sessionSeconds = static_cast<double>(clip->start - sessionStart_) / kHnsPerSecond;
   // A clip belongs to the last match that had started by its end, so a clip of the match
   // start itself counts toward the new match.
-  metadata.match = static_cast<int>(std::ranges::count_if(matchStarts_, [&](int64_t t) { return t <= end; }));
+  metadata.match = MatchAt(end);
   for (const auto& event : session_->EventsBetween(clip->start, end)) {
     metadata.markers.push_back({event.type, static_cast<double>(event.time - clip->start) / kHnsPerSecond, event.text});
   }
@@ -317,6 +370,88 @@ bool App::SaveRange(int64_t start, int64_t end, const char* trigger) {
     winrt::uninit_apartment();
   }));
   return true;
+}
+
+void App::ToggleLongRecording() {
+  if (longRecording_) {
+    FinishLongRecording("");
+    return;
+  }
+  if (!session_) {
+    log::Info("Nothing is being recorded right now, so a long recording can't start");
+    return;
+  }
+  // Settle the moments already found, so they're counted once below.
+  HandleEvents();
+  try {
+    longRecording_ = std::make_unique<LongRecorder>(session_->Buffer(), ClipPath("_long"));
+  } catch (const std::exception& e) {
+    log::Error("Couldn't start a long recording: {}", e.what());
+    return;
+  } catch (const winrt::hresult_error& e) {
+    log::Error("Couldn't start a long recording: {}", Describe(e));
+    return;
+  }
+  // Moments from the stretch of buffer it opens with count too.
+  longEvents_ = session_->EventsBetween(longRecording_->Start(), NowHns());
+  log::Info("Long recording started in {}; press {} again to stop it", session_->Label(), config_.recordHotkeyText);
+  MessageBeep(MB_OK);
+}
+
+void App::CheckLongRecording() {
+  if (!longRecording_) return;
+  if (longRecording_->Failed()) {
+    FinishLongRecording("it couldn't write to the drive");
+    return;
+  }
+  ULARGE_INTEGER free{};
+  if (GetDiskFreeSpaceExW(longRecording_->File().parent_path().c_str(), &free, nullptr, nullptr) &&
+      free.QuadPart < kMinFreeBytes) {
+    log::Warn("The clips drive is nearly full");
+    FinishLongRecording("the drive is nearly full");
+  }
+}
+
+void App::FinishLongRecording(std::string_view why) {
+  if (!longRecording_ || !session_) return;
+  std::shared_ptr<LongRecorder> recorder(std::move(longRecording_));
+  recorder->StopTaking();
+
+  ClipMetadata metadata;
+  metadata.game = session_->Label();
+  metadata.trigger = "long";
+  metadata.session = sessionId_;
+  metadata.sessionSeconds = SessionSeconds(recorder->Start());
+  metadata.match = MatchAt(recorder->Start());
+  for (const auto& event : longEvents_) {
+    metadata.markers.push_back({event.type, static_cast<double>(event.time - recorder->Start()) / kHnsPerSecond, event.text});
+  }
+  longEvents_.clear();
+  const double seconds = SessionSeconds(NowHns()) - metadata.sessionSeconds;
+  if (why.empty()) log::Info("Long recording stopped after {:.0f}s", seconds);
+  else log::Info("Long recording stopped after {:.0f}s because {}", seconds, why);
+
+  saves_.push_back(std::async(std::launch::async, [recorder, metadata = std::move(metadata)]() mutable {
+    winrt::init_apartment(winrt::apartment_type::multi_threaded);
+    try {
+      metadata.seconds = recorder->Finish();
+      const auto& path = recorder->File();
+      const std::string json = ToJson(metadata);
+      AppendMetadataBox(path, json);
+      auto sidecar = path;
+      sidecar.replace_extension(L".json");
+      std::ofstream(sidecar, std::ios::binary) << json;
+      const double mb = static_cast<double>(std::filesystem::file_size(path)) / (1024.0 * 1024.0);
+      log::Info("Saved {:.0f}s long recording ({:.1f} MB) to {}", metadata.seconds, mb, winrt::to_string(path.wstring()));
+      if (const std::string summary = Summarize(metadata.markers); !summary.empty()) log::Info("Recording has {}", summary);
+      MessageBeep(MB_OK);
+    } catch (const winrt::hresult_error& e) {
+      log::Error("Couldn't save the long recording: {}", Describe(e));
+    } catch (const std::exception& e) {
+      log::Error("Couldn't save the long recording: {}", e.what());
+    }
+    winrt::uninit_apartment();
+  }));
 }
 
 }  // namespace clip

@@ -17,6 +17,7 @@ void ReplayBuffer::Push(EncodedPacket&& packet) {
   std::lock_guard lock(mutex_);
   auto& queue = streams_[stream];
   bytes_ += ptr->data.size();
+  if (tap_) tap_(ptr);
   queue.push_back(std::move(ptr));
 
   const int64_t oldest = queue.back()->pts - maxDuration_;
@@ -59,6 +60,33 @@ std::optional<ReplayBuffer::Clip> ReplayBuffer::Extract(int64_t start, int64_t e
   }
   std::ranges::stable_sort(clip.packets, {}, [](const PacketPtr& p) { return p->pts; });
   return clip;
+}
+
+std::optional<ReplayBuffer::Clip> ReplayBuffer::StartTap(Tap tap) {
+  std::lock_guard lock(mutex_);
+  const auto& video = streams_[kVideoStream];
+  if (!formats_[kVideoStream]) return std::nullopt;
+  const auto key = std::find_if(video.rbegin(), video.rend(), [](const PacketPtr& p) { return p->keyframe; });
+  if (key == video.rend()) return std::nullopt;
+
+  Clip clip;
+  clip.start = (*key)->pts;
+  clip.end = video.back()->pts;
+  for (int s = 0; s < kStreamCount; ++s) {
+    if (!formats_[s]) continue;
+    clip.formats[s] = formats_[s];
+    for (const auto& p : streams_[s]) {
+      if (p->pts >= clip.start) clip.packets.push_back(p);
+    }
+  }
+  std::ranges::stable_sort(clip.packets, {}, [](const PacketPtr& p) { return p->pts; });
+  tap_ = std::move(tap);
+  return clip;
+}
+
+void ReplayBuffer::StopTap() {
+  std::lock_guard lock(mutex_);
+  tap_ = nullptr;
 }
 
 size_t ReplayBuffer::Bytes() const {
