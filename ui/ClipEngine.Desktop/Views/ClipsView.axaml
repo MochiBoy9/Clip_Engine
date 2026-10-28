@@ -88,10 +88,10 @@
         <ItemsControl ItemsSource="{Binding Main.Matches}" Margin="0,0,12,24">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:MatchViewModel">
-              <Border Classes="card" Padding="16" Margin="0,0,0,12">
+              <views:Plate Classes="card" Padding="16" Margin="0,0,0,12">
                 <StackPanel Spacing="14">
                   <Grid ColumnDefinitions="Auto,*,Auto">
-                    <Border Width="44" Height="44" CornerRadius="10" Background="{Binding Gradient}" VerticalAlignment="Center">
+                    <Border Width="44" Height="44" CornerRadius="2" Background="{Binding Gradient}" VerticalAlignment="Center">
                       <TextBlock Text="{Binding Initials}" FontSize="16" FontWeight="Black" Foreground="#E6FFFFFF"
                                  HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
@@ -114,7 +114,7 @@
                       <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:MatchStat">
                           <StackPanel Spacing="1" MinWidth="44">
-                            <TextBlock Text="{Binding Value}" FontSize="22" FontWeight="Bold" FontFeatures="tnum"
+                            <TextBlock Classes="mono" Text="{Binding Value}" FontSize="22" FontWeight="Bold"
                                        HorizontalAlignment="Center" />
                             <StackPanel Orientation="Horizontal" Spacing="5" HorizontalAlignment="Center">
                               <Ellipse Width="6" Height="6" Fill="{Binding Brush}" VerticalAlignment="Center" />
@@ -138,22 +138,22 @@
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
                 </StackPanel>
-              </Border>
+              </views:Plate>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
       </ScrollViewer>
 
-      <Border Classes="card" Padding="40" VerticalAlignment="Top" IsVisible="{Binding !Main.HasFilteredClips}">
+      <views:Plate Classes="card" Padding="40" VerticalAlignment="Top" IsVisible="{Binding !Main.HasFilteredClips}">
         <StackPanel Spacing="10" HorizontalAlignment="Center">
-          <Border Classes="tile" Width="48" Height="48" CornerRadius="12" HorizontalAlignment="Center">
+          <Border Classes="tile" Width="48" Height="48" HorizontalAlignment="Center">
             <PathIcon Data="{StaticResource IconClips}" Width="22" Height="22" />
           </Border>
           <TextBlock Classes="h2" Text="Nothing here yet" HorizontalAlignment="Center" />
           <TextBlock Classes="body" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="420"
                      Text="Clips you save while playing show up here, grouped by game." />
         </StackPanel>
-      </Border>
+      </views:Plate>
     </Panel>
   </DockPanel>
 </UserControl>

@@ -3,7 +3,7 @@ using Avalonia.Media;
 
 namespace ClipEngine.Desktop.Services;
 
-// Accent colours. Volt is everyone's; the rest are a thank-you for supporters.
+// Accent colours. Hazard amber is everyone's; the rest are a thank-you for supporters.
 internal sealed record AccentTheme(string Id, string Name, Color Accent)
 {
     public bool IsDefault => Id == AccentThemes.Default.Id;
@@ -11,17 +11,17 @@ internal sealed record AccentTheme(string Id, string Name, Color Accent)
 
 internal static class AccentThemes
 {
-    public static readonly AccentTheme Default = new("volt", "Volt", Color.Parse("#C5F135"));
+    public static readonly AccentTheme Default = new("hazard", "Hazard", Color.Parse("#FFC21A"));
 
     public static IReadOnlyList<AccentTheme> All { get; } =
     [
         Default,
-        new("aurora", "Aurora", Color.Parse("#8F7CFF")),
-        new("ember", "Ember", Color.Parse("#FF7A45")),
-        new("mint", "Mint", Color.Parse("#3DDCB0")),
-        new("sakura", "Sakura", Color.Parse("#FF7EB6")),
-        new("ocean", "Ocean", Color.Parse("#3FB4FF")),
-        new("gold", "Gold", Color.Parse("#F5B83D")),
+        new("aurora", "Aurora", Color.Parse("#9B87FF")),
+        new("ember", "Ember", Color.Parse("#FF6A3D")),
+        new("mint", "Mint", Color.Parse("#2FD6A8")),
+        new("sakura", "Sakura", Color.Parse("#FF6FAE")),
+        new("ocean", "Ocean", Color.Parse("#3AA8FF")),
+        new("volt", "Volt", Color.Parse("#C5F135")),
     ];
 
     public static AccentTheme Find(string? id) => All.FirstOrDefault(t => t.Id == id) ?? Default;
@@ -42,6 +42,7 @@ internal static class AccentThemes
         app.Resources["AccentHoverBrush"] = new SolidColorBrush(Mix(accent, Colors.White, 0.18));
         app.Resources["AccentPressedBrush"] = new SolidColorBrush(Mix(accent, Colors.Black, 0.12));
         app.Resources["AccentSoftBrush"] = new SolidColorBrush(WithAlpha(accent, 0x1F));
+        app.Resources["AccentStripeBrush"] = new SolidColorBrush(WithAlpha(accent, 0x2E));
         app.Resources["AccentForegroundBrush"] = new SolidColorBrush(foreground);
         app.Resources["ToggleSwitchKnobFillOn"] = new SolidColorBrush(foreground);
         app.Resources["ToggleSwitchKnobFillOnPointerOver"] = new SolidColorBrush(foreground);
@@ -55,10 +56,10 @@ internal static class AccentThemes
         }
     }
 
-    // Text on the accent: near-black on light accents like Volt, white on darker ones, whichever reads better.
+    // Text on the accent: near-black on light accents like Hazard, white on darker ones, whichever reads better.
     internal static Color Foreground(Color accent)
     {
-        var dark = Color.Parse("#0C0D10");
+        var dark = Color.Parse("#0B0C0E");
         var l = Luminance(accent);
         var onDark = (l + 0.05) / (Luminance(dark) + 0.05);
         var onWhite = 1.05 / (l + 0.05);

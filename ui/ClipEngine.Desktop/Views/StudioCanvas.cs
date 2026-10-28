@@ -29,7 +29,7 @@ internal sealed class StudioCanvas : Control
     private const double CornerSize = 8;
     private const double MinBox = 0.01;
 
-    private static readonly IBrush EmptyBrush = new SolidColorBrush(Color.Parse("#0C0D10"));
+    private static readonly IBrush EmptyBrush = new SolidColorBrush(Color.Parse("#0B0C0E"));
     private static readonly IBrush ShadeBrush = new SolidColorBrush(Color.Parse("#66000000"));
     private static readonly IBrush LabelText = Brushes.White;
     private static readonly Typeface LabelFace = new("Inter", FontStyle.Normal, FontWeight.SemiBold);

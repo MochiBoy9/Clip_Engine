@@ -8,20 +8,23 @@
     <StackPanel Margin="0,0,0,24" Spacing="14">
 
       <!-- What the engine is doing right now, and saving a clip -->
-      <Border Classes="card" Padding="24,22">
+      <views:Plate Classes="card lead" Padding="26,22,24,22">
+        <Panel>
+        <views:Stripes Width="150" Height="9" Spacing="9" Fill="{DynamicResource AccentStripeBrush}"
+                       HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-21,-23,0" />
         <Grid ColumnDefinitions="*,Auto">
           <StackPanel Spacing="8" VerticalAlignment="Center">
             <Border Classes="pill" HorizontalAlignment="Left" Padding="9,3">
               <StackPanel Orientation="Horizontal" Spacing="7">
                 <Ellipse Classes="liveDot" Classes.pulsing="{Binding Main.IsRecording}" Fill="{Binding Main.StatusBrush}"
                          VerticalAlignment="Center" />
-                <TextBlock Text="{Binding Main.StatusEyebrow}" FontSize="10" FontWeight="Bold" LetterSpacing="1"
+                <TextBlock Text="{Binding Main.StatusEyebrow}" FontSize="11" FontWeight="Bold" LetterSpacing="1.4"
                            Foreground="{StaticResource TextSecondary}" />
               </StackPanel>
             </Border>
             <TextBlock Classes="display" Text="{Binding Main.StatusTitle}" TextTrimming="CharacterEllipsis" Margin="0,4,0,0" />
-            <TextBlock Classes="body" Text="{Binding Main.StatusDetail}" TextWrapping="Wrap" MaxWidth="560"
-                       HorizontalAlignment="Left" FontFeatures="tnum" />
+            <TextBlock Classes="body mono" Text="{Binding Main.StatusDetail}" TextWrapping="Wrap" MaxWidth="600"
+                       HorizontalAlignment="Left" FontSize="13" />
             <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0"
                         IsVisible="{Binding Main.HasEngineProblem}">
               <Button Classes="secondary" Content="Restart engine" Command="{Binding Main.RestartEngineCommand}" />
@@ -32,65 +35,66 @@
           <!-- Recording controls. Room for more next to Save clip, like starting a long recording. -->
           <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="8" Margin="24,0,0,0">
             <StackPanel Name="RecordingControls" Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
-              <Button Classes="accent" Command="{Binding Main.SaveClipCommand}" Height="48" Padding="22,0"
+              <Button Classes="accent" Command="{Binding Main.SaveClipCommand}" Height="54" Padding="26,0"
                       VerticalContentAlignment="Center">
                 <StackPanel Orientation="Horizontal" Spacing="10">
-                  <PathIcon Data="{StaticResource IconBolt}" Width="16" Height="16" />
-                  <TextBlock Text="Save clip" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" />
+                  <PathIcon Data="{StaticResource IconBolt}" Width="20" Height="20" />
+                  <TextBlock Text="SAVE CLIP" FontSize="16" FontWeight="Bold" LetterSpacing="1.2" VerticalAlignment="Center" />
                 </StackPanel>
               </Button>
             </StackPanel>
             <TextBlock Text="{Binding Main.SaveHint}" Classes="caption" HorizontalAlignment="Right" />
           </StackPanel>
         </Grid>
-      </Border>
+        </Panel>
+      </views:Plate>
 
       <!-- Numbers at a glance -->
       <UniformGrid Columns="4">
-        <Border Classes="card" Padding="16" Margin="0,0,9,0">
+        <views:Plate Classes="card" Padding="16" Margin="0,0,9,0">
           <Grid ColumnDefinitions="Auto,*">
             <Border Classes="tile" VerticalAlignment="Center"><PathIcon Data="{StaticResource IconClock}" /></Border>
             <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
-              <TextBlock Classes="stat" FontSize="20" Text="{Binding Main.BufferText}" />
+              <TextBlock Classes="stat" FontSize="22" Text="{Binding Main.BufferText}" />
               <TextBlock Classes="caption" Text="Replay buffer" TextTrimming="CharacterEllipsis" />
             </StackPanel>
           </Grid>
-        </Border>
-        <Border Classes="card" Padding="16" Margin="3,0,6,0">
+        </views:Plate>
+        <views:Plate Classes="card" Padding="16" Margin="3,0,6,0">
           <Grid ColumnDefinitions="Auto,*">
             <Border Classes="tile" VerticalAlignment="Center"><PathIcon Data="{StaticResource IconClips}" /></Border>
             <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
-              <TextBlock Classes="stat" FontSize="20" Text="{Binding Main.ClipsToday}" />
+              <TextBlock Classes="stat" FontSize="22" Text="{Binding Main.ClipsToday}" />
               <TextBlock Classes="caption" Text="Clips today" TextTrimming="CharacterEllipsis" />
             </StackPanel>
           </Grid>
-        </Border>
-        <Border Classes="card" Padding="16" Margin="6,0,3,0">
+        </views:Plate>
+        <views:Plate Classes="card" Padding="16" Margin="6,0,3,0">
           <Grid ColumnDefinitions="Auto,*">
             <Border Classes="tile" VerticalAlignment="Center"><PathIcon Data="{StaticResource IconDrive}" /></Border>
             <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
-              <TextBlock Classes="stat" FontSize="20" Text="{Binding Main.LibrarySize}" />
+              <TextBlock Classes="stat" FontSize="22" Text="{Binding Main.LibrarySize}" />
               <TextBlock Classes="caption" Text="Clip library" TextTrimming="CharacterEllipsis" />
             </StackPanel>
           </Grid>
-        </Border>
-        <Border Classes="card" Padding="16" Margin="9,0,0,0">
+        </views:Plate>
+        <views:Plate Classes="card" Padding="16" Margin="9,0,0,0">
           <Grid ColumnDefinitions="Auto,*">
             <Border Classes="tile" VerticalAlignment="Center"><PathIcon Data="{StaticResource IconGames}" /></Border>
             <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
-              <TextBlock Classes="stat" FontSize="20" Text="{Binding Main.GamesSupported}" />
+              <TextBlock Classes="stat" FontSize="22" Text="{Binding Main.GamesSupported}" />
               <TextBlock Classes="caption" Text="Games detected automatically" TextTrimming="CharacterEllipsis" />
             </StackPanel>
           </Grid>
-        </Border>
+        </views:Plate>
       </UniformGrid>
 
       <Grid ColumnDefinitions="1.7*,14,*">
         <!-- Recent clips -->
-        <Border Classes="card" Padding="18">
+        <views:Plate Classes="card" Padding="18">
           <StackPanel Spacing="14">
             <Grid ColumnDefinitions="*,Auto">
-              <TextBlock Classes="h2" Text="Recent clips" VerticalAlignment="Center" />
+              <TextBlock Classes="eyebrow" Text="RECENT CLIPS" VerticalAlignment="Center" />
               <Button Grid.Column="1" Classes="secondary" Padding="12,5" FontSize="13" Content="View all"
                       Command="{Binding Main.GoToCommand}" CommandParameter="{x:Static vm:Page.Clips}" />
             </Grid>
@@ -111,12 +115,12 @@
               </StackPanel>
             </Border>
           </StackPanel>
-        </Border>
+        </views:Plate>
 
         <!-- Activity -->
-        <Border Grid.Column="2" Classes="card" Padding="18">
+        <views:Plate Grid.Column="2" Classes="card" Padding="18">
           <StackPanel Spacing="14">
-            <TextBlock Classes="h2" Text="Activity" />
+            <TextBlock Classes="eyebrow" Text="ACTIVITY" />
             <ScrollViewer MaxHeight="440">
             <ItemsControl ItemsSource="{Binding Main.Activity}">
               <ItemsControl.ItemTemplate>
@@ -149,7 +153,7 @@
             </ItemsControl>
             </ScrollViewer>
           </StackPanel>
-        </Border>
+        </views:Plate>
       </Grid>
     </StackPanel>
   </ScrollViewer>

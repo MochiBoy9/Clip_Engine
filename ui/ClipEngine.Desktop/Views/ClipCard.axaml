@@ -4,9 +4,9 @@
              xmlns:views="using:ClipEngine.Desktop.Views"
              x:Class="ClipEngine.Desktop.Views.ClipCard"
              x:DataType="vm:ClipItemViewModel">
-  <Border Classes="clipCard" Padding="6" VerticalAlignment="Top">
+  <views:Plate Classes="clipCard" Padding="6" VerticalAlignment="Top">
     <StackPanel Spacing="9">
-      <Border Name="Thumb" CornerRadius="8" ClipToBounds="True" Height="{Binding $parent[views:ClipCard].ThumbnailHeight}"
+      <Border Name="Thumb" CornerRadius="0" ClipToBounds="True" Height="{Binding $parent[views:ClipCard].ThumbnailHeight}"
               Background="{Binding Placeholder}">
         <Panel>
           <!-- Without a thumbnail yet, show the game's initials on its gradient -->
@@ -33,7 +33,7 @@
           <Border Classes="pill onMedia" HorizontalAlignment="Left"
                   VerticalAlignment="Bottom" Margin="8" Padding="6,3" IsVisible="{Binding IsFavorite}"
                   ToolTip.Tip="Favorite: never cleaned up">
-            <PathIcon Data="{StaticResource IconStar}" Width="11" Height="11" Foreground="#FFB547" />
+            <PathIcon Data="{StaticResource IconStar}" Width="11" Height="11" Foreground="{DynamicResource AccentBrush}" />
           </Border>
 
           <Panel Classes="hoverActions">
@@ -48,7 +48,7 @@
                       ToolTip.Tip="{Binding FavoriteTip}">
                 <Panel>
                   <PathIcon Data="{StaticResource IconStarOutline}" Width="13" Height="13" IsVisible="{Binding !IsFavorite}" />
-                  <PathIcon Data="{StaticResource IconStar}" Width="13" Height="13" Foreground="#FFB547"
+                  <PathIcon Data="{StaticResource IconStar}" Width="13" Height="13" Foreground="{DynamicResource AccentBrush}"
                             IsVisible="{Binding IsFavorite}" />
                 </Panel>
               </Button>
@@ -76,5 +76,5 @@
         <TextBlock Text="{Binding Caption}" Classes="caption" TextTrimming="CharacterEllipsis" />
       </StackPanel>
     </StackPanel>
-  </Border>
+  </views:Plate>
 </UserControl>

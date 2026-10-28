@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:views="using:ClipEngine.Desktop.Views"
              xmlns:vm="using:ClipEngine.Desktop.ViewModels"
              x:Class="ClipEngine.Desktop.Views.GamesView"
              x:DataType="vm:GamesPage">
@@ -11,9 +12,9 @@
       </StackPanel>
 
       <!-- Killfeed games need the player's name to tell their kills from everyone else's. -->
-      <Border x:Name="NameCard" x:DataType="vm:PlayerNamesViewModel" Classes="card" Padding="20" Margin="0,0,12,0">
+      <views:Plate x:Name="NameCard" x:DataType="vm:PlayerNamesViewModel" Classes="card" Padding="20" Margin="0,0,12,0">
         <Grid ColumnDefinitions="Auto,*">
-          <Border Classes="tile" Width="40" Height="40" CornerRadius="10" VerticalAlignment="Top" Margin="0,0,16,0">
+          <Border Classes="tile" Width="40" Height="40" VerticalAlignment="Top" Margin="0,0,16,0">
             <PathIcon Data="{StaticResource IconSparkle}" Width="18" Height="18" />
           </Border>
           <StackPanel Grid.Column="1" Spacing="6">
@@ -27,7 +28,7 @@
             <TextBlock Classes="caption" Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextWrapping="Wrap" />
           </StackPanel>
         </Grid>
-      </Border>
+      </views:Plate>
 
       <ItemsControl ItemsSource="{Binding Main.Games}">
         <ItemsControl.ItemsPanel>
@@ -35,10 +36,10 @@
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:GameItemViewModel">
-            <Border Classes="card" Padding="18" Margin="0,0,12,12">
+            <views:Plate Classes="card" Padding="18" Margin="0,0,12,12">
               <StackPanel Spacing="14">
                 <Grid ColumnDefinitions="Auto,*,Auto">
-                  <Border Width="48" Height="48" CornerRadius="10" Background="{Binding Gradient}">
+                  <Border Width="48" Height="48" CornerRadius="2" Background="{Binding Gradient}">
                     <TextBlock Text="{Binding Initials}" FontSize="17" FontWeight="Black" Foreground="White"
                                HorizontalAlignment="Center" VerticalAlignment="Center" />
                   </Border>
@@ -61,14 +62,14 @@
                              Foreground="{StaticResource TextSecondary}" />
                 </Grid>
               </StackPanel>
-            </Border>
+            </views:Plate>
           </DataTemplate>
         </ItemsControl.ItemTemplate>
       </ItemsControl>
 
-      <Border Classes="card" Padding="20" Margin="0,0,12,0">
+      <views:Plate Classes="card" Padding="20" Margin="0,0,12,0">
         <Grid ColumnDefinitions="Auto,*,Auto">
-          <Border Classes="tile" Width="40" Height="40" CornerRadius="10" VerticalAlignment="Top" Margin="0,0,16,0">
+          <Border Classes="tile" Width="40" Height="40" VerticalAlignment="Top" Margin="0,0,16,0">
             <PathIcon Data="{StaticResource IconScan}" Width="18" Height="18" />
           </Border>
           <StackPanel Grid.Column="1" Spacing="6" Margin="0,0,18,0">
@@ -86,7 +87,7 @@
             </Button>
           </StackPanel>
         </Grid>
-      </Border>
+      </views:Plate>
     </StackPanel>
   </ScrollViewer>
 </UserControl>

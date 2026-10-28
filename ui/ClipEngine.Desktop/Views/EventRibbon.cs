@@ -13,7 +13,7 @@ internal sealed class EventRibbon : Control
         AvaloniaProperty.Register<EventRibbon, IReadOnlyList<RibbonTick>?>(nameof(Ticks));
 
     private const double TickWidth = 3;
-    private static readonly IBrush TrackBrush = new SolidColorBrush(Color.Parse("#2A2D35"));
+    private static readonly IBrush TrackBrush = new SolidColorBrush(Color.Parse("#2C2E35"));
 
     static EventRibbon() => AffectsRender<EventRibbon>(TicksProperty);
 
@@ -34,7 +34,7 @@ internal sealed class EventRibbon : Control
         foreach (var tick in Ticks)
         {
             var x = (width - TickWidth) * Math.Clamp(tick.Fraction, 0, 1);
-            context.DrawRectangle(tick.Brush, null, new Rect(x, 0, TickWidth, height), TickWidth / 2, TickWidth / 2);
+            context.DrawRectangle(tick.Brush, null, new Rect(x, 0, TickWidth, height));
         }
     }
 }

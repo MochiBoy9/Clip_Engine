@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:ClipEngine.Desktop.ViewModels"
+        xmlns:views="using:ClipEngine.Desktop.Views"
         x:Class="ClipEngine.Desktop.Views.SidePanelWindow"
         x:DataType="vm:MainViewModel"
         Title="Clip Engine side panel"
@@ -14,17 +15,17 @@
         Background="Transparent"
         TransparencyLevelHint="Transparent, None">
   <!-- A slim panel that sits on the edge of the screen above the game, toggled by its hotkey. -->
-  <Border Name="Card" Margin="12" CornerRadius="14" BorderThickness="1" BorderBrush="{StaticResource BorderStrongBrush}"
-          Background="{StaticResource OverlayBrush}" BoxShadow="{StaticResource FloatShadow}" ClipToBounds="True">
+  <views:Plate Name="Card" Margin="12" Cut="16" BorderBrush="{StaticResource BorderStrongBrush}"
+               Background="{StaticResource OverlayBrush}" Marker="{DynamicResource AccentBrush}">
     <DockPanel Margin="16,16,16,14">
       <!-- Header -->
       <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="2,0,0,16">
-        <Border Width="30" Height="30" CornerRadius="8" Background="{DynamicResource AccentBrush}">
-          <PathIcon Data="{StaticResource IconPlay}" Width="13" Height="13" Foreground="{DynamicResource AccentForegroundBrush}"
+        <views:Plate Width="32" Height="32" Cut="7" Background="{DynamicResource AccentBrush}">
+          <PathIcon Data="{StaticResource IconPlay}" Width="17" Height="17" Foreground="{DynamicResource AccentForegroundBrush}"
                     Margin="2,0,0,0" />
-        </Border>
+        </views:Plate>
         <StackPanel Grid.Column="1" Margin="10,0" VerticalAlignment="Center">
-          <TextBlock Text="Clip Engine" FontWeight="Bold" FontSize="15" />
+          <TextBlock Text="CLIP ENGINE" FontFamily="{StaticResource DisplayFont}" FontWeight="Bold" FontSize="14" LetterSpacing="1.4" />
           <TextBlock Classes="caption" Text="{Binding SidePanelHotkey, StringFormat='{}{0} hides this panel'}" />
         </StackPanel>
         <Button Grid.Column="2" Classes="icon" Width="30" Height="30" CornerRadius="7" Command="{Binding ToggleSidePanelCommand}"
@@ -50,7 +51,7 @@
                 Command="{Binding SaveClipCommand}">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <PathIcon Data="{StaticResource IconBolt}" Width="14" Height="14" />
-            <TextBlock Text="Save clip" VerticalAlignment="Center" />
+            <TextBlock Text="SAVE CLIP" LetterSpacing="1" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
         <TextBlock Classes="caption" Text="{Binding SaveHint}" HorizontalAlignment="Center" />
@@ -84,7 +85,7 @@
                 <Button Classes="marker" Command="{Binding OpenCommand}" HorizontalAlignment="Stretch"
                         HorizontalContentAlignment="Stretch" Padding="6" Margin="0,0,0,4">
                   <Grid ColumnDefinitions="Auto,*">
-                    <Border Width="104" Height="58" CornerRadius="6" ClipToBounds="True" Background="{Binding Placeholder}">
+                    <Border Width="104" Height="58" CornerRadius="0" ClipToBounds="True" Background="{Binding Placeholder}">
                       <Panel>
                         <TextBlock Text="{Binding Initials}" IsVisible="{Binding !HasThumbnail}" FontSize="18" FontWeight="Black"
                                    Foreground="#59FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -109,5 +110,5 @@
         </StackPanel>
       </ScrollViewer>
     </DockPanel>
-  </Border>
+  </views:Plate>
 </Window>

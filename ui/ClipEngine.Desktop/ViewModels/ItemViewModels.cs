@@ -147,12 +147,12 @@ internal static class EventKinds
     };
 
     // One shared brush per kind: the same few are drawn thousands of times across the library.
-    private static readonly IBrush Kill = new ImmutableSolidColorBrush(Color.Parse("#FF4D6A"));
-    private static readonly IBrush Assist = new ImmutableSolidColorBrush(Color.Parse("#3FB4FF"));
-    private static readonly IBrush Death = new ImmutableSolidColorBrush(Color.Parse("#7D8394"));
-    private static readonly IBrush Revive = new ImmutableSolidColorBrush(Color.Parse("#3DDC97"));
-    private static readonly IBrush Match = new ImmutableSolidColorBrush(Color.Parse("#FFB547"));
-    private static readonly IBrush Other = new ImmutableSolidColorBrush(Color.Parse("#A98BFF"));
+    private static readonly IBrush Kill = new ImmutableSolidColorBrush(Color.Parse("#FF3D52"));
+    private static readonly IBrush Assist = new ImmutableSolidColorBrush(Color.Parse("#3AB8FF"));
+    private static readonly IBrush Death = new ImmutableSolidColorBrush(Color.Parse("#7F8088"));
+    private static readonly IBrush Revive = new ImmutableSolidColorBrush(Color.Parse("#34D17D"));
+    private static readonly IBrush Match = new ImmutableSolidColorBrush(Color.Parse("#FF8A2B"));
+    private static readonly IBrush Other = new ImmutableSolidColorBrush(Color.Parse("#B48CFF"));
 
     public static IBrush Brush(string type) => type switch
     {

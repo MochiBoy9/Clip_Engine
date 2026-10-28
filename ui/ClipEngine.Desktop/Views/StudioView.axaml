@@ -35,7 +35,7 @@
     </Grid>
 
     <!-- Adding a game: its name and the program it runs as -->
-    <Border DockPanel.Dock="Top" Classes="card" Padding="18" Margin="0,0,0,14" IsVisible="{Binding IsAddingGame}">
+    <views:Plate DockPanel.Dock="Top" Classes="card" Padding="18" Margin="0,0,0,14" IsVisible="{Binding IsAddingGame}">
       <StackPanel Spacing="12">
         <StackPanel Spacing="2">
           <TextBlock Classes="h2" Text="Add a game" />
@@ -62,7 +62,7 @@
           </StackPanel>
         </Grid>
       </StackPanel>
-    </Border>
+    </views:Plate>
 
     <!-- What went wrong, or what just happened -->
     <Border DockPanel.Dock="Top" Classes="inset" Padding="14,9" Margin="0,0,0,14"
@@ -77,7 +77,7 @@
     </Border>
 
     <!-- The rules, and the picked one's settings -->
-    <Border DockPanel.Dock="Right" Classes="card" Width="340" Margin="12,0,0,0" Padding="16">
+    <views:Plate DockPanel.Dock="Right" Classes="card" Width="340" Margin="12,0,0,0" Padding="16">
       <DockPanel>
         <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
           <TextBlock Classes="h2" Text="Rules" VerticalAlignment="Center" />
@@ -96,7 +96,7 @@
           <ListBox.ItemTemplate>
             <DataTemplate x:DataType="vm:StudioRuleViewModel">
               <Grid ColumnDefinitions="Auto,*">
-                <Border Width="4" Height="30" CornerRadius="2" Background="{Binding Brush}" Margin="0,0,12,0" />
+                <Border Width="3" Height="30" CornerRadius="0" Background="{Binding Brush}" Margin="0,0,12,0" />
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                   <TextBlock Text="{Binding Label}" FontWeight="SemiBold" FontSize="13" />
                   <TextBlock Text="{Binding Summary}" Classes="caption" TextTrimming="CharacterEllipsis" />
@@ -145,10 +145,10 @@
           </StackPanel>
         </ScrollViewer>
       </DockPanel>
-    </Border>
+    </views:Plate>
 
     <!-- The frame, where to take it from, and the test -->
-    <Border Classes="card" Padding="10">
+    <views:Plate Classes="card" Padding="10">
       <DockPanel>
         <StackPanel DockPanel.Dock="Bottom" Margin="6,12,6,0" Spacing="10">
           <!-- Test result for the picked rule -->
@@ -166,13 +166,13 @@
                            Text="Find a frame where the game shows the moment, then test: you'll see what the engine reads in the box." />
               </StackPanel>
               <Panel Grid.Column="2" VerticalAlignment="Center">
-                <Border Classes="pill" Background="{StaticResource SuccessSoftBrush}" BorderBrush="#803DDC97" IsVisible="{Binding IsMatch}">
+                <Border Classes="pill" Background="{StaticResource SuccessSoftBrush}" BorderBrush="#8034D17D" IsVisible="{Binding IsMatch}">
                   <StackPanel Orientation="Horizontal" Spacing="6">
                     <PathIcon Data="{StaticResource IconCheck}" Width="11" Height="11" Foreground="{StaticResource SuccessBrush}" />
                     <TextBlock Text="Match" FontSize="12" FontWeight="Bold" />
                   </StackPanel>
                 </Border>
-                <Border Classes="pill" Background="{StaticResource WarnSoftBrush}" BorderBrush="#80FFB547" IsVisible="{Binding IsNoMatch}">
+                <Border Classes="pill" Background="{StaticResource WarnSoftBrush}" BorderBrush="#80FF8A2B" IsVisible="{Binding IsNoMatch}">
                   <TextBlock Text="No match" FontSize="12" FontWeight="Bold" />
                 </Border>
               </Panel>
@@ -225,7 +225,7 @@
           </ItemsControl>
         </StackPanel>
 
-        <Border Background="Black" CornerRadius="8" ClipToBounds="True">
+        <Border Background="Black" CornerRadius="0" ClipToBounds="True">
           <Panel>
             <views:StudioCanvas Frame="{Binding Frame}" Rules="{Binding Rules}" SelectedRule="{Binding SelectedRule}"
                                 RegionsVersion="{Binding RegionsVersion}" Margin="8" />
@@ -242,6 +242,6 @@
           </Panel>
         </Border>
       </DockPanel>
-    </Border>
+    </views:Plate>
   </DockPanel>
 </UserControl>

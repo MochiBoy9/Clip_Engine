@@ -6,8 +6,8 @@
   <Application.Styles>
     <FluentTheme>
       <FluentTheme.Palettes>
-        <ColorPaletteResources x:Key="Dark" Accent="#C5F135" AltHigh="#0C0D10" RegionColor="#101115"
-                               ChromeMediumLow="#1D2027" BaseHigh="#EDEEF1" />
+        <ColorPaletteResources x:Key="Dark" Accent="#FFC21A" AltHigh="#0B0C0E" RegionColor="#08090A"
+                               ChromeMediumLow="#1C1E23" BaseHigh="#EEECE6" />
       </FluentTheme.Palettes>
     </FluentTheme>
     <StyleInclude Source="avares://ClipEngine/Theme/Theme.axaml" />

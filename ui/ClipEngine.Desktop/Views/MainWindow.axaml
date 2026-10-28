@@ -23,63 +23,46 @@
   </Window.DataTemplates>
 
   <Panel Name="Root">
-    <Grid ColumnDefinitions="232,*">
-      <!-- Sidebar -->
-      <Border Background="{StaticResource SidebarBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
-        <DockPanel Margin="12,14,12,12">
-          <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="6,0,0,26"
-                      IsHitTestVisible="False">
-            <Border Width="30" Height="30" CornerRadius="8" Background="{DynamicResource AccentBrush}">
-              <PathIcon Data="{StaticResource IconPlay}" Width="13" Height="13" Margin="2,0,0,0"
+    <Grid ColumnDefinitions="76,*">
+      <!-- The navigation rail -->
+      <Border Background="{StaticResource RailBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,14,0,22" HorizontalAlignment="Center" IsHitTestVisible="False">
+            <views:Plate Width="40" Height="40" Cut="9" Background="{DynamicResource AccentBrush}">
+              <PathIcon Data="{StaticResource IconPlay}" Width="20" Height="20" Margin="2,0,0,0"
                         Foreground="{DynamicResource AccentForegroundBrush}" />
-            </Border>
-            <StackPanel VerticalAlignment="Center" Spacing="1">
-              <TextBlock Text="Clip Engine" FontSize="15" FontWeight="Bold" LetterSpacing="-0.2" />
-              <StackPanel Orientation="Horizontal" Spacing="6">
-                <TextBlock Text="{Binding Version}" Classes="caption" FontSize="11" VerticalAlignment="Center" />
-                <Border Classes="pill accent" Padding="6,0" IsVisible="{Binding Supporter.IsSupporter}"
-                        ToolTip.Tip="Thanks for supporting Clip Engine">
-                  <TextBlock Text="SUPPORTER" FontSize="9" FontWeight="Bold" LetterSpacing="0.6" />
-                </Border>
-              </StackPanel>
-            </StackPanel>
+            </views:Plate>
+            <views:Stripes Width="40" Height="5" Spacing="6" Fill="{DynamicResource AccentBrush}" Opacity="0.55" />
           </StackPanel>
 
-          <!-- Engine status, always visible -->
-          <Border DockPanel.Dock="Bottom" Classes="inset" Padding="12,10">
-            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
-              <Panel Width="8" Height="8" VerticalAlignment="Center" Margin="0,0,10,0">
+          <!-- Engine status and the side panel, always in reach -->
+          <StackPanel DockPanel.Dock="Bottom" Spacing="12" Margin="0,0,0,14" HorizontalAlignment="Center">
+            <Button Classes="icon" Width="40" Height="40" Command="{Binding ToggleSidePanelCommand}"
+                    ToolTip.Tip="{Binding SidePanelHotkey, StringFormat='Side panel over your game ({0})'}">
+              <PathIcon Data="{StaticResource IconPanel}" />
+            </Button>
+            <StackPanel Spacing="5" HorizontalAlignment="Center" ToolTip.Tip="{Binding SaveHint}" Background="Transparent">
+              <Panel Width="8" Height="8" HorizontalAlignment="Center">
                 <Ellipse Fill="{Binding StatusBrush}" Classes="liveDot" Classes.pulsing="{Binding IsRecording}" />
               </Panel>
-              <TextBlock Grid.Column="1" Text="{Binding SidebarStatus}" FontWeight="SemiBold" FontSize="13" />
-              <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SaveHint}" Classes="caption" Margin="0,2,0,0"
-                         TextTrimming="CharacterEllipsis" />
-            </Grid>
-          </Border>
-
-          <!-- The slim panel that docks over the game -->
-          <Button DockPanel.Dock="Bottom" Classes="marker" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
-                  Margin="0,0,0,8" Padding="12,9" Command="{Binding ToggleSidePanelCommand}"
-                  ToolTip.Tip="A slim panel on the edge of the screen, over your game">
-            <Grid ColumnDefinitions="Auto,*,Auto">
-              <PathIcon Data="{StaticResource IconPanel}" Width="15" Height="15" Margin="0,0,12,0"
-                        Foreground="{StaticResource TextSecondary}" />
-              <TextBlock Grid.Column="1" Text="Side panel" VerticalAlignment="Center" FontSize="13"
-                         Foreground="{StaticResource TextSecondary}" />
-              <Border Grid.Column="2" Classes="kbd" VerticalAlignment="Center">
-                <TextBlock Text="{Binding SidePanelHotkey}" />
-              </Border>
-            </Grid>
-          </Button>
+              <TextBlock Text="{Binding SidebarStatus}" FontFamily="{StaticResource DisplayFont}" FontSize="10"
+                         FontWeight="SemiBold" Foreground="{StaticResource TextSecondary}" HorizontalAlignment="Center"
+                         TextTrimming="CharacterEllipsis" MaxWidth="68" />
+            </StackPanel>
+          </StackPanel>
 
           <ListBox Classes="nav" ItemsSource="{Binding Nav}" SelectedItem="{Binding SelectedNav}">
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="vm:NavItem">
-                <Grid ColumnDefinitions="3,Auto,*" Height="38">
-                  <Border Classes="navBar" Width="3" Height="18" CornerRadius="0,2,2,0" VerticalAlignment="Center" />
-                  <PathIcon Grid.Column="1" Classes="navIcon" Data="{Binding Icon}" Width="16" Height="16" Margin="11,0,12,0" />
-                  <TextBlock Grid.Column="2" Text="{Binding Title}" VerticalAlignment="Center" FontSize="14" FontWeight="Medium"
-                             Foreground="{Binding $parent[ListBoxItem].Foreground}" />
+                <Grid ColumnDefinitions="3,*" Height="58">
+                  <Border Classes="navBar" />
+                  <StackPanel Grid.Column="1" Spacing="4" HorizontalAlignment="Center" VerticalAlignment="Center"
+                              Margin="0,0,3,0">
+                    <PathIcon Classes="navIcon" Data="{Binding Icon}" Width="21" Height="21" />
+                    <TextBlock Text="{Binding Title}" FontFamily="{StaticResource DisplayFont}" FontSize="11"
+                               FontWeight="SemiBold" HorizontalAlignment="Center"
+                               Foreground="{Binding $parent[ListBoxItem].Foreground}" />
+                  </StackPanel>
                 </Grid>
               </DataTemplate>
             </ListBox.ItemTemplate>
@@ -87,17 +70,45 @@
         </DockPanel>
       </Border>
 
-      <TransitioningContentControl Grid.Column="1" Content="{Binding CurrentPage}" Margin="28,40,28,0">
-        <TransitioningContentControl.PageTransition>
-          <CrossFade Duration="0:0:0.12" />
-        </TransitioningContentControl.PageTransition>
-      </TransitioningContentControl>
+      <Grid Grid.Column="1" RowDefinitions="40,*">
+        <!-- The title bar: where you are and what the engine is doing. Not clickable, so it drags the window. -->
+        <Grid ColumnDefinitions="*,Auto" Margin="28,0,150,0" IsHitTestVisible="False">
+          <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <TextBlock Text="CLIP ENGINE" FontFamily="{StaticResource DisplayFont}" FontSize="12" FontWeight="Bold"
+                       LetterSpacing="1.8" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
+            <TextBlock Text="//" FontFamily="{StaticResource MonoFont}" FontSize="12" Foreground="{StaticResource TextTertiary}"
+                       VerticalAlignment="Center" />
+            <TextBlock Text="{Binding SelectedNav.Title}" FontFamily="{StaticResource DisplayFont}" FontSize="12"
+                       FontWeight="SemiBold" LetterSpacing="1.2" Foreground="{StaticResource TextSecondary}"
+                       VerticalAlignment="Center" />
+            <TextBlock Text="{Binding Version}" Classes="mono caption" FontSize="11" VerticalAlignment="Center"
+                       Margin="8,0,0,0" />
+            <Border Classes="pill accent" Padding="6,1" VerticalAlignment="Center" IsVisible="{Binding Supporter.IsSupporter}">
+              <TextBlock Text="SUPPORTER" FontSize="9" FontWeight="Bold" LetterSpacing="1" />
+            </Border>
+          </StackPanel>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <Ellipse Fill="{Binding StatusBrush}" Classes="liveDot" Classes.pulsing="{Binding IsRecording}" Width="7" Height="7"
+                     VerticalAlignment="Center" />
+            <TextBlock Text="{Binding StatusTitle}" FontFamily="{StaticResource MonoFont}" FontSize="11" FontWeight="Bold"
+                       Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                       MaxWidth="320" />
+          </StackPanel>
+        </Grid>
+        <Border Height="1" VerticalAlignment="Bottom" Background="{StaticResource Divider}" IsHitTestVisible="False" />
+
+        <TransitioningContentControl Grid.Row="1" Content="{Binding CurrentPage}" Margin="28,22,28,0">
+          <TransitioningContentControl.PageTransition>
+            <CrossFade Duration="0:0:0.1" />
+          </TransitioningContentControl.PageTransition>
+        </TransitioningContentControl>
+      </Grid>
     </Grid>
 
     <!-- Toast -->
-    <Border Classes="card" IsVisible="{Binding HasToast}" HorizontalAlignment="Center" VerticalAlignment="Bottom"
-            Margin="232,0,0,24" Padding="14,10" Background="#F21A1C22" BorderBrush="{StaticResource BorderStrongBrush}"
-            BoxShadow="{StaticResource FloatShadow}">
+    <views:Plate IsVisible="{Binding HasToast}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Cut="8"
+                 Margin="76,0,0,24" Padding="12,9,16,9" Background="{StaticResource OverlayBrush}"
+                 BorderBrush="{DynamicResource AccentBrush}">
       <StackPanel Orientation="Horizontal" Spacing="10">
         <Border Classes="tile small" IsVisible="{Binding !ToastIsError}">
           <PathIcon Data="{StaticResource IconCheck}" />
@@ -105,8 +116,9 @@
         <Border Classes="tile small record" IsVisible="{Binding ToastIsError}">
           <PathIcon Data="{StaticResource IconAlert}" />
         </Border>
-        <TextBlock Text="{Binding Toast}" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="14" />
+        <TextBlock Text="{Binding Toast}" VerticalAlignment="Center" FontFamily="{StaticResource DisplayFont}"
+                   FontWeight="SemiBold" FontSize="14" />
       </StackPanel>
-    </Border>
+    </views:Plate>
   </Panel>
 </Window>

@@ -9,7 +9,7 @@ internal sealed class DesktopSettings
     public bool CloseToTray { get; set; } = true;
 
     // The colour theme, from AccentThemes. Only supporters can pick one other than the default.
-    public string AccentTheme { get; set; } = "volt";
+    public string AccentTheme { get; set; } = "hazard";
 
     // The side panel that docks to the edge of the screen.
     public string SidePanelEdge { get; set; } = "right";
