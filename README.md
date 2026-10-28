@@ -19,6 +19,7 @@ Proprietary software. All rights reserved; see [LICENSE](LICENSE).
 - Trim a clip in the player (drag the handles, or I and O) and save that part as a new clip, instantly and at full quality.
 - Clips grouped by match: each match's result, kills, assists, deaths and revives, every moment on one colored ribbon, and its best clips.
 - Star clips as favorites, and optionally have old clips cleaned up by age or by a size limit. Favorites are always kept.
+- Detection Studio (Games page, or the scan button in the player): add any game, or fix how one is read. Pick a frame from a clip or a screenshot, draw a box where the game shows a kill, type the words it shows, test it on that frame exactly as the engine would read it in game, and save.
 
 ![Home screen](docs/screenshots/1-home.png)
 
@@ -57,6 +58,7 @@ Run `ClipEngine.exe` and launch a supported game. `clip_engine.exe` can also run
 - Clips: `Videos\Clip_Engine\<Game>\`
 - Detection rules: `detection.ini` next to the app. Copy it to `%LOCALAPPDATA%\Clip_Engine\` to tune it; that copy wins. With `detection_debug = true` in the settings, the log shows what the engine reads from each screen region, which is how rules are tuned.
 - `clip_engine.exe --export <clip.mp4> <out.mp4> --max-mb 10` makes a small copy for sharing.
+- `clip_engine.exe --frame <clip.mp4 or image> <out.png> --at 12.5` saves one frame as a PNG, and `clip_engine.exe --read <clip.mp4 or image> --at 12.5 --region 0.65,0.12,0.33,0.05 --words "ELIMINATED|KNOCKED OUT"` reads that box the way detection does and prints the text and how many times the words matched. Detection Studio uses both.
 - `clip_engine.exe --trim <clip.mp4> <out.mp4> --start 4.5 --end 20` copies part of a clip without re-encoding, starting on the keyframe at or before the start (at most a second early).
 - License: `%LOCALAPPDATA%\Clip_Engine\license.json`. Keys are sold and checked through [Polar](https://polar.sh); the organization and benefit ids go in `ui/ClipEngine.Desktop/Services/Licensing.cs`. Until they're filled in, Settings shows paid plans as coming soon.
 

@@ -54,6 +54,10 @@
             <PathIcon Data="{StaticResource IconStar}" Foreground="#FFC24B" IsVisible="{Binding Clip.IsFavorite}" />
           </Panel>
         </Button>
+        <Button Classes="icon" Command="{Binding StudioCommand}"
+                ToolTip.Tip="Teach Clip Engine to spot a moment from this frame (Detection Studio)">
+          <PathIcon Data="{StaticResource IconScan}" />
+        </Button>
         <Button Classes="icon" Command="{Binding ShowCommand}" ToolTip.Tip="Show in folder">
           <PathIcon Data="{StaticResource IconFolder}" />
         </Button>

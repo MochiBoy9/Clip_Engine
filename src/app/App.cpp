@@ -46,9 +46,25 @@ std::string SafeFileName(std::string name) {
 
 }  // namespace
 
+namespace {
+
+std::vector<GameProfile> CustomProfiles(const DetectionRules& rules) {
+  std::vector<GameProfile> profiles;
+  for (const auto& game : rules.games) {
+    GameProfile& profile = profiles.emplace_back();
+    profile.id = game.id;
+    profile.name = game.name;
+    for (const auto& exe : game.executables) profile.executables.push_back(std::wstring(winrt::to_hstring(exe)));
+  }
+  return profiles;
+}
+
+}  // namespace
+
 App::App(Config config, DetectionRules rules)
     : config_(std::move(config)),
       rules_(std::move(rules)),
+      detector_(CustomProfiles(rules_)),
       planner_(int64_t{config_.clipBeforeSeconds} * kHnsPerSecond, int64_t{config_.clipAfterSeconds} * kHnsPerSecond,
                int64_t{config_.bufferSeconds - 5} * kHnsPerSecond) {}
 
@@ -69,7 +85,7 @@ int App::Run() {
   }
 
   std::string supported;
-  for (const auto& game : BuiltInGames()) supported += (supported.empty() ? "" : ", ") + game.name;
+  for (const auto& game : detector_.Games()) supported += (supported.empty() ? "" : ", ") + game.name;
   log::Info("Waiting for a supported game: {}", supported);
 
   const HANDLE events[] = {CreateEventW(nullptr, FALSE, FALSE, kSaveEventName),

@@ -100,6 +100,39 @@ region = 0.9, 0.9, 0.5, 0.5
   CHECK(rules.ForGame("the_finals").empty());
 }
 
+void TestCustomGames() {
+  const auto rules = Parse(R"(
+[game.valorant]
+name = VALORANT
+exe = VALORANT-Win64-Shipping.exe | VALORANT.exe
+
+[valorant.kill]
+region = 0.7, 0.05, 0.3, 0.2
+words = ELIMINATED
+exclude = BY
+
+[game.half]
+name = Missing exe
+
+[game.bad id!]
+name = X
+exe = x.exe
+)");
+  CHECK(rules.games.size() == 1);
+  if (!rules.games.empty()) {
+    CHECK(rules.games[0].id == "valorant");
+    CHECK(rules.games[0].name == "VALORANT");
+    CHECK(rules.games[0].executables.size() == 2);
+    CHECK(rules.games[0].executables.size() == 2 && rules.games[0].executables[0] == "VALORANT-Win64-Shipping.exe");
+  }
+  CHECK(rules.ForGame("valorant").size() == 1);
+  CHECK(rules.warnings.size() == 2);  // the game without an exe, and the bad id
+
+  const auto& kill = rules.rules[0];
+  CHECK(CountMatches(kill, Tokenize("ELIMINATED Jett  ELIMINATED Sage")) == 2);
+  CHECK(CountMatches(kill, Tokenize("ELIMINATED BY Reyna")) == 0);
+}
+
 void TestShippedRulesParse(const char* path) {
   std::ifstream in(path);
   CHECK(in.good());
@@ -260,6 +293,7 @@ int main(int argc, char** argv) {
   TestWordsMatch();
   TestCountPhrase();
   TestParse();
+  TestCustomGames();
   TestTracker();
   TestPlanner();
   TestMetadata();

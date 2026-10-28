@@ -21,6 +21,8 @@ add_executable(clip_engine
   src/core/Log.cpp
   src/detect/DetectionRules.cpp
   src/detect/EventDetector.cpp
+  src/detect/Ocr.cpp
+  src/detect/RuleTester.cpp
   src/detect/TextMatcher.cpp
   src/game/GameDetector.cpp
   src/media/ClipMetadata.cpp
@@ -46,7 +48,7 @@ target_compile_options(clip_engine PRIVATE /W4 /permissive- /utf-8 /EHsc /bigobj
 target_link_libraries(clip_engine PRIVATE
   d3d11 dxgi
   mfplat mfuuid mfreadwrite mf wmcodecdspuuid
-  windowsapp ole32 winmm avrt
+  windowsapp ole32 winmm avrt windowscodecs
 )
 
 # The detection rules ship next to the executable.

@@ -319,6 +319,31 @@
     <Setter Property="BoxShadow" Value="0 6 18 0 #667C5CFF, inset 0 1 0 0 #66FFFFFF" />
   </Style>
 
+  <!-- Detection Studio's rule list -->
+  <Style Selector="ListBox.rules">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+  <Style Selector="ListBox.rules ListBoxItem">
+    <Setter Property="Padding" Value="10,7" />
+    <Setter Property="Margin" Value="0,0,0,4" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="ListBox.rules ListBoxItem /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="ListBox.rules ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#14FFFFFF" />
+  </Style>
+  <Style Selector="ListBox.rules ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#24FFFFFF" />
+    <Setter Property="BorderBrush" Value="#33FFFFFF" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
   <!-- Sidebar navigation -->
   <Style Selector="ListBox.nav">
     <Setter Property="Background" Value="Transparent" />

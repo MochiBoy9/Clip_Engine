@@ -10,6 +10,7 @@ namespace ClipEngine.Desktop.Views;
 public partial class MainWindow : Window, IAppDialogs
 {
     private static readonly FilePickerFileType VideoFiles = new("Video clips") { Patterns = ["*.mp4"] };
+    private static readonly FilePickerFileType ImageFiles = new("Screenshots") { Patterns = ["*.png", "*.jpg", "*.jpeg", "*.bmp"] };
 
     private bool _allowClose;
 
@@ -37,6 +38,16 @@ public partial class MainWindow : Window, IAppDialogs
         {
             Title = "Import a clip",
             FileTypeFilter = [VideoFiles],
+        });
+        return files.Count > 0 ? files[0].TryGetLocalPath() : null;
+    }
+
+    async Task<string?> IAppDialogs.PickImageAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Open a screenshot of the game",
+            FileTypeFilter = [ImageFiles],
         });
         return files.Count > 0 ? files[0].TryGetLocalPath() : null;
     }

@@ -4,6 +4,7 @@
 #include "core/Log.h"
 #include "detect/DetectionRules.h"
 #include "detect/EventDetector.h"
+#include "detect/RuleTester.h"
 #include "media/Exporter.h"
 #include "media/Trimmer.h"
 
@@ -98,10 +99,43 @@ int RunTrimCommand(int argc, wchar_t** argv) {
   return result;
 }
 
+// clip_engine.exe --frame <clip or image> <out.png> [--at seconds]
+// clip_engine.exe --read <clip or image> [--at seconds] --region l,t,w,h [--threshold n] [--words "A|B"] [--exclude "C"]
+// Detection Studio's helpers: grab a frame to draw on, and read a box of it the way detection does.
+int RunStudioCommand(int argc, wchar_t** argv) {
+  using namespace clip;
+  const bool frame = std::wstring_view(argv[1]) == L"--frame";
+  double seconds = 0;
+  DetectionRule rule;
+  rule.name = "studio";
+  for (int i = frame ? 4 : 3; i + 1 < argc; i += 2) {
+    const std::wstring_view flag = argv[i];
+    const std::string value = winrt::to_string(argv[i + 1]);
+    if (flag == L"--at") seconds = _wtof(argv[i + 1]);
+    if (flag == L"--threshold") rule.threshold = std::clamp(_wtoi(argv[i + 1]), 0, 255);
+    if (flag == L"--words") rule.words = ParsePhrases(value);
+    if (flag == L"--exclude") rule.exclude = ParsePhrases(value);
+    if (flag == L"--region") {
+      double l = 0, t = 0, w = 0, h = 0;
+      if (swscanf_s(argv[i + 1], L"%lf,%lf,%lf,%lf", &l, &t, &w, &h) == 4) rule.region = {l, t, w, h};
+    }
+  }
+  winrt::init_apartment(winrt::apartment_type::multi_threaded);
+  if (FAILED(MFStartup(MF_VERSION))) {
+    log::Error("{} failed: Media Foundation is unavailable", frame ? "Frame" : "Read");
+    return 1;
+  }
+  const int result = frame ? RunFrameCommand(argv[2], argv[3], seconds) : RunReadCommand(argv[2], seconds, rule);
+  MFShutdown();
+  return result;
+}
+
 int wmain(int argc, wchar_t** argv) {
   using namespace clip;
   if (argc >= 4 && std::wstring_view(argv[1]) == L"--export") return RunExportCommand(argc, argv);
   if (argc >= 4 && std::wstring_view(argv[1]) == L"--trim") return RunTrimCommand(argc, argv);
+  if (argc >= 4 && std::wstring_view(argv[1]) == L"--frame") return RunStudioCommand(argc, argv);
+  if (argc >= 3 && std::wstring_view(argv[1]) == L"--read") return RunStudioCommand(argc, argv);
 
   // One copy at a time; two would fight over the hotkey and the GPU encoder.
   HANDLE instance = CreateMutexW(nullptr, TRUE, L"Local\\ClipEngine.SingleInstance");
@@ -132,14 +166,14 @@ int wmain(int argc, wchar_t** argv) {
     return 1;
   }
 
-  DetectionRules rules;
-  if (config.detection) {
-    if (EventDetector::IsAvailable()) {
-      rules = LoadDetectionRules(dataDir);
-    } else {
-      log::Warn("Windows text recognition isn't installed, so automatic clips are off. Add English under "
-                "Settings > Time & language > Language to turn them on.");
-    }
+  // Always read, for the games added there; the rules themselves only matter with detection on.
+  DetectionRules rules = LoadDetectionRules(dataDir);
+  if (config.detection && !EventDetector::IsAvailable()) {
+    log::Warn("Windows text recognition isn't installed, so automatic clips are off. Add English under "
+              "Settings > Time & language > Language to turn them on.");
+    rules.rules.clear();
+  } else if (!config.detection) {
+    rules.rules.clear();
   }
 
   int result = App(std::move(config), std::move(rules)).Run();

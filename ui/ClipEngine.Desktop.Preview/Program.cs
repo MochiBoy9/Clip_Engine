@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using ClipEngine.Desktop;
@@ -70,10 +71,41 @@ vm.ShowMatches = true;
 Save(window, "8-matches.png");
 vm.ShowMatches = false;
 
+// Detection Studio, testing the kill rule on a frame from that clip.
+var studio = vm.OpenStudio(clip: vm.Clips[0], seconds: 12.4);
+studio.ShowSample(SampleFrame(), "ENTERRO ELIMINATED VEX", matched: true);
+Save(window, "9-studio.png");
+
 // The side panel as it sits on the edge of the screen.
 var panel = new SidePanelWindow { DataContext = vm, Width = 344, Height = 900 };
 panel.Show();
 Save(panel, "6-side-panel.png");
+
+// A frame of the sample game with a kill message in its feed, as a clip would show it.
+static Bitmap SampleFrame()
+{
+    var thumb = new Bitmap(Path.Combine(AppContext.BaseDirectory, "SampleThumbnails", "finals_1.png"));
+    var frame = new RenderTargetBitmap(new PixelSize(1280, 720));
+    using (var context = frame.CreateDrawingContext())
+    {
+        context.DrawImage(thumb, new Rect(0, 0, 1280, 720));
+        var face = new Typeface("Inter", FontStyle.Normal, FontWeight.Bold);
+        var lines = new[] { ("ENTERRO", "ELIMINATED", "VEX", 98.0), ("MIRA", "REVIVED", "ENTERRO", 132.0) };
+        foreach (var (who, what, whom, y) in lines)
+        {
+            context.DrawRectangle(new SolidColorBrush(Color.Parse("#99000000")), null, new Rect(846, y - 4, 400, 30), 4, 4);
+            var x = 858.0;
+            foreach (var (text, color) in new[] { (who, "#FFFFFF"), (what, "#FF4D7A"), (whom, "#FFFFFF") })
+            {
+                var formatted = new FormattedText(text, System.Globalization.CultureInfo.InvariantCulture,
+                                                  FlowDirection.LeftToRight, face, 17, new SolidColorBrush(Color.Parse(color)));
+                context.DrawText(formatted, new Point(x, y));
+                x += formatted.Width + 12;
+            }
+        }
+    }
+    return frame;
+}
 
 internal static class Sample
 {

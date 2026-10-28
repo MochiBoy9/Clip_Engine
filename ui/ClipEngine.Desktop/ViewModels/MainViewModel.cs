@@ -90,6 +90,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ImportClipCommand = new RelayCommand(() => _ = ImportClipAsync(null));
         ToggleSidePanelCommand = new RelayCommand(() => SidePanelToggleRequested?.Invoke());
         ShowMainWindowCommand = new RelayCommand(() => ShowMainWindowRequested?.Invoke());
+        OpenStudioCommand = new RelayCommand(p =>
+        {
+            var studio = OpenStudio();
+            if (p is "add") studio.StartAddGameCommand.Execute(null);
+        });
         GoToCommand = new RelayCommand(p => { if (p is Page page) SelectedNav = Nav.First(n => n.Page == page); });
 
         _toastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
@@ -157,6 +162,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public RelayCommand OpenLogCommand { get; }
     public RelayCommand RestartEngineCommand { get; }
     public RelayCommand OpenClipCommand { get; }
+    public RelayCommand OpenStudioCommand { get; }
     public RelayCommand ShowClipCommand { get; }
     public RelayCommand DeleteClipCommand { get; }
     public RelayCommand ShareClipCommand { get; }
@@ -217,6 +223,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ShowPage(player);
         ShowMainWindowRequested?.Invoke();
         return player;
+    }
+
+    // Detection Studio, for making or fixing the rules that spot moments in a game.
+    internal StudioViewModel OpenStudio(string? gameName = null, ClipItemViewModel? clip = null, double seconds = 0)
+    {
+        var studio = new StudioViewModel(this, CurrentPage, gameName, clip, seconds);
+        ShowPage(studio);
+        return studio;
     }
 
     public bool IsSharing { get => _isSharing; private set => Set(ref _isSharing, value); }
@@ -345,7 +359,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public Task StopEngineAsync() => _engine?.StopAsync() ?? Task.CompletedTask;
 
-    private async Task RestartEngineAsync()
+    internal async Task RestartEngineAsync()
     {
         if (_engine is null) return;
         var settings = Settings.ToEngineSettings();

@@ -59,6 +59,12 @@ public sealed class PlayerViewModel : ObservableObject
         CancelTrimCommand = new RelayCommand(CancelTrim);
         SaveTrimCommand = new RelayCommand(() => _ = SaveTrimAsync(), () => IsTrimming && !IsSavingTrim && TrimLength >= 0.5);
         ShowCommand = new RelayCommand(() => _main.ShowClipCommand.Execute(Clip));
+        StudioCommand = new RelayCommand(() =>
+        {
+            _player?.Pause();
+            IsPlaying = false;
+            _main.OpenStudio(clip: Clip, seconds: Position);
+        });
         OpenExternallyCommand = new RelayCommand(() =>
         {
             _player?.Pause();
@@ -89,6 +95,7 @@ public sealed class PlayerViewModel : ObservableObject
 
     public RelayCommand PlayPauseCommand { get; }
     public RelayCommand BackCommand { get; }
+    public RelayCommand StudioCommand { get; }
     public RelayCommand SkipBackCommand { get; }
     public RelayCommand SkipForwardCommand { get; }
     public RelayCommand PreviousMarkerCommand { get; }
