@@ -4,8 +4,8 @@
              xmlns:views="using:ClipEngine.Desktop.Views"
              x:Class="ClipEngine.Desktop.Views.ClipsView"
              x:DataType="vm:ClipsPage">
-  <DockPanel Margin="18,0,22,0">
-    <StackPanel DockPanel.Dock="Top" Spacing="16" Margin="0,0,0,16">
+  <DockPanel Margin="0">
+    <StackPanel DockPanel.Dock="Top" Spacing="14" Margin="0,0,0,16">
       <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
         <StackPanel VerticalAlignment="Center" Spacing="2">
           <TextBlock Classes="h1" Text="Clips" />
@@ -15,7 +15,7 @@
             <TextBlock Classes="caption" Text="{Binding Main.StorageText}" />
           </StackPanel>
         </StackPanel>
-        <Border Grid.Column="1" Classes="inset" Padding="3" CornerRadius="13" VerticalAlignment="Center" Margin="0,0,10,0">
+        <Border Grid.Column="1" Classes="segments" VerticalAlignment="Center" Margin="0,0,10,0">
           <StackPanel Orientation="Horizontal" Spacing="2">
             <RadioButton Classes="segment" GroupName="clipsView" IsChecked="{Binding Main.ShowClipsGrid, Mode=OneWay}"
                          Command="{Binding Main.ShowClipsGridCommand}" ToolTip.Tip="Every clip on its own">
@@ -40,14 +40,14 @@
                       Foreground="{StaticResource TextTertiary}" />
           </TextBox.InnerLeftContent>
         </TextBox>
-        <Button Grid.Column="3" Classes="glass" Command="{Binding Main.ImportClipCommand}" VerticalAlignment="Center"
+        <Button Grid.Column="3" Classes="secondary" Command="{Binding Main.ImportClipCommand}" VerticalAlignment="Center"
                 Margin="0,0,10,0" ToolTip.Tip="Add a clip someone sent you. You can also drop it on the window.">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <PathIcon Data="{StaticResource IconImport}" Width="15" Height="15" />
             <TextBlock Text="Import" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
-        <Button Grid.Column="4" Classes="glass" Command="{Binding Main.OpenClipsFolderCommand}" VerticalAlignment="Center">
+        <Button Grid.Column="4" Classes="secondary" Command="{Binding Main.OpenClipsFolderCommand}" VerticalAlignment="Center">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <PathIcon Data="{StaticResource IconFolder}" Width="15" Height="15" />
             <TextBlock Text="Open folder" VerticalAlignment="Center" />
@@ -71,7 +71,7 @@
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:ClipItemViewModel">
-              <views:ClipCard Margin="0,0,14,14" ThumbnailHeight="168" />
+              <views:ClipCard Margin="0,0,12,12" ThumbnailHeight="168" />
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
@@ -85,14 +85,14 @@
             <Binding Path="Main.ShowMatches" />
           </MultiBinding>
         </ScrollViewer.IsVisible>
-        <ItemsControl ItemsSource="{Binding Main.Matches}" Margin="0,0,14,24">
+        <ItemsControl ItemsSource="{Binding Main.Matches}" Margin="0,0,12,24">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:MatchViewModel">
-              <Border Classes="glass soft" Padding="16" CornerRadius="22" Margin="0,0,0,14">
+              <views:Plate Classes="card" Padding="16" Margin="0,0,0,12">
                 <StackPanel Spacing="14">
                   <Grid ColumnDefinitions="Auto,*,Auto">
-                    <Border Width="52" Height="52" CornerRadius="16" Background="{Binding Gradient}" VerticalAlignment="Center">
-                      <TextBlock Text="{Binding Initials}" FontSize="18" FontWeight="Black" Foreground="#D9FFFFFF"
+                    <Border Width="44" Height="44" CornerRadius="2" Background="{Binding Gradient}" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Initials}" FontSize="16" FontWeight="Black" Foreground="#E6FFFFFF"
                                  HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <StackPanel Grid.Column="1" Margin="14,0" VerticalAlignment="Center" Spacing="3">
@@ -101,8 +101,7 @@
                         <Border Classes="pill" Padding="9,2" VerticalAlignment="Center">
                           <TextBlock Text="{Binding Game}" FontSize="11" FontWeight="SemiBold" />
                         </Border>
-                        <Border Classes="pill" Padding="9,2" VerticalAlignment="Center" Background="#33FFC24B"
-                                BorderBrush="#80FFC24B" IsVisible="{Binding HasResult}">
+                        <Border Classes="pill accent" Padding="9,2" VerticalAlignment="Center" IsVisible="{Binding HasResult}">
                           <TextBlock Text="{Binding Result}" FontSize="11" FontWeight="Bold" LetterSpacing="0.6" />
                         </Border>
                       </StackPanel>
@@ -115,7 +114,7 @@
                       <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:MatchStat">
                           <StackPanel Spacing="1" MinWidth="44">
-                            <TextBlock Text="{Binding Value}" FontSize="22" FontWeight="Bold" FontFeatures="tnum"
+                            <TextBlock Classes="mono" Text="{Binding Value}" FontSize="22" FontWeight="Bold"
                                        HorizontalAlignment="Center" />
                             <StackPanel Orientation="Horizontal" Spacing="5" HorizontalAlignment="Center">
                               <Ellipse Width="6" Height="6" Fill="{Binding Brush}" VerticalAlignment="Center" />
@@ -139,23 +138,22 @@
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
                 </StackPanel>
-              </Border>
+              </views:Plate>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
       </ScrollViewer>
 
-      <Border Classes="glass" Padding="40" VerticalAlignment="Top" IsVisible="{Binding !Main.HasFilteredClips}">
+      <views:Plate Classes="card" Padding="40" VerticalAlignment="Top" IsVisible="{Binding !Main.HasFilteredClips}">
         <StackPanel Spacing="10" HorizontalAlignment="Center">
-          <Border Width="56" Height="56" CornerRadius="18" Background="{DynamicResource AccentGradient}"
-                  HorizontalAlignment="Center" BoxShadow="{StaticResource AccentGlow}">
-            <PathIcon Data="{StaticResource IconClips}" Width="24" Height="24" Foreground="White" />
+          <Border Classes="tile" Width="48" Height="48" HorizontalAlignment="Center">
+            <PathIcon Data="{StaticResource IconClips}" Width="22" Height="22" />
           </Border>
           <TextBlock Classes="h2" Text="Nothing here yet" HorizontalAlignment="Center" />
           <TextBlock Classes="body" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="420"
                      Text="Clips you save while playing show up here, grouped by game." />
         </StackPanel>
-      </Border>
+      </views:Plate>
     </Panel>
   </DockPanel>
 </UserControl>

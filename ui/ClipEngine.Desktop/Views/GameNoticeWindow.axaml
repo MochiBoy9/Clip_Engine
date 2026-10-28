@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="using:ClipEngine.Desktop.Views"
         x:Class="ClipEngine.Desktop.Views.GameNoticeWindow"
         Title="Clip Engine notice"
         Width="420"
@@ -13,14 +14,14 @@
         Background="Transparent"
         TransparencyLevelHint="Transparent, None">
   <!-- A small notice in the corner over the game, like "Clip saved · 2 kills". Left out of recordings. -->
-  <Border Margin="10" HorizontalAlignment="Right" CornerRadius="16" BorderThickness="1" BorderBrush="{StaticResource GlassStroke}" Padding="14,10"
-          BoxShadow="0 10 28 0 #66000010, inset 0 1 0 0 #40FFFFFF" Background="#F21B1836" IsHitTestVisible="False">
+  <views:Plate Margin="10" HorizontalAlignment="Right" Cut="8" BorderBrush="{DynamicResource AccentBrush}"
+               Padding="12,9,16,9" Background="{StaticResource OverlayBrush}" IsHitTestVisible="False">
     <StackPanel Orientation="Horizontal" Spacing="10">
-      <Border Width="24" Height="24" CornerRadius="8" Background="{DynamicResource AccentGradient}">
-        <PathIcon Data="{StaticResource IconCheck}" Width="13" Height="13" Foreground="White" />
+      <Border Classes="tile small">
+        <PathIcon Data="{StaticResource IconCheck}" />
       </Border>
-      <TextBlock Name="Message" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="14" Foreground="White"
+      <TextBlock Name="Message" VerticalAlignment="Center" FontFamily="{StaticResource DisplayFont}" FontWeight="SemiBold" FontSize="14"
                  MaxWidth="360" TextTrimming="CharacterEllipsis" />
     </StackPanel>
-  </Border>
+  </views:Plate>
 </Window>

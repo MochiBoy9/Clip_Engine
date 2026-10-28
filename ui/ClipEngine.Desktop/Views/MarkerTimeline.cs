@@ -40,18 +40,15 @@ internal sealed class MarkerTimeline : Control
     private const double MarkerHeight = 18;
     private const double ThumbRadius = 8;
 
-    private static readonly IBrush TrackBrush = new SolidColorBrush(Color.Parse("#26FFFFFF"));
+    private static readonly IBrush TrackBrush = new SolidColorBrush(Color.Parse("#2C2E35"));
     private static readonly IBrush ThumbBrush = Brushes.White;
-    private static readonly IBrush PlayedBrush = new LinearGradientBrush
-    {
-        StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-        EndPoint = new RelativePoint(1, 0, RelativeUnit.Relative),
-        GradientStops = { new GradientStop(Color.Parse("#B45CF6"), 0), new GradientStop(Color.Parse("#22C8EE"), 1) },
-    };
+    private static readonly IPen ThumbOutline = new Pen(new SolidColorBrush(Color.Parse("#0B0C0E")), 2);
+    private static readonly IPen MarkerOutline = new Pen(new SolidColorBrush(Color.Parse("#CC0C0D10")), 1.5);
+    private static readonly IBrush FallbackPlayedBrush = new SolidColorBrush(Color.Parse("#FFC21A"));
 
-    private static readonly IBrush TrimOutsideBrush = new SolidColorBrush(Color.Parse("#B30B0918"));
-    private static readonly IBrush TrimRangeBrush = new SolidColorBrush(Color.Parse("#1AFFC24B"));
-    private static readonly IBrush HandleBrush = new SolidColorBrush(Color.Parse("#FFC24B"));
+    private static readonly IBrush TrimOutsideBrush = new SolidColorBrush(Color.Parse("#B30C0D10"));
+    private static readonly IBrush TrimRangeBrush = new SolidColorBrush(Color.Parse("#1FFFC21A"));
+    private static readonly IBrush HandleBrush = new SolidColorBrush(Color.Parse("#FFC21A"));
 
     private enum Drag { None, Seek, TrimStart, TrimEnd }
 
@@ -85,21 +82,22 @@ internal sealed class MarkerTimeline : Control
         // Transparent fill so clicks anywhere on the control land on it.
         context.FillRectangle(Brushes.Transparent, new Rect(Bounds.Size));
         var track = new Rect(left, mid - TrackHeight / 2, width, TrackHeight);
-        context.DrawRectangle(TrackBrush, null, track, TrackHeight / 2, TrackHeight / 2);
+        context.DrawRectangle(TrackBrush, null, track);
         if (fraction > 0)
         {
             var played = track.WithWidth(Math.Max(TrackHeight, width * fraction));
-            context.DrawRectangle(PlayedBrush, null, played, TrackHeight / 2, TrackHeight / 2);
+            // The played part is in the accent colour, which follows the colour theme.
+            var playedBrush = this.TryFindResource("AccentBrush", out var accent) && accent is IBrush b ? b : FallbackPlayedBrush;
+            context.DrawRectangle(playedBrush, null, played);
         }
 
         if (Markers is { } markers && Duration > 0)
         {
-            var outline = new Pen(new SolidColorBrush(Color.Parse("#B3100C24")), 1.5);
             foreach (var marker in markers)
             {
                 var x = left + width * Math.Clamp(marker.Seconds / Duration, 0, 1);
                 var rect = new Rect(x - MarkerWidth / 2, mid - MarkerHeight / 2, MarkerWidth, MarkerHeight);
-                context.DrawRectangle(marker.Brush, outline, rect, MarkerWidth / 2, MarkerWidth / 2);
+                context.DrawRectangle(marker.Brush, MarkerOutline, rect);
             }
         }
 
@@ -119,8 +117,8 @@ internal sealed class MarkerTimeline : Control
         }
 
         var thumb = new Point(left + width * fraction, mid);
-        context.DrawEllipse(ThumbBrush, new Pen(new SolidColorBrush(Color.Parse("#668B6CFF")), 4), thumb, ThumbRadius - 2,
-                            ThumbRadius - 2);
+        // The playhead: a hard-edged bar across the track.
+        context.DrawRectangle(ThumbBrush, ThumbOutline, new Rect(thumb.X - 2.5, mid - ThumbRadius - 3, 5, ThumbRadius * 2 + 6));
     }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)

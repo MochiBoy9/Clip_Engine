@@ -23,7 +23,6 @@ public sealed class SettingsViewModel : ObservableObject
     private double _clipAfterSeconds;
     private string _sidePanelHotkey;
     private bool _closeToTray;
-    private bool _animatedBackground;
     private bool _hasChanges;
     private string? _savedMessage;
     private string? _cleanupPreview;
@@ -38,7 +37,6 @@ public sealed class SettingsViewModel : ObservableObject
             .ToList();
         Load(engine);
         _closeToTray = desktop.CloseToTray;
-        _animatedBackground = desktop.AnimatedBackground;
         _sidePanelHotkey = desktop.SidePanelHotkey;
         CleanUpNowCommand = new RelayCommand(() => CleanUpNowRequested?.Invoke());
         SaveCommand = new RelayCommand(() => _ = SaveAsync(), () => HasChanges);
@@ -62,7 +60,6 @@ public sealed class SettingsViewModel : ObservableObject
     // The support card at the top of the right column.
     public SupporterViewModel? Supporter { get; init; }
 
-    public event Action<bool>? AnimatedBackgroundChanged;
     public event Action<string>? SidePanelHotkeyChanged;
     public event Action? StorageRulesChanged;
     public event Action? CleanUpNowRequested;
@@ -145,18 +142,6 @@ public sealed class SettingsViewModel : ObservableObject
             if (!Set(ref _closeToTray, value)) return;
             _desktop.CloseToTray = value;
             TrySaveDesktop();
-        }
-    }
-
-    public bool AnimatedBackground
-    {
-        get => _animatedBackground;
-        set
-        {
-            if (!Set(ref _animatedBackground, value)) return;
-            _desktop.AnimatedBackground = value;
-            TrySaveDesktop();
-            AnimatedBackgroundChanged?.Invoke(value);
         }
     }
 

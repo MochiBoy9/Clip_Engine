@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:ClipEngine.Desktop.ViewModels"
+        xmlns:views="using:ClipEngine.Desktop.Views"
         x:Class="ClipEngine.Desktop.Views.SidePanelWindow"
         x:DataType="vm:MainViewModel"
         Title="Clip Engine side panel"
@@ -14,27 +15,20 @@
         Background="Transparent"
         TransparencyLevelHint="Transparent, None">
   <!-- A slim panel that sits on the edge of the screen above the game, toggled by its hotkey. -->
-  <Border Name="Card" Margin="12" CornerRadius="26" BorderThickness="1" BorderBrush="{StaticResource GlassStroke}"
-          BoxShadow="0 16 40 0 #66000010, inset 0 1 0 0 #40FFFFFF" ClipToBounds="True">
-    <Border.Background>
-      <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
-        <GradientStop Offset="0" Color="#F21C1640" />
-        <GradientStop Offset="0.6" Color="#F2131030" />
-        <GradientStop Offset="1" Color="#F20B1A30" />
-      </LinearGradientBrush>
-    </Border.Background>
+  <views:Plate Name="Card" Margin="12" Cut="16" BorderBrush="{StaticResource BorderStrongBrush}"
+               Background="{StaticResource OverlayBrush}" Marker="{DynamicResource AccentBrush}">
     <DockPanel Margin="16,16,16,14">
       <!-- Header -->
       <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="2,0,0,16">
-        <Border Width="32" Height="32" CornerRadius="10" Background="{DynamicResource AccentGradient}"
-                BoxShadow="{StaticResource AccentGlow}">
-          <PathIcon Data="{StaticResource IconPlay}" Width="13" Height="13" Foreground="White" Margin="2,0,0,0" />
-        </Border>
+        <views:Plate Width="32" Height="32" Cut="7" Background="{DynamicResource AccentBrush}">
+          <PathIcon Data="{StaticResource IconPlay}" Width="17" Height="17" Foreground="{DynamicResource AccentForegroundBrush}"
+                    Margin="2,0,0,0" />
+        </views:Plate>
         <StackPanel Grid.Column="1" Margin="10,0" VerticalAlignment="Center">
-          <TextBlock Text="Clip Engine" FontWeight="Bold" FontSize="15" />
+          <TextBlock Text="CLIP ENGINE" FontFamily="{StaticResource DisplayFont}" FontWeight="Bold" FontSize="14" LetterSpacing="1.4" />
           <TextBlock Classes="caption" Text="{Binding SidePanelHotkey, StringFormat='{}{0} hides this panel'}" />
         </StackPanel>
-        <Button Grid.Column="2" Classes="icon" Width="30" Height="30" CornerRadius="10" Command="{Binding ToggleSidePanelCommand}"
+        <Button Grid.Column="2" Classes="icon" Width="30" Height="30" CornerRadius="7" Command="{Binding ToggleSidePanelCommand}"
                 ToolTip.Tip="Hide">
           <PathIcon Data="{StaticResource IconClose}" Width="12" Height="12" />
         </Button>
@@ -42,7 +36,7 @@
 
       <!-- Status and the save button -->
       <StackPanel DockPanel.Dock="Top" Spacing="10" Margin="0,0,0,18">
-        <Border Classes="inset" Padding="14,12" CornerRadius="18">
+        <Border Classes="inset" Padding="12,10">
           <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
             <Panel Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,10,0">
               <Ellipse Fill="{Binding StatusBrush}" Classes="liveDot" Classes.pulsing="{Binding IsRecording}" />
@@ -56,14 +50,14 @@
         <Button Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                 Command="{Binding SaveClipCommand}">
           <StackPanel Orientation="Horizontal" Spacing="8">
-            <PathIcon Data="{StaticResource IconRecord}" Width="12" Height="12" Foreground="White" />
-            <TextBlock Text="Save clip" VerticalAlignment="Center" />
+            <PathIcon Data="{StaticResource IconBolt}" Width="14" Height="14" />
+            <TextBlock Text="SAVE CLIP" LetterSpacing="1" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
         <TextBlock Classes="caption" Text="{Binding SaveHint}" HorizontalAlignment="Center" />
       </StackPanel>
 
-      <Button DockPanel.Dock="Bottom" Classes="glass" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+      <Button DockPanel.Dock="Bottom" Classes="secondary" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
               Command="{Binding ShowMainWindowCommand}" Margin="0,12,0,0">
         <TextBlock Text="Open Clip Engine" />
       </Button>
@@ -75,7 +69,7 @@
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:ActivityItem">
                 <Grid ColumnDefinitions="Auto,*,Auto" Margin="2,3">
-                  <PathIcon Data="{StaticResource IconSparkle}" Width="11" Height="11" Foreground="#B45CF6" Margin="0,0,10,0" />
+                  <PathIcon Data="{StaticResource IconSparkle}" Width="11" Height="11" Foreground="{DynamicResource AccentBrush}" Margin="0,0,10,0" />
                   <TextBlock Grid.Column="1" Text="{Binding Text}" FontSize="13" TextTrimming="CharacterEllipsis" />
                   <TextBlock Grid.Column="2" Text="{Binding Time}" Classes="caption" Margin="8,0,0,0" />
                 </Grid>
@@ -91,12 +85,12 @@
                 <Button Classes="marker" Command="{Binding OpenCommand}" HorizontalAlignment="Stretch"
                         HorizontalContentAlignment="Stretch" Padding="6" Margin="0,0,0,4">
                   <Grid ColumnDefinitions="Auto,*">
-                    <Border Width="104" Height="58" CornerRadius="10" ClipToBounds="True" Background="{Binding Placeholder}">
+                    <Border Width="104" Height="58" CornerRadius="0" ClipToBounds="True" Background="{Binding Placeholder}">
                       <Panel>
                         <TextBlock Text="{Binding Initials}" IsVisible="{Binding !HasThumbnail}" FontSize="18" FontWeight="Black"
                                    Foreground="#59FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" IsVisible="{Binding HasThumbnail}" />
-                        <Border Classes="pill" Background="#99000000" BorderThickness="0" Padding="5,1" Margin="4"
+                        <Border Classes="pill onMedia" Padding="5,1" Margin="4"
                                 HorizontalAlignment="Right" VerticalAlignment="Bottom" IsVisible="{Binding HasDuration}">
                           <TextBlock Text="{Binding Duration}" FontSize="10" FontWeight="SemiBold" />
                         </Border>
@@ -105,7 +99,7 @@
                     <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center" Spacing="2">
                       <TextBlock Text="{Binding Game}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis" />
                       <TextBlock Text="{Binding When}" Classes="caption" TextTrimming="CharacterEllipsis" />
-                      <TextBlock Text="{Binding Summary}" Classes="caption" Foreground="#C9B8FF" IsVisible="{Binding HasSummary}"
+                      <TextBlock Text="{Binding Summary}" Classes="caption" Foreground="{DynamicResource AccentBrush}" IsVisible="{Binding HasSummary}"
                                  TextTrimming="CharacterEllipsis" />
                     </StackPanel>
                   </Grid>
@@ -116,5 +110,5 @@
         </StackPanel>
       </ScrollViewer>
     </DockPanel>
-  </Border>
+  </views:Plate>
 </Window>
