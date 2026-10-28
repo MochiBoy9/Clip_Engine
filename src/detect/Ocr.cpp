@@ -22,17 +22,32 @@ SoftwareBitmap PrepareForOcr(const std::vector<uint8_t>& bgra, UINT width, UINT 
   const UINT maxDimension = OcrEngine::MaxImageDimension();
   UINT scale = height < 120 ? 2 : 1;  // small text reads better a little larger
   if (width * scale > maxDimension || height * scale > maxDimension) scale = 1;
-  const UINT outWidth = std::min(width * scale, maxDimension);
-  const UINT outHeight = std::min(height * scale, maxDimension);
+  // A big region (a whole scoreboard on a 4K screen) is shrunk to fit, keeping the brightest
+  // pixel of each block so thin bright text survives.
+  const UINT shrink = std::max<UINT>(1, (std::max(width, height) + maxDimension - 1) / maxDimension);
+  const UINT outWidth = std::min(width * scale / shrink, maxDimension);
+  const UINT outHeight = std::min(height * scale / shrink, maxDimension);
+
+  auto brightness = [&](UINT x, UINT y) {
+    const uint8_t* p = bgra.data() + (static_cast<size_t>(y) * width + x) * 4;
+    return std::max({p[0], p[1], p[2]});
+  };
 
   winrt::Windows::Storage::Streams::Buffer buffer(outWidth * outHeight * 4);
   buffer.Length(outWidth * outHeight * 4);
   uint8_t* out = buffer.data();
   for (UINT y = 0; y < outHeight; ++y) {
-    const uint8_t* row = bgra.data() + static_cast<size_t>(y / scale) * width * 4;
     for (UINT x = 0; x < outWidth; ++x) {
-      const uint8_t* p = row + static_cast<size_t>(x / scale) * 4;
-      const uint8_t bright = std::max({p[0], p[1], p[2]});
+      uint8_t bright = 0;
+      if (shrink == 1) {
+        bright = brightness(x / scale, y / scale);
+      } else {
+        for (UINT dy = 0; dy < shrink; ++dy) {
+          for (UINT dx = 0; dx < shrink; ++dx) {
+            bright = std::max(bright, brightness(std::min(x * shrink + dx, width - 1), std::min(y * shrink + dy, height - 1)));
+          }
+        }
+      }
       const uint8_t v = threshold > 0 ? (bright >= threshold ? 0 : 255) : static_cast<uint8_t>(255 - bright);
       out[0] = out[1] = out[2] = v;
       out[3] = 255;

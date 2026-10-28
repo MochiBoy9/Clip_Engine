@@ -5,7 +5,7 @@ using ClipEngine.Desktop.Services;
 
 namespace ClipEngine.Desktop.ViewModels;
 
-public enum Page { Home, Clips, Games, Settings }
+public enum Page { Home, Clips, Records, Games, Settings }
 
 public sealed record NavItem(Page Page, string Title, StreamGeometry Icon);
 

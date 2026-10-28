@@ -41,6 +41,7 @@ std::vector<ApiEvent> Cs2Tracker::Update(const Json& state) {
     map_.clear();
     phase_.clear();
     haveStats_ = false;
+    board_.clear();
     return events;
   }
 
@@ -75,13 +76,18 @@ std::vector<ApiEvent> Cs2Tracker::Update(const Json& state) {
 
   if (!self || !player.Has("match_stats")) return events;
 
-  Stats now;
+  Counters now;
   now.kills = player["match_stats"]["kills"].Int();
   now.assists = player["match_stats"]["assists"].Int();
   now.deaths = player["match_stats"]["deaths"].Int();
   now.mvps = player["match_stats"]["mvps"].Int();
   now.roundKills = player["state"]["round_kills"].Int();
   now.roundKillHs = player["state"]["round_killhs"].Int();
+  board_ = {{"kills", now.kills},
+            {"deaths", now.deaths},
+            {"assists", now.assists},
+            {"mvps", now.mvps},
+            {"score", player["match_stats"]["score"].Int()}};
 
   // Counters going down means a new match on the same map; start counting again.
   const bool comparable = haveStats_ && now.kills >= last_.kills && now.deaths >= last_.deaths;
@@ -115,6 +121,7 @@ std::vector<ApiEvent> Dota2Tracker::Update(const Json& state, double nowSeconds)
     match_.clear();
     gameState_.clear();
     haveStats_ = false;
+    board_.clear();
     return events;
   }
 
@@ -147,6 +154,11 @@ std::vector<ApiEvent> Dota2Tracker::Update(const Json& state, double nowSeconds)
   const int kills = player["kills"].Int();
   const int deaths = player["deaths"].Int();
   const int assists = player["assists"].Int();
+  board_ = {{"kills", kills},
+            {"deaths", deaths},
+            {"assists", assists},
+            {"last_hits", player["last_hits"].Int()},
+            {"denies", player["denies"].Int()}};
 
   if (haveStats_ && kills >= kills_ && deaths >= deaths_) {
     const std::string hero = StripPrefix(state["hero"]["name"].Str(), "npc_dota_hero_");
@@ -200,6 +212,17 @@ std::vector<ApiEvent> LeagueTracker::Update(const Json& data) {
     if (name.empty()) continue;
     if (const auto hash = name.find('#'); hash != std::string::npos) names_.insert(name.substr(0, hash));
     names_.insert(std::move(name));
+  }
+
+  for (const auto& p : data["allPlayers"].Items()) {
+    if (!IsMe(p["riotId"].Str()) && !IsMe(p["riotIdGameName"].Str()) && !IsMe(p["summonerName"].Str())) continue;
+    const Json& scores = p["scores"];
+    board_ = {{"kills", scores["kills"].Int()},
+              {"deaths", scores["deaths"].Int()},
+              {"assists", scores["assists"].Int()},
+              {"creep_score", scores["creepScore"].Int()},
+              {"ward_score", static_cast<int>(scores["wardScore"].Number())}};
+    break;
   }
 
   auto withAssist = [&](const Json& e) {
@@ -267,7 +290,13 @@ std::vector<ApiEvent> RocketLeagueTracker::Update(const Json& message) {
       me_ = game["Target"]["Name"].Str();
       myTeam_ = game["Target"]["TeamNum"].Int(-1);
     }
+    for (const auto& p : data["Players"].Items()) {
+      if (me_.empty() || p["Name"].Str() != me_) continue;
+      board_ = {{"goals", p["Goals"].Int()},   {"assists", p["Assists"].Int()}, {"saves", p["Saves"].Int()},
+                {"shots", p["Shots"].Int()},   {"demos", p["Demos"].Int()},     {"score", p["Score"].Int()}};
+    }
   } else if (name == "MatchInitialized") {
+    board_.clear();
     events.push_back({EventType::MatchStart, "Kickoff"});
   } else if (name == "GoalScored") {
     if (!me_.empty() && data["Scorer"]["Name"].Str() == me_) events.push_back({EventType::Highlight, "Goal"});

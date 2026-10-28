@@ -20,6 +20,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private readonly DispatcherTimer _toastTimer;
     private readonly DispatcherTimer _saveDesktopTimer;
     private readonly DispatcherTimer _cleanupTimer;
+    private readonly DispatcherTimer _longRecordingTimer;
+    private DateTime? _longRecordingSince;
+    private string _recordHotkey = "F9";
     private NavItem _selectedNav;
     private object _currentPage;
     private EngineState _engineState = EngineState.Stopped;
@@ -51,6 +54,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         [
             new NavItem(Page.Home, "Home", Icon("IconHome")),
             new NavItem(Page.Clips, "Clips", Icon("IconClips")),
+            new NavItem(Page.Records, "Records", Icon("IconTrophy")),
             new NavItem(Page.Games, "Games", Icon("IconGames")),
             new NavItem(Page.Settings, "Settings", Icon("IconSettings")),
         ];
@@ -67,15 +71,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Settings.CleanUpNowRequested += () => _ = CleanUpAsync();
         _showMatches = DesktopSettings.ShowMatches;
         _hotkey = engineSettings.SaveHotkey;
+        _recordHotkey = engineSettings.RecordHotkey;
         _clipSeconds = engineSettings.ClipSeconds;
         _bufferSeconds = engineSettings.BufferSeconds;
 
         Home = new HomePage(this);
         ClipsPage = new ClipsPage(this);
         GamesPage = new GamesPage(this);
+        Records = new RecordsViewModel(this);
         _currentPage = Home;
 
         SaveClipCommand = new RelayCommand(SaveClip, () => IsRecording);
+        ToggleLongRecordingCommand = new RelayCommand(ToggleLongRecording, () => IsRecording);
         OpenClipsFolderCommand = new RelayCommand(() => Shell.Open(ClipsFolder));
         OpenLogCommand = new RelayCommand(() => Shell.Open(AppPaths.EngineLogFile));
         RestartEngineCommand = new RelayCommand(() => _ = RestartEngineAsync());
@@ -118,6 +125,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             _ = CleanUpAsync();
         };
 
+        // Ticks the long recording's clock while one runs.
+        _longRecordingTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _longRecordingTimer.Tick += (_, _) => RaiseLongRecording();
+
         if (!live) return;
         _cleanupTimer.Start();
 
@@ -141,6 +152,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public HomePage Home { get; }
     public ClipsPage ClipsPage { get; }
     public GamesPage GamesPage { get; }
+    public RecordsViewModel Records { get; }
     public SettingsViewModel Settings { get; }
     public SupporterViewModel Supporter { get; }
     internal DesktopSettings DesktopSettings { get; }
@@ -156,6 +168,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public ObservableCollection<GameItemViewModel> Games { get; } = [];
 
     public RelayCommand SaveClipCommand { get; }
+    public RelayCommand ToggleLongRecordingCommand { get; }
     public RelayCommand OpenClipsFolderCommand { get; }
     public RelayCommand OpenLogCommand { get; }
     public RelayCommand RestartEngineCommand { get; }
@@ -190,26 +203,25 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         set
         {
             if (value is null || !Set(ref _selectedNav, value)) return;
-            CurrentPage = value.Page switch
-            {
-                Page.Clips => ClipsPage,
-                Page.Games => GamesPage,
-                Page.Settings => Settings,
-                _ => Home,
-            };
+            CurrentPage = PageFor(value.Page);
         }
     }
+
+    private object PageFor(Page page) => page switch
+    {
+        Page.Clips => ClipsPage,
+        Page.Records => Records,
+        Page.Games => GamesPage,
+        Page.Settings => Settings,
+        _ => Home,
+    };
 
     public object CurrentPage { get => _currentPage; private set => Set(ref _currentPage, value); }
 
     // Shows a page that isn't in the sidebar, like the player, or goes back to one that is.
     internal void ShowPage(object page)
     {
-        var nav = ReferenceEquals(page, Home) ? Nav[0]
-            : ReferenceEquals(page, ClipsPage) ? Nav[1]
-            : ReferenceEquals(page, GamesPage) ? Nav[2]
-            : ReferenceEquals(page, Settings) ? Nav[3]
-            : null;
+        var nav = Nav.FirstOrDefault(n => ReferenceEquals(PageFor(n.Page), page));
         if (nav is not null) Set(ref _selectedNav, nav, nameof(SelectedNav));
         CurrentPage = page;
     }
@@ -244,6 +256,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public string StatusEyebrow => _engineState switch
     {
+        EngineState.Running when IsLongRecording => $"LIVE · LONG RECORDING {LongRecordingTime}",
         EngineState.Running when IsRecording => "LIVE · REPLAY BUFFER ON",
         EngineState.Running => "ENGINE READY",
         EngineState.Starting => "STARTING",
@@ -282,7 +295,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         IsRecording ? "RecordBrush" : _engineState == EngineState.Running ? "SuccessBrush"
         : _engineState == EngineState.Starting ? "WarnBrush" : "IdleBrush") ?? Brushes.Gray);
 
-    public string SidebarStatus => IsRecording ? "Recording" : _engineState switch
+    public string SidebarStatus => IsLongRecording ? $"Long recording {LongRecordingTime}" : IsRecording ? "Recording" : _engineState switch
     {
         EngineState.Running => "Engine ready",
         EngineState.Starting => "Starting…",
@@ -290,6 +303,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     };
 
     public string SaveHint => $"{Hotkey} saves the last {ClipSeconds} s";
+
+    // A long recording runs from its hotkey (or the button) until it's pressed again.
+    public bool IsLongRecording => _longRecordingSince is not null && IsRecording;
+    public string LongRecordingTime => _longRecordingSince is { } since ? Format.Duration(DateTime.Now - since) : "";
+    public string LongRecordingButton => IsLongRecording ? $"Stop · {LongRecordingTime}" : "Long recording";
+    public string LongRecordingHint => IsLongRecording
+        ? $"{RecordHotkey} stops it. Moments are still marked."
+        : $"{RecordHotkey} records until pressed again";
+    public string RecordHotkey { get => _recordHotkey; private set { if (Set(ref _recordHotkey, value)) RaiseLongRecording(); } }
     public string Hotkey { get => _hotkey; private set { if (Set(ref _hotkey, value)) Raise(nameof(SaveHint)); } }
     public int ClipSeconds { get => _clipSeconds; private set { if (Set(ref _clipSeconds, value)) Raise(nameof(SaveHint)); } }
     public int BufferSeconds { get => _bufferSeconds; private set { if (Set(ref _bufferSeconds, value)) Raise(nameof(BufferText)); } }
@@ -362,11 +384,36 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (_engine is null) return;
         var settings = Settings.ToEngineSettings();
         Hotkey = settings.SaveHotkey;
+        RecordHotkey = settings.RecordHotkey;
         ClipSeconds = settings.ClipSeconds;
         BufferSeconds = settings.BufferSeconds;
         _library?.Watch(settings.OutputDir);
         Raise(nameof(ClipsFolder));
         await _engine.RestartAsync();
+    }
+
+    private void ToggleLongRecording()
+    {
+        if (_engine?.ToggleLongRecording() == true) return;
+        ShowToast("The engine isn't running, so nothing can be recorded.", isError: true);
+    }
+
+    private void RaiseLongRecording()
+    {
+        Raise(nameof(IsLongRecording));
+        Raise(nameof(LongRecordingTime));
+        Raise(nameof(LongRecordingButton));
+        Raise(nameof(LongRecordingHint));
+        Raise(nameof(StatusEyebrow));
+        Raise(nameof(SidebarStatus));
+    }
+
+    private void SetLongRecording(DateTime? since)
+    {
+        _longRecordingSince = since;
+        if (since is null) _longRecordingTimer.Stop();
+        else _longRecordingTimer.Start();
+        RaiseLongRecording();
     }
 
     private void SaveClip()
@@ -518,6 +565,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             _recording = null;
             _detectedGame = null;
+            SetLongRecording(null);
+            Records.StartLiveMatch(null);
             UpdateGames();
         }
         if (message is not null) AddActivity(ActivityKind.Error, message);
@@ -552,10 +601,34 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 break;
             case RecordingStarted r:
                 _recording = r;
+                Records.StartLiveMatch(r.Label == "Desktop" ? null : r.Label);
                 AddActivity(ActivityKind.Recording, $"Recording {r.Label} at {r.Width}×{r.Height}, {r.Fps} fps");
                 break;
             case RecordingStopped:
                 _recording = null;
+                SetLongRecording(null);
+                Records.StartLiveMatch(null);
+                _ = RefreshRecordsAsync();
+                break;
+            case RecordHotkey h:
+                RecordHotkey = h.Hotkey;
+                break;
+            case LongRecordingStarted l:
+                SetLongRecording(DateTime.Now);
+                AddActivity(ActivityKind.Recording, $"Long recording started in {l.Game}");
+                ShowToast($"Long recording · {RecordHotkey} to stop");
+                break;
+            case LongRecordingStopped l:
+                SetLongRecording(null);
+                ShowToast(l.Reason is null ? "Saving the long recording…" : $"Long recording stopped: {l.Reason}", l.Reason is not null);
+                break;
+            case LongRecordingSaved l:
+                AddActivity(ActivityKind.Clip, $"Saved a {Format.Duration(TimeSpan.FromSeconds(l.Seconds))} long recording ({Format.Bytes((long)(l.Megabytes * 1024 * 1024))})");
+                ShowToast($"Long recording saved · {Format.Duration(TimeSpan.FromSeconds(l.Seconds))}");
+                _ = RefreshClipsAsync();
+                break;
+            case ScoreboardRead b:
+                Records.SetLiveScoreboard(b.Game, b.Stats);
                 break;
             case ClipSaved s:
                 AddActivity(ActivityKind.Clip, $"Saved a {s.Seconds:0} s clip ({s.Megabytes:0.0} MB)");
@@ -569,6 +642,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 break;
             case MomentDetected m:
                 AddActivity(ActivityKind.Moment, $"{EventKinds.Label(m.Type)} in {m.Game}");
+                Records.AddLiveMoment(m.Game, m.Type);
                 break;
         }
         UpdateGames();
@@ -665,6 +739,23 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Raise(nameof(ClipCount));
         Raise(nameof(HasClips));
         Raise(nameof(HasNoClips));
+        _ = RefreshRecordsAsync();
+    }
+
+    // Timelines the preview tool shows records from, in place of the ones on disk.
+    internal IReadOnlyList<Timeline> SampleTimelines { get; set; } = [];
+
+    // Rebuilds the records from every timeline and clip. Cheap enough to run after each change.
+    internal async Task RefreshRecordsAsync()
+    {
+        var files = _files;
+        if (!IsLive)
+        {
+            Records.SetBook(PlayerRecords.Build(SampleTimelines, files));
+            return;
+        }
+        var book = await Task.Run(() => PlayerRecords.Build(Timeline.LoadAll(Timeline.Folder), files));
+        Records.SetBook(book);
     }
 
     private static async Task LoadThumbnailAsync(ClipItemViewModel clip)
@@ -807,7 +898,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Raise(nameof(StatusDetail));
         Raise(nameof(StatusBrush));
         Raise(nameof(SidebarStatus));
+        RaiseLongRecording();
         SaveClipCommand.NotifyCanExecuteChanged();
+        ToggleLongRecordingCommand.NotifyCanExecuteChanged();
     }
 
     private static StreamGeometry Icon(string key) =>

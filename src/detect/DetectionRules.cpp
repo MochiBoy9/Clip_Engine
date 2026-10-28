@@ -106,9 +106,18 @@ std::vector<DetectionRule> DetectionRules::ForGame(const std::string& game, cons
   return result;
 }
 
+std::vector<ScoreboardRule> DetectionRules::ScoreboardsForGame(const std::string& game) const {
+  std::vector<ScoreboardRule> result;
+  for (const auto& board : scoreboards) {
+    if (board.game == game) result.push_back(board);
+  }
+  return result;
+}
+
 DetectionRules ParseDetectionRules(std::istream& in) {
   DetectionRules result;
   DetectionRule* rule = nullptr;
+  ScoreboardRule* board = nullptr;
   CustomGame* game = nullptr;
   bool inGlobal = false;
   bool skipping = false;
@@ -125,7 +134,13 @@ DetectionRules ParseDetectionRules(std::istream& in) {
       warn(std::format("[game.{}] needs a name and an exe; ignoring it", game->id));
       result.games.pop_back();
     }
+    if (board && board->columns.empty()) {
+      warn(std::format("[{}] lists no columns (like kills = K | KILLS), so it can't read anything; ignoring it",
+                       board->name));
+      result.scoreboards.pop_back();
+    }
     rule = nullptr;
+    board = nullptr;
     game = nullptr;
   };
 
@@ -160,10 +175,16 @@ DetectionRules ParseDetectionRules(std::istream& in) {
         game->id = parts[1];
         continue;
       }
+      if (parts.size() >= 2 && parts[1] == "scoreboard" && !parts[0].empty()) {
+        board = &result.scoreboards.emplace_back();
+        board->name = name;
+        board->game = parts[0];
+        continue;
+      }
       const auto event = parts.size() >= 2 ? ParseEventType(parts[1]) : std::nullopt;
       if (parts.size() < 2 || parts[0].empty() || !event) {
         warn(std::format("[{}] should be [<game>.<event>], with event one of kill, assist, death, revive, "
-                         "match_start, match_end or highlight",
+                         "match_start, match_end, highlight or scoreboard",
                          name));
         skipping = true;
         continue;
@@ -203,20 +224,41 @@ DetectionRules ParseDetectionRules(std::istream& in) {
       }
       continue;
     }
-    if (!rule) {
+    if (!rule && !board) {
       warn("setting outside of a section");
       continue;
     }
 
+    const std::string& section = rule ? rule->name : board->name;
     if (key == "region") {
       const auto numbers = Split(value, ',');
       double v[4]{};
       bool ok = numbers.size() == 4;
       for (size_t i = 0; ok && i < 4; ++i) ok = ParseDouble(numbers[i], v[i]) && v[i] >= 0 && v[i] <= 1;
       if (ok && v[2] > 0 && v[3] > 0 && v[0] + v[2] <= 1.0001 && v[1] + v[3] <= 1.0001) {
-        rule->region = {v[0], v[1], v[2], v[3]};
+        (rule ? rule->region : board->region) = {v[0], v[1], v[2], v[3]};
       } else {
-        warn(std::format("[{}] region must be four fractions: left, top, width, height", rule->name));
+        warn(std::format("[{}] region must be four fractions: left, top, width, height", section));
+      }
+    } else if (key == "threshold") {
+      int t = 0;
+      if (ParseInt(value, t) && t >= 0 && t <= 255) (rule ? rule->threshold : board->threshold) = t;
+      else warn(std::format("[{}] threshold must be 0 to 255", section));
+    } else if (board) {
+      if (key == "sample_ms") {
+        int ms = 0;
+        if (ParseInt(value, ms)) board->sampleMs = std::clamp(ms, 250, 10000);
+        else warn(std::format("[{}] sample_ms must be a whole number", board->name));
+      } else if (IsId(key)) {
+        // Any other key is a stat, and its value the column headers it shows under.
+        std::vector<std::string> labels;
+        for (auto& label : Split(value, '|')) {
+          if (!MakePhrase(label).words.empty()) labels.push_back(std::move(label));
+        }
+        if (labels.empty()) warn(std::format("[{}] {} needs the column headers it shows under", board->name, key));
+        else board->columns.emplace_back(key, std::move(labels));
+      } else {
+        warn(std::format("[{}] unknown setting '{}'", board->name, key));
       }
     } else if (key == "words") {
       rule->words = ParsePhrases(value, rule->playerWords);
@@ -232,10 +274,6 @@ DetectionRules ParseDetectionRules(std::istream& in) {
       int ms = 0;
       if (ParseInt(value, ms) && ms >= 0) rule->cooldownMs = ms;
       else warn(std::format("[{}] cooldown_ms must be a whole number", rule->name));
-    } else if (key == "threshold") {
-      int t = 0;
-      if (ParseInt(value, t) && t >= 0 && t <= 255) rule->threshold = t;
-      else warn(std::format("[{}] threshold must be 0 to 255", rule->name));
     } else {
       warn(std::format("[{}] unknown setting '{}'", rule->name, key));
     }

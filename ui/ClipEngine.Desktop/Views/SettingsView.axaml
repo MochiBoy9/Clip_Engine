@@ -373,7 +373,7 @@
         </Border>
         <Border Classes="glass" Padding="22" Margin="0,0,0,18">
           <StackPanel>
-            <TextBlock Classes="eyebrow" Text="HOTKEY" Margin="0,0,0,16" />
+            <TextBlock Classes="eyebrow" Text="HOTKEYS" Margin="0,0,0,16" />
             <Grid ColumnDefinitions="Auto,*,Auto">
               <Border Width="36" Height="36" CornerRadius="11" VerticalAlignment="Center" Margin="0,0,14,0">
                 <Border.Background>
@@ -389,6 +389,21 @@
               </StackPanel>
               <Panel Grid.Column="2" VerticalAlignment="Center">
                 <TextBox Width="160" Text="{Binding SaveHotkey}" HorizontalContentAlignment="Center" FontWeight="SemiBold" />
+              </Panel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,14" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Width="36" Height="36" CornerRadius="11" VerticalAlignment="Center" Margin="0,0,14,0"
+                      Background="{StaticResource RecordGradient}">
+                <PathIcon Data="{StaticResource IconRecord}" Width="12" Height="12" Foreground="White" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Long recording hotkey" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" TextWrapping="Wrap"
+                           Text="Starts a recording that keeps going until you press it again, with every moment marked on its timeline." />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <TextBox Width="160" Text="{Binding RecordHotkey}" HorizontalContentAlignment="Center" FontWeight="SemiBold" />
               </Panel>
             </Grid>
             <Border Height="1" Background="{StaticResource Divider}" Margin="0,14" />

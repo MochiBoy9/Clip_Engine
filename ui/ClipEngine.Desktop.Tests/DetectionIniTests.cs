@@ -83,6 +83,17 @@ public class DetectionIniTests
         Assert.Equal(1, ini.ToString().Split("[game.valorant]").Length - 1);
     }
 
+    [Fact]
+    public void KeepsTheGamesScoreboardWhenItsRulesAreReplaced()
+    {
+        var ini = DetectionIni.Parse(Ini + "\n[the_finals.scoreboard]\nkills = E | ELIMS\ndeaths = D\n");
+        ini.SetGame("the_finals", null, [new StudioRule { Game = "the_finals", Words = "ELIMINATED" }]);
+        var text = ini.ToString();
+        Assert.Contains("[the_finals.scoreboard]\nkills = E | ELIMS", text);
+        // The scoreboard isn't a rule the Studio shows.
+        Assert.DoesNotContain(DetectionIni.Parse(text).Rules, r => r.Section.StartsWith("the_finals.scoreboard"));
+    }
+
     [Theory]
     [InlineData("Marvel Rivals", "marvel_rivals")]
     [InlineData("  VALORANT ", "valorant")]
