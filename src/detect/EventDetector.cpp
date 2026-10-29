@@ -130,8 +130,8 @@ bool EventDetector::IsAvailable() {
 
 EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCapture& capture,
                              std::vector<DetectionRule> rules, std::vector<ScoreboardRule> scoreboards,
-                             std::vector<std::string> playerNames, int sampleMs, ReadQuality quality, bool debug,
-                             Sink sink, ScoreboardSink scoreboardSink)
+                             std::vector<std::string> playerNames, int sampleMs, ReadQuality quality, double hudScale,
+                             bool debug, Sink sink, ScoreboardSink scoreboardSink)
     : gpu_(std::move(gpu)),
       capture_(capture),
       rules_(std::move(rules)),
@@ -144,7 +144,9 @@ EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCaptur
       scoreboardSink_(std::move(scoreboardSink)) {
   const double screenW = capture_.Width();
   const double screenH = capture_.Height();
-  auto boxFor = [&](const ScreenRegion& r) {
+  // Where the HUD draws each region on this screen, at the HUD size the player set.
+  auto boxFor = [&](const ScreenRegion& rule) {
+    const ScreenRegion r = PlaceRegion(rule, screenW, screenH, hudScale);
     D3D11_BOX box{};
     box.left = static_cast<UINT>(std::floor(r.left * screenW));
     box.top = static_cast<UINT>(std::floor(r.top * screenH));
@@ -176,9 +178,13 @@ EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCaptur
     if (rule.LooksForImage()) {
       try {
         const Picture picture = LoadPicture(std::filesystem::path(winrt::to_hstring(rule.image).c_str()));
+        // An icon is drawn as big as the rest of the HUD: scaled with the height of its 16:9
+        // area, and with the HUD size.
+        const int pictureScreen = rule.imageScreen > 0 ? rule.imageScreen : static_cast<int>(capture_.Height());
+        const double drawnAt = rule.imageScreen > 0 ? HudHeight(rule.region, screenW, screenH, hudScale) : screenH * hudScale;
         matcher.emplace(ToGray(picture.bgra.data(), static_cast<int>(picture.width), static_cast<int>(picture.height),
                                static_cast<size_t>(picture.width) * 4, true),
-                        rule.imageScreen, static_cast<int>(capture_.Height()));
+                        pictureScreen, static_cast<int>(std::lround(drawnAt)));
         if (!matcher->Valid()) {
           log::Warn("Detection rule {}: {} is one flat color, so it would match anything; skipping it", rule.name, rule.image);
           matcher.reset();
@@ -277,6 +283,9 @@ EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCaptur
 
   log::Info("Watching {} screen regions ({} read directly) for {} detection rules, reading quality {}", regions_.size(),
             read, rules_.size(), ToString(quality_));
+  if (std::abs(screenW / screenH - kDefaultAspect) > 0.02 || hudScale != 1) {
+    log::Info("Regions placed for a {}x{} screen with the HUD at {:.0f}%", capture_.Width(), capture_.Height(), hudScale * 100);
+  }
   thread_ = std::thread([this] { Run(); });
 }
 

@@ -23,6 +23,7 @@ public sealed class PlayerViewModel : ObservableObject
     private double _trimStart;
     private double _trimEnd;
     private bool _isSavingTrim;
+    private bool _isChecking;
 
     internal PlayerViewModel(MainViewModel main, ClipItemViewModel clip, object returnTo)
     {
@@ -78,6 +79,13 @@ public sealed class PlayerViewModel : ObservableObject
             _main.ShowPage(_returnTo);
         });
 
+        Accuracy = new AccuracyViewModel(main, clip, () => Position, seconds => SeekTo(seconds, play: true));
+        CheckCommand = new RelayCommand(() =>
+        {
+            if (!IsChecking) IsTrimming = false;
+            IsChecking = !IsChecking;
+        });
+
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(80) };
         _timer.Tick += (_, _) => Poll();
     }
@@ -111,6 +119,18 @@ public sealed class PlayerViewModel : ObservableObject
     public RelayCommand ShowCommand { get; }
     public RelayCommand OpenExternallyCommand { get; }
     public RelayCommand DeleteCommand { get; }
+    public RelayCommand CheckCommand { get; }
+
+    // Checking detection on this clip: marking what really happened, and scoring the rules on it.
+    public AccuracyViewModel Accuracy { get; }
+
+    public bool IsChecking
+    {
+        get => _isChecking;
+        private set { if (Set(ref _isChecking, value)) Raise(nameof(IsNotChecking)); }
+    }
+
+    public bool IsNotChecking => !_isChecking;
 
     public string Title => Clip.HasSummary ? Clip.Summary : $"{Clip.Game} clip";
     public string ShareTip => $"Make a copy under {_main.DesktopSettings.ShareLimitMb} MB and copy it, ready to paste into Discord";
@@ -301,6 +321,7 @@ public sealed class PlayerViewModel : ObservableObject
     private void StartTrim()
     {
         if (_duration <= 0) return;
+        IsChecking = false;
         // Start with the moments if there are any, with a little room either side; otherwise the whole clip.
         _trimStart = HasMarkers ? Math.Max(0, Markers[0].Seconds - 3) : 0;
         _trimEnd = HasMarkers ? Math.Min(_duration, Markers[^1].Seconds + 3) : _duration;
@@ -354,6 +375,19 @@ public sealed class PlayerViewModel : ObservableObject
     {
         SetPosition(seconds);
         IsPlaying = playing;
+    }
+
+    // For the preview tool: the Check detection panel with some marks and a result.
+    internal void ShowCheck()
+    {
+        IsChecking = true;
+        foreach (var (type, at) in new[] { ("kill", 6.2), ("kill", 9.8), ("death", 15.1), ("kill", 21.4), ("revive", 25.0) })
+            Accuracy.AddMark(type, at);
+        Accuracy.ShowResult(DetectionAccuracy.Compare(
+            Accuracy.Marks.Select(m => new ClipEvent { Type = m.Event.Type, Time = m.Event.Time }),
+            [new ClipEvent { Type = "kill", Time = 6.4 }, new ClipEvent { Type = "kill", Time = 10.1 },
+             new ClipEvent { Type = "death", Time = 15.3 }, new ClipEvent { Type = "revive", Time = 25.2 },
+             new ClipEvent { Type = "kill", Time = 18.0, Text = "ELIMINATED BY VEX" }]));
     }
 
     internal void ShowTrim(double start, double end)

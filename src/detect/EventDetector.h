@@ -29,10 +29,11 @@ class EventDetector {
   using ScoreboardSink = std::function<void(const Scoreboard&)>;
 
   // playerNames: for finding the player's row on a scoreboard. quality: how hard to work at
-  // reading (see ReadQuality).
+  // reading (see ReadQuality). hudScale: the size the game's HUD is set to, 1 for 100%; with
+  // the screen's shape, it moves each rule's region to where the HUD draws it (PlaceRegion).
   EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCapture& capture, std::vector<DetectionRule> rules,
                 std::vector<ScoreboardRule> scoreboards, std::vector<std::string> playerNames, int sampleMs,
-                ReadQuality quality, bool debug, Sink sink, ScoreboardSink scoreboardSink);
+                ReadQuality quality, double hudScale, bool debug, Sink sink, ScoreboardSink scoreboardSink);
   ~EventDetector();
 
   EventDetector(const EventDetector&) = delete;

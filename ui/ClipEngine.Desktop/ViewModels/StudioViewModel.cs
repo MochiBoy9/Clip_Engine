@@ -42,6 +42,13 @@ public sealed class StudioViewModel : ObservableObject
         new("call_of_duty", "Call of Duty", false, ["cod.exe", "cod24-cod.exe", "cod25-cod.exe"]),
         new("arc_raiders", "ARC Raiders", false, ["PioneerGame.exe"]),
         new("delta_force", "Delta Force", false, ["DeltaForceClient-Win64-Shipping.exe"]),
+        new("deadlock", "Deadlock", false, ["deadlock.exe", "project8.exe"]),
+        new("halo_infinite", "Halo Infinite", false, ["HaloInfinite.exe"]),
+        new("destiny_2", "Destiny 2", false, ["destiny2.exe"]),
+        new("team_fortress_2", "Team Fortress 2", false, ["tf_win64.exe", "tf.exe"]),
+        new("escape_from_tarkov", "Escape from Tarkov", false, ["EscapeFromTarkov.exe"]),
+        new("roblox", "Roblox", false, ["RobloxPlayerBeta.exe"]),
+        new("minecraft", "Minecraft", false, ["Minecraft.Windows.exe"]),
     ];
 
     public static IReadOnlyList<QualityOption> Qualities { get; } =
@@ -75,6 +82,8 @@ public sealed class StudioViewModel : ObservableObject
     private RunningProgram? _newGameProgram;
     private Avalonia.Threading.DispatcherTimer? _frameTimer;
     private bool _reloadFrame;
+    private int _hudScale = 100;       // the game's HUD size, in percent, as set here
+    private int _savedHudScale = 100;  // and as clip_engine.ini has it
 
     internal StudioViewModel(MainViewModel main, object returnTo, string? gameName = null, ClipItemViewModel? clip = null,
                              double seconds = 0)
@@ -152,6 +161,46 @@ public sealed class StudioViewModel : ObservableObject
         : _ownRules ? "Your own rules."
         : HasBuiltInRules ? (HasChanges ? "Built-in rules, changed. Save to use your version." : "Built-in rules. Change any of them and save to make them yours.")
         : "No rules yet.";
+
+    // How big the game's HUD is set in the game, in percent. The boxes are drawn, tested and
+    // used in game where a HUD that size puts them (ScreenPlacement), so one set of rules fits
+    // every HUD size.
+    public double HudScale
+    {
+        get => _hudScale;
+        set
+        {
+            var percent = (int)Math.Clamp(Math.Round(value / 5) * 5, HudScales.Min, HudScales.Max);
+            if (percent == _hudScale) return;
+            _hudScale = percent;
+            Raise(nameof(HudScale));
+            Raise(nameof(HudScaleText));
+            if (percent != _savedHudScale) HasChanges = true;
+            Matched = null;
+            ReadText = null;
+            RegionsChanged();
+        }
+    }
+
+    public string HudScaleText => $"{_hudScale}%";
+
+    internal double HudFactor => _hudScale / 100.0;
+
+    // The loaded frame's size in pixels, which the boxes are placed for: a frame from an
+    // ultrawide or a 16:10 screen shows them where the engine looks on that screen.
+    internal (double Width, double Height) FrameSize => _frame is { } f ? (f.PixelSize.Width, f.PixelSize.Height) : (0, 0);
+
+    private static int LoadHudScale(string gameId)
+    {
+        try
+        {
+            return HudScales.For(AppPaths.EngineSettingsFile, gameId);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return 100;
+        }
+    }
 
     // The reading quality tests use.
     public QualityOption TestQuality
@@ -266,7 +315,12 @@ public sealed class StudioViewModel : ObservableObject
     public Bitmap? Frame
     {
         get => _frame;
-        private set { if (Set(ref _frame, value)) Raise(nameof(HasFrame)); }
+        private set
+        {
+            if (!Set(ref _frame, value)) return;
+            Raise(nameof(HasFrame));
+            RegionsChanged();
+        }
     }
 
     public bool HasFrame => _frame is not null;
@@ -370,6 +424,9 @@ public sealed class StudioViewModel : ObservableObject
     {
         if (_game is null) return;
         _ownRules = _user.EditedGames.Contains(_game.Id);
+        _savedHudScale = _hudScale = _main.IsLive ? LoadHudScale(_game.Id) : 100;
+        Raise(nameof(HudScale));
+        Raise(nameof(HudScaleText));
         ShowRules((_ownRules ? _user : _shipped).RulesFor(_game.Id));
         HasChanges = false;
     }
@@ -507,7 +564,7 @@ public sealed class StudioViewModel : ObservableObject
         IsBusy = true;
         try
         {
-            var (text, matches) = await StudioTools.ReadAsync(path, FrameSourceSeconds, _selectedRule.Rule, _testQuality.Name);
+            var (text, matches) = await StudioTools.ReadAsync(path, FrameSourceSeconds, _selectedRule.Rule, _testQuality.Name, _hudScale);
             ReadText = text.Length > 0 ? text : "(nothing readable)";
             Matched = matches > 0;
             ShowStatus(null);
@@ -544,6 +601,19 @@ public sealed class StudioViewModel : ObservableObject
                 var n = 2;
                 while (!used.Add(n.ToString(System.Globalization.CultureInfo.InvariantCulture))) n++;
                 rule.Rule.Suffix = n.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
+        }
+        if (_main.IsLive && _hudScale != _savedHudScale)
+        {
+            try
+            {
+                HudScales.Save(AppPaths.EngineSettingsFile, _game.Id, _hudScale);
+                _savedHudScale = _hudScale;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                ShowStatus($"Couldn't save the HUD size: {e.Message}", error: true);
+                return;
             }
         }
         var custom = _game.IsCustom ? new StudioGame(_game.Id, _game.Name, _game.Executables) : null;
@@ -761,21 +831,48 @@ public sealed class StudioRuleViewModel : ObservableObject
 
     public string CooldownText => $"{Rule.CooldownMs / 1000.0:0.#} s";
 
-    // The box, as fractions of the screen.
-    public (double Left, double Top, double Width, double Height) Region => (Rule.Left, Rule.Top, Rule.Width, Rule.Height);
+    // The box as fractions of the frame: where the engine looks on a screen the frame's shape,
+    // with the HUD at the size set in Studio.
+    public (double Left, double Top, double Width, double Height) Region
+    {
+        get
+        {
+            var (width, height) = _owner.FrameSize;
+            var box = ScreenPlacement.Place(new(Rule.Left, Rule.Top, Rule.Width, Rule.Height), Rule.Setting("anchor"),
+                                            Rule.Setting("aspect"), width, height, _owner.HudFactor);
+            return (box.Left, box.Top, box.Width, box.Height);
+        }
+    }
 
+    // A box drawn on the frame, saved as made for a screen that shape with the HUD at 100%.
     internal void SetRegion(double left, double top, double width, double height)
     {
         width = Math.Clamp(width, 0.01, 1);
         height = Math.Clamp(height, 0.01, 1);
-        Rule.Left = Math.Clamp(left, 0, 1 - width);
-        Rule.Top = Math.Clamp(top, 0, 1 - height);
-        Rule.Width = width;
-        Rule.Height = height;
+        var drawn = new ScreenPlacement.Box(Math.Clamp(left, 0, 1 - width), Math.Clamp(top, 0, 1 - height), width, height);
+        var (frameWidth, frameHeight) = _owner.FrameSize;
+        if (frameWidth > 0 || _owner.HudFactor != 1)
+        {
+            var (box, aspect, anchor) = ScreenPlacement.Unplace(drawn, Rule.Setting("anchor"), frameWidth, frameHeight, _owner.HudFactor);
+            drawn = box;
+            Rule.SetSetting("aspect", aspect);
+            Rule.SetSetting("anchor", anchor);
+        }
+        Rule.Left = drawn.Left;
+        Rule.Top = drawn.Top;
+        Rule.Width = drawn.Width;
+        Rule.Height = drawn.Height;
         Changed(nameof(Region), nameof(RegionText));
     }
 
-    public string RegionText => $"{Rule.Left:P0} from left, {Rule.Top:P0} from top, {Rule.Width:P0} × {Rule.Height:P0}";
+    public string RegionText
+    {
+        get
+        {
+            var (left, top, width, height) = Region;
+            return $"{left:P0} from left, {top:P0} from top, {width:P0} × {height:P0}";
+        }
+    }
 
     public bool IsSelected { get => _isSelected; set => Set(ref _isSelected, value); }
 

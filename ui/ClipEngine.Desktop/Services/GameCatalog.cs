@@ -4,7 +4,7 @@ namespace ClipEngine.Desktop.Services;
 // assets/detection.ini). Games not listed here are read off the screen.
 internal static class GameCatalog
 {
-    public enum Method { Screen, Killfeed, GameApi }
+    public enum Method { Screen, Killfeed, GameApi, Hotkey }
 
     private static readonly Dictionary<string, Method> Methods = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -16,6 +16,12 @@ internal static class GameCatalog
         ["Marvel Rivals"] = Method.Killfeed,
         ["Rainbow Six Siege"] = Method.Killfeed,
         ["Delta Force"] = Method.Killfeed,
+        ["Deadlock"] = Method.Killfeed,
+        ["Halo Infinite"] = Method.Killfeed,
+        ["Destiny 2"] = Method.Killfeed,
+        ["Team Fortress 2"] = Method.Killfeed,
+        ["Roblox"] = Method.Hotkey,
+        ["Minecraft"] = Method.Hotkey,
     };
 
     public static Method For(string game) => Methods.GetValueOrDefault(game, Method.Screen);
@@ -24,6 +30,7 @@ internal static class GameCatalog
     {
         Method.GameApi => "Official game events",
         Method.Killfeed => "Reads the killfeed",
+        Method.Hotkey => "Records, clips on the hotkey",
         _ => "Reads the screen",
     };
 }

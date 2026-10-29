@@ -37,6 +37,14 @@ public class EngineLogParserTests
         Assert.Equal("Desktop", Assert.IsType<RecordingStopped>(Parse("Stopped recording Desktop")).Label);
 
     [Fact]
+    public void GameFocus()
+    {
+        Assert.Equal("Halo Infinite", Assert.IsType<GameAway>(
+            Parse("Halo Infinite isn't in front, so the recording shows Game Not Found until you're back")).Game);
+        Assert.Equal("Halo Infinite", Assert.IsType<GameBack>(Parse("Back in Halo Infinite, recording it again")).Game);
+    }
+
+    [Fact]
     public void ClipSaved()
     {
         var e = Assert.IsType<ClipSaved>(Parse(@"Saved 30s clip (212.4 MB) to C:\Users\me\Videos\Clip_Engine\The Finals\The Finals_2026-10-26_21-04-05.mp4"));

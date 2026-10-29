@@ -6,6 +6,7 @@
 #include "core/Config.h"
 #include "detect/DetectionRules.h"
 #include "game/GameDetector.h"
+#include "integrations/DiscordPresence.h"
 #include "integrations/GameIntegration.h"
 #include "media/LongRecorder.h"
 
@@ -50,6 +51,8 @@ class App {
   void SyncIntegration(const DetectedGame* game);
   // Hands moments from the game's API to the recording, like the ones read off the screen.
   void PumpIntegrationEvents();
+  // Shows the game, the match so far and the clips saved as the user's Discord status.
+  void UpdatePresence();
 
   Config config_;
   DetectionRules rules_;
@@ -74,6 +77,9 @@ class App {
   std::unique_ptr<LongRecorder> longRecording_;
   std::vector<GameEvent> longEvents_;  // the moments it caught, for its markers
   std::unique_ptr<TimelineWriter> timeline_;
+
+  std::unique_ptr<DiscordPresence> presence_;
+  PresenceState presenceState_;  // the game being recorded, counted since its match started
 };
 
 }  // namespace clip

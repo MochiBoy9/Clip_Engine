@@ -6,9 +6,11 @@ Proprietary software. All rights reserved; see [LICENSE](LICENSE).
 
 ## What works today
 
-- Detects 16 games (see [Supported games](#supported-games)) and starts recording on the monitor the game is on, stopping when it closes.
+- Detects 23 games (see [Supported games](#supported-games)) and starts recording on the monitor the game is on, stopping when it closes.
 - Captures at the monitor's native resolution and refresh rate with Windows.Graphics.Capture. Nothing is injected into the game, so it is safe with anti-cheat.
 - Encodes on the GPU (NVIDIA, AMD or Intel) with H.264, switching to HEVC when the resolution and frame rate need it.
+- Records only the game: when you switch to another window, the video shows a "Game Not Found" card and game audio goes quiet until you're back, so nothing else on your PC ends up in a clip. Turn it off with **Record only the game** in Settings (`game_focus`).
+- Discord Rich Presence: while Discord is open, your status shows the game you're playing, how long you've been at it, your kills and deaths in the match and the clips you've saved. Turn it off with **Discord status** in Settings (`discord_presence`).
 - Keeps the last 60 seconds in memory; press **F8** to save the last 30 seconds as an MP4 with separate game and mic audio tracks.
 
 - Long recordings: press **F9** (or the button on Home) to record for as long as you like, until you press it again. Detection keeps running, so every kill, death and other moment is marked on its timeline, and automatic clips carry on meanwhile. It streams to disk as it records, so memory use doesn't grow, and it stops by itself before the drive fills up.
@@ -22,6 +24,9 @@ Proprietary software. All rights reserved; see [LICENSE](LICENSE).
 - Trim a clip in the player (drag the handles, or I and O) and save that part as a new clip, instantly and at full quality.
 - Clips grouped by match: each match's result, kills, assists, deaths and revives, every moment on one colored ribbon, and its best clips.
 - Star clips as favorites, and optionally have old clips cleaned up by age or by a size limit. Favorites are always kept.
+- Works on any screen shape and HUD size: each box keeps to the edge or middle of the HUD it sits next to, so the killfeed is read in the right place on ultrawide, 16:10 and 4:3 screens, and a game's HUD size set in Detection Studio moves and resizes every box with it.
+- Check detection (in the player): mark what really happened in a clip, run the game's rules over the whole clip the way the engine reads the game, and see what they caught, missed and found that wasn't there.
+- Moments over the game: the in-game notice also shows each kill with the match's count, multi-kills, streaks, revives, the match's line when it ends and a new personal best. Turn it off in Settings.
 - Detection Studio (Games page, or the scan button in the player): add any game, or fix how one is read. Pick a frame from a clip or a screenshot, draw a box where the game shows a kill, type the words it shows, test it on that frame exactly as the engine would read it in game, and save.
 
 ![Home screen](docs/screenshots/1-home.png)
@@ -34,8 +39,10 @@ Proprietary software. All rights reserved; see [LICENSE](LICENSE).
 | Dota 2 | Official Game State Integration: kills, deaths, assists, multi-kills, the horn and the match result |
 | League of Legends | Official Live Client Data API: kills, deaths, assists, multi-kills, aces, first blood, dragons, Baron and steals, game start and result |
 | Rocket League | Official Stats API: goals, assists, demolitions, saves, kickoff and the match result |
-| Valorant, Marvel Rivals, Rainbow Six Siege, Delta Force | The killfeed, by your in-game name (set it on the Games page), plus round and match banners |
+| Valorant, Marvel Rivals, Rainbow Six Siege, Delta Force, Deadlock, Halo Infinite, Destiny 2, Team Fortress 2 | The killfeed, by your in-game name (set it on the Games page), plus round and match banners and medals |
 | The Finals, Overwatch, Battlefield 6, Fortnite, Apex Legends, PUBG, Call of Duty, ARC Raiders | The HUD's kill, death, revive and match messages |
+| Escape from Tarkov | Deaths and the end of each raid (Tarkov shows no kills on screen) |
+| Roblox, Minecraft | Recorded, with clips on the hotkey; add rules for the experiences you play in Detection Studio |
 
 The official events are exact and work whatever the HUD looks like. Clip Engine turns them on by itself: it writes a `gamestate_integration_clipengine.cfg` into CS2's and Dota 2's `cfg` folders and sets `PacketSendRate` in Rocket League's `TAGame\Config\DefaultStatsAPI.ini`, for installs it finds through Steam and the Epic Games launcher and for any game it sees running. A game that was already open needs one restart to pick that up. Dota 2 may also need `-gamestateintegration` in its Steam launch options. League's API is always on during a game.
 
@@ -80,6 +87,7 @@ Run `ClipEngine.exe` and launch a supported game. `clip_engine.exe` can also run
 - `clip_engine.exe --export <clip.mp4> <out.mp4> --max-mb 10` makes a small copy for sharing.
 - Supporter key: `%LOCALAPPDATA%\Clip_Engine\supporter.key`. Patreon backers get a key that unlocks colour themes, a supporter badge and a place in the thank-you list; every recording feature is free. Keys are made with `dotnet run --project ui/ClipEngine.SupporterKeys -- make "Name"` and checked offline against the public key in `ui/ClipEngine.Desktop/Services/SupporterKey.cs`. Thank-you names live in `ui/ClipEngine.Desktop/Assets/Supporters.txt`.
 - `clip_engine.exe --frame <clip.mp4 or image> <out.png> --at 12.5` saves one frame as a PNG, and `clip_engine.exe --read <clip.mp4 or image> --at 12.5 --region 0.65,0.12,0.33,0.05 --words "ELIMINATED|KNOCKED OUT"` reads that box the way detection does and prints the text and how many times the words matched; `--position start|end` reads it as a killfeed, and `--image icon.png` also says how alike the box is to an icon. Detection Studio uses both.
+- `clip_engine.exe --scan <clip.mp4> --game <id or name> [--quality medium] [--hud-scale 100]` runs a game's rules over a whole clip and prints each moment they find with its time; the player's Check detection uses it.
 - `clip_engine.exe --trim <clip.mp4> <out.mp4> --start 4.5 --end 20` copies part of a clip without re-encoding, starting on the keyframe at or before the start (at most a second early).
 
 ## Layout

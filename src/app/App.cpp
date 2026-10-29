@@ -26,6 +26,9 @@ constexpr int64_t kPollInterval = 2 * kHnsPerSecond;
 constexpr int64_t kRetryDelay = 10 * kHnsPerSecond;
 // How long the main loop sleeps between checks for detected events and finished clips.
 constexpr DWORD kLoopWaitMs = 250;
+// Clip Engine's application on Discord, which the Discord status belongs to. discord_app_id in
+// the settings can name another one.
+constexpr char kDiscordAppId[] = "";
 
 DWORD g_mainThread = 0;
 
@@ -100,6 +103,10 @@ int App::Run() {
   for (const auto& game : detector_.Games()) supported += (supported.empty() ? "" : ", ") + game.name;
   log::Info("Waiting for a supported game: {}", supported);
   if (config_.detection) PrepareGameIntegrations();
+  if (config_.discordPresence) {
+    const std::string appId = config_.discordAppId.empty() ? kDiscordAppId : config_.discordAppId;
+    if (!appId.empty()) presence_ = std::make_unique<DiscordPresence>(appId);
+  }
 
   const HANDLE events[] = {CreateEventW(nullptr, FALSE, FALSE, kSaveEventName),
                            CreateEventW(nullptr, FALSE, FALSE, kQuitEventName),
@@ -112,6 +119,7 @@ int App::Run() {
     UnregisterHotKey(nullptr, kSaveHotkeyId);
     UnregisterHotKey(nullptr, kRecordHotkeyId);
     StopSession();
+    presence_.reset();
     for (auto& save : saves_) save.wait();
     for (HANDLE event : events) {
       if (event) CloseHandle(event);
@@ -144,6 +152,7 @@ int App::Run() {
       Poll();
       nextPoll = NowHns() + kPollInterval;
     }
+    UpdatePresence();
     std::erase_if(saves_, [](std::future<void>& f) { return f.wait_for(std::chrono::seconds(0)) == std::future_status::ready; });
   }
 }
@@ -178,21 +187,28 @@ void App::Poll() {
     std::vector<DetectionRule> rules;
     std::vector<ScoreboardRule> scoreboards;
     std::vector<std::string> playerNames;
+    double hudScale = 1;
     if (config_.detection && !gameId.empty()) {
       std::vector<std::string> needingName;
       playerNames = ReadPlayerNames(config_.file);
       rules = rules_.ForGame(gameId, playerNames, &needingName);
       scoreboards = rules_.ScoreboardsForGame(gameId);
+      hudScale = ReadHudScale(config_.file, gameId);
       if (!needingName.empty()) log::Warn("Add your {} name on the Games page to catch your kills in its killfeed", label);
       if (rules.empty() && game->profile->api == GameApi::None) log::Info("No detection rules for {}, so only the hotkey saves clips", label);
     }
     try {
       session_ = std::make_unique<RecordingSession>(config_, monitor, label, std::move(rules), std::move(scoreboards),
-                                                    std::move(playerNames), rules_.sampleMs);
+                                                    std::move(playerNames), rules_.sampleMs, hudScale);
       sessionGameId_ = gameId;
       sessionId_ = LocalTimestamp();
       sessionStart_ = NowHns();
       matchStarts_.clear();
+      presenceState_ = PresenceState{};
+      presenceState_.game = label;
+      presenceState_.startUnix = std::chrono::duration_cast<std::chrono::seconds>(
+                                     std::chrono::system_clock::now().time_since_epoch())
+                                     .count();
       // Only games have moments worth keeping for the records.
       if (config_.detection && !gameId.empty()) {
         timeline_ = std::make_unique<TimelineWriter>(config_.file.parent_path() / L"timeline", sessionId_, label);
@@ -229,6 +245,18 @@ void App::PumpIntegrationEvents() {
   // Only moments from the game being recorded belong in its clips.
   if (!session_ || session_->Label() != integrationGame_->name) return;
   for (auto& event : events) session_->AddEvent(event);
+}
+
+void App::UpdatePresence() {
+  if (!presence_) return;
+  // Only games go on the status, not a recording of the desktop.
+  if (!session_ || sessionGameId_.empty()) {
+    presence_->Set(std::nullopt);
+    return;
+  }
+  presenceState_.longRecording = longRecording_ != nullptr;
+  presenceState_.away = !session_->GameInFocus();
+  presence_->Set(presenceState_);
 }
 
 void App::PumpScoreboards() {
@@ -269,7 +297,13 @@ void App::HandleEvents() {
   if (!session_) return;
   for (const auto& event : session_->TakeNewEvents()) {
     log::Info("Detected {} in {}: {}", EventName(event.type), session_->Label(), event.text);
-    if (event.type == EventType::MatchStart) matchStarts_.push_back(event.time);
+    if (event.type == EventType::MatchStart) {
+      matchStarts_.push_back(event.time);
+      presenceState_.kills = presenceState_.deaths = presenceState_.assists = 0;
+    }
+    if (event.type == EventType::Kill) ++presenceState_.kills;
+    if (event.type == EventType::Death) ++presenceState_.deaths;
+    if (event.type == EventType::Assist) ++presenceState_.assists;
     if (timeline_) timeline_->Write(TimelineEvent(SessionSeconds(event.time), MatchAt(event.time), event));
     if (longRecording_ && event.time >= longRecording_->Start()) longEvents_.push_back(event);
     if (config_.autoClip && config_.autoClipEvents.contains(event.type)) planner_.Add(event.time);
@@ -337,6 +371,7 @@ bool App::SaveRange(int64_t start, int64_t end, const char* trigger) {
   }
 
   const auto path = ClipPath();
+  ++presenceState_.clips;
   const bool beep = std::string_view(trigger) == "hotkey";
   saves_.push_back(std::async(std::launch::async, [clip = std::move(*clip), metadata = std::move(metadata), path, beep] {
     winrt::init_apartment(winrt::apartment_type::multi_threaded);

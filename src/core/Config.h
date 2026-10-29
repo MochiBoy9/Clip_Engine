@@ -22,6 +22,11 @@ struct Hotkey {
 // engine runs, so it's read again each time a game starts.
 std::vector<std::string> ReadPlayerNames(const std::filesystem::path& file);
 
+// The size the player set a game's HUD to, from the hud_scale setting ("overwatch 90,
+// fortnite 120", percent per game id), as a fraction: 1 when the game isn't listed. Read again
+// each time a game starts, like the player's names, since the app can change it.
+double ReadHudScale(const std::filesystem::path& file, std::string_view gameId);
+
 // Parses "F8", "Alt+F10", "Ctrl+Shift+S" and similar.
 std::optional<Hotkey> ParseHotkey(std::string_view text);
 
@@ -40,6 +45,13 @@ struct Config {
   Hotkey recordHotkey{0, VK_F9};
   std::string recordHotkeyText = "F9";
   bool recordWithoutGame = false;  // keep a buffer of the main monitor when no game is open
+  // While a game is recorded, record only the game: when another window comes to the front,
+  // the video shows a "Game Not Found" card and game audio goes quiet until the game is back.
+  bool gameFocus = true;
+
+  // Show what's being played and recorded as the user's Discord status.
+  bool discordPresence = true;
+  std::string discordAppId;  // the Discord application the status belongs to; empty = the built-in one
 
   bool detection = true;          // read the screen for kills, deaths and other moments
   bool detectionDebug = false;    // log everything read off the screen, for tuning detection.ini

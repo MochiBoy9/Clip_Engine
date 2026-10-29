@@ -17,6 +17,8 @@ public sealed class SettingsViewModel : ObservableObject
     private string _saveHotkey = "F8";
     private string _recordHotkey = "F9";
     private bool _recordWithoutGame;
+    private bool _gameFocus = true;
+    private bool _discordPresence = true;
     private bool _detection;
     private string _readingQuality = "medium";
     private bool _autoClip;
@@ -116,6 +118,8 @@ public sealed class SettingsViewModel : ObservableObject
     public string SaveHotkey { get => _saveHotkey; set => Change(ref _saveHotkey, value); }
     public string RecordHotkey { get => _recordHotkey; set => Change(ref _recordHotkey, value); }
     public bool RecordWithoutGame { get => _recordWithoutGame; set => Change(ref _recordWithoutGame, value); }
+    public bool GameFocus { get => _gameFocus; set => Change(ref _gameFocus, value); }
+    public bool DiscordPresence { get => _discordPresence; set => Change(ref _discordPresence, value); }
 
     // Reading kills and other moments off the screen, and saving clips around them.
     public bool Detection { get => _detection; set => Change(ref _detection, value); }
@@ -221,6 +225,18 @@ public sealed class SettingsViewModel : ObservableObject
         }
     }
 
+    public bool MomentNotices
+    {
+        get => _desktop.MomentNotices;
+        set
+        {
+            if (_desktop.MomentNotices == value) return;
+            _desktop.MomentNotices = value;
+            TrySaveDesktop();
+            Raise();
+        }
+    }
+
     public bool HasChanges
     {
         get => _hasChanges;
@@ -247,6 +263,8 @@ public sealed class SettingsViewModel : ObservableObject
         SaveHotkey = string.IsNullOrWhiteSpace(SaveHotkey) ? "F8" : SaveHotkey.Trim(),
         RecordHotkey = string.IsNullOrWhiteSpace(RecordHotkey) ? "F9" : RecordHotkey.Trim(),
         RecordWithoutGame = RecordWithoutGame,
+        GameFocus = GameFocus,
+        DiscordPresence = DiscordPresence,
         Detection = Detection,
         ReadingQuality = _readingQuality,
         AutoClip = AutoClip,
@@ -284,6 +302,8 @@ public sealed class SettingsViewModel : ObservableObject
         _saveHotkey = s.SaveHotkey;
         _recordHotkey = s.RecordHotkey;
         _recordWithoutGame = s.RecordWithoutGame;
+        _gameFocus = s.GameFocus;
+        _discordPresence = s.DiscordPresence;
         _detection = s.Detection;
         _readingQuality = EngineSettings.ReadingQualities.Contains(s.ReadingQuality) ? s.ReadingQuality : "medium";
         _autoClip = s.AutoClip;

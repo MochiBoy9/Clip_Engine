@@ -49,6 +49,23 @@ public class EngineSettingsTests : IDisposable
     }
 
     [Fact]
+    public void GameFocusAndDiscordRoundTrip()
+    {
+        var settings = EngineSettings.Load(_file);
+        Assert.True(settings.GameFocus);
+        Assert.True(settings.DiscordPresence);
+
+        settings.GameFocus = false;
+        settings.DiscordPresence = false;
+        settings.Save(_file);
+        Assert.Contains("game_focus = false", File.ReadAllLines(_file));
+
+        var reloaded = EngineSettings.Load(_file);
+        Assert.False(reloaded.GameFocus);
+        Assert.False(reloaded.DiscordPresence);
+    }
+
+    [Fact]
     public void AutomaticClipSettingsRoundTrip()
     {
         var settings = EngineSettings.Load(_file);

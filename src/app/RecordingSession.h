@@ -24,7 +24,7 @@ class RecordingSession {
   // scoreboards: where the game shows the player's totals, found by playerNames.
   RecordingSession(const Config& config, HMONITOR monitor, std::string label, std::vector<DetectionRule> rules,
                    std::vector<ScoreboardRule> scoreboards, std::vector<std::string> playerNames,
-                   int detectionSampleMs);
+                   int detectionSampleMs, double hudScale = 1);
   ~RecordingSession();
 
   RecordingSession(const RecordingSession&) = delete;
@@ -40,10 +40,15 @@ class RecordingSession {
   const ReplayBuffer& Buffer() const { return buffer_; }
   ReplayBuffer& Buffer() { return buffer_; }
 
-  // The game's process, so the screen is read only while the game is in front.
+  // The game's process, so the screen is read only while the game is in front, and, with
+  // game_focus on, only the game is recorded.
   void SetGameProcess(DWORD processId) {
+    gameProcess_ = processId;
     if (detector_) detector_->SetGameProcess(processId);
   }
+
+  // False while the recording shows "Game Not Found" because another window is in front.
+  bool GameInFocus() const { return !away_; }
 
   // Adds a moment found some other way than reading the screen (the game's own API).
   void AddEvent(const GameEvent& event) { OnEvent(event); }
@@ -57,6 +62,8 @@ class RecordingSession {
 
  private:
   void PaceFrames();
+  // Whether the game's own frames should be recorded, for game_focus. Called by the frame pacer.
+  bool CheckFocus();
   void OnEvent(const GameEvent& event);
   void StartAudio(AudioCapture::Source source, int stream, std::unique_ptr<AacEncoder>& encoder,
                   std::unique_ptr<AudioCapture>& capture);
@@ -81,6 +88,15 @@ class RecordingSession {
   std::deque<GameEvent> history_;
   std::vector<GameEvent> newEvents_;
   std::vector<Scoreboard> newScoreboards_;
+
+  // game_focus: while another window is in front, the "Game Not Found" frame is recorded
+  // instead of the screen, and game audio is silent.
+  bool focusOnly_ = false;
+  std::atomic<DWORD> gameProcess_{0};
+  std::atomic<bool> away_{false};
+  int64_t backSince_ = 0;  // when the game came back in front
+  winrt::com_ptr<ID3D11Texture2D> notFoundFrame_;
+  bool notFoundFailed_ = false;
 
   std::atomic<bool> stop_{false};
   std::thread pacer_;

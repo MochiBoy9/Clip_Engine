@@ -67,12 +67,22 @@ public partial class PlayerView : UserControl
             Key.OemPeriod or Key.Down => _vm.NextMarkerCommand,
             Key.I => _vm.SetTrimStartCommand,
             Key.O => _vm.SetTrimEndCommand,
+            Key.M when _vm.IsChecking => _vm.Accuracy.MarkCommand,
+            >= Key.D1 and <= Key.D7 when _vm.IsChecking => PickMarkType(e.Key - Key.D1),
             Key.Escape when _vm.IsTrimming => _vm.CancelTrimCommand,
+            Key.Escape when _vm.IsChecking => _vm.CheckCommand,
             Key.Escape or Key.Back => _vm.BackCommand,
             _ => null,
         };
         if (command is null) return;
         command.Execute(null);
         e.Handled = true;
+    }
+
+    // 1 to 7 pick what the next mark is, in the order of the list.
+    private RelayCommand PickMarkType(int index)
+    {
+        var accuracy = _vm!.Accuracy;
+        return new RelayCommand(() => accuracy.MarkType = accuracy.Events[Math.Clamp(index, 0, accuracy.Events.Count - 1)]);
     }
 }

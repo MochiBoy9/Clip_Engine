@@ -5,23 +5,23 @@
              x:Class="ClipEngine.Desktop.Views.GamesView"
              x:DataType="vm:GamesPage">
   <ScrollViewer>
-    <StackPanel Margin="0,0,0,24" Spacing="14">
-      <StackPanel Spacing="2">
+    <StackPanel Margin="0,0,40,40" Spacing="22">
+      <StackPanel Spacing="4">
         <TextBlock Classes="h1" Text="Games" />
         <TextBlock Classes="caption" Text="Clip Engine starts recording as soon as one of these opens, on the monitor it's on." />
       </StackPanel>
 
       <!-- Killfeed games need the player's name to tell their kills from everyone else's. -->
-      <views:Plate x:Name="NameCard" x:DataType="vm:PlayerNamesViewModel" Classes="card" Padding="20" Margin="0,0,12,0">
+      <views:Plate x:Name="NameCard" x:DataType="vm:PlayerNamesViewModel" Classes="card" Padding="26,24">
         <Grid ColumnDefinitions="Auto,*">
           <Border Classes="tile" Width="40" Height="40" VerticalAlignment="Top" Margin="0,0,16,0">
             <PathIcon Data="{StaticResource IconSparkle}" Width="18" Height="18" />
           </Border>
-          <StackPanel Grid.Column="1" Spacing="6">
+          <StackPanel Grid.Column="1" Spacing="8">
             <TextBlock Classes="h2" Text="Your in-game name" />
             <TextBlock Classes="body" TextWrapping="Wrap"
-                       Text="Valorant, Marvel Rivals, Rainbow Six Siege and Delta Force show kills in a killfeed, so Clip Engine looks for your name there. Separate names for different games with commas, without the #tag." />
-            <Grid ColumnDefinitions="*,Auto" Margin="0,6,0,0">
+                       Text="Valorant, Marvel Rivals, Rainbow Six Siege, Delta Force, Deadlock, Halo Infinite, Destiny 2 and Team Fortress 2 show kills in a killfeed, so Clip Engine looks for your name there. Separate names for different games with commas, without the #tag." />
+            <Grid ColumnDefinitions="*,Auto" Margin="0,8,0,0">
               <TextBox Text="{Binding Names}" Watermark="Your name, as it shows in the killfeed" />
               <Button Grid.Column="1" Classes="accent" Content="Save" Command="{Binding SaveCommand}" Margin="10,0,0,0" />
             </Grid>
@@ -30,20 +30,20 @@
         </Grid>
       </views:Plate>
 
-      <ItemsControl ItemsSource="{Binding Main.Games}">
+      <ItemsControl ItemsSource="{Binding Main.Games}" Margin="0,0,-18,-18">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate><UniformGrid Columns="3" /></ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:GameItemViewModel">
-            <views:Plate Classes="card" Padding="18" Margin="0,0,12,12">
-              <StackPanel Spacing="14">
+            <views:Plate Classes="card" Padding="22,20" Margin="0,0,18,18">
+              <StackPanel Spacing="16">
                 <Grid ColumnDefinitions="Auto,*,Auto">
                   <Border Width="48" Height="48" CornerRadius="2" Background="{Binding Gradient}">
                     <TextBlock Text="{Binding Initials}" FontSize="17" FontWeight="Black" Foreground="White"
                                HorizontalAlignment="Center" VerticalAlignment="Center" />
                   </Border>
-                  <StackPanel Grid.Column="1" Margin="14,0,8,0" VerticalAlignment="Center" Spacing="2">
+                  <StackPanel Grid.Column="1" Margin="16,0,8,0" VerticalAlignment="Center" Spacing="3">
                     <TextBlock Classes="h2" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
                     <TextBlock Classes="caption" Text="{Binding Status}" />
                   </StackPanel>
@@ -67,7 +67,7 @@
         </ItemsControl.ItemTemplate>
       </ItemsControl>
 
-      <views:Plate Classes="card" Padding="20" Margin="0,0,12,0">
+      <views:Plate Classes="card" Padding="26,24">
         <Grid ColumnDefinitions="Auto,*,Auto">
           <Border Classes="tile" Width="40" Height="40" VerticalAlignment="Top" Margin="0,0,16,0">
             <PathIcon Data="{StaticResource IconScan}" Width="18" Height="18" />

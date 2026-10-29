@@ -18,6 +18,10 @@ internal sealed record GameClosed(string Game) : EngineEvent;
 internal sealed record RecordingStarted(string Label, int Width, int Height, int Fps, string Codec, int Mbps, string Encoder)
     : EngineEvent;
 internal sealed record RecordingStopped(string Label) : EngineEvent;
+// With game focus on: another window came in front of the game, so the recording shows
+// "Game Not Found" until the game is back.
+internal sealed record GameAway(string Game) : EngineEvent;
+internal sealed record GameBack(string Game) : EngineEvent;
 internal sealed record ClipSaved(string Path, double Seconds, double Megabytes) : EngineEvent;
 internal sealed record MomentDetected(string Type, string Game, string Text) : EngineEvent;
 internal sealed record ExportProgress(int Percent) : EngineEvent;
@@ -31,6 +35,10 @@ internal sealed record RecordHotkey(string Hotkey) : EngineEvent;
 internal sealed record LongRecordingStarted(string Game) : EngineEvent;
 internal sealed record LongRecordingStopped(double Seconds, string? Reason) : EngineEvent;
 internal sealed record LongRecordingSaved(string Path, double Seconds, double Megabytes) : EngineEvent;
+// --scan: a moment the game's rules found in a clip, how far it has got, and the end.
+internal sealed record ScanFound(string Type, double Seconds, string Text) : EngineEvent;
+internal sealed record ScanProgress(int Percent) : EngineEvent;
+internal sealed record ScanDone(int Count) : EngineEvent;
 // The player's totals in the match, from the game's API or its scoreboard.
 internal sealed record ScoreboardRead(string Game, IReadOnlyDictionary<string, int> Stats) : EngineEvent;
 
@@ -103,6 +111,21 @@ internal static partial class EngineLogParser
     [GeneratedRegex(@"^([a-z0-9_]+) (-?\d+)$")]
     private static partial Regex StatRegex();
 
+    [GeneratedRegex(@"^(.+) isn't in front, so the recording shows Game Not Found until you're back$")]
+    private static partial Regex AwayRegex();
+
+    [GeneratedRegex(@"^Back in (.+), recording it again$")]
+    private static partial Regex BackRegex();
+
+    [GeneratedRegex(@"^Scan found (\S+) at ([\d.]+): ?(.*)$")]
+    private static partial Regex ScanFoundRegex();
+
+    [GeneratedRegex(@"^Scan progress (\d+)%$")]
+    private static partial Regex ScanProgressRegex();
+
+    [GeneratedRegex(@"^Scan done: (\d+) moments$")]
+    private static partial Regex ScanDoneRegex();
+
     [GeneratedRegex(@"^(.+) (detected|closed)$")]
     private static partial Regex GameRegex();
 
@@ -161,6 +184,11 @@ internal static partial class EngineLogParser
             }
             if (stats.Count > 0) return new ScoreboardRead(m.Groups[1].Value, stats);
         }
+        if ((m = AwayRegex().Match(text)).Success) return new GameAway(m.Groups[1].Value);
+        if ((m = BackRegex().Match(text)).Success) return new GameBack(m.Groups[1].Value);
+        if ((m = ScanFoundRegex().Match(text)).Success) return new ScanFound(m.Groups[1].Value, Double(m.Groups[2]), m.Groups[3].Value);
+        if ((m = ScanProgressRegex().Match(text)).Success) return new ScanProgress(Int(m.Groups[1]));
+        if ((m = ScanDoneRegex().Match(text)).Success) return new ScanDone(Int(m.Groups[1]));
         if ((m = GameRegex().Match(text)).Success)
             return m.Groups[2].Value == "detected" ? new GameDetected(m.Groups[1].Value) : new GameClosed(m.Groups[1].Value);
         return null;
