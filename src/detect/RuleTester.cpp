@@ -338,8 +338,8 @@ int RunScanCommand(const std::filesystem::path& input, const std::vector<Detecti
       watches.push_back(std::move(watch));
     }
     if (watches.empty()) {
-      log::Error(ocr ? "Scan failed: none of this game's rules fit the video"
-                     : "Scan failed: Windows text recognition isn't installed. Add English under Settings > Time & language > Language.");
+      if (ocr) log::Error("Scan failed: none of this game's rules fit the video");
+      else log::Error("Scan failed: Windows text recognition isn't installed. Add English under Settings > Time & language > Language.");
       return 1;
     }
     log::Info("Scanning {}x{} video with {} rules at reading quality {}", video.width, video.height, watches.size(),
