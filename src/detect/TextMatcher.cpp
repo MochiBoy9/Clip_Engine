@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <iterator>
 
 namespace clip {
 namespace {
@@ -60,10 +61,35 @@ std::vector<std::string> Tokenize(std::string_view text) {
   return tokens;
 }
 
-Phrase MakePhrase(std::string_view text) { return Phrase{Tokenize(text)}; }
+Phrase MakePhrase(std::string_view text) {
+  std::string lower(text);
+  std::ranges::transform(lower, lower.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  Phrase phrase;
+  size_t start = 0;
+  while (true) {
+    const size_t at = lower.find(kNumberPlaceholder, start);
+    for (auto& token : Tokenize(text.substr(start, at == std::string::npos ? std::string_view::npos : at - start))) {
+      phrase.words.push_back(std::move(token));
+    }
+    if (at == std::string::npos) break;
+    phrase.words.emplace_back(kNumberWord);
+    start = at + kNumberPlaceholder.size();
+  }
+  return phrase;
+}
+
+bool HasNumber(const Phrase& phrase) { return std::ranges::find(phrase.words, kNumberWord) != phrase.words.end(); }
 
 bool WordsMatch(std::string_view token, std::string_view word) {
   if (token.empty() || word.empty()) return false;
+  // A number, maybe with an O read for a 0 or an S for a 5, but never a distance like 15M.
+  if (word == kNumberWord) {
+    const auto digits = std::ranges::count_if(token, [](char c) { return std::isdigit(static_cast<unsigned char>(c)) != 0; });
+    const bool lookalikes = std::ranges::all_of(token, [](char c) {
+      return std::isdigit(static_cast<unsigned char>(c)) != 0 || c == 'O' || c == 'I' || c == 'S' || c == 'B';
+    });
+    return lookalikes && digits * 2 >= std::ssize(token);
+  }
 
   const bool wordIsLetters = std::ranges::all_of(word, [](char c) { return std::isalpha(static_cast<unsigned char>(c)) != 0; });
   std::string candidate(token);
@@ -73,11 +99,19 @@ bool WordsMatch(std::string_view token, std::string_view word) {
   // Short words must match exactly; longer ones may lose or gain a letter.
   const int tolerance = word.size() >= 9 ? 2 : word.size() >= 5 ? 1 : 0;
   if (tolerance == 0) return false;
+
+  // A plural is another word, and closer to the word without its S than with it.
+  if (word.back() != 'S' && candidate.size() > 1 && candidate.back() == 'S' &&
+      EditDistance(std::string_view(candidate).substr(0, candidate.size() - 1), word, tolerance) <
+          EditDistance(candidate, word, tolerance)) {
+    return false;
+  }
   if (EditDistance(candidate, word, tolerance) <= tolerance) return true;
 
-  // OCR often runs a keyword into the next word ("ELIMINATEDPLAYER").
+  // OCR often runs a keyword into the next word ("ELIMINATEDPLAYER"). Only a letter off
+  // there, or another form of the word would pass for it (ELIMINATION for ELIMINATED).
   if (word.size() >= 6 && candidate.size() > word.size()) {
-    return EditDistance(std::string_view(candidate).substr(0, word.size()), word, tolerance) <= tolerance;
+    return EditDistance(std::string_view(candidate).substr(0, word.size()), word, 1) <= 1;
   }
   return false;
 }

@@ -205,6 +205,7 @@ void App::Poll() {
     }
   }
 
+  if (session_) session_->SetGameProcess(game ? game->processId : 0);
   SyncIntegration(game ? &*game : nullptr);
 }
 

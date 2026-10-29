@@ -12,13 +12,23 @@ namespace clip {
 // Upper-cases and splits into runs of letters and digits.
 std::vector<std::string> Tokenize(std::string_view text);
 
-// A keyword or short phrase such as "ELIMINATED" or "KILLED BY".
+// A keyword or short phrase such as "ELIMINATED" or "KILLED BY". "{number}" in it stands for
+// any number, as in "ELIMINATION {number}" for the score line a kill brings up; it's kept in
+// the phrase as kNumberWord.
 struct Phrase {
   std::vector<std::string> words;
 };
 Phrase MakePhrase(std::string_view text);
 
-// True when an OCR'd word is close enough to the expected word.
+inline constexpr std::string_view kNumberPlaceholder = "{number}";
+inline constexpr std::string_view kNumberWord = "#";
+
+// Whether a phrase has a {number} in it.
+bool HasNumber(const Phrase& phrase);
+
+// True when an OCR'd word is close enough to the expected word, or for kNumberWord, when it's
+// a number. A plural never matches the word it's the plural of: ELIMINATIONS and REVIVES are
+// scoreboard headings, not a kill or a revive.
 bool WordsMatch(std::string_view token, std::string_view word);
 
 // True when two runs of OCR'd text, such as player names, are close enough to be the same
