@@ -37,4 +37,12 @@ int RunFrameCommand(const std::filesystem::path& input, const std::filesystem::p
 int RunReadCommand(const std::filesystem::path& input, double seconds, const DetectionRule& rule, ReadQuality quality,
                    double hudScale = 1);
 
+// clip_engine.exe --scan <clip> --game <id or name> [--quality low|medium|high|ultra] [--hud-scale 100]
+// Runs the game's rules over the whole video, frame by frame, as detection would have in game,
+// and logs "Scan found <event> at <seconds>: <text>" for each moment, "Scan progress <n>%" as
+// it goes and "Scan done: <count> moments". The app scores detection against the player's own
+// marks of what really happened with it.
+int RunScanCommand(const std::filesystem::path& input, const std::vector<DetectionRule>& rules, ReadQuality quality,
+                   double hudScale = 1);
+
 }  // namespace clip

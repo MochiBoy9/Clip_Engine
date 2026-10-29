@@ -31,6 +31,12 @@ internal sealed class ClipMetadata
     // Starred in the app. Favorites are never removed by the storage cleanup.
     [JsonPropertyName("favorite")] public bool Favorite { get; set; }
 
+    // The player's own marks of what really happened in the clip, made in the player's "Check
+    // detection" panel, to score detection against. Null until the clip has been marked.
+    [JsonPropertyName("labels")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<ClipEvent>? Labels { get; set; }
+
     // Two reads of one killfeed line used to be saved as two moments: a repeat of the same
     // moment with the same text a few seconds later is the same kill, so it's dropped (and the
     // title recounted). Clips saved by newer engines don't have these.

@@ -831,6 +831,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         SetClips(_files.Select(f => string.Equals(f.Path, clip.Path, StringComparison.OrdinalIgnoreCase) ? clip.File : f).ToList());
     }
 
+    // Keeps what's known about a clip after its .json was rewritten (its marks, say).
+    internal void ClipMetadataChanged(ClipItemViewModel clip, ClipMetadata metadata)
+    {
+        clip.File = clip.File with { Metadata = metadata };
+        _files = _files.Select(f => string.Equals(f.Path, clip.Path, StringComparison.OrdinalIgnoreCase) ? clip.File : f).ToList();
+    }
+
     // Saves part of a clip as a new clip and returns it, or null if that failed (with a toast saying why).
     internal async Task<ClipItemViewModel?> TrimClipAsync(ClipItemViewModel clip, double start, double end)
     {

@@ -42,6 +42,13 @@
             <TextBlock Text="Trim" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
+        <Button Classes="secondary" Command="{Binding CheckCommand}" Classes.active="{Binding IsChecking}"
+                ToolTip.Tip="Mark what really happened in this clip and see what detection catches, misses and gets wrong">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <PathIcon Data="{StaticResource IconScan}" Width="14" Height="14" />
+            <TextBlock Text="Check detection" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
         <Button Classes="secondary" Command="{Binding CopyCommand}" ToolTip.Tip="Copy the full-quality clip to paste anywhere">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <PathIcon Data="{StaticResource IconCopy}" Width="14" Height="14" />
@@ -154,6 +161,125 @@
                 </Button>
               </StackPanel>
             </Grid>
+          </Border>
+          <!-- Checking detection: marking what really happened, then scoring the rules on it -->
+          <Border IsVisible="{Binding IsChecking}" Classes="inset" Padding="12,10" Margin="0,0,0,4">
+            <StackPanel DataContext="{Binding Accuracy}" x:DataType="vm:AccuracyViewModel" Spacing="10">
+              <Grid ColumnDefinitions="Auto,*,Auto">
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                  <ComboBox Width="140" ItemsSource="{Binding Events}" SelectedItem="{Binding MarkType}"
+                            ToolTip.Tip="What the next mark is (1 to 7)" />
+                  <Button Classes="accent" Command="{Binding MarkCommand}" ToolTip.Tip="Mark this moment at the playhead (M)">
+                    <TextBlock Text="Mark · M" />
+                  </Button>
+                  <Button Classes="secondary" Command="{Binding StartFromDetectedCommand}"
+                          ToolTip.Tip="Start from the moments detection saved with the clip, then remove the wrong ones and mark the missed">
+                    <TextBlock Text="Start from detected" />
+                  </Button>
+                  <Button Classes="secondary" Command="{Binding ClearCommand}" Content="Clear" />
+                </StackPanel>
+                <TextBlock Grid.Column="1" Classes="caption" Text="{Binding MarksCaption}" TextWrapping="Wrap"
+                           VerticalAlignment="Center" Margin="14,0" />
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                  <ProgressBar Width="90" Minimum="0" Maximum="100" Value="{Binding Progress}" IsVisible="{Binding IsScanning}"
+                               VerticalAlignment="Center" />
+                  <Button Classes="secondary" Content="Stop" Command="{Binding CancelCommand}" IsVisible="{Binding IsScanning}" />
+                  <Button Classes="accent" Command="{Binding RunCommand}"
+                          ToolTip.Tip="Run this game's rules over the whole clip the way the engine reads the game, and compare with your marks">
+                    <TextBlock Text="Run detection" />
+                  </Button>
+                </StackPanel>
+              </Grid>
+
+              <ScrollViewer MaxHeight="64" IsVisible="{Binding HasMarks}" HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl ItemsSource="{Binding Marks}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:MarkViewModel">
+                      <Button Classes="secondary" Command="{Binding SeekCommand}" Margin="0,0,6,6" Padding="8,3,4,3">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <Ellipse Width="8" Height="8" Fill="{Binding Brush}" VerticalAlignment="Center" />
+                          <TextBlock FontSize="12" FontFeatures="tnum" VerticalAlignment="Center">
+                            <Run Text="{Binding Label}" />
+                            <Run Text="{Binding TimeText}" Foreground="{StaticResource TextTertiary}" />
+                          </TextBlock>
+                          <Button Classes="icon" Command="{Binding RemoveCommand}" Width="20" Height="20" Padding="4"
+                                  ToolTip.Tip="Take this mark off">
+                            <PathIcon Data="{StaticResource IconClose}" Width="9" Height="9" />
+                          </Button>
+                        </StackPanel>
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </ScrollViewer>
+
+              <StackPanel Spacing="6" IsVisible="{Binding HasStatus}">
+                <TextBlock Classes="caption" Text="{Binding Status}" TextWrapping="Wrap"
+                           Foreground="{StaticResource WarnBrush}" IsVisible="{Binding StatusIsError}" />
+                <TextBlock Classes="caption" Text="{Binding Status}" TextWrapping="Wrap" IsVisible="{Binding !StatusIsError}" />
+              </StackPanel>
+
+              <StackPanel Spacing="8" IsVisible="{Binding HasResult}">
+                <TextBlock Text="{Binding ResultSummary}" FontWeight="SemiBold" FontSize="13" />
+                <ItemsControl ItemsSource="{Binding Rows}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:AccuracyRow">
+                      <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,16,4">
+                        <Ellipse Width="8" Height="8" Fill="{Binding Brush}" VerticalAlignment="Center" />
+                        <TextBlock FontSize="12" FontFeatures="tnum">
+                          <Run Text="{Binding Label}" FontWeight="SemiBold" />
+                          <Run Text="{Binding Text}" Foreground="{StaticResource TextSecondary}" />
+                        </TextBlock>
+                      </StackPanel>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding HasMissed}">
+                  <TextBlock Classes="caption" Text="Missed:" VerticalAlignment="Center" />
+                  <ItemsControl ItemsSource="{Binding Missed}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:MarkerViewModel">
+                        <Button Classes="secondary" Command="{Binding SeekCommand}" Margin="0,0,6,0" Padding="6,2"
+                                ToolTip.Tip="Jump there, then open Detection Studio to fix the rule">
+                          <TextBlock FontSize="12" FontFeatures="tnum">
+                            <Run Text="{Binding Label}" />
+                            <Run Text="{Binding TimeText}" Foreground="{StaticResource TextTertiary}" />
+                          </TextBlock>
+                        </Button>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding HasExtra}">
+                  <TextBlock Classes="caption" Text="Not really there:" VerticalAlignment="Center" />
+                  <ItemsControl ItemsSource="{Binding Extra}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:MarkerViewModel">
+                        <Button Classes="secondary" Command="{Binding SeekCommand}" Margin="0,0,6,0" Padding="6,2"
+                                ToolTip.Tip="{Binding Text}">
+                          <TextBlock FontSize="12" FontFeatures="tnum">
+                            <Run Text="{Binding Label}" />
+                            <Run Text="{Binding TimeText}" Foreground="{StaticResource TextTertiary}" />
+                          </TextBlock>
+                        </Button>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </StackPanel>
+            </StackPanel>
           </Border>
           <views:MarkerTimeline Position="{Binding Position}" Duration="{Binding Duration}" Markers="{Binding Markers}"
                                 IsTrimming="{Binding IsTrimming}" TrimStart="{Binding TrimStart}" TrimEnd="{Binding TrimEnd}" />

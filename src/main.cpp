@@ -5,6 +5,7 @@
 #include "detect/DetectionRules.h"
 #include "detect/EventDetector.h"
 #include "detect/RuleTester.h"
+#include "game/GameDetector.h"
 #include "media/Exporter.h"
 #include "media/Trimmer.h"
 
@@ -181,12 +182,50 @@ int RunStudioCommand(int argc, wchar_t** argv) {
   return result;
 }
 
+// clip_engine.exe --scan <clip> --game <id or name> [--quality low|medium|high|ultra] [--hud-scale 100]
+// Runs a game's rules (yours where you've changed them) over a whole clip, for checking
+// detection against what really happened in it.
+int RunScanCommand(int argc, wchar_t** argv) {
+  using namespace clip;
+  std::string game;
+  ReadQuality quality = ReadQuality::Medium;
+  std::optional<double> hudScale;
+  for (int i = 3; i + 1 < argc; i += 2) {
+    const std::wstring_view flag = argv[i];
+    const std::string value = winrt::to_string(argv[i + 1]);
+    if (flag == L"--game") game = value;
+    if (flag == L"--quality") {
+      if (const auto q = ParseReadQuality(value)) quality = *q;
+    }
+    if (flag == L"--hud-scale") hudScale = std::clamp(_wtof(argv[i + 1]), 25.0, 400.0) / 100;
+  }
+  winrt::init_apartment(winrt::apartment_type::multi_threaded);
+  const auto dataDir = DataDir();
+  const DetectionRules rules = LoadDetectionRules(dataDir);
+  // The game by its id, or by the name its clips are filed under.
+  std::vector<GameProfile> custom;
+  for (const auto& g : rules.games) custom.push_back({g.id, g.name, {}, GameApi::None});
+  for (const auto& profile : GameDetector(custom).Games()) {
+    if (_stricmp(profile.name.c_str(), game.c_str()) == 0) game = profile.id;
+  }
+  const auto settings = dataDir / L"clip_engine.ini";
+  const auto forGame = rules.ForGame(game, ReadPlayerNames(settings));
+  if (FAILED(MFStartup(MF_VERSION))) {
+    log::Error("Scan failed: Media Foundation is unavailable");
+    return 1;
+  }
+  const int result = RunScanCommand(argv[2], forGame, quality, hudScale.value_or(ReadHudScale(settings, game)));
+  MFShutdown();
+  return result;
+}
+
 int wmain(int argc, wchar_t** argv) {
   using namespace clip;
   if (argc >= 4 && std::wstring_view(argv[1]) == L"--export") return RunExportCommand(argc, argv);
   if (argc >= 4 && std::wstring_view(argv[1]) == L"--trim") return RunTrimCommand(argc, argv);
   if (argc >= 4 && std::wstring_view(argv[1]) == L"--frame") return RunStudioCommand(argc, argv);
   if (argc >= 3 && std::wstring_view(argv[1]) == L"--read") return RunStudioCommand(argc, argv);
+  if (argc >= 3 && std::wstring_view(argv[1]) == L"--scan") return RunScanCommand(argc, argv);
 
   // One copy at a time; two would fight over the hotkey and the GPU encoder.
   HANDLE instance = CreateMutexW(nullptr, TRUE, L"Local\\ClipEngine.SingleInstance");

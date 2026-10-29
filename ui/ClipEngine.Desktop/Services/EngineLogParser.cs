@@ -31,6 +31,10 @@ internal sealed record RecordHotkey(string Hotkey) : EngineEvent;
 internal sealed record LongRecordingStarted(string Game) : EngineEvent;
 internal sealed record LongRecordingStopped(double Seconds, string? Reason) : EngineEvent;
 internal sealed record LongRecordingSaved(string Path, double Seconds, double Megabytes) : EngineEvent;
+// --scan: a moment the game's rules found in a clip, how far it has got, and the end.
+internal sealed record ScanFound(string Type, double Seconds, string Text) : EngineEvent;
+internal sealed record ScanProgress(int Percent) : EngineEvent;
+internal sealed record ScanDone(int Count) : EngineEvent;
 // The player's totals in the match, from the game's API or its scoreboard.
 internal sealed record ScoreboardRead(string Game, IReadOnlyDictionary<string, int> Stats) : EngineEvent;
 
@@ -103,6 +107,15 @@ internal static partial class EngineLogParser
     [GeneratedRegex(@"^([a-z0-9_]+) (-?\d+)$")]
     private static partial Regex StatRegex();
 
+    [GeneratedRegex(@"^Scan found (\S+) at ([\d.]+): ?(.*)$")]
+    private static partial Regex ScanFoundRegex();
+
+    [GeneratedRegex(@"^Scan progress (\d+)%$")]
+    private static partial Regex ScanProgressRegex();
+
+    [GeneratedRegex(@"^Scan done: (\d+) moments$")]
+    private static partial Regex ScanDoneRegex();
+
     [GeneratedRegex(@"^(.+) (detected|closed)$")]
     private static partial Regex GameRegex();
 
@@ -161,6 +174,9 @@ internal static partial class EngineLogParser
             }
             if (stats.Count > 0) return new ScoreboardRead(m.Groups[1].Value, stats);
         }
+        if ((m = ScanFoundRegex().Match(text)).Success) return new ScanFound(m.Groups[1].Value, Double(m.Groups[2]), m.Groups[3].Value);
+        if ((m = ScanProgressRegex().Match(text)).Success) return new ScanProgress(Int(m.Groups[1]));
+        if ((m = ScanDoneRegex().Match(text)).Success) return new ScanDone(Int(m.Groups[1]));
         if ((m = GameRegex().Match(text)).Success)
             return m.Groups[2].Value == "detected" ? new GameDetected(m.Groups[1].Value) : new GameClosed(m.Groups[1].Value);
         return null;
