@@ -42,7 +42,7 @@ jobs:
         run: >
           dotnet publish ui/ClipEngine.Desktop -c Release -r win-x64 --self-contained
           -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
-          -p:Version=${{ steps.version.outputs.version }} -o dist
+          -p:Version=${{ steps.version.outputs.version }} -p:UpdateRepo=${{ vars.DOWNLOADS_REPO }} -o dist
 
       - name: Assemble package
         shell: pwsh

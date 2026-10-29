@@ -60,6 +60,9 @@ public sealed class SettingsViewModel : ObservableObject
     // The support card at the top of the right column.
     public SupporterViewModel? Supporter { get; init; }
 
+    // The updates card under it.
+    public UpdatesViewModel? Updates { get; init; }
+
     public event Action<string>? SidePanelHotkeyChanged;
     public event Action? StorageRulesChanged;
     public event Action? CleanUpNowRequested;

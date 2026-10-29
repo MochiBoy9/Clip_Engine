@@ -6,5 +6,6 @@ internal interface IAppDialogs
     nint WindowHandle { get; }
     Task<string?> PickClipAsync();
     Task<string?> PickImageAsync();
+    Task<string?> PickZipAsync();
     Task<string?> PickFolderAsync(string title, string? startFolder);
 }

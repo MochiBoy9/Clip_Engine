@@ -32,6 +32,12 @@ internal sealed class DesktopSettings
     // Clips page: show matches instead of single clips.
     public bool ShowMatches { get; set; }
 
+    // Updates: looked for when the app starts, on GitHub Releases of UpdateRepo (empty for the one the app was built
+    // from). UpdateToken is a GitHub token for a private repository, encrypted for this Windows account.
+    public bool CheckForUpdates { get; set; } = true;
+    public string UpdateRepo { get; set; } = "";
+    public string UpdateToken { get; set; } = "";
+
     // Folders clips shared with you were imported into, shown in the library too.
     public List<string> ImportFolders { get; set; } = [];
 

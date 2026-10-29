@@ -1,17 +1,15 @@
-## Clip Engine 0.5.0
+## Clip Engine 0.5.1
 
-This update brings a new look, counts your kills properly, records whole sessions and keeps your records.
+This update fixes kills, assists and revives being counted too many times, and lets Clip Engine update itself.
 
-- **A new look.** The glassy UI is replaced by a flat, rugged amber-on-gunmetal design that is lighter to draw, so the app stays out of your game's way.
-- **Each kill counts once.** A kill feed line is remembered by the names on it, so it counts once however long it stays up or flickers, and quick multi-kills are no longer lost. Scores, countdowns and medals like `DOUBLE KILL` no longer count as extra kills. Older clips with repeated moments are tidied when they load.
-- **Icons, not just words.** A detection rule can now look for a picture cut from a screenshot, like a kill banner or a skull, at any resolution.
-- **Lighter on your PC.** Parts of the screen that haven't changed aren't read again, deaths and match banners are checked less often, and big banners on 4K screens are read at half size.
-- **Long recording.** Press **F9** (or the button on Home) to record until you press it again. Nothing is re-encoded, detection keeps marking your moments, and auto clips carry on. It stops on its own when the game closes or your drive gets low.
-- **Records.** A new Records page shows your lifetime kills, deaths, assists, revives, K/D and wins, your personal bests, totals per game, your recent matches and a live card for the match you're playing. Scoreboards are read in CS2, Dota 2, League and Rocket League, and from the screen in Valorant, Overwatch, Marvel Rivals, Siege, The Finals, Battlefield 6, Call of Duty and Delta Force. Add your in-game name on the Games page.
-- **Detection Studio fixes.** Saving a game in Studio no longer loses settings it doesn't show, which had turned some kill feed rules into rules that counted every line with your name, or deletes the game's scoreboard.
-- **New rules** for Black Ops 6 medals, Overwatch round starts and Valorant's team ace.
+- **Updates from inside the app.** Settings > Updates looks for a new version when Clip Engine starts, and **Install and restart** downloads it, swaps the files and opens the new version, with your settings and clips untouched. You can also install a release zip you already downloaded with **Choose zip**. While the repository is private, paste a GitHub token that can read it under Release source.
+- **Each kill counts once in The Finals.** A kill shows both "ELIMINATED <name>" and "ELIMINATION +250", and both used to count, often several times over as the name read differently each time. Only the score line counts now. In one recorded match the app logged 46 kills, 35 assists and 30 revives where the game's summary shows 12, 8 and 1.
+- **Revives are real revives.** A downed teammate's REVIVE marker and the hold-E REVIVE prompt no longer count; only the "REVIVE +200" you get for picking someone up does.
+- **The end-of-match summary isn't counted.** Its ELIMINATIONS, REVIVES and ASSISTS headings no longer add kills, revives or assists, in any game.
+- **Only the game is read.** While another window is in front of the game, like Clip Engine's own clip list or a browser, the screen isn't read, so text there can't become a moment.
+- **Detection rules** can use `{number}` for any number on the same row, as in `ELIMINATION {number}`.
 
-Everything from 0.4.1 is included: every feature free, trimming, matches, favorites and Detection Studio.
+Everything from 0.5.0 is included.
 
 ## Install
 
