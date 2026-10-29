@@ -170,7 +170,8 @@ int RunFrameCommand(const std::filesystem::path& input, const std::filesystem::p
   return 1;
 }
 
-int RunReadCommand(const std::filesystem::path& input, double seconds, const DetectionRule& rule, ReadQuality quality) {
+int RunReadCommand(const std::filesystem::path& input, double seconds, const DetectionRule& rule, ReadQuality quality,
+                   double hudScale) {
   try {
     const auto ocr = CreateOcrEngine();
     if (!ocr) {
@@ -178,10 +179,12 @@ int RunReadCommand(const std::filesystem::path& input, double seconds, const Det
       return 1;
     }
     const Picture frame = LoadFrame(input, seconds);
-    const auto left = static_cast<UINT>(std::floor(rule.region.left * frame.width));
-    const auto top = static_cast<UINT>(std::floor(rule.region.top * frame.height));
-    const auto right = std::min(frame.width, static_cast<UINT>(std::ceil((rule.region.left + rule.region.width) * frame.width)));
-    const auto bottom = std::min(frame.height, static_cast<UINT>(std::ceil((rule.region.top + rule.region.height) * frame.height)));
+    // Where detection would look on a screen this shape, with the HUD at this size.
+    const ScreenRegion region = PlaceRegion(rule.region, frame.width, frame.height, hudScale);
+    const auto left = static_cast<UINT>(std::floor(region.left * frame.width));
+    const auto top = static_cast<UINT>(std::floor(region.top * frame.height));
+    const auto right = std::min(frame.width, static_cast<UINT>(std::ceil((region.left + region.width) * frame.width)));
+    const auto bottom = std::min(frame.height, static_cast<UINT>(std::ceil((region.top + region.height) * frame.height)));
     if (right < left + 8 || bottom < top + 8) {
       log::Error("Read failed: the box is too small to read");
       return 1;
@@ -210,9 +213,12 @@ int RunReadCommand(const std::filesystem::path& input, double seconds, const Det
 
     if (rule.LooksForImage()) {
       const Picture icon = LoadPicture(std::filesystem::path(winrt::to_hstring(rule.image).c_str()));
+      const int pictureScreen = rule.imageScreen > 0 ? rule.imageScreen : static_cast<int>(frame.height);
+      const double drawnAt = rule.imageScreen > 0 ? HudHeight(rule.region, frame.width, frame.height, hudScale)
+                                                  : frame.height * hudScale;
       const ImageMatcher matcher(ToGray(icon.bgra.data(), static_cast<int>(icon.width), static_cast<int>(icon.height),
                                         icon.width * 4, true),
-                                 rule.imageScreen, static_cast<int>(frame.height));
+                                 pictureScreen, static_cast<int>(std::lround(drawnAt)));
       if (!matcher.Valid()) {
         log::Error("Read failed: the image is one flat color, so it would match anything flat");
         return 1;

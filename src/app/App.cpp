@@ -178,17 +178,19 @@ void App::Poll() {
     std::vector<DetectionRule> rules;
     std::vector<ScoreboardRule> scoreboards;
     std::vector<std::string> playerNames;
+    double hudScale = 1;
     if (config_.detection && !gameId.empty()) {
       std::vector<std::string> needingName;
       playerNames = ReadPlayerNames(config_.file);
       rules = rules_.ForGame(gameId, playerNames, &needingName);
       scoreboards = rules_.ScoreboardsForGame(gameId);
+      hudScale = ReadHudScale(config_.file, gameId);
       if (!needingName.empty()) log::Warn("Add your {} name on the Games page to catch your kills in its killfeed", label);
       if (rules.empty() && game->profile->api == GameApi::None) log::Info("No detection rules for {}, so only the hotkey saves clips", label);
     }
     try {
       session_ = std::make_unique<RecordingSession>(config_, monitor, label, std::move(rules), std::move(scoreboards),
-                                                    std::move(playerNames), rules_.sampleMs);
+                                                    std::move(playerNames), rules_.sampleMs, hudScale);
       sessionGameId_ = gameId;
       sessionId_ = LocalTimestamp();
       sessionStart_ = NowHns();

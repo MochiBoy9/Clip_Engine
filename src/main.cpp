@@ -131,13 +131,14 @@ int RunTrimCommand(int argc, wchar_t** argv) {
 // clip_engine.exe --frame <clip or image> <out.png> [--at seconds]
 // clip_engine.exe --read <clip or image> [--at seconds] --region l,t,w,h [--threshold n] [--words "A|B"] [--exclude "C"]
 //                 [--position start|end] [--image icon.png] [--image-match 0.85] [--image-screen 1440]
-//                 [--quality low|medium|high|ultra] [--event kill]
+//                 [--quality low|medium|high|ultra] [--event kill] [--anchor top-right] [--aspect 16:9] [--hud-scale 100]
 // Detection Studio's helpers: grab a frame to draw on, and read a box of it the way detection does.
 int RunStudioCommand(int argc, wchar_t** argv) {
   using namespace clip;
   const bool frame = std::wstring_view(argv[1]) == L"--frame";
   double seconds = 0;
   ReadQuality quality = ReadQuality::Medium;
+  double hudScale = 1;
   DetectionRule rule;
   rule.name = "studio";
   for (int i = frame ? 4 : 3; i + 1 < argc; i += 2) {
@@ -159,15 +160,23 @@ int RunStudioCommand(int argc, wchar_t** argv) {
     }
     if (flag == L"--region") {
       double l = 0, t = 0, w = 0, h = 0;
-      if (swscanf_s(argv[i + 1], L"%lf,%lf,%lf,%lf", &l, &t, &w, &h) == 4) rule.region = {l, t, w, h};
+      if (swscanf_s(argv[i + 1], L"%lf,%lf,%lf,%lf", &l, &t, &w, &h) == 4) {
+        rule.region.left = l;
+        rule.region.top = t;
+        rule.region.width = w;
+        rule.region.height = h;
+      }
     }
+    if (flag == L"--anchor") ParseAnchor(value, rule.region.anchorX, rule.region.anchorY);
+    if (flag == L"--aspect") ParseAspect(value, rule.region.aspect);
+    if (flag == L"--hud-scale") hudScale = std::clamp(_wtof(argv[i + 1]), 25.0, 400.0) / 100;
   }
   winrt::init_apartment(winrt::apartment_type::multi_threaded);
   if (FAILED(MFStartup(MF_VERSION))) {
     log::Error("{} failed: Media Foundation is unavailable", frame ? "Frame" : "Read");
     return 1;
   }
-  const int result = frame ? RunFrameCommand(argv[2], argv[3], seconds) : RunReadCommand(argv[2], seconds, rule, quality);
+  const int result = frame ? RunFrameCommand(argv[2], argv[3], seconds) : RunReadCommand(argv[2], seconds, rule, quality, hudScale);
   MFShutdown();
   return result;
 }

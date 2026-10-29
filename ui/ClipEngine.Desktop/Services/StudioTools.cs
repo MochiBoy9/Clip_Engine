@@ -30,7 +30,8 @@ internal static class StudioTools
 
     // Reads the rule's box of the frame like detection does at that reading quality (low to ultra):
     // the text, and how many times its words match.
-    public static async Task<(string Text, int Matches)> ReadAsync(string source, double seconds, StudioRule rule, string quality)
+    public static async Task<(string Text, int Matches)> ReadAsync(string source, double seconds, StudioRule rule, string quality,
+                                                                  int hudScale = 100)
     {
         Require();
         string? text = null;
@@ -40,7 +41,11 @@ internal static class StudioTools
             "--read", source, "--at", Number(seconds), "--region", rule.RegionText.Replace(" ", ""),
             "--threshold", rule.Threshold.ToString(CultureInfo.InvariantCulture), "--words", rule.Words, "--exclude", rule.Exclude,
             "--position", rule.Position, "--event", rule.Event, "--quality", quality,
+            "--hud-scale", hudScale.ToString(CultureInfo.InvariantCulture),
         ];
+        // Placed on the frame the way the engine places it on a screen that shape.
+        if (rule.Setting("anchor") is { } anchor) args.AddRange(["--anchor", anchor]);
+        if (rule.Setting("aspect") is { } aspect) args.AddRange(["--aspect", aspect]);
         // Icons are found next to detection.ini, like the engine looks for them.
         if (rule.Image is { Length: > 0 } image)
         {

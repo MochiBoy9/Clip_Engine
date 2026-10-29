@@ -22,6 +22,11 @@ struct Hotkey {
 // engine runs, so it's read again each time a game starts.
 std::vector<std::string> ReadPlayerNames(const std::filesystem::path& file);
 
+// The size the player set a game's HUD to, from the hud_scale setting ("overwatch 90,
+// fortnite 120", percent per game id), as a fraction: 1 when the game isn't listed. Read again
+// each time a game starts, like the player's names, since the app can change it.
+double ReadHudScale(const std::filesystem::path& file, std::string_view gameId);
+
 // Parses "F8", "Alt+F10", "Ctrl+Shift+S" and similar.
 std::optional<Hotkey> ParseHotkey(std::string_view text);
 

@@ -38,7 +38,7 @@ UINT AutoBitrate(UINT width, UINT height, UINT fps) {
 
 RecordingSession::RecordingSession(const Config& config, HMONITOR monitor, std::string label,
                                    std::vector<DetectionRule> rules, std::vector<ScoreboardRule> scoreboards,
-                                   std::vector<std::string> playerNames, int detectionSampleMs)
+                                   std::vector<std::string> playerNames, int detectionSampleMs, double hudScale)
     : label_(std::move(label)),
       monitor_(monitor),
       buffer_(int64_t{config.bufferSeconds} * kHnsPerSecond),
@@ -75,7 +75,7 @@ RecordingSession::RecordingSession(const Config& config, HMONITOR monitor, std::
     try {
       detector_ = std::make_unique<EventDetector>(
           gpu_, *capture_, std::move(rules), std::move(scoreboards), std::move(playerNames), detectionSampleMs,
-          config.readingQuality, config.detectionDebug, [this](const GameEvent& e) { OnEvent(e); },
+          config.readingQuality, hudScale, config.detectionDebug, [this](const GameEvent& e) { OnEvent(e); },
           [this](const Scoreboard& board) {
             std::lock_guard lock(eventsMutex_);
             newScoreboards_.push_back(board);
