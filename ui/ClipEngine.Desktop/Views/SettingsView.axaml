@@ -312,6 +312,55 @@
             </StackPanel>
           </StackPanel>
         </views:Plate>
+        <views:Plate Classes="card" Padding="20" Margin="0,0,0,14" DataContext="{Binding Updates}" x:DataType="vm:UpdatesViewModel"
+                IsVisible="{Binding $self.DataContext, Converter={x:Static ObjectConverters.IsNotNull}}">
+          <StackPanel>
+            <TextBlock Classes="eyebrow" Margin="0,0,0,14" Text="UPDATES" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,14,0">
+                <PathIcon Data="{StaticResource IconImport}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="{Binding AvailableTitle, TargetNullValue='Clip Engine updates'}" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="{Binding Status}" TextWrapping="Wrap" Classes.error="{Binding StatusIsError}" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <Button Classes="accent" Content="Install and restart" Command="{Binding InstallCommand}" IsVisible="{Binding HasUpdate}" />
+                <Button Classes="secondary" Content="Check now" Command="{Binding CheckCommand}" IsVisible="{Binding !HasUpdate}" />
+              </Panel>
+            </Grid>
+            <TextBlock Classes="caption" Text="{Binding AvailableNotes}" TextWrapping="Wrap" Margin="0,10,0,0"
+                       IsVisible="{Binding AvailableNotes, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            <ProgressBar Minimum="0" Maximum="1" Value="{Binding Progress}" IsVisible="{Binding ShowProgress}" Margin="0,10,0,0" />
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,12" />
+            <Grid ColumnDefinitions="*,Auto">
+              <StackPanel VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Look for updates when Clip Engine starts" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="Nothing installs until you choose to." TextWrapping="Wrap" />
+              </StackPanel>
+              <ToggleSwitch Grid.Column="1" IsChecked="{Binding CheckOnStart}" OnContent="{x:Null}" OffContent="{x:Null}" />
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,12" />
+            <Grid ColumnDefinitions="*,Auto">
+              <StackPanel VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Install from a zip" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="A Clip_Engine-…-windows-x64.zip you already downloaded." TextWrapping="Wrap" />
+              </StackPanel>
+              <Button Grid.Column="1" Classes="secondary" Content="Choose zip" Command="{Binding InstallFromZipCommand}" />
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,12" />
+            <TextBlock Text="Release source" FontWeight="SemiBold" FontSize="14" />
+            <TextBlock Classes="caption" TextWrapping="Wrap" Margin="0,2,0,8"
+                       Text="The GitHub repository updates come from. A private one needs a token that can read it (Contents: read)." />
+            <TextBox Text="{Binding RepoInput}" Watermark="{Binding RepoShown}" />
+            <Grid ColumnDefinitions="*,Auto" Margin="0,8,0,0" IsVisible="{Binding ShowTokenBox}">
+              <TextBox Text="{Binding TokenInput}" PasswordChar="•" Watermark="GitHub token (github_pat_…)" />
+              <Button Grid.Column="1" Classes="secondary" Content="Save token" Command="{Binding SaveTokenCommand}" Margin="10,0,0,0" />
+            </Grid>
+            <Button Classes="secondary" Content="Remove token from this PC" Command="{Binding RemoveTokenCommand}"
+                    IsVisible="{Binding HasToken}" Margin="0,8,0,0" />
+          </StackPanel>
+        </views:Plate>
         <views:Plate Classes="card" Padding="20" Margin="0,0,0,14">
           <StackPanel>
             <TextBlock Classes="eyebrow" Margin="0,0,0,14" Text="HOTKEYS" />

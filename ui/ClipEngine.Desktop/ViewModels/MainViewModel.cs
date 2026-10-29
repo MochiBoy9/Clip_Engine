@@ -65,7 +65,23 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Supporter = live
             ? new SupporterViewModel(SupporterConfig.PublicKey, AppPaths.SupporterKeyFile, DesktopSettings)
             : new SupporterViewModel(SupporterConfig.PublicKey, null, DesktopSettings);
-        Settings = new SettingsViewModel(engineSettings, DesktopSettings, live ? RestartEngineAsync : null) { Supporter = Supporter };
+        Updates = new UpdatesViewModel(DesktopSettings, live)
+        {
+            PickZip = () => Dialogs?.PickZipAsync() ?? Task.FromResult<string?>(null),
+            StopEngine = StopEngineAsync,
+            StartEngine = () =>
+            {
+                _engine?.Start();
+                return Task.CompletedTask;
+            },
+        };
+        Updates.UpdateFound += release =>
+            AddActivity(ActivityKind.Info, $"Clip Engine {release.Version} is out. Install it from Settings > Updates.");
+        Settings = new SettingsViewModel(engineSettings, DesktopSettings, live ? RestartEngineAsync : null)
+        {
+            Supporter = Supporter,
+            Updates = Updates,
+        };
         Settings.SidePanelHotkeyChanged += _ => Raise(nameof(SidePanelHotkey));
         Settings.StorageRulesChanged += OnStorageRulesChanged;
         Settings.CleanUpNowRequested += () => _ = CleanUpAsync();
@@ -146,6 +162,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                                                        line.Message));
         };
         _engine.Start();
+        Updates.OnStarted();
     }
 
     public IReadOnlyList<NavItem> Nav { get; }
@@ -155,6 +172,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public RecordsViewModel Records { get; }
     public SettingsViewModel Settings { get; }
     public SupporterViewModel Supporter { get; }
+    public UpdatesViewModel Updates { get; }
     internal DesktopSettings DesktopSettings { get; }
 
     public ObservableCollection<ActivityItem> Activity { get; } = [];

@@ -35,6 +35,7 @@ public partial class App : Application
             _viewModel.SidePanelToggleRequested += ToggleSidePanel;
             _viewModel.GameNoticeRequested += ShowGameNotice;
             _viewModel.Settings.SidePanelHotkeyChanged += RegisterHotkey;
+            _viewModel.Updates.RestartRequested += () => _ = RestartAfterUpdateAsync();
             _window.Show();
             RegisterHotkey(_viewModel.DesktopSettings.SidePanelHotkey);
             desktop.Exit += (_, _) =>
@@ -114,6 +115,24 @@ public partial class App : Application
     private void OnTrayOpenFolder(object? sender, EventArgs e) => _viewModel?.OpenClipsFolderCommand.Execute(null);
 
     private void OnTrayQuit(object? sender, EventArgs e) => _ = QuitAsync();
+
+    // The new files are in place: start them, and make way.
+    private async Task RestartAfterUpdateAsync()
+    {
+        try
+        {
+            var exe = Path.Combine(AppContext.BaseDirectory, UpdateInstaller.AppExe);
+            var start = new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = false, WorkingDirectory = AppContext.BaseDirectory };
+            start.ArgumentList.Add(Program.AfterUpdateArg);
+            start.ArgumentList.Add(Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            System.Diagnostics.Process.Start(start);
+        }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or IOException)
+        {
+            _viewModel?.AddActivity(ActivityKind.Error, $"The update is installed, but Clip Engine couldn't restart itself ({e.Message}). Start it again.");
+        }
+        await QuitAsync();
+    }
 
     internal async Task QuitAsync()
     {

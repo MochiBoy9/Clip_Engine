@@ -8,7 +8,7 @@
     <LangVersion>latest</LangVersion>
     <AssemblyName>ClipEngine</AssemblyName>
     <RootNamespace>ClipEngine.Desktop</RootNamespace>
-    <Version>0.5.0</Version>
+    <Version>0.5.1</Version>
     <Product>Clip Engine</Product>
     <Copyright>Copyright (c) 2026 MochiBoy9. All rights reserved.</Copyright>
     <ApplicationIcon>Assets\ClipEngine.ico</ApplicationIcon>
@@ -26,6 +26,12 @@
     <PackageReference Include="Avalonia.Desktop" Version="11.3.22" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.22" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.22" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+  </ItemGroup>
+
+  <!-- Where the app looks for updates: dotnet publish -p:UpdateRepo=owner/repo. The source repository otherwise. -->
+  <ItemGroup Condition="'$(UpdateRepo)' != ''">
+    <AssemblyMetadata Include="UpdateRepo" Value="$(UpdateRepo)" />
   </ItemGroup>
 
   <ItemGroup>
