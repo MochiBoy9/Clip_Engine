@@ -24,6 +24,7 @@ internal sealed record ExportProgress(int Percent) : EngineEvent;
 internal sealed record Exported(string Path, double Megabytes) : EngineEvent;
 internal sealed record Trimmed(string Path, double Seconds, double From) : EngineEvent;
 internal sealed record FrameSaved(string Path, int Width, int Height) : EngineEvent;
+internal sealed record VideoLength(double Seconds) : EngineEvent;
 internal sealed record TextRead(string Text) : EngineEvent;
 internal sealed record RuleMatches(int Count) : EngineEvent;
 internal sealed record RecordHotkey(string Hotkey) : EngineEvent;
@@ -74,6 +75,9 @@ internal static partial class EngineLogParser
 
     [GeneratedRegex(@"^Frame (\d+)x(\d+) saved to (.+)$")]
     private static partial Regex FrameRegex();
+
+    [GeneratedRegex(@"^Video length: ([\d.]+)$")]
+    private static partial Regex VideoLengthRegex();
 
     [GeneratedRegex(@"^Read: ?(.*)$")]
     private static partial Regex ReadRegex();
@@ -138,6 +142,7 @@ internal static partial class EngineLogParser
         if ((m = ExportedRegex().Match(text)).Success) return new Exported(m.Groups[2].Value, Double(m.Groups[1]));
         if ((m = TrimmedRegex().Match(text)).Success) return new Trimmed(m.Groups[3].Value, Double(m.Groups[1]), Double(m.Groups[2]));
         if ((m = FrameRegex().Match(text)).Success) return new FrameSaved(m.Groups[3].Value, Int(m.Groups[1]), Int(m.Groups[2]));
+        if ((m = VideoLengthRegex().Match(text)).Success) return new VideoLength(Double(m.Groups[1]));
         if ((m = ReadRegex().Match(text)).Success) return new TextRead(m.Groups[1].Value);
         if ((m = MatchesRegex().Match(text)).Success) return new RuleMatches(Int(m.Groups[1]));
         if ((m = RecordHotkeyRegex().Match(text)).Success) return new RecordHotkey(m.Groups[1].Value);

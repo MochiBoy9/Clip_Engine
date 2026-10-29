@@ -122,6 +122,83 @@ public class DetectionIniTests
         Assert.DoesNotContain(DetectionIni.Parse(text).Rules, r => r.Section.StartsWith("the_finals.scoreboard"));
     }
 
+    [Fact]
+    public void MarksAGameSavedInStudioAsTheUsersOwn()
+    {
+        var user = DetectionIni.NewChanges();
+        Assert.Empty(user.EditedGames);
+        user.SetGame("valorant", null, []);
+        // Even with every rule removed, the built-in ones stay off for it.
+        Assert.Equal(["valorant"], user.EditedGames);
+        Assert.Contains("[valorant.edited]", user.ToString());
+        Assert.Empty(user.Rules);
+
+        user.SetGame("valorant", null, [new StudioRule { Game = "valorant", Words = "KILLED" }]);
+        Assert.Single(user.Rules);
+        Assert.Single(user.ToString().Split('\n'), l => l == "[valorant.edited]");
+
+        user.RemoveGame("valorant");
+        Assert.Empty(user.EditedGames);
+        Assert.StartsWith(DetectionIni.ChangesHeader, user.ToString());
+    }
+
+    [Fact]
+    public void ComparesRulesByWhatTheySay()
+    {
+        var a = DetectionIni.Parse(Ini);
+        var b = DetectionIni.Parse(Ini.Replace("exclude = BY   # not when you're the one", "exclude = BY"));
+        Assert.Equal(a.RulesText("the_finals"), b.RulesText("the_finals"));
+        Assert.Equal(a.RulesText("the_finals"), DetectionIni.RulesText(b.RulesFor("the_finals").Reverse()));
+        var changed = b.RulesFor("the_finals");
+        changed[0].Words = "ELIMINATED";
+        Assert.NotEqual(a.RulesText("the_finals"), DetectionIni.RulesText(changed));
+    }
+
+    [Fact]
+    public void TrimsAnOldWholeCopyToTheUsersChanges()
+    {
+        var shipped = DetectionIni.Parse(Ini.Replace("ELIMINATED | KNOCKED OUT", "ELIMINATION {number}"));
+        // A pre-0.6 copy: The Finals as it shipped back then, Overwatch made in Studio, a game added
+        // by hand, and the user's own [detection] setting.
+        var old = DetectionIni.Parse(Ini[..Ini.IndexOf("[overwatch.kill]")].Replace("sample_ms = 250", "sample_ms = 200") + """
+            # Made in Detection Studio.
+
+            [overwatch.kill]
+            region = 0.7, 0.1, 0.2, 0.1
+            words = ELIMINATED
+
+            [game.my_game]
+            name = My Game
+            exe = MyGame.exe
+
+            [my_game.kill]
+            words = KO
+            """);
+        var trimmed = old.ChangesOnly(shipped);
+        Assert.NotNull(trimmed);
+        var text = trimmed!.ToString();
+        Assert.StartsWith(DetectionIni.ChangesHeader, text);
+        // The Finals goes back to the built-in rules, and their fix.
+        Assert.DoesNotContain("the_finals", text);
+        Assert.Equal(["my_game", "overwatch"], trimmed.EditedGames.Order());
+        Assert.Equal("0.7, 0.1, 0.2, 0.1", trimmed.RulesFor("overwatch").Single().RegionText);
+        Assert.Equal(["my_game"], trimmed.Games.Select(g => g.Id));
+        Assert.Contains("[detection]\nsample_ms = 200", text);
+        // Already trimmed: nothing more to do.
+        Assert.Null(trimmed.ChangesOnly(shipped));
+    }
+
+    [Fact]
+    public void DropsStudioGamesThatMatchTheBuiltInRules()
+    {
+        var shipped = DetectionIni.Parse(Ini);
+        var old = DetectionIni.Parse(Ini.Replace("# ---------------------------------------------------------------------- Overwatch",
+                                                 "# ---------------------------------------------------------------------- Overwatch\n# Made in Detection Studio."));
+        var trimmed = old.ChangesOnly(shipped)!;
+        Assert.Empty(trimmed.EditedGames);
+        Assert.DoesNotContain("[detection]", trimmed.ToString());
+    }
+
     [Theory]
     [InlineData("Marvel Rivals", "marvel_rivals")]
     [InlineData("  VALORANT ", "valorant")]

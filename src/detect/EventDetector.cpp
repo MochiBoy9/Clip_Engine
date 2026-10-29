@@ -103,7 +103,7 @@ struct EventDetector::Region {
 
   bool haveSignature = false;
   Signature signature{};
-  std::vector<WordBox> words;  // from the last read
+  std::vector<std::vector<WordBox>> reads;  // the last read, one for each way it's read (ReadPasses)
   std::string lastText;
 
   bool ReadsText() const { return !textRules.empty() || !inside.empty() || board; }
@@ -130,14 +130,15 @@ bool EventDetector::IsAvailable() {
 
 EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCapture& capture,
                              std::vector<DetectionRule> rules, std::vector<ScoreboardRule> scoreboards,
-                             std::vector<std::string> playerNames, int sampleMs, bool debug, Sink sink,
-                             ScoreboardSink scoreboardSink)
+                             std::vector<std::string> playerNames, int sampleMs, ReadQuality quality, bool debug,
+                             Sink sink, ScoreboardSink scoreboardSink)
     : gpu_(std::move(gpu)),
       capture_(capture),
       rules_(std::move(rules)),
       scoreboards_(std::move(scoreboards)),
       playerNames_(std::move(playerNames)),
       sampleMs_(sampleMs),
+      quality_(quality),
       debug_(debug),
       sink_(std::move(sink)),
       scoreboardSink_(std::move(scoreboardSink)) {
@@ -193,7 +194,7 @@ EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCaptur
              r->box.bottom == box.bottom && r->threshold == rule.threshold;
     });
     Region* region = existing != regions_.end() ? existing->get() : addRegion(rule.name, box, rule.threshold);
-    region->intervalMs = std::min(region->intervalMs, rule.sampleMs > 0 ? rule.sampleMs : sampleMs_);
+    region->intervalMs = std::min(region->intervalMs, ScaledSampleMs(rule.sampleMs > 0 ? rule.sampleMs : sampleMs_, quality_));
     const bool banner = rule.position == LinePosition::Anywhere && rule.event != EventType::Kill &&
                         rule.event != EventType::Assist && rule.event != EventType::Revive;
     region->banner &= banner;
@@ -220,7 +221,7 @@ EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCaptur
 
   for (auto& region : regions_) {
     // Banners on a screen taller than 2000 pixels read as well at half size.
-    if (region->banner && screenH >= 2000 && region->height >= 480) region->shrink = 2;
+    if (ShrinksBanners(quality_) && region->banner && screenH >= 2000 && region->height >= 480) region->shrink = 2;
   }
 
   // Read a region as part of a bigger one around it when that's less work: the bigger one is
@@ -237,7 +238,10 @@ EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCaptur
       if (outer == inner || outer->within || outer->board || !outer->ReadsText() || outer->threshold != inner->threshold) continue;
       if (!Contains(outer->box, inner->box) || Area(outer->box) <= Area(inner->box)) continue;
       // Text must be read at the same size either way.
-      if (OcrScale(outer->width, outer->height, outer->shrink) != OcrScale(inner->width, inner->height, inner->shrink)) continue;
+      if (OcrScale(outer->width, outer->height, outer->shrink, quality_) !=
+          OcrScale(inner->width, inner->height, inner->shrink, quality_)) {
+        continue;
+      }
       const double together = Area(outer->box) / std::min(outer->intervalMs, inner->intervalMs);
       const double apart = Area(outer->box) / outer->intervalMs + Area(inner->box) / inner->intervalMs;
       if (together > apart) continue;
@@ -271,7 +275,8 @@ EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCaptur
     winrt::check_hresult(gpu_->device->CreateTexture2D(&desc, nullptr, region->staging.put()));
   }
 
-  log::Info("Watching {} screen regions ({} read directly) for {} detection rules", regions_.size(), read, rules_.size());
+  log::Info("Watching {} screen regions ({} read directly) for {} detection rules, reading quality {}", regions_.size(),
+            read, rules_.size(), ToString(quality_));
   thread_ = std::thread([this] { Run(); });
 }
 
@@ -385,51 +390,66 @@ void EventDetector::Process(Region& region, int64_t time, const OcrEngine& ocr) 
   }
 
   if (region.ReadsText() && ocr && changed) {
-    region.words = ReadWords(ocr, region.pixels, region.width, region.height, region.threshold, region.shrink);
+    region.reads = ReadWords(ocr, region.pixels, region.width, region.height, region.threshold, region.shrink, quality_);
   }
 
-  // Each region's own words: all of them for this one, those within its bounds for the
-  // regions inside it.
-  auto feed = [&](Region& target, const std::vector<WordBox>& words) {
+  auto textOf = [](const std::vector<std::vector<WordBox>>& reads) {
     std::string text;
-    for (const auto& word : words) text += (text.empty() ? "" : " ") + word.text;
+    if (reads.empty()) return text;
+    for (const auto& word : reads.front()) text += (text.empty() ? "" : " ") + word.text;
+    return text;
+  };
+  // Each region's own words: all of them for this one, those within its bounds for the
+  // regions inside it. Each rule goes by whichever read of the region suits it (ChooseRead).
+  auto feed = [&](Region& target, const std::vector<std::vector<WordBox>>& reads) {
+    const std::string text = textOf(reads);
     if (debug_ && text != target.lastText && !text.empty()) log::Info("Read [{}]: {}", target.name, Shorten(text, 160));
     target.lastText = text;
     if (target.textRules.empty()) return;
-    const auto rows = GroupIntoRows(words);
+    std::vector<std::vector<std::vector<std::string>>> rows;
+    for (const auto& words : reads) rows.push_back(GroupIntoRows(words));
+    if (rows.empty()) rows.emplace_back();
     for (auto& tracker : target.textRules) {
-      const int fresh = tracker.Update(rows, ms);
+      const size_t chosen = ChooseRead(tracker.Rule(), rows);
+      const int fresh = tracker.Update(rows[chosen], ms);
+      if (debug_ && fresh > 0 && chosen > 0) log::Info("[{}] found in read {} of the region", tracker.Rule().name, chosen + 1);
       for (int i = 0; i < fresh; ++i) sink_(GameEvent{tracker.Rule().event, time, Shorten(text, 80)});
     }
   };
   if (region.board) {
     if (!ocr) return;
-    std::string text;
-    for (const auto& word : region.words) text += (text.empty() ? "" : " ") + word.text;
+    const std::string text = textOf(region.reads);
     if (debug_ && text != region.lastText && !text.empty()) log::Info("Read [{}]: {}", region.name, Shorten(text, 160));
     region.lastText = text;
+    // The first read that finds the player's row.
     std::optional<Stats> read;
-    if (!region.words.empty()) read = ReadScoreboard(*region.board, region.words, playerNames_);
+    for (const auto& words : region.reads) {
+      if (!words.empty()) read = ReadScoreboard(*region.board, words, playerNames_);
+      if (read) break;
+    }
     if (const auto stats = region.boardTracker.Update(read)) scoreboardSink_(Scoreboard{time, "screen", *stats});
     return;
   }
 
   if (region.ReadsText() && ocr) {
-    feed(region, region.words);
+    feed(region, region.reads);
     for (Region* inner : region.inside) {
       const double left = inner->box.left - region.box.left;
       const double top = inner->box.top - region.box.top;
-      std::vector<WordBox> words;
-      for (const auto& word : region.words) {
-        const double cx = word.x + word.width / 2 - left;
-        const double cy = word.y + word.height / 2 - top;
-        if (cx < 0 || cy < 0 || cx >= inner->width || cy >= inner->height) continue;
-        WordBox moved = word;
-        moved.x -= left;
-        moved.y -= top;
-        words.push_back(std::move(moved));
+      std::vector<std::vector<WordBox>> reads;
+      for (const auto& all : region.reads) {
+        auto& words = reads.emplace_back();
+        for (const auto& word : all) {
+          const double cx = word.x + word.width / 2 - left;
+          const double cy = word.y + word.height / 2 - top;
+          if (cx < 0 || cy < 0 || cx >= inner->width || cy >= inner->height) continue;
+          WordBox moved = word;
+          moved.x -= left;
+          moved.y -= top;
+          words.push_back(std::move(moved));
+        }
       }
-      feed(*inner, words);
+      feed(*inner, reads);
     }
   }
 

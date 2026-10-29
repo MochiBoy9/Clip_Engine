@@ -1,15 +1,13 @@
-## Clip Engine 0.5.1
+## Clip Engine 0.6.0
 
-This update fixes kills, assists and revives being counted too many times, and lets Clip Engine update itself.
+This update lets you fix detection yourself, for any game, and reads the screen better.
 
-- **Updates from inside the app.** Settings > Updates looks for a new version when Clip Engine starts, and **Install and restart** downloads it, swaps the files and opens the new version, with your settings and clips untouched. You can also install a release zip you already downloaded with **Choose zip**. While the repository is private, paste a GitHub token that can read it under Release source.
-- **Each kill counts once in The Finals.** A kill shows both "ELIMINATED <name>" and "ELIMINATION +250", and both used to count, often several times over as the name read differently each time. Only the score line counts now. In one recorded match the app logged 46 kills, 35 assists and 30 revives where the game's summary shows 12, 8 and 1.
-- **Revives are real revives.** A downed teammate's REVIVE marker and the hold-E REVIVE prompt no longer count; only the "REVIVE +200" you get for picking someone up does.
-- **The end-of-match summary isn't counted.** Its ELIMINATIONS, REVIVES and ASSISTS headings no longer add kills, revives or assists, in any game.
-- **Only the game is read.** While another window is in front of the game, like Clip Engine's own clip list or a browser, the screen isn't read, so text there can't become a moment.
-- **Detection rules** can use `{number}` for any number on the same row, as in `ELIMINATION {number}`.
+- **Edit any game's detection in Detection Studio.** Every game Clip Engine reads off the screen (The Finals, Overwatch, Battlefield 6, Valorant, Fortnite, Apex Legends, PUBG, Marvel Rivals, Rainbow Six Siege, Call of Duty, ARC Raiders, Delta Force) opens with its built-in rules, ready to change: move a box, change the words, the brightness filter, where on a killfeed row the words must be, then test and save. Your version replaces that game's built-in rules; **Use built-in** puts them back.
+- **Updates still reach games you didn't touch.** Your changes are kept apart from the rules that ship with the app, so a fix to a game's built-in rules arrives with the update unless you've made that game's rules your own. Before, saving anything in Studio froze every game's rules at that version. Your old file is trimmed to the games you changed in Studio, and kept as `detection.before-0.6.ini` in case.
+- **Use any clip.** Studio's frame picker lists all your clips and long recordings, from every game, with this game's first. **Open a video or screenshot** takes a frame from any video file too (MP4, MKV, MOV and others), with a slider to find the moment.
+- **Reading quality.** Settings > Automatic clips > Reading quality goes from Low (how 0.5 read) to Medium (the new default: small text is enlarged smoothly and its contrast stretched), High (also reads every part of the screen a second way, and a quarter more often) and Ultra (three ways, twice as often). Higher catches more and misreads less, and uses more CPU. Studio's test can read at any quality, to see what each one gets.
 
-Everything from 0.5.0 is included.
+Everything from 0.5.1 is included.
 
 ## Install
 

@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <fstream>
+#include <optional>
 #include <string_view>
 
 namespace {
@@ -39,15 +40,17 @@ std::filesystem::path ExeDir() {
   return std::filesystem::path(path).parent_path();
 }
 
-// A copy in the data folder wins over the one that ships with the app, so tuning a rule
-// survives updates.
+// The rules that ship with the app, with the user's own detection.ini (written by Detection
+// Studio, or by hand) laid over them: a game the user's file has rules for uses those, and
+// every other game the shipped ones, so fixes in an update still reach it.
 clip::DetectionRules LoadDetectionRules(const std::filesystem::path& dataDir) {
   using namespace clip;
-  for (const auto& file : {dataDir / L"detection.ini", ExeDir() / L"detection.ini"}) {
+  auto load = [&](const std::filesystem::path& file) -> std::optional<DetectionRules> {
     std::ifstream in(file);
-    if (!in) continue;
+    if (!in) return std::nullopt;
     auto rules = ParseDetectionRules(in);
-    for (const auto& warning : rules.warnings) log::Warn("detection.ini {}", warning);
+    for (const auto& warning : rules.warnings) log::Warn("{} {}", winrt::to_string(file.wstring()), warning);
+    rules.warnings.clear();
     // Icons are found next to the detection.ini that names them, then in the other places
     // it can be.
     for (auto& rule : rules.rules) {
@@ -64,9 +67,21 @@ clip::DetectionRules LoadDetectionRules(const std::filesystem::path& dataDir) {
     }
     log::Info("Detection rules: {} ({} rules)", winrt::to_string(file.wstring()), rules.rules.size());
     return rules;
+  };
+  auto shipped = load(ExeDir() / L"detection.ini");
+  auto user = load(dataDir / L"detection.ini");
+  if (!shipped && !user) {
+    log::Warn("detection.ini wasn't found next to the app, so only the hotkey saves clips");
+    return {};
   }
-  log::Warn("detection.ini wasn't found next to the app, so only the hotkey saves clips");
-  return {};
+  if (!user) return std::move(*shipped);
+  if (!shipped) return std::move(*user);
+  if (!user->editedGames.empty()) {
+    std::string games;
+    for (const auto& game : user->editedGames) games += (games.empty() ? "" : ", ") + game;
+    log::Info("Your own rules replace the built-in ones for: {}", games);
+  }
+  return MergeDetectionRules(std::move(*shipped), std::move(*user));
 }
 
 }  // namespace
@@ -116,11 +131,13 @@ int RunTrimCommand(int argc, wchar_t** argv) {
 // clip_engine.exe --frame <clip or image> <out.png> [--at seconds]
 // clip_engine.exe --read <clip or image> [--at seconds] --region l,t,w,h [--threshold n] [--words "A|B"] [--exclude "C"]
 //                 [--position start|end] [--image icon.png] [--image-match 0.85] [--image-screen 1440]
+//                 [--quality low|medium|high|ultra] [--event kill]
 // Detection Studio's helpers: grab a frame to draw on, and read a box of it the way detection does.
 int RunStudioCommand(int argc, wchar_t** argv) {
   using namespace clip;
   const bool frame = std::wstring_view(argv[1]) == L"--frame";
   double seconds = 0;
+  ReadQuality quality = ReadQuality::Medium;
   DetectionRule rule;
   rule.name = "studio";
   for (int i = frame ? 4 : 3; i + 1 < argc; i += 2) {
@@ -134,6 +151,12 @@ int RunStudioCommand(int argc, wchar_t** argv) {
     if (flag == L"--image") rule.image = value;
     if (flag == L"--image-match") rule.imageMatch = std::clamp(_wtof(argv[i + 1]), 0.05, 1.0);
     if (flag == L"--image-screen") rule.imageScreen = std::max(0, _wtoi(argv[i + 1]));
+    if (flag == L"--event") {
+      if (const auto e = ParseEventType(value)) rule.event = *e;
+    }
+    if (flag == L"--quality") {
+      if (const auto q = ParseReadQuality(value)) quality = *q;
+    }
     if (flag == L"--region") {
       double l = 0, t = 0, w = 0, h = 0;
       if (swscanf_s(argv[i + 1], L"%lf,%lf,%lf,%lf", &l, &t, &w, &h) == 4) rule.region = {l, t, w, h};
@@ -144,7 +167,7 @@ int RunStudioCommand(int argc, wchar_t** argv) {
     log::Error("{} failed: Media Foundation is unavailable", frame ? "Frame" : "Read");
     return 1;
   }
-  const int result = frame ? RunFrameCommand(argv[2], argv[3], seconds) : RunReadCommand(argv[2], seconds, rule);
+  const int result = frame ? RunFrameCommand(argv[2], argv[3], seconds) : RunReadCommand(argv[2], seconds, rule, quality);
   MFShutdown();
   return result;
 }

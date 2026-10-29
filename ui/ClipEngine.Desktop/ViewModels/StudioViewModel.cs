@@ -19,25 +19,47 @@ public sealed record RunningProgram(string Title, string Exe)
 }
 
 // Detection Studio: make or fix the rules that spot kills and other moments in any game. Pick a
-// frame from one of your clips (or a screenshot), draw a box where the game shows the moment,
-// type the words it shows, test it on the frame, and save.
+// frame from any of your clips or long recordings (or another video or a screenshot), draw a box
+// where the game shows the moment, type the words it shows, test it on the frame, and save.
+//
+// A game Clip Engine knows starts from its built-in rules, which can be changed like any others.
+// Saving makes them the user's own for that game (in DetectionIni.UserFile), used instead of the
+// built-in ones; every other game keeps the built-in rules, so updates to them still arrive.
 public sealed class StudioViewModel : ObservableObject
 {
-    // The games built into the engine (src/game/GameDetector.cpp).
+    // The games built into the engine that are read off the screen (src/game/GameDetector.cpp).
     private static readonly StudioGameOption[] BuiltIn =
     [
         new("the_finals", "The Finals", false, ["Discovery.exe"]),
         new("overwatch", "Overwatch", false, ["Overwatch.exe"]),
         new("battlefield_6", "Battlefield 6", false, ["bf6.exe"]),
+        new("valorant", "Valorant", false, ["VALORANT-Win64-Shipping.exe"]),
+        new("fortnite", "Fortnite", false, ["FortniteClient-Win64-Shipping.exe"]),
+        new("apex_legends", "Apex Legends", false, ["r5apex.exe", "r5apex_dx12.exe"]),
+        new("pubg", "PUBG", false, ["TslGame.exe"]),
+        new("marvel_rivals", "Marvel Rivals", false, ["Marvel-Win64-Shipping.exe"]),
+        new("rainbow_six_siege", "Rainbow Six Siege", false, ["RainbowSix.exe", "RainbowSix_Vulkan.exe", "RainbowSix_DX11.exe"]),
+        new("call_of_duty", "Call of Duty", false, ["cod.exe", "cod24-cod.exe", "cod25-cod.exe"]),
+        new("arc_raiders", "ARC Raiders", false, ["PioneerGame.exe"]),
+        new("delta_force", "Delta Force", false, ["DeltaForceClient-Win64-Shipping.exe"]),
+    ];
+
+    public static IReadOnlyList<QualityOption> Qualities { get; } =
+    [
+        new("low", "Low"), new("medium", "Medium"), new("high", "High"), new("ultra", "Ultra"),
     ];
 
     private readonly MainViewModel _main;
     private readonly object _returnTo;
-    private DetectionIni _ini;
+    private readonly DetectionIni _shipped;  // the rules that ship with the app
+    private readonly DetectionIni _user;     // the user's changes, laid over them
+    private bool _ownRules;                  // the rules shown are the user's, not the built-in ones
+    private QualityOption _testQuality;
     private StudioGameOption? _game;
     private StudioRuleViewModel? _selectedRule;
     private ClipItemViewModel? _source;
-    private string? _imageSource;
+    private string? _fileSource;  // a video or screenshot opened from disk
+    private double? _fileLength;  // that video's length, once known
     private double _frameSeconds;
     private Bitmap? _frame;
     private bool _isBusy;
@@ -59,7 +81,11 @@ public sealed class StudioViewModel : ObservableObject
     {
         _main = main;
         _returnTo = returnTo;
-        _ini = main.IsLive ? DetectionIni.Load() : DetectionIni.Parse(SampleIni);
+        _shipped = main.IsLive ? DetectionIni.LoadShipped() : DetectionIni.Parse(SampleIni);
+        _user = main.IsLive ? DetectionIni.LoadUser() : DetectionIni.NewChanges();
+        // Tests read the box the way the engine does at the quality picked in Settings.
+        var quality = main.IsLive ? EngineSettings.Load(AppPaths.EngineSettingsFile).ReadingQuality : "medium";
+        _testQuality = Qualities.FirstOrDefault(q => q.Name == quality) ?? Qualities[1];
 
         BackCommand = new RelayCommand(() => _main.ShowPage(_returnTo));
         AddRuleCommand = new RelayCommand(AddRule, () => _game is not null);
@@ -67,7 +93,8 @@ public sealed class StudioViewModel : ObservableObject
         TestCommand = new RelayCommand(() => _ = TestAsync(), () => _selectedRule is not null && HasFrameSource && !IsBusy);
         SaveCommand = new RelayCommand(() => _ = SaveAsync(), () => HasChanges && !IsBusy);
         LoadFrameCommand = new RelayCommand(() => _ = LoadFrameAsync(), () => HasFrameSource && !IsBusy);
-        OpenImageCommand = new RelayCommand(() => _ = OpenImageAsync());
+        OpenImageCommand = new RelayCommand(() => _ = OpenFileAsync());
+        UseBuiltInCommand = new RelayCommand(UseBuiltIn, () => CanUseBuiltIn);
         StartAddGameCommand = new RelayCommand(StartAddGame);
         CancelAddGameCommand = new RelayCommand(() => IsAddingGame = false);
         ConfirmAddGameCommand = new RelayCommand(ConfirmAddGame, () => CanAddGame);
@@ -95,6 +122,7 @@ public sealed class StudioViewModel : ObservableObject
     public RelayCommand SaveCommand { get; }
     public RelayCommand LoadFrameCommand { get; }
     public RelayCommand OpenImageCommand { get; }
+    public RelayCommand UseBuiltInCommand { get; }
     public RelayCommand StartAddGameCommand { get; }
     public RelayCommand CancelAddGameCommand { get; }
     public RelayCommand ConfirmAddGameCommand { get; }
@@ -111,6 +139,29 @@ public sealed class StudioViewModel : ObservableObject
             LoadSources();
             AddRuleCommand.NotifyCanExecuteChanged();
             Raise(nameof(GameCaption));
+        }
+    }
+
+    // Whose rules these are: the game's built-in ones, or the user's own in their place.
+    public bool UsesOwnRules => _ownRules;
+    public bool HasBuiltInRules => _game is not null && _shipped.RulesFor(_game.Id).Count > 0;
+    private bool CanUseBuiltIn => HasBuiltInRules && (_ownRules || HasChanges);
+
+    public string RulesOrigin => _game is null ? ""
+        : _ownRules && HasBuiltInRules ? "Your own rules, used instead of the built-in ones."
+        : _ownRules ? "Your own rules."
+        : HasBuiltInRules ? (HasChanges ? "Built-in rules, changed. Save to use your version." : "Built-in rules. Change any of them and save to make them yours.")
+        : "No rules yet.";
+
+    // The reading quality tests use.
+    public QualityOption TestQuality
+    {
+        get => _testQuality;
+        set
+        {
+            if (value is null || !Set(ref _testQuality, value)) return;
+            Matched = null;
+            ReadText = null;
         }
     }
 
@@ -136,31 +187,49 @@ public sealed class StudioViewModel : ObservableObject
     public bool HasSelectedRule => _selectedRule is not null;
     public bool HasRules => Rules.Count > 0;
 
-    // Where the frame comes from: one of the game's clips at a moment, or a screenshot.
+    // Where the frame comes from: any of the user's clips or long recordings at a moment, or a
+    // video or screenshot opened from disk.
     public ClipItemViewModel? SelectedSource
     {
         get => _source;
         set
         {
             var samePath = value?.Path == _source?.Path;
-            if (!Set(ref _source, value) && _imageSource is null && _frame is not null) return;
-            _imageSource = null;
+            if (!Set(ref _source, value) && _fileSource is null && _frame is not null) return;
+            if (value is null && _fileSource is not null) return;
+            _fileSource = null;
+            _fileLength = null;
             if (!samePath) _frameSeconds = 0;
-            Raise(nameof(FrameSeconds));
-            Raise(nameof(FrameTimeText));
-            Raise(nameof(SourceDuration));
-            Raise(nameof(SourceMoments));
-            Raise(nameof(HasFrameSource));
-            Raise(nameof(IsClipSource));
-            LoadFrameCommand.NotifyCanExecuteChanged();
-            TestCommand.NotifyCanExecuteChanged();
+            SourceChanged();
             if (value is not null && _main.IsLive) _ = LoadFrameAsync();
         }
     }
 
-    public bool HasFrameSource => _source is not null || _imageSource is not null;
-    public bool IsClipSource => _imageSource is null && _source is not null;
-    public double SourceDuration => _source?.File.Duration?.TotalSeconds ?? _source?.File.Metadata?.Seconds ?? 30;
+    public bool HasFrameSource => _source is not null || _fileSource is not null;
+    public bool IsClipSource => _fileSource is null && _source is not null;
+    // A clip, or a video opened from disk: something with a slider to find the frame.
+    public bool HasTimeline => IsClipSource || _fileLength is > 0;
+    public string? FileSourceName => _fileSource is null ? null : Path.GetFileName(_fileSource);
+    public bool HasFileSource => _fileSource is not null;
+
+    public double SourceDuration => _fileSource is not null ? _fileLength ?? 0
+        : _source?.File.Duration?.TotalSeconds ?? _source?.File.Metadata?.Seconds ?? 30;
+
+    private void SourceChanged()
+    {
+        Raise(nameof(SelectedSource));
+        Raise(nameof(FrameSeconds));
+        Raise(nameof(FrameTimeText));
+        Raise(nameof(SourceDuration));
+        Raise(nameof(SourceMoments));
+        Raise(nameof(HasFrameSource));
+        Raise(nameof(IsClipSource));
+        Raise(nameof(HasTimeline));
+        Raise(nameof(FileSourceName));
+        Raise(nameof(HasFileSource));
+        LoadFrameCommand.NotifyCanExecuteChanged();
+        TestCommand.NotifyCanExecuteChanged();
+    }
 
     public double FrameSeconds
     {
@@ -170,7 +239,7 @@ public sealed class StudioViewModel : ObservableObject
             if (!Set(ref _frameSeconds, Math.Round(Math.Max(0, value), 1))) return;
             Raise(nameof(FrameTimeText));
             // Show the new frame once the slider settles, rather than on every step of a drag.
-            if (!_main.IsLive || !IsClipSource) return;
+            if (!_main.IsLive || !HasTimeline) return;
             _frameTimer ??= new Avalonia.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(350),
                 Avalonia.Threading.DispatcherPriority.Background, (_, _) =>
                 {
@@ -185,7 +254,7 @@ public sealed class StudioViewModel : ObservableObject
     public string FrameTimeText => Format.Duration(TimeSpan.FromSeconds(_frameSeconds)) + $".{(int)(_frameSeconds * 10) % 10}";
 
     // The clip's moments, to jump the frame to one: the kill feed is easiest to box while it shows a kill.
-    public IReadOnlyList<MarkerViewModel> SourceMoments => _source?.Events
+    public IReadOnlyList<MarkerViewModel> SourceMoments => _fileSource is not null ? [] : _source?.Events
         .OrderBy(e => e.Time)
         .Select(e =>
         {
@@ -239,7 +308,13 @@ public sealed class StudioViewModel : ObservableObject
     public bool HasChanges
     {
         get => _hasChanges;
-        private set { if (Set(ref _hasChanges, value)) SaveCommand.NotifyCanExecuteChanged(); }
+        private set
+        {
+            if (!Set(ref _hasChanges, value)) return;
+            SaveCommand.NotifyCanExecuteChanged();
+            UseBuiltInCommand.NotifyCanExecuteChanged();
+            Raise(nameof(RulesOrigin));
+        }
     }
 
     // Bumped whenever a box moves, so the canvas redraws.
@@ -287,31 +362,65 @@ public sealed class StudioViewModel : ObservableObject
     {
         Games.Clear();
         foreach (var game in BuiltIn) Games.Add(game);
-        foreach (var game in _ini.Games.Where(g => BuiltIn.All(b => b.Id != g.Id)))
+        foreach (var game in _user.Games.Concat(_shipped.Games).Where(g => BuiltIn.All(b => b.Id != g.Id)).DistinctBy(g => g.Id))
             Games.Add(new StudioGameOption(game.Id, game.Name, true, game.Executables));
     }
 
     private void LoadRules()
     {
-        Rules.Clear();
         if (_game is null) return;
-        foreach (var rule in _ini.Rules.Where(r => r.Game == _game.Id)) Rules.Add(new StudioRuleViewModel(rule, this));
-        SelectedRule = Rules.FirstOrDefault();
+        _ownRules = _user.EditedGames.Contains(_game.Id);
+        ShowRules((_ownRules ? _user : _shipped).RulesFor(_game.Id));
         HasChanges = false;
+    }
+
+    private void ShowRules(IEnumerable<StudioRule> rules)
+    {
+        Rules.Clear();
+        foreach (var rule in rules) Rules.Add(new StudioRuleViewModel(rule, this));
+        SelectedRule = Rules.FirstOrDefault();
         Raise(nameof(HasRules));
+        Raise(nameof(GameCaption));
+        RaiseOrigin();
         RegionsChanged();
+    }
+
+    private void RaiseOrigin()
+    {
+        Raise(nameof(UsesOwnRules));
+        Raise(nameof(HasBuiltInRules));
+        Raise(nameof(RulesOrigin));
+        UseBuiltInCommand.NotifyCanExecuteChanged();
+    }
+
+    // Puts the built-in rules back in the editor; saving then drops the user's own for this game.
+    private void UseBuiltIn()
+    {
+        if (_game is null) return;
+        // Parsed afresh, so editing them doesn't change the copy kept for comparing.
+        ShowRules(DetectionIni.Parse(_shipped.ToString()).RulesFor(_game.Id));
+        HasChanges = _ownRules;
+        ShowStatus(_ownRules ? $"These are {_game.Name}'s built-in rules. Save to use them instead of yours." : null);
     }
 
     private void LoadSources()
     {
         Sources.Clear();
         if (_game is null) return;
-        foreach (var clip in _main.Clips.Where(c => string.Equals(c.Game, _game.Name, StringComparison.OrdinalIgnoreCase))) Sources.Add(clip);
-        // Clips with moments first: their frames show what the rules look for.
-        var ordered = Sources.OrderByDescending(c => c.Events.Count > 0).ToList();
-        Sources.Clear();
-        foreach (var clip in ordered) Sources.Add(clip);
-        if (_imageSource is null) SelectedSource = Sources.FirstOrDefault(c => c.Path == _source?.Path) ?? Sources.FirstOrDefault();
+        // Every clip and long recording, the game's own first and those with moments first among
+        // them: their frames show what the rules look for. Other games' are there too, for a game
+        // recorded under another name or a HUD shared between games.
+        var game = _game.Name;
+        foreach (var clip in _main.Clips
+                     .OrderByDescending(c => string.Equals(c.Game, game, StringComparison.OrdinalIgnoreCase))
+                     .ThenByDescending(c => c.Events.Count > 0))
+        {
+            Sources.Add(clip);
+        }
+        if (_fileSource is not null) return;
+        SelectedSource = Sources.FirstOrDefault(c => c.Path == _source?.Path)
+                         ?? Sources.FirstOrDefault(c => string.Equals(c.Game, game, StringComparison.OrdinalIgnoreCase))
+                         ?? Sources.FirstOrDefault();
     }
 
     private void AddRule()
@@ -336,8 +445,8 @@ public sealed class StudioViewModel : ObservableObject
         RuleChanged();
     }
 
-    private string? FrameSourcePath => _imageSource ?? _source?.Path;
-    private double FrameSourceSeconds => _imageSource is null ? _frameSeconds : 0;
+    private string? FrameSourcePath => _fileSource ?? _source?.Path;
+    private double FrameSourceSeconds => HasTimeline ? _frameSeconds : 0;
 
     private async Task LoadFrameAsync()
     {
@@ -350,7 +459,13 @@ public sealed class StudioViewModel : ObservableObject
         IsBusy = true;
         try
         {
-            var png = await StudioTools.GrabFrameAsync(path, FrameSourceSeconds);
+            var (png, length) = await StudioTools.GrabFrameAsync(path, FrameSourceSeconds);
+            if (path == _fileSource && length is > 0 && _fileLength is null)
+            {
+                _fileLength = length;
+                Raise(nameof(SourceDuration));
+                Raise(nameof(HasTimeline));
+            }
             Bitmap frame;
             await using (var stream = File.OpenRead(png)) frame = new Bitmap(stream);
             var old = Frame;
@@ -374,16 +489,15 @@ public sealed class StudioViewModel : ObservableObject
         }
     }
 
-    private async Task OpenImageAsync()
+    // Any video (one recorded with something else, say) or a screenshot.
+    private async Task OpenFileAsync()
     {
-        if (_main.Dialogs is null || await _main.Dialogs.PickImageAsync() is not { } path) return;
-        _imageSource = path;
+        if (_main.Dialogs is null || await _main.Dialogs.PickFrameSourceAsync() is not { } path) return;
+        _fileSource = path;
+        _fileLength = null;
+        _frameSeconds = 0;
         _source = null;
-        Raise(nameof(SelectedSource));
-        Raise(nameof(HasFrameSource));
-        Raise(nameof(IsClipSource));
-        TestCommand.NotifyCanExecuteChanged();
-        LoadFrameCommand.NotifyCanExecuteChanged();
+        SourceChanged();
         await LoadFrameAsync();
     }
 
@@ -393,7 +507,7 @@ public sealed class StudioViewModel : ObservableObject
         IsBusy = true;
         try
         {
-            var (text, matches) = await StudioTools.ReadAsync(path, FrameSourceSeconds, _selectedRule.Rule);
+            var (text, matches) = await StudioTools.ReadAsync(path, FrameSourceSeconds, _selectedRule.Rule, _testQuality.Name);
             ReadText = text.Length > 0 ? text : "(nothing readable)";
             Matched = matches > 0;
             ShowStatus(null);
@@ -411,7 +525,7 @@ public sealed class StudioViewModel : ObservableObject
     private async Task SaveAsync()
     {
         if (_game is null) return;
-        var problem = Rules.FirstOrDefault(r => r.Words.Trim().Length == 0);
+        var problem = Rules.FirstOrDefault(r => r.Words.Trim().Length == 0 && r.Rule.Image is null);
         if (problem is not null)
         {
             SelectedRule = problem;
@@ -419,14 +533,27 @@ public sealed class StudioViewModel : ObservableObject
             return;
         }
 
-        // Several rules for one event get their own section names: [game.kill], [game.kill.2], ...
+        // Several rules for one event need their own section names: [game.kill], [game.kill.2], ...
+        // A rule keeps its name (like the built-in [game.kill.score]) unless another has it.
         foreach (var group in Rules.GroupBy(r => r.Event))
         {
-            var n = 0;
-            foreach (var rule in group) rule.Rule.Suffix = n++ == 0 ? "" : n.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var used = new HashSet<string>();
+            foreach (var rule in group)
+            {
+                if (used.Add(rule.Rule.Suffix)) continue;
+                var n = 2;
+                while (!used.Add(n.ToString(System.Globalization.CultureInfo.InvariantCulture))) n++;
+                rule.Rule.Suffix = n.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
         }
         var custom = _game.IsCustom ? new StudioGame(_game.Id, _game.Name, _game.Executables) : null;
-        _ini.SetGame(_game.Id, custom, Rules.Select(r => r.Rule));
+        var rules = Rules.Select(r => r.Rule).ToList();
+        // The same as the built-in rules: drop the user's copy, so later fixes to them arrive.
+        var builtIn = custom is null && DetectionIni.RulesText(rules) == _shipped.RulesText(_game.Id);
+        if (builtIn) _user.RemoveGame(_game.Id);
+        else _user.SetGame(_game.Id, custom, rules);
+        _ownRules = !builtIn;
+        RaiseOrigin();
         if (!_main.IsLive)
         {
             HasChanges = false;
@@ -434,7 +561,7 @@ public sealed class StudioViewModel : ObservableObject
         }
         try
         {
-            _ini.SaveToUserFile();
+            _user.SaveToUserFile();
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -442,7 +569,9 @@ public sealed class StudioViewModel : ObservableObject
             return;
         }
         HasChanges = false;
-        ShowStatus($"Saved to {DetectionIni.UserFile}. The engine is restarting to use the new rules.");
+        ShowStatus(builtIn
+            ? $"{_game.Name} uses its built-in rules again. The engine is restarting to use them."
+            : $"Saved your rules for {_game.Name} to {DetectionIni.UserFile}. The engine is restarting to use them.");
         await _main.RestartEngineAsync();
     }
 
@@ -537,6 +666,24 @@ public sealed record EventOption(string Name, string Label, IBrush Brush)
     public override string ToString() => Label;
 }
 
+public sealed record QualityOption(string Name, string Label)
+{
+    public override string ToString() => Label;
+}
+
+// Where on a row of text a rule's words must be (position in detection.ini).
+public sealed record PositionOption(string Name, string Label)
+{
+    public static IReadOnlyList<PositionOption> All { get; } =
+    [
+        new("anywhere", "Anywhere in the box"),
+        new("start", "Start of a row (the killer, in a killfeed)"),
+        new("end", "End of a row (who died, in a killfeed)"),
+    ];
+
+    public override string ToString() => Label;
+}
+
 // One rule being edited, with its box on the frame.
 public sealed class StudioRuleViewModel : ObservableObject
 {
@@ -569,6 +716,19 @@ public sealed class StudioRuleViewModel : ObservableObject
     public IBrush Brush => EventKinds.Brush(Rule.Event);
 
     public string Words { get => Rule.Words; set { Rule.Words = value ?? ""; Changed(nameof(Words), nameof(Summary)); } }
+
+    public IReadOnlyList<PositionOption> Positions => PositionOption.All;
+
+    public PositionOption Position
+    {
+        get => PositionOption.All.FirstOrDefault(p => p.Name == Rule.Position) ?? PositionOption.All[0];
+        set
+        {
+            if (value is null || value.Name == Rule.Position) return;
+            Rule.SetSetting("position", value.Name == "anywhere" ? null : value.Name);
+            Changed(nameof(Position));
+        }
+    }
     public string Exclude { get => Rule.Exclude; set { Rule.Exclude = value ?? ""; Changed(nameof(Exclude)); } }
     public string Summary => Rule.Words.Trim().Length > 0 ? Rule.Words : "No words yet";
 

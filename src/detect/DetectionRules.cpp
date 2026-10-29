@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <charconv>
+#include <climits>
 #include <format>
 #include <span>
 #include <sstream>
@@ -185,6 +186,11 @@ DetectionRules ParseDetectionRules(std::istream& in) {
         game->id = parts[1];
         continue;
       }
+      if (parts.size() == 2 && parts[1] == "edited" && IsId(parts[0])) {
+        result.editedGames.insert(parts[0]);
+        skipping = true;
+        continue;
+      }
       if (parts.size() >= 2 && parts[1] == "scoreboard" && !parts[0].empty()) {
         board = &result.scoreboards.emplace_back();
         board->name = name;
@@ -199,6 +205,7 @@ DetectionRules ParseDetectionRules(std::istream& in) {
         skipping = true;
         continue;
       }
+      result.editedGames.insert(parts[0]);
       DetectionRule& added = result.rules.emplace_back();
       added.name = name;
       added.game = parts[0];
@@ -218,7 +225,10 @@ DetectionRules ParseDetectionRules(std::istream& in) {
 
     if (inGlobal) {
       int ms = 0;
-      if (key == "sample_ms" && ParseInt(value, ms)) result.sampleMs = std::clamp(ms, 100, 2000);
+      if (key == "sample_ms" && ParseInt(value, ms)) {
+        result.sampleMs = std::clamp(ms, 100, 2000);
+        result.sampleMsSet = true;
+      }
       else warn(std::format("unknown setting '{}' in [detection]", key));
       continue;
     }
@@ -286,8 +296,10 @@ DetectionRules ParseDetectionRules(std::istream& in) {
       else warn(std::format("[{}] cooldown_ms must be a whole number", rule->name));
     } else if (key == "sample_ms") {
       int ms = 0;
-      if (ParseInt(value, ms) && ms >= 100 && ms <= 5000) rule->sampleMs = ms;
-      else warn(std::format("[{}] sample_ms must be 100 to 5000", rule->name));
+      if (ParseInt(value, ms) && ms >= 100 && ms <= 5000) {
+        rule->sampleMs = ms;
+        rule->sampleMsSet = true;
+      } else warn(std::format("[{}] sample_ms must be 100 to 5000", rule->name));
     } else if (key == "image") {
       rule->image = value;
     } else if (key == "image_match") {
@@ -307,6 +319,39 @@ DetectionRules ParseDetectionRules(std::istream& in) {
     if (r.sampleMs == 0) r.sampleMs = DefaultSampleMs(r.event, result.sampleMs);
   }
   return result;
+}
+
+DetectionRules MergeDetectionRules(DetectionRules shipped, DetectionRules user) {
+  DetectionRules merged;
+  merged.sampleMs = user.sampleMsSet ? user.sampleMs : shipped.sampleMs;
+  merged.sampleMsSet = user.sampleMsSet || shipped.sampleMsSet;
+  merged.editedGames = user.editedGames;
+
+  merged.games = std::move(shipped.games);
+  for (auto& game : user.games) {
+    std::erase_if(merged.games, [&](const CustomGame& g) { return g.id == game.id; });
+    merged.games.push_back(std::move(game));
+  }
+
+  for (auto& rule : shipped.rules) {
+    if (!user.editedGames.contains(rule.game)) merged.rules.push_back(std::move(rule));
+  }
+  for (auto& rule : user.rules) merged.rules.push_back(std::move(rule));
+  // Rules that look as often as [detection] says follow the sample_ms that won.
+  for (auto& rule : merged.rules) {
+    if (!rule.sampleMsSet) rule.sampleMs = DefaultSampleMs(rule.event, merged.sampleMs);
+  }
+
+  std::set<std::string> userBoards;
+  for (const auto& board : user.scoreboards) userBoards.insert(board.game);
+  for (auto& board : shipped.scoreboards) {
+    if (!userBoards.contains(board.game)) merged.scoreboards.push_back(std::move(board));
+  }
+  for (auto& board : user.scoreboards) merged.scoreboards.push_back(std::move(board));
+
+  merged.warnings = std::move(shipped.warnings);
+  merged.warnings.insert(merged.warnings.end(), user.warnings.begin(), user.warnings.end());
+  return merged;
 }
 
 int DefaultSampleMs(EventType event, int sampleMs) {
@@ -464,6 +509,22 @@ std::vector<std::string> FindMatches(const DetectionRule& rule, const std::vecto
 
 int CountMatches(const DetectionRule& rule, const std::vector<std::vector<std::string>>& rows) {
   return static_cast<int>(FindMatches(rule, rows).size());
+}
+
+size_t ChooseRead(const DetectionRule& rule, const std::vector<std::vector<std::vector<std::string>>>& reads) {
+  if (reads.size() < 2) return 0;
+  size_t most = 0, fewest = 0;
+  int mostCount = -1, fewestCount = INT_MAX;
+  bool excluded = false;
+  for (size_t i = 0; i < reads.size(); ++i) {
+    const int count = CountMatches(rule, reads[i]);
+    if (count > mostCount) mostCount = count, most = i;
+    if (count < fewestCount) fewestCount = count, fewest = i;
+    for (const auto& row : reads[i]) {
+      excluded = excluded || std::ranges::any_of(rule.exclude, [&](const Phrase& p) { return CountPhrase(row, p) > 0; });
+    }
+  }
+  return excluded && mostCount != fewestCount ? fewest : most;
 }
 
 int64_t RuleTracker::ForgetMs(const std::string& key) const {

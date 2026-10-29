@@ -47,6 +47,12 @@ record_without_game = false
 # Read the screen for kills, deaths and other moments (rules are in detection.ini).
 detection = true
 
+# How hard to work at reading the screen: low, medium, high or ultra. Higher reads small text
+# bigger and smoother, and high and ultra read each part of the screen more than one way and
+# look more often, which misses and misreads fewer moments but uses more CPU. low is how
+# versions before 0.6 read.
+reading_quality = medium
+
 # Save a clip around each detected moment, and which moments count. Moments close together
 # share one clip.
 auto_clip = true
@@ -249,6 +255,10 @@ Config Config::Load(const std::filesystem::path& file) {
       setBool(config.detection);
     } else if (key == "detection_debug") {
       setBool(config.detectionDebug);
+    } else if (key == "reading_quality") {
+      if (const auto quality = ParseReadQuality(value)) config.readingQuality = *quality;
+      else log::Warn("Setting reading_quality '{}' should be low, medium, high or ultra; keeping {}", value,
+                     ToString(config.readingQuality));
     } else if (key == "auto_clip") {
       setBool(config.autoClip);
     } else if (key == "auto_clip_events") {

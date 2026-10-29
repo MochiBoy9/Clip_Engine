@@ -67,4 +67,19 @@ public class EngineSettingsTests : IDisposable
         Assert.Equal(["kill", "revive"], reloaded.AutoClipEvents);
         Assert.Equal((15, 3), (reloaded.ClipBeforeSeconds, reloaded.ClipAfterSeconds));
     }
+
+    [Fact]
+    public void ReadsAndWritesTheReadingQuality()
+    {
+        Assert.Equal("medium", new EngineSettings().ReadingQuality);
+        File.WriteAllText(_file, "reading_quality = Ultra\n");
+        var settings = EngineSettings.Load(_file);
+        Assert.Equal("ultra", settings.ReadingQuality);
+        settings.ReadingQuality = "low";
+        settings.Save(_file);
+        Assert.Contains("reading_quality = low", File.ReadAllLines(_file));
+
+        File.WriteAllText(_file, "reading_quality = extreme\n");
+        Assert.Equal("medium", EngineSettings.Load(_file).ReadingQuality);
+    }
 }

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(ClipEngine VERSION 0.5.1 LANGUAGES CXX)
+project(ClipEngine VERSION 0.6.0 LANGUAGES CXX)
 
 if(NOT WIN32 OR NOT MSVC)
   message(FATAL_ERROR "Clip Engine builds on Windows with MSVC (Visual Studio 2022 or newer).")
@@ -25,6 +25,7 @@ add_executable(clip_engine
   src/detect/EventDetector.cpp
   src/detect/ImageMatch.cpp
   src/detect/Ocr.cpp
+  src/detect/OcrImage.cpp
   src/detect/RuleTester.cpp
   src/detect/Scoreboard.cpp
   src/detect/TextMatcher.cpp
@@ -71,6 +72,7 @@ add_executable(clip_engine_tests
   tests/DetectTests.cpp
   src/detect/DetectionRules.cpp
   src/detect/ImageMatch.cpp
+  src/detect/OcrImage.cpp
   src/detect/Scoreboard.cpp
   src/detect/TextMatcher.cpp
   src/media/ClipMetadata.cpp

@@ -181,6 +181,26 @@
             <StackPanel Spacing="0" IsEnabled="{Binding Detection}">
             <Grid ColumnDefinitions="Auto,*,Auto">
               <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,14,0">
+                <PathIcon Data="{StaticResource IconSparkle}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Reading quality" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="{Binding ReadingQualityHint}" TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <Border Classes="segments">
+                  <StackPanel Orientation="Horizontal" Spacing="2">
+                    <RadioButton Classes="segment" GroupName="quality" Content="Low" IsChecked="{Binding QualityLow}" />
+                    <RadioButton Classes="segment" GroupName="quality" Content="Medium" IsChecked="{Binding QualityMedium}" />
+                    <RadioButton Classes="segment" GroupName="quality" Content="High" IsChecked="{Binding QualityHigh}" />
+                    <RadioButton Classes="segment" GroupName="quality" Content="Ultra" IsChecked="{Binding QualityUltra}" />
+                  </StackPanel>
+                </Border>
+              </Panel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,12" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,14,0">
                 <PathIcon Data="{StaticResource IconRecord}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">

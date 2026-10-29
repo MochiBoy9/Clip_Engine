@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <istream>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -37,6 +38,7 @@ struct DetectionRule {
   // How often to look, in ms. 0 until parsed, then the [detection] sample_ms for quick moments
   // (kills, assists, revives, highlights) and a slower default for banners that stay up.
   int sampleMs = 0;
+  bool sampleMsSet = false;  // sample_ms was given, rather than the default
 
   // An icon to look for instead of (or as well as) words: a picture cut from a screenshot,
   // where fully transparent pixels are ignored. image is as written in detection.ini until
@@ -67,6 +69,10 @@ struct CustomGame {
 
 struct DetectionRules {
   int sampleMs = 250;  // how often the screen is read
+  bool sampleMsSet = false;  // [detection] sample_ms was in the file
+  // Games this file gives its own rules for: those with a [<game>.<event>] section, or an
+  // [<game>.edited] one, which Detection Studio writes so a game can have every rule removed.
+  std::set<std::string> editedGames;
   std::vector<CustomGame> games;
   std::vector<DetectionRule> rules;
   std::vector<ScoreboardRule> scoreboards;
@@ -83,6 +89,13 @@ struct DetectionRules {
 // [<game id>.scoreboard] says where the game's scoreboard is, and [game.<id>] adds a game.
 DetectionRules ParseDetectionRules(std::istream& in);
 
+// The rules that ship with the app, with the user's own detection.ini laid over them. A game
+// the user's file has rules for (editedGames) uses those instead of the shipped ones, and a
+// game whose scoreboard it describes uses that scoreboard; every other game keeps the shipped
+// rules, so fixes in an update still reach it. Games added in either file are all kept, the
+// user's winning, and so is the user's [detection] sample_ms.
+DetectionRules MergeDetectionRules(DetectionRules shipped, DetectionRules user);
+
 // "A | B" as phrases, as the words and exclude settings are read. Phrases mentioning {player} are left out.
 std::vector<Phrase> ParsePhrases(const std::string& value);
 
@@ -97,6 +110,13 @@ int CountMatches(const DetectionRule& rule, const std::vector<std::vector<std::s
 inline int CountMatches(const DetectionRule& rule, const std::vector<std::string>& tokens) {
   return CountMatches(rule, std::vector<std::vector<std::string>>{tokens});
 }
+
+// With a region read more than one way (at the High and Ultra reading qualities), which read
+// the rule goes by, given each read's rows of tokens: the one where it finds the most. But
+// when the reads disagree and one of them shows the rule's exclude words, the one where it
+// finds the fewest, so a misread "BY" can't turn "ELIMINATED BY" into a kill. Ties go to
+// the first read.
+size_t ChooseRead(const DetectionRule& rule, const std::vector<std::vector<std::vector<std::string>>>& reads);
 
 // Turns what one rule sees in successive screen reads into new events. Each message is
 // remembered by the names in it, so a killfeed line counts once however long it stays, even
