@@ -1,13 +1,16 @@
-## Clip Engine 0.6.0
+## Clip Engine 0.7.0
 
-This update lets you fix detection yourself, for any game, and reads the screen better.
+This update fits detection to any screen, lets you check how well it reads your own footage, tells you about your moments while you play, records only the game, adds seven games, and gives the app more room.
 
-- **Edit any game's detection in Detection Studio.** Every game Clip Engine reads off the screen (The Finals, Overwatch, Battlefield 6, Valorant, Fortnite, Apex Legends, PUBG, Marvel Rivals, Rainbow Six Siege, Call of Duty, ARC Raiders, Delta Force) opens with its built-in rules, ready to change: move a box, change the words, the brightness filter, where on a killfeed row the words must be, then test and save. Your version replaces that game's built-in rules; **Use built-in** puts them back.
-- **Updates still reach games you didn't touch.** Your changes are kept apart from the rules that ship with the app, so a fix to a game's built-in rules arrives with the update unless you've made that game's rules your own. Before, saving anything in Studio froze every game's rules at that version. Your old file is trimmed to the games you changed in Studio, and kept as `detection.before-0.6.ini` in case.
-- **Use any clip.** Studio's frame picker lists all your clips and long recordings, from every game, with this game's first. **Open a video or screenshot** takes a frame from any video file too (MP4, MKV, MOV and others), with a slider to find the moment.
-- **Reading quality.** Settings > Automatic clips > Reading quality goes from Low (how 0.5 read) to Medium (the new default: small text is enlarged smoothly and its contrast stretched), High (also reads every part of the screen a second way, and a quarter more often) and Ultra (three ways, twice as often). Higher catches more and misreads less, and uses more CPU. Studio's test can read at any quality, to see what each one gets.
+- **Any screen shape and HUD size.** Detection boxes now keep to the edges of the game's HUD, so ultrawide, 16:10 and 4:3 screens read correctly. Detection Studio has a **HUD size** slider for each game: set it to match the game's own HUD scale setting and every box moves with it.
+- **Check detection.** A new panel in the player lets you mark what really happened in a clip (M marks at the playhead, 1 to 7 picks the kind of moment), then **Run detection** to see what was caught, what was missed and what was found that isn't there. Each one is a click away on the timeline.
+- **Moments over the game.** The in-game "Clip saved" notice now also shows each kill with the match's count, double, triple and quad kills and 5-kill streaks, assists and revives, the match's line when it ends, and a new personal best. Turn it off in Settings > **Moments over the game**.
+- **Record only the game.** When you tab out, the recording shows a "Game Not Found" card and game audio goes quiet (your mic stays on) until you're back. Home shows when this is happening. Turn it off in Settings > **Record only the game**.
+- **Seven more games.** Deadlock, Halo Infinite, Destiny 2 and Team Fortress 2 (kills by killfeed, medals and match end), Escape from Tarkov (deaths and raid end), and Roblox and Minecraft (recorded, with clips on the hotkey). All are in Detection Studio. Their rules are a first pass, so tell us where they miss.
+- **More room and some motion.** Pages, cards and settings are spaced out, pages rise into place, clip cards lift under the pointer, and the nav rail's accent slides to the page you pick. Grids now line up with their headers, scrollbars sit at the window's edge, and the Settings subtitle shows again.
+- **Discord status is on its way.** The Settings toggle is there, but your Discord profile won't show anything yet; it switches on in a small update shortly.
 
-Everything from 0.5.1 is included.
+Everything from 0.6.0 is included.
 
 ## Install
 

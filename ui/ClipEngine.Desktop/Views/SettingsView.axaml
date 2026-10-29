@@ -423,9 +423,9 @@
                 <ToggleSwitch IsChecked="{Binding RecordWithoutGame}" OnContent="{x:Null}" OffContent="{x:Null}" />
               </Panel>
             </Grid>
-            <Border Height="1" Background="{StaticResource Divider}" Margin="0,12" />
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <Grid ColumnDefinitions="Auto,*,Auto">
-              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,14,0">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconTarget}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
@@ -437,9 +437,9 @@
                 <ToggleSwitch IsChecked="{Binding GameFocus}" OnContent="{x:Null}" OffContent="{x:Null}" />
               </Panel>
             </Grid>
-            <Border Height="1" Background="{StaticResource Divider}" Margin="0,12" />
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <Grid ColumnDefinitions="Auto,*,Auto">
-              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,14,0">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconShare}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
@@ -528,9 +528,9 @@
                 <ToggleSwitch IsChecked="{Binding GameNotifications}" OnContent="{x:Null}" OffContent="{x:Null}" />
               </Panel>
             </Grid>
-            <Border Height="1" Background="{StaticResource Divider}" Margin="0,12" />
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <Grid ColumnDefinitions="Auto,*,Auto" IsEnabled="{Binding GameNotifications}">
-              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,14,0">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconBolt}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
