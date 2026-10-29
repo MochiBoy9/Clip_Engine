@@ -56,20 +56,20 @@ namespace {
 
 // Decodes the frame showing at `seconds` (or the last one, past the end). length gets the
 // video's length in seconds, when it's known.
-Picture LoadVideoFrame(const std::filesystem::path& path, double seconds, double* length = nullptr) {
+Picture LoadVideoFrame(const std::filesystem::path& path, double seconds, double* videoLength = nullptr) {
   winrt::com_ptr<IMFAttributes> attributes;
   winrt::check_hresult(MFCreateAttributes(attributes.put(), 1));
   winrt::check_hresult(attributes->SetUINT32(MF_SOURCE_READER_ENABLE_VIDEO_PROCESSING, TRUE));
   winrt::com_ptr<IMFSourceReader> reader;
   winrt::check_hresult(MFCreateSourceReaderFromURL(path.c_str(), attributes.get(), reader.put()));
 
-  if (length) {
+  if (videoLength) {
     PROPVARIANT duration;
     PropVariantInit(&duration);
     if (SUCCEEDED(reader->GetPresentationAttribute(static_cast<DWORD>(MF_SOURCE_READER_MEDIASOURCE), MF_PD_DURATION,
                                                    &duration)) &&
         duration.vt == VT_UI8) {
-      *length = static_cast<double>(duration.uhVal.QuadPart) / kHnsPerSecond;
+      *videoLength = static_cast<double>(duration.uhVal.QuadPart) / kHnsPerSecond;
     }
     PropVariantClear(&duration);
   }
@@ -127,8 +127,8 @@ Picture LoadVideoFrame(const std::filesystem::path& path, double seconds, double
   return frame;
 }
 
-Picture LoadFrame(const std::filesystem::path& path, double seconds, double* length = nullptr) {
-  return IsImage(path) ? LoadPicture(path) : LoadVideoFrame(path, seconds, length);
+Picture LoadFrame(const std::filesystem::path& path, double seconds, double* videoLength = nullptr) {
+  return IsImage(path) ? LoadPicture(path) : LoadVideoFrame(path, seconds, videoLength);
 }
 
 void SavePng(const Picture& frame, const std::filesystem::path& path) {
