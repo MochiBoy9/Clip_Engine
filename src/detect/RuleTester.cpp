@@ -54,7 +54,7 @@ Picture LoadPicture(const std::filesystem::path& path) {
 
 namespace {
 
-// Decodes the frame showing at `seconds` (or the last one, past the end). length gets the
+// Decodes the frame showing at `seconds` (or the last one, past the end). videoLength gets the
 // video's length in seconds, when it's known.
 Picture LoadVideoFrame(const std::filesystem::path& path, double seconds, double* videoLength = nullptr) {
   winrt::com_ptr<IMFAttributes> attributes;
