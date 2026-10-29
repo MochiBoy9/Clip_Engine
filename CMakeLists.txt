@@ -28,6 +28,7 @@ add_executable(clip_engine
   src/detect/OcrImage.cpp
   src/detect/RuleTester.cpp
   src/detect/Scoreboard.cpp
+  src/detect/ScreenRegion.cpp
   src/detect/TextMatcher.cpp
   src/game/GameDetector.cpp
   src/integrations/DiscordActivity.cpp
@@ -77,6 +78,7 @@ add_executable(clip_engine_tests
   src/detect/ImageMatch.cpp
   src/detect/OcrImage.cpp
   src/detect/Scoreboard.cpp
+  src/detect/ScreenRegion.cpp
   src/detect/TextMatcher.cpp
   src/media/ClipMetadata.cpp
 )
@@ -93,6 +95,7 @@ add_executable(clip_engine_game_tests
   src/core/Json.cpp
   src/detect/DetectionRules.cpp
   src/detect/Scoreboard.cpp
+  src/detect/ScreenRegion.cpp
   src/detect/TextMatcher.cpp
   src/integrations/DiscordActivity.cpp
   src/integrations/GameStateTrackers.cpp

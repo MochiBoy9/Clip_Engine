@@ -29,9 +29,20 @@ int RunFrameCommand(const std::filesystem::path& input, const std::filesystem::p
 // clip_engine.exe --read <clip or image> [--at seconds] --region l,t,w,h [--threshold n]
 //                 [--words "A | B"] [--exclude "C"] [--position start|end]
 //                 [--image icon.png [--image-match 0.85] [--image-screen 1440]] [--quality low|medium|high|ultra]
-// Reads the region the way detection does at that reading quality and logs "Read: <text>" (the
+//                 [--anchor top-right] [--aspect 16:9] [--hud-scale 100]
+// Reads the region the way detection does at that reading quality, placed on the frame as it
+// would be on a screen that shape with the HUD at hudScale (PlaceRegion), and logs "Read: <text>" (the
 // read the rule goes by, when it's read more than one way) and "Matches: <count>".
 // With an image, also logs "Image: <how alike, 0-1>" and counts it as a match when it's alike enough.
-int RunReadCommand(const std::filesystem::path& input, double seconds, const DetectionRule& rule, ReadQuality quality);
+int RunReadCommand(const std::filesystem::path& input, double seconds, const DetectionRule& rule, ReadQuality quality,
+                   double hudScale = 1);
+
+// clip_engine.exe --scan <clip> --game <id or name> [--quality low|medium|high|ultra] [--hud-scale 100]
+// Runs the game's rules over the whole video, frame by frame, as detection would have in game,
+// and logs "Scan found <event> at <seconds>: <text>" for each moment, "Scan progress <n>%" as
+// it goes and "Scan done: <count> moments". The app scores detection against the player's own
+// marks of what really happened with it.
+int RunScanCommand(const std::filesystem::path& input, const std::vector<DetectionRule>& rules, ReadQuality quality,
+                   double hudScale = 1);
 
 }  // namespace clip

@@ -12,9 +12,13 @@
 #include <wincodec.h>
 
 #include <algorithm>
+#include <compare>
 #include <cmath>
 #include <cstring>
 #include <cwctype>
+#include <map>
+#include <memory>
+#include <optional>
 
 namespace clip {
 namespace {
@@ -54,77 +58,151 @@ Picture LoadPicture(const std::filesystem::path& path) {
 
 namespace {
 
+// A video opened for reading its frames as BGRA, in order. length gets its length in seconds,
+// when it's known.
+struct VideoReader {
+  winrt::com_ptr<IMFSourceReader> reader;
+  UINT32 width = 0;
+  UINT32 height = 0;
+  INT32 stride = 0;
+
+  explicit VideoReader(const std::filesystem::path& path, double* length = nullptr) {
+    winrt::com_ptr<IMFAttributes> attributes;
+    winrt::check_hresult(MFCreateAttributes(attributes.put(), 1));
+    winrt::check_hresult(attributes->SetUINT32(MF_SOURCE_READER_ENABLE_VIDEO_PROCESSING, TRUE));
+    winrt::check_hresult(MFCreateSourceReaderFromURL(path.c_str(), attributes.get(), reader.put()));
+
+    if (length) {
+      PROPVARIANT duration;
+      PropVariantInit(&duration);
+      if (SUCCEEDED(reader->GetPresentationAttribute(static_cast<DWORD>(MF_SOURCE_READER_MEDIASOURCE), MF_PD_DURATION,
+                                                     &duration)) &&
+          duration.vt == VT_UI8) {
+        *length = static_cast<double>(duration.uhVal.QuadPart) / kHnsPerSecond;
+      }
+      PropVariantClear(&duration);
+    }
+
+    winrt::check_hresult(reader->SetStreamSelection(static_cast<DWORD>(MF_SOURCE_READER_ALL_STREAMS), FALSE));
+    winrt::check_hresult(reader->SetStreamSelection(Stream(), TRUE));
+    {
+      winrt::com_ptr<IMFMediaType> type;
+      winrt::check_hresult(MFCreateMediaType(type.put()));
+      winrt::check_hresult(type->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video));
+      winrt::check_hresult(type->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_RGB32));
+      winrt::check_hresult(reader->SetCurrentMediaType(Stream(), nullptr, type.get()));
+    }
+    winrt::com_ptr<IMFMediaType> current;
+    winrt::check_hresult(reader->GetCurrentMediaType(Stream(), current.put()));
+    winrt::check_hresult(MFGetAttributeSize(current.get(), MF_MT_FRAME_SIZE, &width, &height));
+    stride = static_cast<INT32>(MFGetAttributeUINT32(current.get(), MF_MT_DEFAULT_STRIDE, width * 4));
+  }
+
+  static DWORD Stream() { return static_cast<DWORD>(MF_SOURCE_READER_FIRST_VIDEO_STREAM); }
+
+  void Seek(double seconds) {
+    PROPVARIANT position;
+    PropVariantInit(&position);
+    position.vt = VT_I8;
+    position.hVal.QuadPart = static_cast<int64_t>(std::llround(std::max(0.0, seconds) * kHnsPerSecond));
+    winrt::check_hresult(reader->SetCurrentPosition(GUID_NULL, position));
+  }
+
+  // The next frame and its time, or null at the end of the video.
+  winrt::com_ptr<IMFSample> Next(int64_t& time) {
+    while (true) {
+      DWORD index = 0, flags = 0;
+      LONGLONG at = 0;
+      winrt::com_ptr<IMFSample> sample;
+      winrt::check_hresult(reader->ReadSample(Stream(), 0, &index, &flags, &at, sample.put()));
+      if (sample) {
+        time = at;
+        return sample;
+      }
+      if (flags & MF_SOURCE_READERF_ENDOFSTREAM) return nullptr;
+    }
+  }
+
+  Picture ToPicture(IMFSample* sample) const {
+    winrt::com_ptr<IMFMediaBuffer> buffer;
+    winrt::check_hresult(sample->ConvertToContiguousBuffer(buffer.put()));
+    BYTE* data = nullptr;
+    DWORD bytes = 0;
+    winrt::check_hresult(buffer->Lock(&data, nullptr, &bytes));
+    Picture frame;
+    frame.width = width;
+    frame.height = height;
+    const size_t rowBytes = static_cast<size_t>(width) * 4;
+    const size_t pitch = static_cast<size_t>(std::abs(stride));
+    frame.bgra.resize(rowBytes * height);
+    for (UINT y = 0; y < height && (y + 1) * pitch <= bytes; ++y) {
+      // A negative stride means the rows are stored bottom-up.
+      const UINT sourceRow = stride < 0 ? height - 1 - y : y;
+      std::memcpy(frame.bgra.data() + y * rowBytes, data + sourceRow * pitch, rowBytes);
+    }
+    buffer->Unlock();
+    for (size_t i = 3; i < frame.bgra.size(); i += 4) frame.bgra[i] = 255;  // RGB32 leaves alpha undefined
+    return frame;
+  }
+};
+
 // Decodes the frame showing at `seconds` (or the last one, past the end). videoLength gets the
 // video's length in seconds, when it's known.
 Picture LoadVideoFrame(const std::filesystem::path& path, double seconds, double* videoLength = nullptr) {
-  winrt::com_ptr<IMFAttributes> attributes;
-  winrt::check_hresult(MFCreateAttributes(attributes.put(), 1));
-  winrt::check_hresult(attributes->SetUINT32(MF_SOURCE_READER_ENABLE_VIDEO_PROCESSING, TRUE));
-  winrt::com_ptr<IMFSourceReader> reader;
-  winrt::check_hresult(MFCreateSourceReaderFromURL(path.c_str(), attributes.get(), reader.put()));
-
-  if (videoLength) {
-    PROPVARIANT duration;
-    PropVariantInit(&duration);
-    if (SUCCEEDED(reader->GetPresentationAttribute(static_cast<DWORD>(MF_SOURCE_READER_MEDIASOURCE), MF_PD_DURATION,
-                                                   &duration)) &&
-        duration.vt == VT_UI8) {
-      *videoLength = static_cast<double>(duration.uhVal.QuadPart) / kHnsPerSecond;
-    }
-    PropVariantClear(&duration);
-  }
-
-  const auto video = static_cast<DWORD>(MF_SOURCE_READER_FIRST_VIDEO_STREAM);
-  winrt::check_hresult(reader->SetStreamSelection(static_cast<DWORD>(MF_SOURCE_READER_ALL_STREAMS), FALSE));
-  winrt::check_hresult(reader->SetStreamSelection(video, TRUE));
-  {
-    winrt::com_ptr<IMFMediaType> type;
-    winrt::check_hresult(MFCreateMediaType(type.put()));
-    winrt::check_hresult(type->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video));
-    winrt::check_hresult(type->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_RGB32));
-    winrt::check_hresult(reader->SetCurrentMediaType(video, nullptr, type.get()));
-  }
-  winrt::com_ptr<IMFMediaType> current;
-  winrt::check_hresult(reader->GetCurrentMediaType(video, current.put()));
-  Picture frame;
-  winrt::check_hresult(MFGetAttributeSize(current.get(), MF_MT_FRAME_SIZE, &frame.width, &frame.height));
-  const auto stride = static_cast<INT32>(MFGetAttributeUINT32(current.get(), MF_MT_DEFAULT_STRIDE, frame.width * 4));
-
+  VideoReader video(path, videoLength);
   const auto target = static_cast<int64_t>(std::llround(std::max(0.0, seconds) * kHnsPerSecond));
-  PROPVARIANT position;
-  PropVariantInit(&position);
-  position.vt = VT_I8;
-  position.hVal.QuadPart = target;
-  winrt::check_hresult(reader->SetCurrentPosition(GUID_NULL, position));
+  video.Seek(seconds);
 
   // Seeking lands on the keyframe before the target; decode forward to it.
   winrt::com_ptr<IMFSample> chosen;
-  while (true) {
-    DWORD index = 0, flags = 0;
-    LONGLONG time = 0;
-    winrt::com_ptr<IMFSample> sample;
-    winrt::check_hresult(reader->ReadSample(video, 0, &index, &flags, &time, sample.put()));
-    if (sample) chosen = sample;
-    if ((flags & MF_SOURCE_READERF_ENDOFSTREAM) || (sample && time + kHnsPerSecond / 120 >= target)) break;
+  int64_t time = 0;
+  while (auto sample = video.Next(time)) {
+    chosen = sample;
+    if (time + kHnsPerSecond / 120 >= target) break;
   }
   if (!chosen) throw winrt::hresult_error(MF_E_INVALIDREQUEST, L"There's no video at that time");
+  return video.ToPicture(chosen.get());
+}
 
-  winrt::com_ptr<IMFMediaBuffer> buffer;
-  winrt::check_hresult(chosen->ConvertToContiguousBuffer(buffer.put()));
-  BYTE* data = nullptr;
-  DWORD length = 0;
-  winrt::check_hresult(buffer->Lock(&data, nullptr, &length));
-  const size_t rowBytes = static_cast<size_t>(frame.width) * 4;
-  const size_t pitch = static_cast<size_t>(std::abs(stride));
-  frame.bgra.resize(rowBytes * frame.height);
-  for (UINT y = 0; y < frame.height && (y + 1) * pitch <= length; ++y) {
-    // A negative stride means the rows are stored bottom-up.
-    const UINT sourceRow = stride < 0 ? frame.height - 1 - y : y;
-    std::memcpy(frame.bgra.data() + y * rowBytes, data + sourceRow * pitch, rowBytes);
+// The pixels of part of a frame, as detection copies them off the screen.
+std::vector<uint8_t> Crop(const Picture& frame, UINT left, UINT top, UINT width, UINT height) {
+  std::vector<uint8_t> pixels(static_cast<size_t>(width) * height * 4);
+  for (UINT y = 0; y < height; ++y) {
+    std::memcpy(pixels.data() + static_cast<size_t>(y) * width * 4,
+                frame.bgra.data() + (static_cast<size_t>(top + y) * frame.width + left) * 4, static_cast<size_t>(width) * 4);
   }
-  buffer->Unlock();
-  for (size_t i = 3; i < frame.bgra.size(); i += 4) frame.bgra[i] = 255;  // RGB32 leaves alpha undefined
-  return frame;
+  return pixels;
+}
+
+// The pixel box of a region placed on a frame.
+struct PixelBox {
+  UINT left = 0, top = 0, right = 0, bottom = 0;
+  bool TooSmall() const { return right < left + 8 || bottom < top + 8; }
+  auto operator<=>(const PixelBox&) const = default;
+};
+
+PixelBox BoxOn(const ScreenRegion& region, UINT width, UINT height) {
+  PixelBox box;
+  box.left = static_cast<UINT>(std::floor(region.left * width));
+  box.top = static_cast<UINT>(std::floor(region.top * height));
+  box.right = std::min(width, static_cast<UINT>(std::ceil((region.left + region.width) * width)));
+  box.bottom = std::min(height, static_cast<UINT>(std::ceil((region.top + region.height) * height)));
+  return box;
+}
+
+// Big banners on a very large screen are read at half size at Low, as detection reads them.
+UINT BannerShrink(const DetectionRule& rule, ReadQuality quality, UINT screenHeight, UINT boxHeight) {
+  const bool banner = rule.position == LinePosition::Anywhere && rule.event != EventType::Kill &&
+                      rule.event != EventType::Assist && rule.event != EventType::Revive;
+  return ShrinksBanners(quality) && banner && screenHeight >= 2000 && boxHeight >= 480 ? 2 : 1;
+}
+
+ImageMatcher IconMatcher(const DetectionRule& rule, UINT width, UINT height, double hudScale) {
+  const Picture icon = LoadPicture(std::filesystem::path(winrt::to_hstring(rule.image).c_str()));
+  const int pictureScreen = rule.imageScreen > 0 ? rule.imageScreen : static_cast<int>(height);
+  const double drawnAt = rule.imageScreen > 0 ? HudHeight(rule.region, width, height, hudScale) : height * hudScale;
+  return ImageMatcher(ToGray(icon.bgra.data(), static_cast<int>(icon.width), static_cast<int>(icon.height), icon.width * 4, true),
+                      pictureScreen, static_cast<int>(std::lround(drawnAt)));
 }
 
 Picture LoadFrame(const std::filesystem::path& path, double seconds, double* videoLength = nullptr) {
@@ -170,7 +248,8 @@ int RunFrameCommand(const std::filesystem::path& input, const std::filesystem::p
   return 1;
 }
 
-int RunReadCommand(const std::filesystem::path& input, double seconds, const DetectionRule& rule, ReadQuality quality) {
+int RunReadCommand(const std::filesystem::path& input, double seconds, const DetectionRule& rule, ReadQuality quality,
+                   double hudScale) {
   try {
     const auto ocr = CreateOcrEngine();
     if (!ocr) {
@@ -178,28 +257,18 @@ int RunReadCommand(const std::filesystem::path& input, double seconds, const Det
       return 1;
     }
     const Picture frame = LoadFrame(input, seconds);
-    const auto left = static_cast<UINT>(std::floor(rule.region.left * frame.width));
-    const auto top = static_cast<UINT>(std::floor(rule.region.top * frame.height));
-    const auto right = std::min(frame.width, static_cast<UINT>(std::ceil((rule.region.left + rule.region.width) * frame.width)));
-    const auto bottom = std::min(frame.height, static_cast<UINT>(std::ceil((rule.region.top + rule.region.height) * frame.height)));
-    if (right < left + 8 || bottom < top + 8) {
+    // Where detection would look on a screen this shape, with the HUD at this size.
+    const PixelBox box = BoxOn(PlaceRegion(rule.region, frame.width, frame.height, hudScale), frame.width, frame.height);
+    if (box.TooSmall()) {
       log::Error("Read failed: the box is too small to read");
       return 1;
     }
 
     // The same pixels detection copies off the screen.
-    const UINT width = right - left;
-    const UINT height = bottom - top;
-    std::vector<uint8_t> pixels(static_cast<size_t>(width) * height * 4);
-    for (UINT y = 0; y < height; ++y) {
-      std::memcpy(pixels.data() + static_cast<size_t>(y) * width * 4,
-                  frame.bgra.data() + (static_cast<size_t>(top + y) * frame.width + left) * 4, static_cast<size_t>(width) * 4);
-    }
-    // Big banners on a very large screen are read at half size at Low, as detection reads them.
-    const bool banner = rule.position == LinePosition::Anywhere && rule.event != EventType::Kill &&
-                        rule.event != EventType::Assist && rule.event != EventType::Revive;
-    const UINT shrink = ShrinksBanners(quality) && banner && frame.height >= 2000 && height >= 480 ? 2 : 1;
-    const auto reads = ReadWords(ocr, pixels, width, height, rule.threshold, shrink, quality);
+    const UINT width = box.right - box.left;
+    const UINT height = box.bottom - box.top;
+    const auto pixels = Crop(frame, box.left, box.top, width, height);
+    const auto reads = ReadWords(ocr, pixels, width, height, rule.threshold, BannerShrink(rule, quality, frame.height, height), quality);
     std::vector<std::vector<std::vector<std::string>>> rows;
     for (const auto& words : reads) rows.push_back(GroupIntoRows(words));
     const size_t chosen = rule.ReadsText() ? ChooseRead(rule, rows) : 0;
@@ -209,10 +278,7 @@ int RunReadCommand(const std::filesystem::path& input, double seconds, const Det
     int matches = rule.ReadsText() ? CountMatches(rule, rows[chosen]) : 0;
 
     if (rule.LooksForImage()) {
-      const Picture icon = LoadPicture(std::filesystem::path(winrt::to_hstring(rule.image).c_str()));
-      const ImageMatcher matcher(ToGray(icon.bgra.data(), static_cast<int>(icon.width), static_cast<int>(icon.height),
-                                        icon.width * 4, true),
-                                 rule.imageScreen, static_cast<int>(frame.height));
+      const ImageMatcher matcher = IconMatcher(rule, frame.width, frame.height, hudScale);
       if (!matcher.Valid()) {
         log::Error("Read failed: the image is one flat color, so it would match anything flat");
         return 1;
@@ -228,6 +294,119 @@ int RunReadCommand(const std::filesystem::path& input, double seconds, const Det
     log::Error("Read failed: {}", Describe(e));
   } catch (const std::exception& e) {
     log::Error("Read failed: {}", e.what());
+  }
+  return 1;
+}
+
+int RunScanCommand(const std::filesystem::path& input, const std::vector<DetectionRule>& rules, ReadQuality quality,
+                   double hudScale) {
+  try {
+    if (rules.empty()) {
+      log::Error("Scan failed: this game has no rules that read the screen");
+      return 1;
+    }
+    const auto ocr = CreateOcrEngine();
+    double length = 0;
+    VideoReader video(input, &length);
+
+    // Each rule with its own tracker, as detection runs it in game.
+    struct Watch {
+      explicit Watch(const DetectionRule& r) : rule(r), tracker(rule) {}
+      DetectionRule rule;
+      RuleTracker tracker;
+      PixelBox box;
+      std::optional<ImageMatcher> matcher;
+      int intervalMs = 250;
+      int64_t dueMs = 0;
+    };
+    std::vector<std::unique_ptr<Watch>> watches;
+    for (const auto& rule : rules) {
+      if (rule.ReadsText() && !ocr && !rule.LooksForImage()) continue;
+      auto watch = std::make_unique<Watch>(rule);
+      watch->box = BoxOn(PlaceRegion(rule.region, video.width, video.height, hudScale), video.width, video.height);
+      if (watch->box.TooSmall()) continue;
+      if (rule.LooksForImage()) {
+        try {
+          watch->matcher.emplace(IconMatcher(rule, video.width, video.height, hudScale));
+        } catch (const winrt::hresult_error& e) {
+          log::Warn("Scan: couldn't open {} for {} ({})", rule.image, rule.name, Describe(e));
+          continue;
+        }
+        if (!watch->matcher->Valid()) continue;
+      }
+      watch->intervalMs = ScaledSampleMs(rule.sampleMs > 0 ? rule.sampleMs : 250, quality);
+      watches.push_back(std::move(watch));
+    }
+    if (watches.empty()) {
+      if (ocr) log::Error("Scan failed: none of this game's rules fit the video");
+      else log::Error("Scan failed: Windows text recognition isn't installed. Add English under Settings > Time & language > Language.");
+      return 1;
+    }
+    log::Info("Scanning {}x{} video with {} rules at reading quality {}", video.width, video.height, watches.size(),
+              ToString(quality));
+
+    int found = 0;
+    int lastPercent = -1;
+    int64_t time = 0;
+    while (auto sample = video.Next(time)) {
+      const int64_t ms = time / kHnsPerMs;
+      if (std::ranges::none_of(watches, [&](const auto& w) { return w->dueMs <= ms; })) continue;
+      const Picture frame = video.ToPicture(sample.get());
+      // Rules that look at the same box share one read of it.
+      std::map<std::pair<PixelBox, int>, std::vector<std::vector<WordBox>>> readsOf;
+      for (auto& watch : watches) {
+        if (watch->dueMs > ms) continue;
+        watch->dueMs = ms + watch->intervalMs;
+        const DetectionRule& rule = watch->rule;
+        const UINT width = watch->box.right - watch->box.left;
+        const UINT height = watch->box.bottom - watch->box.top;
+        std::vector<uint8_t> pixels;
+        int fresh = 0;
+        std::string text;
+        if (rule.ReadsText() && ocr) {
+          auto key = std::make_pair(watch->box, rule.threshold);
+          auto cached = readsOf.find(key);
+          if (cached == readsOf.end()) {
+            pixels = Crop(frame, watch->box.left, watch->box.top, width, height);
+            cached = readsOf.emplace(key, ReadWords(ocr, pixels, width, height, rule.threshold,
+                                                    BannerShrink(rule, quality, frame.height, height), quality)).first;
+          }
+          std::vector<std::vector<std::vector<std::string>>> rows;
+          for (const auto& words : cached->second) rows.push_back(GroupIntoRows(words));
+          if (rows.empty()) rows.emplace_back();
+          const size_t chosen = ChooseRead(rule, rows);
+          if (!cached->second.empty()) {
+            for (const auto& word : cached->second[chosen]) text += (text.empty() ? "" : " ") + word.text;
+          }
+          fresh = watch->tracker.Update(rows[chosen], ms);
+        }
+        if (watch->matcher) {
+          if (pixels.empty()) pixels = Crop(frame, watch->box.left, watch->box.top, width, height);
+          const double alike = watch->matcher->BestMatch(
+              ToGray(pixels.data(), static_cast<int>(width), static_cast<int>(height), static_cast<size_t>(width) * 4, false));
+          fresh += watch->tracker.UpdateMatches(alike >= rule.imageMatch ? std::vector<std::string>{""} : std::vector<std::string>{}, ms);
+          if (text.empty()) text = "icon: " + rule.name;
+        }
+        if (text.size() > 80) text = text.substr(0, 80) + "...";
+        for (int i = 0; i < fresh; ++i) {
+          log::Info("Scan found {} at {:.2f}: {}", EventName(rule.event), ms / 1000.0, text);
+          ++found;
+        }
+      }
+      if (length > 0) {
+        const int percent = std::clamp(static_cast<int>(ms / 10.0 / length), 0, 100);
+        if (percent / 5 != lastPercent / 5) {
+          lastPercent = percent;
+          log::Info("Scan progress {}%", percent);
+        }
+      }
+    }
+    log::Info("Scan done: {} moments", found);
+    return 0;
+  } catch (const winrt::hresult_error& e) {
+    log::Error("Scan failed: {}", Describe(e));
+  } catch (const std::exception& e) {
+    log::Error("Scan failed: {}", e.what());
   }
   return 1;
 }

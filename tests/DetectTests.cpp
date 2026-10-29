@@ -746,6 +746,88 @@ void TestReadQuality() {
   CHECK(t > 20 && t <= 220);
 }
 
+bool Near(double a, double b, double within = 1e-6) { return std::abs(a - b) <= within; }
+
+void TestPlaceRegion() {
+  const ScreenRegion feed{0.65, 0.125, 0.33, 0.045};
+  // On the shape it was made for, at 100%, nothing moves.
+  CHECK(Near(PlaceRegion(feed, 2560, 1440).left, 0.65) && Near(PlaceRegion(feed, 1920, 1080).width, 0.33));
+  CHECK(Near(PlaceRegion(feed, 2560, 1440).top, 0.125) && Near(PlaceRegion(feed, 2560, 1440).height, 0.045));
+
+  // An ultrawide: the killfeed keeps to the right edge, as many pixels in and as wide as on 2560x1440.
+  const ScreenRegion wide = PlaceRegion(feed, 3440, 1440);
+  CHECK(wide.anchorX == Anchor::End && wide.anchorY == Anchor::Start);
+  CHECK(Near((1 - wide.left - wide.width) * 3440, 0.02 * 2560, 1e-6));
+  CHECK(Near(wide.width * 3440, 0.33 * 2560, 1e-6));
+  CHECK(Near(wide.top, 0.125) && Near(wide.height, 0.045));
+
+  // The kill banner stays in the middle, the same size.
+  const ScreenRegion banner = PlaceRegion({0.42, 0.72, 0.16, 0.16}, 3440, 1440);
+  CHECK(Near(banner.left + banner.width / 2, 0.5) && Near(banner.width * 3440, 0.16 * 2560, 1e-6));
+  CHECK(Near(banner.top, 0.72));
+  // Something on the left keeps to the left edge.
+  const ScreenRegion left = PlaceRegion({0.02, 0.8, 0.2, 0.1}, 5120, 1440);
+  CHECK(Near(left.left * 5120, 0.02 * 2560, 1e-6) && Near(left.width * 5120, 0.2 * 2560, 1e-6));
+
+  // A 16:10 screen: the HUD's 16:9 area is 1920x1080 in the middle, so the top keeps to the top
+  // and the bottom to the bottom, each as far in as on a 1080p screen.
+  const ScreenRegion tall = PlaceRegion(feed, 1920, 1200);
+  CHECK(Near(tall.top * 1200, 0.125 * 1080, 1e-6) && Near(tall.left, 0.65));
+  const ScreenRegion low = PlaceRegion({0.4, 0.8, 0.2, 0.1}, 1920, 1200);
+  CHECK(Near((1 - low.top - low.height) * 1200, 0.1 * 1080, 1e-6));
+
+  // A smaller HUD shrinks toward the same corner.
+  const ScreenRegion small = PlaceRegion(feed, 1920, 1080, 0.8);
+  CHECK(Near(small.left + small.width, 1 - 0.02 * 0.8) && Near(small.width, 0.33 * 0.8));
+  CHECK(Near(small.top, 0.125 * 0.8) && Near(small.height, 0.045 * 0.8));
+  // A bigger one never runs off the screen.
+  const ScreenRegion big = PlaceRegion({0.7, 0.0, 0.3, 0.1}, 1920, 1080, 1.5);
+  CHECK(big.left >= 0 && Near(big.left + big.width, 1) && Near(big.width, 0.45));
+
+  // An anchor given in the file wins over where the region is.
+  ScreenRegion pinned{0.1, 0.4, 0.2, 0.2};
+  pinned.anchorX = Anchor::Center;
+  const ScreenRegion centered = PlaceRegion(pinned, 3440, 1440);
+  CHECK(Near(centered.left + centered.width / 2, 0.5 + (0.2 - 0.5) * 2560 / 3440));
+
+  // A region made on an ultrawide stays put there. On a 16:9 screen that HUD fits the width, so
+  // the region keeps across but moves toward the top.
+  ScreenRegion madeWide{0.8, 0.1, 0.15, 0.05};
+  CHECK(ParseAspect("3440:1440", madeWide.aspect));
+  CHECK(Near(PlaceRegion(madeWide, 3440, 1440).left, 0.8) && Near(PlaceRegion(madeWide, 3440, 1440).top, 0.1));
+  const ScreenRegion onNarrow = PlaceRegion(madeWide, 2560, 1440);
+  CHECK(Near(onNarrow.left, 0.8) && Near(onNarrow.top * 1440, 0.1 * 2560 * 1440 / 3440, 1e-6));
+
+  CHECK(Near(HudHeight(feed, 1920, 1200), 1080));
+  CHECK(Near(HudHeight(feed, 3440, 1440), 1440));
+  CHECK(Near(HudHeight(feed, 3440, 1440, 0.9), 1296));
+
+  Anchor x = Anchor::Auto, y = Anchor::Auto;
+  CHECK(ParseAnchor("top-right", x, y) && x == Anchor::End && y == Anchor::Start);
+  CHECK(ParseAnchor("Center", x, y) && x == Anchor::Center && y == Anchor::Center);
+  CHECK(ParseAnchor("bottom center", x, y) && x == Anchor::Center && y == Anchor::End);
+  CHECK(ParseAnchor("left", x, y) && x == Anchor::Start && y == Anchor::Auto);
+  CHECK(ParseAnchor("auto", x, y) && x == Anchor::Auto && y == Anchor::Auto);
+  CHECK(!ParseAnchor("upper", x, y) && !ParseAnchor("left right", x, y) && !ParseAnchor("", x, y));
+  double aspect = 0;
+  CHECK(ParseAspect("21:9", aspect) && Near(aspect, 21.0 / 9));
+  CHECK(ParseAspect("1.6", aspect) && Near(aspect, 1.6));
+  CHECK(!ParseAspect("wide", aspect) && !ParseAspect("16:0", aspect) && !ParseAspect("20", aspect));
+
+  // Both keys are read from detection.ini, before or after the region.
+  std::istringstream in(
+      "[the_finals.kill]\nanchor = top-right\naspect = 21:9\nregion = 0.7, 0.1, 0.25, 0.05\nwords = ELIMINATED\n"
+      "[the_finals.scoreboard]\nregion = 0.1, 0.1, 0.8, 0.8\nanchor = center\nkills = K\n"
+      "[the_finals.death]\nregion = 0.4, 0.4, 0.2, 0.2\nanchor = sideways\nwords = DEAD\n");
+  const auto rules = ParseDetectionRules(in);
+  CHECK(rules.rules.size() == 2);
+  CHECK(rules.rules[0].region.anchorX == Anchor::End && rules.rules[0].region.anchorY == Anchor::Start);
+  CHECK(Near(rules.rules[0].region.aspect, 21.0 / 9) && Near(rules.rules[0].region.left, 0.7));
+  CHECK(rules.scoreboards.size() == 1 && rules.scoreboards[0].region.anchorX == Anchor::Center);
+  CHECK(rules.rules[1].region.anchorX == Anchor::Auto);
+  CHECK(rules.warnings.size() == 1);
+}
+
 int main(int argc, char** argv) {
   TestTokenize();
   TestWordsMatch();
@@ -767,6 +849,7 @@ int main(int argc, char** argv) {
   TestMergeRules();
   TestChooseRead();
   TestReadQuality();
+  TestPlaceRegion();
   if (argc > 1) TestShippedRulesParse(argv[1]);
   if (argc > 1) TestFinalsRules(argv[1]);
   if (argc > 2) TestMetadataBox(argv[2]);

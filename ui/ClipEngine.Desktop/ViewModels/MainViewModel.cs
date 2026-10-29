@@ -43,6 +43,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private bool _showMatches;
     private string? _freeSpace;
     private IReadOnlyList<ClipFile> _files = [];
+    private readonly MomentNotices _notices = new();
 
     public const string AllGames = "All clips";
     public const string FavoritesFilter = "Favorites";
@@ -591,6 +592,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             _detectedGame = null;
             SetLongRecording(null);
             Records.StartLiveMatch(null);
+            _notices.Reset();
             UpdateGames();
         }
         if (message is not null) AddActivity(ActivityKind.Error, message);
@@ -627,6 +629,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 _recording = r;
                 _gameAway = false;
                 Records.StartLiveMatch(r.Label == "Desktop" ? null : r.Label);
+                _notices.Reset();
                 AddActivity(ActivityKind.Recording, $"Recording {r.Label} at {r.Width}×{r.Height}, {r.Fps} fps");
                 break;
             case RecordingStopped:
@@ -634,6 +637,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 _gameAway = false;
                 SetLongRecording(null);
                 Records.StartLiveMatch(null);
+                _notices.Reset();
                 _ = RefreshRecordsAsync();
                 break;
             case RecordHotkey h:
@@ -674,7 +678,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 break;
             case MomentDetected m:
                 AddActivity(ActivityKind.Moment, $"{EventKinds.Label(m.Type)} in {m.Game}");
+                // The best before this match, read before the moment counts toward it.
+                var best = Records.BestKills(m.Game);
                 Records.AddLiveMoment(m.Game, m.Type);
+                var notice = _notices.OnMoment(m.Type, DateTime.UtcNow, Records.LiveKillCount, best);
+                if (notice is not null && DesktopSettings.GameNotifications && DesktopSettings.MomentNotices && IsRecording)
+                    GameNoticeRequested?.Invoke(notice);
                 break;
         }
         UpdateGames();
@@ -841,6 +850,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         clip.File = clip.File with { Metadata = metadata };
         ShowToast(metadata.Favorite ? "Added to favorites. Favorites are never cleaned up." : "Removed from favorites");
         SetClips(_files.Select(f => string.Equals(f.Path, clip.Path, StringComparison.OrdinalIgnoreCase) ? clip.File : f).ToList());
+    }
+
+    // Keeps what's known about a clip after its .json was rewritten (its marks, say).
+    internal void ClipMetadataChanged(ClipItemViewModel clip, ClipMetadata metadata)
+    {
+        clip.File = clip.File with { Metadata = metadata };
+        _files = _files.Select(f => string.Equals(f.Path, clip.Path, StringComparison.OrdinalIgnoreCase) ? clip.File : f).ToList();
     }
 
     // Saves part of a clip as a new clip and returns it, or null if that failed (with a toast saying why).

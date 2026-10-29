@@ -65,6 +65,9 @@ Save(window, "5-player.png");
 vm.OpenPlayer(vm.Clips[0]).ShowTrim(4.5, 27.5);
 Save(window, "7-trim.png");
 
+vm.OpenPlayer(vm.Clips[0]).ShowCheck();
+Save(window, "13-check-detection.png");
+
 // The Clips page grouped by match.
 vm.ShowPage(vm.ClipsPage);
 vm.ShowMatches = true;

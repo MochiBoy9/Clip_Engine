@@ -93,6 +93,10 @@ public sealed class RecordsViewModel : ObservableObject
 
     private int LiveValue(string stat, int counted) => Math.Max(counted, _liveBoard.GetValueOrDefault(stat));
 
+    // For the notices over the game: this match's kills so far, and the best before it.
+    internal int LiveKillCount => LiveValue("kills", _liveKills);
+    internal int BestKills(string game) => _book.BestKills(game);
+
     // A new recording or a new match starts the count again.
     internal void StartLiveMatch(string? game)
     {

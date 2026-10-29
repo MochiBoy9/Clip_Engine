@@ -256,9 +256,24 @@ DetectionRules ParseDetectionRules(std::istream& in) {
       bool ok = numbers.size() == 4;
       for (size_t i = 0; ok && i < 4; ++i) ok = ParseDouble(numbers[i], v[i]) && v[i] >= 0 && v[i] <= 1;
       if (ok && v[2] > 0 && v[3] > 0 && v[0] + v[2] <= 1.0001 && v[1] + v[3] <= 1.0001) {
-        (rule ? rule->region : board->region) = {v[0], v[1], v[2], v[3]};
+        ScreenRegion& region = rule ? rule->region : board->region;
+        region.left = v[0];
+        region.top = v[1];
+        region.width = v[2];
+        region.height = v[3];
       } else {
         warn(std::format("[{}] region must be four fractions: left, top, width, height", section));
+      }
+    } else if (key == "anchor") {
+      ScreenRegion& region = rule ? rule->region : board->region;
+      if (!ParseAnchor(value, region.anchorX, region.anchorY)) {
+        warn(std::format("[{}] anchor must be auto, or where the box keeps to: left, right, top, bottom or center, "
+                         "like top-right",
+                         section));
+      }
+    } else if (key == "aspect") {
+      if (!ParseAspect(value, (rule ? rule->region : board->region).aspect)) {
+        warn(std::format("[{}] aspect must be the shape of the screen the box was made on, like 16:9 or 21:9", section));
       }
     } else if (key == "threshold") {
       int t = 0;

@@ -225,6 +225,18 @@ public sealed class SettingsViewModel : ObservableObject
         }
     }
 
+    public bool MomentNotices
+    {
+        get => _desktop.MomentNotices;
+        set
+        {
+            if (_desktop.MomentNotices == value) return;
+            _desktop.MomentNotices = value;
+            TrySaveDesktop();
+            Raise();
+        }
+    }
+
     public bool HasChanges
     {
         get => _hasChanges;

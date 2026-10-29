@@ -24,6 +24,9 @@ Proprietary software. All rights reserved; see [LICENSE](LICENSE).
 - Trim a clip in the player (drag the handles, or I and O) and save that part as a new clip, instantly and at full quality.
 - Clips grouped by match: each match's result, kills, assists, deaths and revives, every moment on one colored ribbon, and its best clips.
 - Star clips as favorites, and optionally have old clips cleaned up by age or by a size limit. Favorites are always kept.
+- Works on any screen shape and HUD size: each box keeps to the edge or middle of the HUD it sits next to, so the killfeed is read in the right place on ultrawide, 16:10 and 4:3 screens, and a game's HUD size set in Detection Studio moves and resizes every box with it.
+- Check detection (in the player): mark what really happened in a clip, run the game's rules over the whole clip the way the engine reads the game, and see what they caught, missed and found that wasn't there.
+- Moments over the game: the in-game notice also shows each kill with the match's count, multi-kills, streaks, revives, the match's line when it ends and a new personal best. Turn it off in Settings.
 - Detection Studio (Games page, or the scan button in the player): add any game, or fix how one is read. Pick a frame from a clip or a screenshot, draw a box where the game shows a kill, type the words it shows, test it on that frame exactly as the engine would read it in game, and save.
 
 ![Home screen](docs/screenshots/1-home.png)
@@ -84,6 +87,7 @@ Run `ClipEngine.exe` and launch a supported game. `clip_engine.exe` can also run
 - `clip_engine.exe --export <clip.mp4> <out.mp4> --max-mb 10` makes a small copy for sharing.
 - Supporter key: `%LOCALAPPDATA%\Clip_Engine\supporter.key`. Patreon backers get a key that unlocks colour themes, a supporter badge and a place in the thank-you list; every recording feature is free. Keys are made with `dotnet run --project ui/ClipEngine.SupporterKeys -- make "Name"` and checked offline against the public key in `ui/ClipEngine.Desktop/Services/SupporterKey.cs`. Thank-you names live in `ui/ClipEngine.Desktop/Assets/Supporters.txt`.
 - `clip_engine.exe --frame <clip.mp4 or image> <out.png> --at 12.5` saves one frame as a PNG, and `clip_engine.exe --read <clip.mp4 or image> --at 12.5 --region 0.65,0.12,0.33,0.05 --words "ELIMINATED|KNOCKED OUT"` reads that box the way detection does and prints the text and how many times the words matched; `--position start|end` reads it as a killfeed, and `--image icon.png` also says how alike the box is to an icon. Detection Studio uses both.
+- `clip_engine.exe --scan <clip.mp4> --game <id or name> [--quality medium] [--hud-scale 100]` runs a game's rules over a whole clip and prints each moment they find with its time; the player's Check detection uses it.
 - `clip_engine.exe --trim <clip.mp4> <out.mp4> --start 4.5 --end 20` copies part of a clip without re-encoding, starting on the keyframe at or before the start (at most a second early).
 
 ## Layout

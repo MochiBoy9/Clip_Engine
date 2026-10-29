@@ -72,6 +72,10 @@ clip_after_seconds = 5
 # Rivals, Delta Force, Halo Infinite and others) need it to tell your kills and deaths from everyone else's.
 player_names =
 
+# How big you've set each game's HUD, in percent, when it isn't 100: game ids from
+# detection.ini with the size, like overwatch 90, fortnite 120. Detection Studio sets it.
+hud_scale =
+
 # Log everything read off the screen, to see what words a game uses when tuning detection.ini.
 detection_debug = false
 )";
@@ -137,6 +141,26 @@ std::vector<std::string> ReadPlayerNames(const std::filesystem::path& file) {
     }
   }
   return names;
+}
+
+double ReadHudScale(const std::filesystem::path& file, std::string_view gameId) {
+  std::ifstream in(file);
+  std::string line;
+  double scale = 1;
+  while (std::getline(in, line)) {
+    if (const auto hash = line.find('#'); hash != std::string::npos) line.resize(hash);
+    const auto eq = line.find('=');
+    if (eq == std::string::npos || Lower(Trim(std::string_view(line).substr(0, eq))) != "hud_scale") continue;
+    scale = 1;
+    for (const auto& entry : SplitNames(Trim(std::string_view(line).substr(eq + 1)))) {
+      const auto space = entry.find_last_of(" \t:");
+      if (space == std::string::npos || Lower(Trim(std::string_view(entry).substr(0, space))) != gameId) continue;
+      std::string number = Trim(std::string_view(entry).substr(space + 1));
+      if (!number.empty() && number.back() == '%') number.pop_back();
+      if (const auto percent = ParseInt(number)) scale = std::clamp(*percent, 25, 400) / 100.0;
+    }
+  }
+  return scale;
 }
 
 std::optional<Hotkey> ParseHotkey(std::string_view text) {
@@ -292,6 +316,8 @@ Config Config::Load(const std::filesystem::path& file) {
       setInt(config.clipAfterSeconds);
     } else if (key == "player_names") {
       config.playerNames = SplitNames(value);
+    } else if (key == "hud_scale") {
+      // Read for each game as it starts (ReadHudScale).
     } else {
       log::Warn("Unknown setting '{}' on line {}", key, lineNumber);
     }
