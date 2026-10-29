@@ -42,6 +42,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private bool _showMatches;
     private string? _freeSpace;
     private IReadOnlyList<ClipFile> _files = [];
+    private readonly MomentNotices _notices = new();
 
     public const string AllGames = "All clips";
     public const string FavoritesFilter = "Favorites";
@@ -587,6 +588,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             _detectedGame = null;
             SetLongRecording(null);
             Records.StartLiveMatch(null);
+            _notices.Reset();
             UpdateGames();
         }
         if (message is not null) AddActivity(ActivityKind.Error, message);
@@ -622,12 +624,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             case RecordingStarted r:
                 _recording = r;
                 Records.StartLiveMatch(r.Label == "Desktop" ? null : r.Label);
+                _notices.Reset();
                 AddActivity(ActivityKind.Recording, $"Recording {r.Label} at {r.Width}×{r.Height}, {r.Fps} fps");
                 break;
             case RecordingStopped:
                 _recording = null;
                 SetLongRecording(null);
                 Records.StartLiveMatch(null);
+                _notices.Reset();
                 _ = RefreshRecordsAsync();
                 break;
             case RecordHotkey h:
@@ -662,7 +666,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 break;
             case MomentDetected m:
                 AddActivity(ActivityKind.Moment, $"{EventKinds.Label(m.Type)} in {m.Game}");
+                // The best before this match, read before the moment counts toward it.
+                var best = Records.BestKills(m.Game);
                 Records.AddLiveMoment(m.Game, m.Type);
+                var notice = _notices.OnMoment(m.Type, DateTime.UtcNow, Records.LiveKillCount, best);
+                if (notice is not null && DesktopSettings.GameNotifications && DesktopSettings.MomentNotices && IsRecording)
+                    GameNoticeRequested?.Invoke(notice);
                 break;
         }
         UpdateGames();

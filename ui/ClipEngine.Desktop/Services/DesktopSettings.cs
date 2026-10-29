@@ -29,6 +29,9 @@ internal sealed class DesktopSettings
     // A small "Clip saved" notice over the game.
     public bool GameNotifications { get; set; } = true;
 
+    // And one for each moment as it happens: kills, multi-kills, revives, a new personal best.
+    public bool MomentNotices { get; set; } = true;
+
     // Clips page: show matches instead of single clips.
     public bool ShowMatches { get; set; }
 
