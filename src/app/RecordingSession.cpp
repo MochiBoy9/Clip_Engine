@@ -2,11 +2,13 @@
 
 #include "core/Clock.h"
 #include "core/Log.h"
+#include "video/GameNotFoundFrame.h"
 
 #include <avrt.h>
 
 #include <algorithm>
 #include <utility>
+#include <vector>
 
 namespace clip {
 namespace {
@@ -29,6 +31,12 @@ bool NeedsHevc(UINT width, UINT height, UINT fps) {
   return width > 4096 || height > 2304 || macroblocksPerSecond > 2'073'600;
 }
 
+// How long the game must be back in front before its frames are used again: the capture runs a
+// frame or two behind, so the first frames after switching back can still show the other window.
+constexpr int64_t kFocusSettle = 250 * kHnsPerMs;
+// SetWindowDisplayAffinity's "leave out of captures", as Clip Engine's own side panel uses.
+constexpr DWORD kExcludedFromCapture = 0x11;
+
 UINT AutoBitrate(UINT width, UINT height, UINT fps) {
   const double bits = 0.1 * width * height * fps;  // about 12 Mbps at 1080p60, 60 Mbps at 1440p165
   return static_cast<UINT>(std::clamp(bits, 8e6, 150e6));
@@ -42,7 +50,8 @@ RecordingSession::RecordingSession(const Config& config, HMONITOR monitor, std::
     : label_(std::move(label)),
       monitor_(monitor),
       buffer_(int64_t{config.bufferSeconds} * kHnsPerSecond),
-      bufferDuration_(int64_t{config.bufferSeconds} * kHnsPerSecond) {
+      bufferDuration_(int64_t{config.bufferSeconds} * kHnsPerSecond),
+      focusOnly_(config.gameFocus) {
   gpu_ = GpuDevice::Create();
   fps_ = config.fps > 0 ? static_cast<UINT>(config.fps) : std::clamp<UINT>(RefreshRate(monitor), 24, 240);
   capture_ = std::make_unique<MonitorCapture>(gpu_, monitor, fps_);
@@ -133,8 +142,16 @@ void RecordingSession::StartAudio(AudioCapture::Source source, int stream, std::
   try {
     encoder = std::make_unique<AacEncoder>(stream, buffer_);
     AacEncoder* target = encoder.get();
-    capture = std::make_unique<AudioCapture>(source, [target](const int16_t* pcm, uint32_t frames, int64_t pts) {
+    // Game audio is everything the PC plays, so while the game isn't in front it's silenced
+    // with the picture. The mic carries on: it's the player's own voice.
+    const bool followFocus = source == AudioCapture::Source::GameAudio;
+    capture = std::make_unique<AudioCapture>(source, [this, target, followFocus, silence = std::vector<int16_t>()](
+                                                         const int16_t* pcm, uint32_t frames, int64_t pts) mutable {
       try {
+        if (followFocus && away_) {
+          silence.assign(size_t{frames} * AudioCapture::kChannels, 0);
+          pcm = silence.data();
+        }
         target->Push(pcm, frames, pts);
       } catch (const winrt::hresult_error& e) {
         log::Error("Audio encoding failed: {}", Describe(e));
@@ -146,6 +163,36 @@ void RecordingSession::StartAudio(AudioCapture::Source source, int stream, std::
     capture.reset();
     encoder.reset();
   }
+}
+
+bool RecordingSession::CheckFocus() {
+  const DWORD game = gameProcess_;
+  if (!focusOnly_ || game == 0) {
+    away_ = false;
+    return true;
+  }
+  // Checked on every frame: Windows changes the window in front before the new one is drawn,
+  // so the switch is caught before the capture can show it.
+  const int64_t now = NowHns();
+  // No window is in front for a moment while switching; keep things as they are.
+  HWND front = GetForegroundWindow();
+  if (!front) return !away_ && now - backSince_ >= kFocusSettle;
+  DWORD process = 0;
+  GetWindowThreadProcessId(front, &process);
+  DWORD affinity = 0;
+  // A window left out of captures, like Clip Engine's side panel, doesn't show in the video anyway.
+  const bool inFront = process == game ||
+                       (GetWindowDisplayAffinity(front, &affinity) && affinity == kExcludedFromCapture);
+
+  if (!inFront && !away_) {
+    away_ = true;
+    log::Info("{} isn't in front, so the recording shows Game Not Found until you're back", label_);
+  } else if (inFront && away_) {
+    away_ = false;
+    backSince_ = now;
+    log::Info("Back in {}, recording it again", label_);
+  }
+  return !away_ && now - backSince_ >= kFocusSettle;
 }
 
 void RecordingSession::PaceFrames() {
@@ -179,7 +226,19 @@ void RecordingSession::PaceFrames() {
     }
 
     ID3D11Texture2D* latest = nullptr;
-    {
+    if (!CheckFocus()) {
+      if (!notFoundFrame_ && !notFoundFailed_) {
+        try {
+          notFoundFrame_ = MakeGameNotFoundFrame(gpu_->device.get(), capture_->Width(), capture_->Height(),
+                                                 winrt::to_hstring(label_));
+        } catch (const winrt::hresult_error& e) {
+          log::Error("Couldn't draw the Game Not Found frame: {}", Describe(e));
+          notFoundFailed_ = true;
+        }
+      }
+      // Without the card, nothing is recorded until the game is back, rather than the other window.
+      latest = notFoundFrame_.get();
+    } else {
       std::lock_guard lock(gpu_->contextLock);
       latest = capture_->LatestFrame();
     }

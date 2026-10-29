@@ -7,6 +7,7 @@
 #include "detect/DetectionRules.h"
 #include "detect/Scoreboard.h"
 #include "detect/TextMatcher.h"
+#include "integrations/DiscordActivity.h"
 #include "integrations/GameStateTrackers.h"
 #include "integrations/StreamReaders.h"
 
@@ -313,7 +314,8 @@ void TestShippedRules(const char* path) {
   for (const auto& w : rules.warnings) std::printf("detection.ini %s\n", w.c_str());
   CHECK(rules.warnings.empty());
   for (const char* game : {"valorant", "fortnite", "apex_legends", "pubg", "marvel_rivals", "rainbow_six_siege",
-                           "call_of_duty", "arc_raiders", "delta_force"}) {
+                           "call_of_duty", "arc_raiders", "delta_force", "deadlock", "halo_infinite", "destiny_2",
+                           "team_fortress_2"}) {
     bool kill = false, death = false, end = false;
     for (const auto& r : rules.ForGame(game, {"Mochi"})) {
       kill |= r.event == EventType::Kill;
@@ -323,6 +325,8 @@ void TestShippedRules(const char* path) {
     if (!(kill && death && end)) std::printf("%s is missing a kill, death or match end rule\n", game);
     CHECK(kill && death && end);
   }
+  // Tarkov shows no kills, but its deaths and raid ends are found.
+  CHECK(rules.ForGame("escape_from_tarkov").size() == 2);
   // Every scoreboard rule reads kills, and only games that have a scoreboard get one.
   for (const auto& board : rules.scoreboards) {
     CHECK(board.columns.size() >= 2 && board.columns[0].first == "kills");
@@ -442,6 +446,47 @@ void TestTimeline() {
   CHECK(Json::Parse(TimelineEvent(1, 0, {EventType::Death, 0, "tab\there"})).has_value());
 }
 
+void TestDiscordActivity() {
+  PresenceState state;
+  state.game = "Valorant";
+  state.startUnix = 1793000000;
+  CHECK(PresenceDetails(state) == "Valorant");
+  CHECK(PresenceLine(state) == "Recording with Clip Engine");
+  state.kills = 12;
+  state.deaths = 1;
+  state.clips = 3;
+  CHECK(PresenceLine(state) == "12 kills \xC2\xB7 1 death \xC2\xB7 3 clips");
+  state.assists = 2;
+  state.longRecording = true;
+  CHECK(PresenceLine(state) == "Long recording \xC2\xB7 12 kills \xC2\xB7 1 death \xC2\xB7 2 assists \xC2\xB7 3 clips");
+  state.away = true;
+  CHECK(PresenceLine(state).starts_with("Tabbed out \xC2\xB7 12 kills"));
+
+  // Discord wants 2 to 128 characters in each line.
+  state.game = "X";
+  CHECK(PresenceDetails(state).size() == 2);
+  state.game = std::string(200, 'a');
+  CHECK(PresenceDetails(state).size() == 128);
+
+  state.game = "Halo \"Infinite\"";
+  const auto activity = J(PresenceActivityJson(state, "0.7.0", true));
+  CHECK(activity["details"].Str() == "Halo \"Infinite\"");
+  CHECK(activity["status_display_type"].Int() == 2);
+  CHECK(activity["timestamps"]["start"].Number() == 1793000000);
+  CHECK(activity["assets"]["large_text"].Str() == "Clip Engine 0.7.0");
+  CHECK(!J(PresenceActivityJson(state, "0.7.0", false)).Has("status_display_type"));
+
+  const auto command = J(SetActivityCommand(42, PresenceActivityJson(state, "0.7.0", true), "7"));
+  CHECK(command["cmd"].Str() == "SET_ACTIVITY");
+  CHECK(command["args"]["pid"].Int() == 42);
+  CHECK(command["nonce"].Str() == "7");
+  CHECK(command["args"]["activity"]["state"].Str() == PresenceLine(state));
+  CHECK(J(SetActivityCommand(42, "", "8"))["args"]["activity"].IsNull());
+
+  const std::string frame = DiscordFrame(1, "{}");
+  CHECK(frame == std::string("\x01\0\0\0\x02\0\0\0{}", 10));
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -458,6 +503,7 @@ int main(int argc, char** argv) {
   TestScoreboardRules();
   TestReadScoreboard();
   TestTimeline();
+  TestDiscordActivity();
   if (argc > 1) TestShippedRules(argv[1]);
   if (g_failures == 0) std::printf("All game support tests passed\n");
   return g_failures == 0 ? 0 : 1;

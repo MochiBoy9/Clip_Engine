@@ -423,6 +423,34 @@
                 <ToggleSwitch IsChecked="{Binding RecordWithoutGame}" OnContent="{x:Null}" OffContent="{x:Null}" />
               </Panel>
             </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,12" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,14,0">
+                <PathIcon Data="{StaticResource IconTarget}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Record only the game" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" TextWrapping="Wrap"
+                           Text="When you switch to another window, the video shows Game Not Found and game audio goes quiet until you're back." />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <ToggleSwitch IsChecked="{Binding GameFocus}" OnContent="{x:Null}" OffContent="{x:Null}" />
+              </Panel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,12" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,14,0">
+                <PathIcon Data="{StaticResource IconShare}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Discord status" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" TextWrapping="Wrap"
+                           Text="Show the game you're playing, your kills and deaths and the clips you've saved on your Discord profile." />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <ToggleSwitch IsChecked="{Binding DiscordPresence}" OnContent="{x:Null}" OffContent="{x:Null}" />
+              </Panel>
+            </Grid>
           </StackPanel>
         </views:Plate>
         <views:Plate Classes="card" Padding="20" Margin="0,0,0,14">
