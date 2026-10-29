@@ -109,6 +109,17 @@ struct EventDetector::Region {
   bool ReadsText() const { return !textRules.empty() || !inside.empty() || board; }
 };
 
+namespace {
+
+bool InFront(DWORD processId) {
+  if (processId == 0) return true;
+  DWORD front = 0;
+  if (HWND window = GetForegroundWindow()) GetWindowThreadProcessId(window, &front);
+  return front == processId;
+}
+
+}  // namespace
+
 bool EventDetector::IsAvailable() {
   try {
     return OcrEngine::AvailableRecognizerLanguages().Size() > 0;
@@ -304,6 +315,7 @@ void EventDetector::Run() {
     }
 
     auto next = std::chrono::steady_clock::now();
+    bool wasInFront = true;
     while (true) {
       next += std::chrono::milliseconds(tickMs);
       {
@@ -332,8 +344,15 @@ void EventDetector::Run() {
           region->copying = false;
           ready.push_back(region);
         }
-        // Then copy the regions that are due a look.
-        if (ID3D11Texture2D* frame = capture_.LatestFrame()) {
+        // Then copy the regions that are due a look, unless the game is behind another window.
+        const bool inFront = InFront(gameProcess_);
+        if (debug_ && inFront != wasInFront) {
+          if (inFront) log::Info("The game is in front again; reading the screen");
+          else log::Info("Another window is in front of the game; not reading the screen");
+        }
+        wasInFront = inFront;
+        ID3D11Texture2D* frame = inFront ? capture_.LatestFrame() : nullptr;
+        if (frame) {
           const int64_t time = NowHns();
           for (Region* region : direct) {
             // Half a look early counts as on time, as the looks never land exactly.

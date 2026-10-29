@@ -39,6 +39,11 @@ class EventDetector {
   // False when Windows has no text recognition for any installed language.
   static bool IsAvailable();
 
+  // Reads the screen only while a window of this process is in front, so another window
+  // over the game (this app's clip list, a browser) is never taken for the game's HUD.
+  // 0, the default, reads it all the time.
+  void SetGameProcess(DWORD processId) { gameProcess_ = processId; }
+
  private:
   struct Region;
   void Run();
@@ -55,6 +60,7 @@ class EventDetector {
   ScoreboardSink scoreboardSink_;
 
   std::vector<std::unique_ptr<Region>> regions_;
+  std::atomic<DWORD> gameProcess_{0};
 
   std::mutex mutex_;
   std::condition_variable wake_;

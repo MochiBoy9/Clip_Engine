@@ -350,26 +350,47 @@ std::string MatchKey(const DetectionRule& rule, std::span<const std::string> tok
 
 struct Span {
   size_t begin = 0;
-  size_t end = 0;  // one past the last token
+  size_t end = 0;      // one past the last token
+  bool score = false;  // a score line, like ELIMINATION {number}, which names no one
 };
 
+// How many tokens from at the phrase covers, or 0 when it isn't there. A phrase may run on
+// from one row to the next, but the number in a score line is on the line's own row, maybe
+// after a stray letter: the bar between the points and the running total reads as one.
+size_t MatchLength(const Phrase& phrase, const std::vector<std::string>& tokens, const std::vector<size_t>& rowOf,
+                   size_t at) {
+  size_t i = at;
+  for (size_t k = 0; k < phrase.words.size(); ++k, ++i) {
+    if (i >= tokens.size()) return 0;
+    if (phrase.words[k] != kNumberWord || k == 0) {
+      if (!WordsMatch(tokens[i], phrase.words[k])) return 0;
+      continue;
+    }
+    if (tokens[i].size() == 1 && !WordsMatch(tokens[i], kNumberWord) && i + 1 < tokens.size() &&
+        rowOf[i + 1] == rowOf[i]) {
+      ++i;
+    }
+    if (rowOf[i] != rowOf[i - 1] || !WordsMatch(tokens[i], kNumberWord)) return 0;
+  }
+  return i - at;
+}
+
 // Where the phrases show in the tokens, left to right and without overlapping.
-std::vector<Span> FindSpans(const std::vector<Phrase>& phrases, const std::vector<std::string>& tokens) {
+std::vector<Span> FindSpans(const std::vector<Phrase>& phrases, const std::vector<std::string>& tokens,
+                            const std::vector<size_t>& rowOf) {
   std::vector<Span> spans;
   for (size_t i = 0; i < tokens.size();) {
     size_t length = 0;
+    bool score = false;
     for (const auto& phrase : phrases) {
-      const size_t n = phrase.words.size();
-      if (n == 0 || i + n > tokens.size()) continue;
-      bool match = true;
-      for (size_t k = 0; k < n && match; ++k) match = WordsMatch(tokens[i + k], phrase.words[k]);
-      if (match) {
-        length = n;
+      length = phrase.words.empty() ? 0 : MatchLength(phrase, tokens, rowOf, i);
+      if (length > 0) {
+        score = HasNumber(phrase);
         break;
       }
     }
     if (length > 0) {
-      spans.push_back({i, i + length});
+      spans.push_back({i, i + length, score});
       i += length;
     } else {
       ++i;
@@ -392,8 +413,8 @@ std::vector<std::string> FindMatches(const DetectionRule& rule, const std::vecto
       tokens.insert(tokens.end(), rows[r].begin(), rows[r].end());
       rowOf.insert(rowOf.end(), rows[r].size(), r);
     }
-    const auto spans = FindSpans(rule.words, tokens);
-    const auto excluded = FindSpans(rule.exclude, tokens);
+    const auto spans = FindSpans(rule.words, tokens, rowOf);
+    const auto excluded = FindSpans(rule.exclude, tokens, rowOf);
 
     for (size_t m = 0; m < spans.size(); ++m) {
       const Span match = spans[m];
@@ -407,6 +428,11 @@ std::vector<std::string> FindMatches(const DetectionRule& rule, const std::vecto
       });
       if (cancelled) continue;
 
+      // A score line stays the same from one kill to the next, whatever else is around it.
+      if (match.score) {
+        matches.emplace_back();
+        continue;
+      }
       // The match's name is the first one after it on its row, before the next match; or the
       // last one before it when nothing follows ("BOB ELIMINATED").
       std::string key;
@@ -428,10 +454,10 @@ std::vector<std::string> FindMatches(const DetectionRule& rule, const std::vecto
   for (const auto& row : rows) {
     const bool excluded = std::ranges::any_of(rule.exclude, [&](const Phrase& p) { return CountPhrase(row, p) > 0; });
     if (excluded) continue;
-    const bool match = std::ranges::any_of(rule.words, [&](const Phrase& p) {
+    const auto match = std::ranges::find_if(rule.words, [&](const Phrase& p) {
       return rule.position == LinePosition::Start ? PhraseAtStart(row, p) : PhraseAtEnd(row, p);
     });
-    if (match) matches.push_back(MatchKey(rule, row));
+    if (match != rule.words.end()) matches.push_back(HasNumber(*match) ? std::string() : MatchKey(rule, row));
   }
   return matches;
 }

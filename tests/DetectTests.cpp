@@ -7,6 +7,7 @@
 #include "detect/TextMatcher.h"
 #include "media/ClipMetadata.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <fstream>
@@ -27,6 +28,8 @@ void Check(bool ok, const char* expression, int line) {
 
 using namespace clip;
 
+std::vector<std::vector<std::string>> Rows(std::initializer_list<const char*> lines);
+
 void TestTokenize() {
   const auto tokens = Tokenize("  Eliminated: xX_Sn1per_Xx!! ");
   CHECK(tokens.size() == 4);
@@ -46,6 +49,20 @@ void TestWordsMatch() {
   CHECK(!WordsMatch("SKILL", "KILL"));
   CHECK(!WordsMatch("ELEVATED", "ELIMINATED"));
   CHECK(!WordsMatch("", "KILL"));
+  // Plurals are scoreboard headings, not the moment itself.
+  CHECK(!WordsMatch("REVIVES", "REVIVE"));
+  CHECK(!WordsMatch("ELIMINATIONS", "ELIMINATION"));
+  CHECK(!WordsMatch("EUMINATION5", "ELIMINATION"));  // misread, still plural
+  CHECK(!WordsMatch("ELIMINATIONS", "ELIMINATED"));
+  CHECK(!WordsMatch("ASSISTS", "ASSIST"));
+  CHECK(WordsMatch("ASSISS", "ASSIST"));  // a misread last letter isn't a plural
+  CHECK(WordsMatch("KILLS", "KILLS"));
+  // {number}
+  CHECK(WordsMatch("250", kNumberWord));
+  CHECK(WordsMatch("25O", kNumberWord));
+  CHECK(!WordsMatch("15M", kNumberWord));  // a distance
+  CHECK(!WordsMatch("FANS", kNumberWord));
+  CHECK(!WordsMatch("O", kNumberWord));
 }
 
 void TestCountPhrase() {
@@ -102,6 +119,26 @@ region = 0.9, 0.9, 0.5, 0.5
   CHECK(rules.ForGame("the_finals").empty());
 }
 
+void TestNumberPhrase() {
+  const auto phrase = MakePhrase("Elimination {NUMBER}");
+  CHECK(phrase.words.size() == 2 && phrase.words[0] == "ELIMINATION" && phrase.words[1] == kNumberWord);
+  CHECK(HasNumber(phrase));
+  CHECK(!HasNumber(MakePhrase("ELIMINATION")));
+
+  DetectionRule rule;
+  rule.words = {phrase};
+  CHECK(CountMatches(rule, Rows({"ELIMINATION 250"})) == 1);
+  CHECK(CountMatches(rule, Rows({"ELIMINATION | + 250"})) == 1);  // the bar read as a letter
+  CHECK(CountMatches(rule, Rows({"ELIMINATION I + 250"})) == 1);
+  CHECK(CountMatches(rule, Rows({"ELIMINATION", "250"})) == 0);  // the number belongs to another row
+  CHECK(CountMatches(rule, Rows({"ELIMINATION FANS 250"})) == 0);
+  CHECK(CountMatches(rule, Rows({"ELIMINATION 250", "ELIMINATION 250"})) == 2);
+
+  rule.position = LinePosition::Start;
+  CHECK(CountMatches(rule, Rows({"ELIMINATION 250"})) == 1);
+  CHECK(CountMatches(rule, Rows({"ELIMINATED BOB"})) == 0);
+}
+
 void TestCustomGames() {
   const auto rules = Parse(R"(
 [game.valorant]
@@ -150,6 +187,56 @@ void TestShippedRulesParse(const char* path) {
     }
     CHECK(kill && death);
   }
+}
+
+// What The Finals really puts on screen, as text recognition read it in recorded matches.
+void TestFinalsRules(const char* path) {
+  std::ifstream in(path);
+  const auto rules = ParseDetectionRules(in).ForGame("the_finals");
+  auto rule = [&](EventType event) -> const DetectionRule& {
+    return *std::ranges::find_if(rules, [&](const DetectionRule& r) { return r.event == event; });
+  };
+  const DetectionRule& kill = rule(EventType::Kill);
+  const DetectionRule& assist = rule(EventType::Assist);
+  const DetectionRule& revive = rule(EventType::Revive);
+  auto count = [](const DetectionRule& r, std::initializer_list<const char*> lines) { return CountMatches(r, Rows(lines)); };
+
+  // A kill: the headline and its score line are one kill, not two.
+  CHECK(count(kill, {"ELIMINATED TTPS SUSHICUBBY", "ELIMINATION 250 | + 202"}) == 1);
+  CHECK(count(kill, {"fliMINATfD", "ELIMINATION + 250"}) == 1);
+  CHECK(count(kill, {"ELIMINATED DOVAHKIIN2299", "SPECIAL DELIVERY + 10 + 20 FANS"}) == 0);  // the score line isn't up yet
+  CHECK(count(kill, {"fliMINATfD SA5SVRfWAR", "ELIMINATION 250 + 131 + 40 FANS", "FLOW STATE"}) == 1);
+  CHECK(count(revive, {"ELIMINATED TTPS SUSHICUBBY", "ELIMINATION 250 | + 202"}) == 0);
+
+  // A downed teammate's marker and the prompt to revive them aren't revives; the score line is.
+  CHECK(count(revive, {"REVIVE"}) == 0);
+  CHECK(count(revive, {"15m REVIVE"}) == 0);
+  CHECK(count(revive, {"REVIVE 14m"}) == 0);
+  CHECK(count(revive, {"37m", "REVIVE", "ForemostFace"}) == 0);
+  CHECK(count(revive, {"E REVIVE"}) == 0);
+  CHECK(count(revive, {"REVIVE PVP THCORPSE", "REVIVE + 200"}) == 1);
+
+  CHECK(count(assist, {"ASSIST BINIO", "ASSIST + 100"}) == 1);
+  CHECK(count(assist, {"PICK UP 19m", "ASSIST"}) == 0);
+
+  // The end-of-match summary lists every stat by name.
+  for (const auto* r : {&kill, &assist, &revive}) {
+    CHECK(count(*r, {"WINS 217", "ELIMINATIONS 3,237", "REVIVES 712", "Eliminations 12", "Assists 8", "Revives 1"}) == 0);
+  }
+
+  // One score line up for three seconds, read with what's around it changing, is one kill.
+  RuleTracker kills(kill);
+  CHECK(kills.Update(Rows({"ELIMINATED DOVAHKllN2299", "ELIMINATION + 250 + 20 FANS"}), 0) == 1);
+  CHECK(kills.Update(Rows({"IMIN EL IMIN KIN,'299", "ELIMINATION 250 + 20 FANS"}), 250) == 0);
+  CHECK(kills.Update(Rows({"fillWINATfD DOVAHKllN229", "ELIMINATIO + 250"}), 500) == 0);
+  CHECK(kills.Update(Rows({"ELIMINATED", "ELIMINATION 250"}), 1500) == 0);
+  CHECK(kills.Update(Rows({"ELIMINATED"}), 2500) == 0);
+  CHECK(kills.Update(Rows({}), 3000) == 0);
+  CHECK(kills.Update(Rows({}), 4500) == 0);
+  // The next kill.
+  CHECK(kills.Update(Rows({"fliMINATED nssmnvnn", "FLOW STATE 40 + 40 FANS"}), 5000) == 0);
+  CHECK(kills.Update(Rows({"fillWINATfD SA5SVRfWAR", "ELIMINATION + 250", "FLOW STATE"}), 5250) == 1);
+  CHECK(kills.Update(Rows({"fillWINATfD SA5SVRfWAR", "ELIMINATION + 250"}), 5500) == 0);
 }
 
 void TestTracker() {
@@ -515,7 +602,9 @@ int main(int argc, char** argv) {
   TestMetadata();
   TestMetadataRoundTrip();
   TestTrimmed();
+  TestNumberPhrase();
   if (argc > 1) TestShippedRulesParse(argv[1]);
+  if (argc > 1) TestFinalsRules(argv[1]);
   if (argc > 2) TestMetadataBox(argv[2]);
   if (g_failures == 0) std::printf("All detection tests passed\n");
   return g_failures == 0 ? 0 : 1;

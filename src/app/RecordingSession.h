@@ -40,6 +40,11 @@ class RecordingSession {
   const ReplayBuffer& Buffer() const { return buffer_; }
   ReplayBuffer& Buffer() { return buffer_; }
 
+  // The game's process, so the screen is read only while the game is in front.
+  void SetGameProcess(DWORD processId) {
+    if (detector_) detector_->SetGameProcess(processId);
+  }
+
   // Adds a moment found some other way than reading the screen (the game's own API).
   void AddEvent(const GameEvent& event) { OnEvent(event); }
 
