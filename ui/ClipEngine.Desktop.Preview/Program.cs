@@ -127,7 +127,8 @@ internal static class Sample
         vm.SampleTimelines = Timelines(now);
         vm.SetSupportedGames(["The Finals", "Overwatch", "Battlefield 6", "Counter-Strike 2", "Dota 2", "League of Legends",
                               "Rocket League", "Valorant", "Fortnite", "Apex Legends", "PUBG", "Marvel Rivals",
-                              "Rainbow Six Siege", "Call of Duty", "ARC Raiders", "Delta Force"]);
+                              "Rainbow Six Siege", "Call of Duty", "ARC Raiders", "Delta Force", "Deadlock",
+                              "Halo Infinite", "Destiny 2", "Team Fortress 2", "Escape from Tarkov", "Roblox", "Minecraft"]);
 
         var clips = new (string Game, string Thumb, double MinutesAgo, int Seconds, long Mb)[]
         {

@@ -26,6 +26,14 @@ const std::vector<GameProfile>& BuiltInGames() {
       {"call_of_duty", "Call of Duty", {L"cod.exe", L"cod24-cod.exe", L"cod25-cod.exe"}},
       {"arc_raiders", "ARC Raiders", {L"PioneerGame.exe"}},
       {"delta_force", "Delta Force", {L"DeltaForceClient-Win64-Shipping.exe"}},
+      {"deadlock", "Deadlock", {L"deadlock.exe", L"project8.exe"}},
+      {"halo_infinite", "Halo Infinite", {L"HaloInfinite.exe"}},
+      {"destiny_2", "Destiny 2", {L"destiny2.exe"}},
+      {"team_fortress_2", "Team Fortress 2", {L"tf_win64.exe", L"tf.exe"}},
+      {"escape_from_tarkov", "Escape from Tarkov", {L"EscapeFromTarkov.exe"}},
+      // Recorded, with clips from the hotkey; their HUDs differ from one experience or mod to the next.
+      {"roblox", "Roblox", {L"RobloxPlayerBeta.exe"}},
+      {"minecraft", "Minecraft", {L"Minecraft.Windows.exe"}},
   };
   return games;
 }

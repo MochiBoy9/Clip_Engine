@@ -17,6 +17,8 @@ internal sealed class EngineSettings
     public string SaveHotkey { get; set; } = "F8";
     public string RecordHotkey { get; set; } = "F9";
     public bool RecordWithoutGame { get; set; }
+    public bool GameFocus { get; set; } = true;
+    public bool DiscordPresence { get; set; } = true;
     public bool Detection { get; set; } = true;
     public string ReadingQuality { get; set; } = "medium";
     public bool AutoClip { get; set; } = true;
@@ -52,6 +54,8 @@ internal sealed class EngineSettings
                 case "save_hotkey": settings.SaveHotkey = value; break;
                 case "record_hotkey": settings.RecordHotkey = value; break;
                 case "record_without_game": settings.RecordWithoutGame = ParseBool(value, settings.RecordWithoutGame); break;
+                case "game_focus": settings.GameFocus = ParseBool(value, settings.GameFocus); break;
+                case "discord_presence": settings.DiscordPresence = ParseBool(value, settings.DiscordPresence); break;
                 case "detection": settings.Detection = ParseBool(value, settings.Detection); break;
                 case "reading_quality":
                     if (ReadingQualities.Contains(value.ToLowerInvariant())) settings.ReadingQuality = value.ToLowerInvariant();
@@ -83,6 +87,8 @@ internal sealed class EngineSettings
             ["save_hotkey"] = SaveHotkey,
             ["record_hotkey"] = RecordHotkey,
             ["record_without_game"] = Format(RecordWithoutGame),
+            ["game_focus"] = Format(GameFocus),
+            ["discord_presence"] = Format(DiscordPresence),
             ["detection"] = Format(Detection),
             ["reading_quality"] = ReadingQuality,
             ["auto_clip"] = Format(AutoClip),

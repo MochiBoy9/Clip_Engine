@@ -42,6 +42,13 @@ public sealed class StudioViewModel : ObservableObject
         new("call_of_duty", "Call of Duty", false, ["cod.exe", "cod24-cod.exe", "cod25-cod.exe"]),
         new("arc_raiders", "ARC Raiders", false, ["PioneerGame.exe"]),
         new("delta_force", "Delta Force", false, ["DeltaForceClient-Win64-Shipping.exe"]),
+        new("deadlock", "Deadlock", false, ["deadlock.exe", "project8.exe"]),
+        new("halo_infinite", "Halo Infinite", false, ["HaloInfinite.exe"]),
+        new("destiny_2", "Destiny 2", false, ["destiny2.exe"]),
+        new("team_fortress_2", "Team Fortress 2", false, ["tf_win64.exe", "tf.exe"]),
+        new("escape_from_tarkov", "Escape from Tarkov", false, ["EscapeFromTarkov.exe"]),
+        new("roblox", "Roblox", false, ["RobloxPlayerBeta.exe"]),
+        new("minecraft", "Minecraft", false, ["Minecraft.Windows.exe"]),
     ];
 
     public static IReadOnlyList<QualityOption> Qualities { get; } =

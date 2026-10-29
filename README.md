@@ -6,9 +6,11 @@ Proprietary software. All rights reserved; see [LICENSE](LICENSE).
 
 ## What works today
 
-- Detects 16 games (see [Supported games](#supported-games)) and starts recording on the monitor the game is on, stopping when it closes.
+- Detects 23 games (see [Supported games](#supported-games)) and starts recording on the monitor the game is on, stopping when it closes.
 - Captures at the monitor's native resolution and refresh rate with Windows.Graphics.Capture. Nothing is injected into the game, so it is safe with anti-cheat.
 - Encodes on the GPU (NVIDIA, AMD or Intel) with H.264, switching to HEVC when the resolution and frame rate need it.
+- Records only the game: when you switch to another window, the video shows a "Game Not Found" card and game audio goes quiet until you're back, so nothing else on your PC ends up in a clip. Turn it off with **Record only the game** in Settings (`game_focus`).
+- Discord Rich Presence: while Discord is open, your status shows the game you're playing, how long you've been at it, your kills and deaths in the match and the clips you've saved. Turn it off with **Discord status** in Settings (`discord_presence`).
 - Keeps the last 60 seconds in memory; press **F8** to save the last 30 seconds as an MP4 with separate game and mic audio tracks.
 
 - Long recordings: press **F9** (or the button on Home) to record for as long as you like, until you press it again. Detection keeps running, so every kill, death and other moment is marked on its timeline, and automatic clips carry on meanwhile. It streams to disk as it records, so memory use doesn't grow, and it stops by itself before the drive fills up.
@@ -34,8 +36,10 @@ Proprietary software. All rights reserved; see [LICENSE](LICENSE).
 | Dota 2 | Official Game State Integration: kills, deaths, assists, multi-kills, the horn and the match result |
 | League of Legends | Official Live Client Data API: kills, deaths, assists, multi-kills, aces, first blood, dragons, Baron and steals, game start and result |
 | Rocket League | Official Stats API: goals, assists, demolitions, saves, kickoff and the match result |
-| Valorant, Marvel Rivals, Rainbow Six Siege, Delta Force | The killfeed, by your in-game name (set it on the Games page), plus round and match banners |
+| Valorant, Marvel Rivals, Rainbow Six Siege, Delta Force, Deadlock, Halo Infinite, Destiny 2, Team Fortress 2 | The killfeed, by your in-game name (set it on the Games page), plus round and match banners and medals |
 | The Finals, Overwatch, Battlefield 6, Fortnite, Apex Legends, PUBG, Call of Duty, ARC Raiders | The HUD's kill, death, revive and match messages |
+| Escape from Tarkov | Deaths and the end of each raid (Tarkov shows no kills on screen) |
+| Roblox, Minecraft | Recorded, with clips on the hotkey; add rules for the experiences you play in Detection Studio |
 
 The official events are exact and work whatever the HUD looks like. Clip Engine turns them on by itself: it writes a `gamestate_integration_clipengine.cfg` into CS2's and Dota 2's `cfg` folders and sets `PacketSendRate` in Rocket League's `TAGame\Config\DefaultStatsAPI.ini`, for installs it finds through Steam and the Epic Games launcher and for any game it sees running. A game that was already open needs one restart to pick that up. Dota 2 may also need `-gamestateintegration` in its Steam launch options. League's API is always on during a game.
 

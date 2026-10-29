@@ -20,7 +20,7 @@
           <StackPanel Grid.Column="1" Spacing="6">
             <TextBlock Classes="h2" Text="Your in-game name" />
             <TextBlock Classes="body" TextWrapping="Wrap"
-                       Text="Valorant, Marvel Rivals, Rainbow Six Siege and Delta Force show kills in a killfeed, so Clip Engine looks for your name there. Separate names for different games with commas, without the #tag." />
+                       Text="Valorant, Marvel Rivals, Rainbow Six Siege, Delta Force, Deadlock, Halo Infinite, Destiny 2 and Team Fortress 2 show kills in a killfeed, so Clip Engine looks for your name there. Separate names for different games with commas, without the #tag." />
             <Grid ColumnDefinitions="*,Auto" Margin="0,6,0,0">
               <TextBox Text="{Binding Names}" Watermark="Your name, as it shows in the killfeed" />
               <Button Grid.Column="1" Classes="accent" Content="Save" Command="{Binding SaveCommand}" Margin="10,0,0,0" />

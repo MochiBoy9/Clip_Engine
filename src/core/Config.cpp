@@ -44,6 +44,14 @@ record_hotkey = F9
 # Keep recording the main monitor even when no supported game is running.
 record_without_game = false
 
+# Record only the game. When you switch to another window, the video shows "Game Not Found" and
+# game audio goes quiet until you're back in the game, so nothing else ends up in a clip.
+game_focus = true
+
+# Show the game you're playing, your kills and deaths and how many clips you've saved as your
+# Discord status, while Discord is open.
+discord_presence = true
+
 # Read the screen for kills, deaths and other moments (rules are in detection.ini).
 detection = true
 
@@ -61,7 +69,7 @@ clip_before_seconds = 10
 clip_after_seconds = 5
 
 # Your in-game names, separated by commas. Games that show kills in a killfeed (Valorant, Marvel
-# Rivals, Delta Force and others) need it to tell your kills and deaths from everyone else's.
+# Rivals, Delta Force, Halo Infinite and others) need it to tell your kills and deaths from everyone else's.
 player_names =
 
 # Log everything read off the screen, to see what words a game uses when tuning detection.ini.
@@ -251,6 +259,12 @@ Config Config::Load(const std::filesystem::path& file) {
       }
     } else if (key == "record_without_game") {
       setBool(config.recordWithoutGame);
+    } else if (key == "game_focus") {
+      setBool(config.gameFocus);
+    } else if (key == "discord_presence") {
+      setBool(config.discordPresence);
+    } else if (key == "discord_app_id") {
+      config.discordAppId = value;
     } else if (key == "detection") {
       setBool(config.detection);
     } else if (key == "detection_debug") {

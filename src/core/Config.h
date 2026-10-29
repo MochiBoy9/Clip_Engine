@@ -40,6 +40,13 @@ struct Config {
   Hotkey recordHotkey{0, VK_F9};
   std::string recordHotkeyText = "F9";
   bool recordWithoutGame = false;  // keep a buffer of the main monitor when no game is open
+  // While a game is recorded, record only the game: when another window comes to the front,
+  // the video shows a "Game Not Found" card and game audio goes quiet until the game is back.
+  bool gameFocus = true;
+
+  // Show what's being played and recorded as the user's Discord status.
+  bool discordPresence = true;
+  std::string discordAppId;  // the Discord application the status belongs to; empty = the built-in one
 
   bool detection = true;          // read the screen for kills, deaths and other moments
   bool detectionDebug = false;    // log everything read off the screen, for tuning detection.ini

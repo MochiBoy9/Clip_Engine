@@ -29,6 +29,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string? _engineProblem;
     private string? _detectedGame;
     private RecordingStarted? _recording;
+    private bool _gameAway;  // another window is in front, so the recording shows Game Not Found
     private string _hotkey = "F8";
     private int _clipSeconds = 30;
     private int _bufferSeconds = 60;
@@ -276,6 +277,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public string StatusEyebrow => _engineState switch
     {
+        EngineState.Running when IsRecording && _gameAway => "PAUSED · GAME NOT FOUND",
         EngineState.Running when IsLongRecording => $"LIVE · LONG RECORDING {LongRecordingTime}",
         EngineState.Running when IsRecording => "LIVE · REPLAY BUFFER ON",
         EngineState.Running => "ENGINE READY",
@@ -300,6 +302,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         get
         {
             if (_engineProblem is not null) return _engineProblem;
+            if (IsRecording && _gameAway)
+                return $"Another window is in front, so only a Game Not Found card is recorded until you're back in {_recording!.Label}.";
             if (IsRecording)
             {
                 var r = _recording!;
@@ -621,17 +625,25 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 break;
             case RecordingStarted r:
                 _recording = r;
+                _gameAway = false;
                 Records.StartLiveMatch(r.Label == "Desktop" ? null : r.Label);
                 AddActivity(ActivityKind.Recording, $"Recording {r.Label} at {r.Width}×{r.Height}, {r.Fps} fps");
                 break;
             case RecordingStopped:
                 _recording = null;
+                _gameAway = false;
                 SetLongRecording(null);
                 Records.StartLiveMatch(null);
                 _ = RefreshRecordsAsync();
                 break;
             case RecordHotkey h:
                 RecordHotkey = h.Hotkey;
+                break;
+            case GameAway:
+                _gameAway = true;
+                break;
+            case GameBack:
+                _gameAway = false;
                 break;
             case LongRecordingStarted l:
                 SetLongRecording(DateTime.Now);
