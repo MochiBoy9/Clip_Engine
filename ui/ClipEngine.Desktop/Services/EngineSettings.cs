@@ -18,10 +18,14 @@ internal sealed class EngineSettings
     public string RecordHotkey { get; set; } = "F9";
     public bool RecordWithoutGame { get; set; }
     public bool Detection { get; set; } = true;
+    public string ReadingQuality { get; set; } = "medium";
     public bool AutoClip { get; set; } = true;
     public List<string> AutoClipEvents { get; set; } = [.. AllEvents];
     public int ClipBeforeSeconds { get; set; } = 10;
     public int ClipAfterSeconds { get; set; } = 5;
+
+    // How hard the engine works at reading the screen (ReadQuality in src/detect/OcrImage.h).
+    public static readonly IReadOnlyList<string> ReadingQualities = ["low", "medium", "high", "ultra"];
 
     // The engine's event names (src/detect/GameEvent.h).
     public static readonly IReadOnlyList<string> AllEvents =
@@ -49,6 +53,9 @@ internal sealed class EngineSettings
                 case "record_hotkey": settings.RecordHotkey = value; break;
                 case "record_without_game": settings.RecordWithoutGame = ParseBool(value, settings.RecordWithoutGame); break;
                 case "detection": settings.Detection = ParseBool(value, settings.Detection); break;
+                case "reading_quality":
+                    if (ReadingQualities.Contains(value.ToLowerInvariant())) settings.ReadingQuality = value.ToLowerInvariant();
+                    break;
                 case "auto_clip": settings.AutoClip = ParseBool(value, settings.AutoClip); break;
                 case "auto_clip_events":
                     settings.AutoClipEvents = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -77,6 +84,7 @@ internal sealed class EngineSettings
             ["record_hotkey"] = RecordHotkey,
             ["record_without_game"] = Format(RecordWithoutGame),
             ["detection"] = Format(Detection),
+            ["reading_quality"] = ReadingQuality,
             ["auto_clip"] = Format(AutoClip),
             ["auto_clip_events"] = string.Join(", ", AllEvents.Where(AutoClipEvents.Contains)),
             ["clip_before_seconds"] = Format(ClipBeforeSeconds),

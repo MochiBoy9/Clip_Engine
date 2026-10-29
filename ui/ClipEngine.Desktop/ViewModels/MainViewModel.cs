@@ -152,6 +152,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _library.Changed += () => _ = RefreshClipsAsync();
         _library.Watch(engineSettings.OutputDir);
 
+        // Older copies of detection.ini hid fixes to the built-in rules; keep only the user's changes.
+        DetectionIni.MigrateUserFile();
         _engine = new EngineHost();
         _engine.StateChanged += (state, message) => Dispatcher.UIThread.Post(() => OnEngineState(state, message));
         _engine.EventReceived += e => Dispatcher.UIThread.Post(() => OnEngineEvent(e));

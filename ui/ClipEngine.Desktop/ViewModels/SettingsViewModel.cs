@@ -18,6 +18,7 @@ public sealed class SettingsViewModel : ObservableObject
     private string _recordHotkey = "F9";
     private bool _recordWithoutGame;
     private bool _detection;
+    private string _readingQuality = "medium";
     private bool _autoClip;
     private double _clipBeforeSeconds;
     private double _clipAfterSeconds;
@@ -118,6 +119,20 @@ public sealed class SettingsViewModel : ObservableObject
 
     // Reading kills and other moments off the screen, and saving clips around them.
     public bool Detection { get => _detection; set => Change(ref _detection, value); }
+
+    // How hard the screen is read: higher misses and misreads less, and uses more CPU.
+    public bool QualityLow { get => _readingQuality == "low"; set { if (value) SetReadingQuality("low"); } }
+    public bool QualityMedium { get => _readingQuality == "medium"; set { if (value) SetReadingQuality("medium"); } }
+    public bool QualityHigh { get => _readingQuality == "high"; set { if (value) SetReadingQuality("high"); } }
+    public bool QualityUltra { get => _readingQuality == "ultra"; set { if (value) SetReadingQuality("ultra"); } }
+
+    public string ReadingQualityHint => _readingQuality switch
+    {
+        "low" => "One quick read of each part of the screen. Lightest on the CPU; small text gets misread more.",
+        "high" => "Reads small text bigger, two ways, and a little more often. Fewer misses, more CPU.",
+        "ultra" => "Reads three ways, twice as often. Catches the most, and uses the most CPU.",
+        _ => "Reads small text bigger and sharper than Low, at little extra cost. Recommended.",
+    };
     public bool AutoClip { get => _autoClip; set => Change(ref _autoClip, value); }
     public IReadOnlyList<EventToggle> AutoClipEvents { get; }
 
@@ -233,6 +248,7 @@ public sealed class SettingsViewModel : ObservableObject
         RecordHotkey = string.IsNullOrWhiteSpace(RecordHotkey) ? "F9" : RecordHotkey.Trim(),
         RecordWithoutGame = RecordWithoutGame,
         Detection = Detection,
+        ReadingQuality = _readingQuality,
         AutoClip = AutoClip,
         AutoClipEvents = AutoClipEvents.Where(e => e.IsOn).Select(e => e.Name).ToList(),
         ClipBeforeSeconds = (int)ClipBeforeSeconds,
@@ -269,6 +285,7 @@ public sealed class SettingsViewModel : ObservableObject
         _recordHotkey = s.RecordHotkey;
         _recordWithoutGame = s.RecordWithoutGame;
         _detection = s.Detection;
+        _readingQuality = EngineSettings.ReadingQualities.Contains(s.ReadingQuality) ? s.ReadingQuality : "medium";
         _autoClip = s.AutoClip;
         _clipBeforeSeconds = Math.Clamp(s.ClipBeforeSeconds, 0, 60);
         _clipAfterSeconds = Math.Clamp(s.ClipAfterSeconds, 0, 30);
@@ -317,6 +334,15 @@ public sealed class SettingsViewModel : ObservableObject
         Raise(nameof(Share10));
         Raise(nameof(Share50));
         Raise(nameof(Share500));
+    }
+
+    private void SetReadingQuality(string quality)
+    {
+        if (!Change(ref _readingQuality, quality, nameof(QualityLow))) return;
+        Raise(nameof(QualityMedium));
+        Raise(nameof(QualityHigh));
+        Raise(nameof(QualityUltra));
+        Raise(nameof(ReadingQualityHint));
     }
 
     private void SetCodec(string codec)

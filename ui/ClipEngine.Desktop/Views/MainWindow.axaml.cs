@@ -11,7 +11,10 @@ public partial class MainWindow : Window, IAppDialogs
 {
     private static readonly FilePickerFileType VideoFiles = new("Video clips") { Patterns = ["*.mp4"] };
     private static readonly FilePickerFileType ZipFiles = new("Clip Engine release") { Patterns = ["*.zip"] };
-    private static readonly FilePickerFileType ImageFiles = new("Screenshots") { Patterns = ["*.png", "*.jpg", "*.jpeg", "*.bmp"] };
+    private static readonly FilePickerFileType FrameFiles = new("Videos and screenshots")
+    {
+        Patterns = ["*.mp4", "*.mkv", "*.mov", "*.avi", "*.wmv", "*.webm", "*.png", "*.jpg", "*.jpeg", "*.bmp"],
+    };
 
     private bool _allowClose;
 
@@ -43,12 +46,12 @@ public partial class MainWindow : Window, IAppDialogs
         return files.Count > 0 ? files[0].TryGetLocalPath() : null;
     }
 
-    async Task<string?> IAppDialogs.PickImageAsync()
+    async Task<string?> IAppDialogs.PickFrameSourceAsync()
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "Open a screenshot of the game",
-            FileTypeFilter = [ImageFiles],
+            Title = "Open a video or screenshot of the game",
+            FileTypeFilter = [FrameFiles],
         });
         return files.Count > 0 ? files[0].TryGetLocalPath() : null;
     }

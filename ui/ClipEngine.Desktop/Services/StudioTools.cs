@@ -11,20 +11,26 @@ internal static class StudioTools
 
     public static bool Available => OperatingSystem.IsWindows() && File.Exists(AppPaths.EngineExe);
 
-    // Saves the frame of a clip at `seconds` (or a screenshot as it is) and returns the PNG's path.
-    public static async Task<string> GrabFrameAsync(string source, double seconds)
+    // Saves the frame of a video at `seconds` (or a screenshot as it is) and returns the PNG's
+    // path, and for a video its length in seconds when it's known.
+    public static async Task<(string Png, double? Length)> GrabFrameAsync(string source, double seconds)
     {
         Require();
         Directory.CreateDirectory(Path.GetDirectoryName(FrameFile)!);
         FrameSaved? saved = null;
-        var (exitCode, failure) = await EngineCommand.RunAsync(
-            ["--frame", source, FrameFile, "--at", Number(seconds)], e => saved ??= e as FrameSaved);
+        double? length = null;
+        var (exitCode, failure) = await EngineCommand.RunAsync(["--frame", source, FrameFile, "--at", Number(seconds)], e =>
+        {
+            saved ??= e as FrameSaved;
+            if (e is VideoLength v) length = v.Seconds;
+        });
         if (exitCode != 0 || saved is null) throw new StudioFailedException(Reason(failure, "Frame failed: ", exitCode));
-        return FrameFile;
+        return (FrameFile, length);
     }
 
-    // Reads the rule's box of the frame like detection does: the text, and how many times its words match.
-    public static async Task<(string Text, int Matches)> ReadAsync(string source, double seconds, StudioRule rule)
+    // Reads the rule's box of the frame like detection does at that reading quality (low to ultra):
+    // the text, and how many times its words match.
+    public static async Task<(string Text, int Matches)> ReadAsync(string source, double seconds, StudioRule rule, string quality)
     {
         Require();
         string? text = null;
@@ -33,7 +39,7 @@ internal static class StudioTools
         [
             "--read", source, "--at", Number(seconds), "--region", rule.RegionText.Replace(" ", ""),
             "--threshold", rule.Threshold.ToString(CultureInfo.InvariantCulture), "--words", rule.Words, "--exclude", rule.Exclude,
-            "--position", rule.Position,
+            "--position", rule.Position, "--event", rule.Event, "--quality", quality,
         ];
         // Icons are found next to detection.ini, like the engine looks for them.
         if (rule.Image is { Length: > 0 } image)

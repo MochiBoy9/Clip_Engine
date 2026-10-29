@@ -87,6 +87,18 @@
           </Button>
         </Grid>
 
+        <!-- Whose rules these are, and going back to the built-in ones -->
+        <Border DockPanel.Dock="Top" Classes="inset" Padding="10,8" Margin="0,0,0,10">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="caption" Text="{Binding RulesOrigin}" TextWrapping="Wrap" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Classes="secondary" Command="{Binding UseBuiltInCommand}" Padding="10,4" Margin="8,0,0,0"
+                    IsVisible="{Binding HasBuiltInRules}" VerticalAlignment="Center"
+                    ToolTip.Tip="Put the game's built-in rules back in the editor; save to use them again">
+              <TextBlock Text="Use built-in" FontSize="12" />
+            </Button>
+          </Grid>
+        </Border>
+
         <TextBlock DockPanel.Dock="Top" Classes="caption" TextWrapping="Wrap" Margin="0,0,0,10"
                    IsVisible="{Binding !HasRules}"
                    Text="No rules for this game yet. Add one, draw a box where the game shows a kill (or any moment), and type the words it shows." />
@@ -125,6 +137,11 @@
               <TextBlock Classes="caption" Text="But not when it also shows" />
               <TextBox Text="{Binding Exclude}" Watermark="Optional, e.g. BY" />
             </StackPanel>
+            <StackPanel Spacing="6">
+              <TextBlock Classes="caption" Text="Where the words are" />
+              <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Positions}" SelectedItem="{Binding Position}"
+                        ToolTip.Tip="In a killfeed, the player who got the kill starts a row and the one who died ends it" />
+            </StackPanel>
             <StackPanel Spacing="4">
               <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Classes="caption" Text="Brightness filter" />
@@ -154,10 +171,15 @@
           <!-- Test result for the picked rule -->
           <Border Classes="inset" Padding="12,8" IsVisible="{Binding HasSelectedRule}">
             <Grid ColumnDefinitions="Auto,*,Auto">
-              <Button Classes="accent" Command="{Binding TestCommand}"
-                      ToolTip.Tip="Read the box on this frame the way the engine does in game">
-                <TextBlock Text="Test on this frame" />
-              </Button>
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Classes="accent" Command="{Binding TestCommand}"
+                        ToolTip.Tip="Read the box on this frame the way the engine does in game">
+                  <TextBlock Text="Test on this frame" />
+                </Button>
+                <ComboBox Width="110" ItemsSource="{x:Static vm:StudioViewModel.Qualities}" SelectedItem="{Binding TestQuality}"
+                          VerticalAlignment="Center"
+                          ToolTip.Tip="The reading quality to test at. The engine uses the one picked in Settings." />
+              </StackPanel>
               <StackPanel Grid.Column="1" Margin="14,0" VerticalAlignment="Center" Spacing="1">
                 <TextBlock Classes="caption" Text="Reads" IsVisible="{Binding HasReadText}" />
                 <TextBlock Text="{Binding ReadText}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
@@ -182,24 +204,28 @@
           <!-- Where the frame comes from -->
           <Grid ColumnDefinitions="260,14,*,14,Auto">
             <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Sources}" SelectedItem="{Binding SelectedSource}"
-                      PlaceholderText="No clips of this game yet" VerticalAlignment="Center">
+                      PlaceholderText="{Binding FileSourceName, FallbackValue='No clips yet', TargetNullValue='No clips yet'}"
+                      VerticalAlignment="Center" ToolTip.Tip="Any of your clips or long recordings">
               <ComboBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:ClipItemViewModel">
-                  <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                  <StackPanel>
+                    <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Classes="caption" FontSize="11" Text="{Binding Game}" TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
                 </DataTemplate>
               </ComboBox.ItemTemplate>
             </ComboBox>
-            <Grid Grid.Column="2" ColumnDefinitions="*,Auto" IsVisible="{Binding IsClipSource}" VerticalAlignment="Center">
+            <Grid Grid.Column="2" ColumnDefinitions="*,Auto" IsVisible="{Binding HasTimeline}" VerticalAlignment="Center">
               <Slider Minimum="0" Maximum="{Binding SourceDuration}" Value="{Binding FrameSeconds}" VerticalAlignment="Center"
                       ToolTip.Tip="Move through the clip to find a frame showing the moment" />
               <TextBlock Grid.Column="1" Text="{Binding FrameTimeText}" FontFeatures="tnum" FontSize="13" FontWeight="SemiBold"
                          VerticalAlignment="Center" Margin="12,0,0,0" />
             </Grid>
             <Button Grid.Column="4" Classes="secondary" Command="{Binding OpenImageCommand}" VerticalAlignment="Center"
-                    ToolTip.Tip="Use a screenshot of the game instead of a clip">
+                    ToolTip.Tip="Take the frame from another video (one recorded with another app, say) or a screenshot">
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <PathIcon Data="{StaticResource IconImport}" Width="14" Height="14" />
-                <TextBlock Text="Use a screenshot" VerticalAlignment="Center" />
+                <TextBlock Text="Open a video or screenshot" VerticalAlignment="Center" />
               </StackPanel>
             </Button>
           </Grid>
@@ -233,7 +259,7 @@
                         Spacing="8" MaxWidth="380" IsHitTestVisible="False">
               <TextBlock Classes="h2" Text="No frame yet" HorizontalAlignment="Center" />
               <TextBlock Classes="body" TextWrapping="Wrap" TextAlignment="Center"
-                         Text="Pick a clip of this game below, or use a screenshot. Then draw a box over the part of the screen that shows the moment." />
+                         Text="Pick any of your clips below, or open a video or screenshot. Then draw a box over the part of the screen that shows the moment." />
             </StackPanel>
             <Border IsVisible="{Binding IsBusy}" Classes="pill" HorizontalAlignment="Right" VerticalAlignment="Top"
                     Margin="16" IsHitTestVisible="False">
