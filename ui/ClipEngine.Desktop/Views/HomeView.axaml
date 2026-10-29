@@ -5,15 +5,15 @@
              x:Class="ClipEngine.Desktop.Views.HomeView"
              x:DataType="vm:HomePage">
   <ScrollViewer>
-    <StackPanel Margin="0,0,0,24" Spacing="14">
+    <StackPanel Margin="0,0,40,40" Spacing="22">
 
       <!-- What the engine is doing right now, and saving a clip -->
-      <views:Plate Classes="card lead" Padding="26,22,24,22">
+      <views:Plate Classes="card lead" Padding="32,28,30,28">
         <Panel>
         <views:Stripes Width="150" Height="9" Spacing="9" Fill="{DynamicResource AccentStripeBrush}"
-                       HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-21,-23,0" />
+                       HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-27,-29,0" />
         <Grid ColumnDefinitions="*,Auto">
-          <StackPanel Spacing="8" VerticalAlignment="Center">
+          <StackPanel Spacing="10" VerticalAlignment="Center">
             <Border Classes="pill" HorizontalAlignment="Left" Padding="9,3">
               <StackPanel Orientation="Horizontal" Spacing="7">
                 <Ellipse Classes="liveDot" Classes.pulsing="{Binding Main.IsRecording}" Fill="{Binding Main.StatusBrush}"
@@ -59,61 +59,61 @@
       </views:Plate>
 
       <!-- Numbers at a glance -->
-      <UniformGrid Columns="4">
-        <views:Plate Classes="card" Padding="16" Margin="0,0,9,0">
+      <Grid ColumnDefinitions="*,18,*,18,*,18,*">
+        <views:Plate Classes="card" Padding="20,18">
           <Grid ColumnDefinitions="Auto,*">
             <Border Classes="tile" VerticalAlignment="Center"><PathIcon Data="{StaticResource IconClock}" /></Border>
-            <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+            <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
               <TextBlock Classes="stat" FontSize="22" Text="{Binding Main.BufferText}" />
               <TextBlock Classes="caption" Text="Replay buffer" TextTrimming="CharacterEllipsis" />
             </StackPanel>
           </Grid>
         </views:Plate>
-        <views:Plate Classes="card" Padding="16" Margin="3,0,6,0">
+        <views:Plate Grid.Column="2" Classes="card" Padding="20,18">
           <Grid ColumnDefinitions="Auto,*">
             <Border Classes="tile" VerticalAlignment="Center"><PathIcon Data="{StaticResource IconClips}" /></Border>
-            <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+            <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
               <TextBlock Classes="stat" FontSize="22" Text="{Binding Main.ClipsToday}" />
               <TextBlock Classes="caption" Text="Clips today" TextTrimming="CharacterEllipsis" />
             </StackPanel>
           </Grid>
         </views:Plate>
-        <views:Plate Classes="card" Padding="16" Margin="6,0,3,0">
+        <views:Plate Grid.Column="4" Classes="card" Padding="20,18">
           <Grid ColumnDefinitions="Auto,*">
             <Border Classes="tile" VerticalAlignment="Center"><PathIcon Data="{StaticResource IconDrive}" /></Border>
-            <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+            <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
               <TextBlock Classes="stat" FontSize="22" Text="{Binding Main.LibrarySize}" />
               <TextBlock Classes="caption" Text="Clip library" TextTrimming="CharacterEllipsis" />
             </StackPanel>
           </Grid>
         </views:Plate>
-        <views:Plate Classes="card" Padding="16" Margin="9,0,0,0">
+        <views:Plate Grid.Column="6" Classes="card" Padding="20,18">
           <Grid ColumnDefinitions="Auto,*">
             <Border Classes="tile" VerticalAlignment="Center"><PathIcon Data="{StaticResource IconGames}" /></Border>
-            <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+            <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
               <TextBlock Classes="stat" FontSize="22" Text="{Binding Main.GamesSupported}" />
               <TextBlock Classes="caption" Text="Games detected automatically" TextTrimming="CharacterEllipsis" />
             </StackPanel>
           </Grid>
         </views:Plate>
-      </UniformGrid>
+      </Grid>
 
-      <Grid ColumnDefinitions="1.7*,14,*">
+      <Grid ColumnDefinitions="1.7*,22,*">
         <!-- Recent clips -->
-        <views:Plate Classes="card" Padding="18">
-          <StackPanel Spacing="14">
+        <views:Plate Classes="card" Padding="24,22">
+          <StackPanel Spacing="18">
             <Grid ColumnDefinitions="*,Auto">
               <TextBlock Classes="eyebrow" Text="RECENT CLIPS" VerticalAlignment="Center" />
               <Button Grid.Column="1" Classes="secondary" Padding="12,5" FontSize="13" Content="View all"
                       Command="{Binding Main.GoToCommand}" CommandParameter="{x:Static vm:Page.Clips}" />
             </Grid>
-            <ItemsControl ItemsSource="{Binding Main.RecentClips}" IsVisible="{Binding Main.HasClips}">
+            <ItemsControl ItemsSource="{Binding Main.RecentClips}" IsVisible="{Binding Main.HasClips}" Margin="0,0,-16,-16">
               <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate><UniformGrid Columns="2" /></ItemsPanelTemplate>
               </ItemsControl.ItemsPanel>
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:ClipItemViewModel">
-                  <views:ClipCard Margin="0,0,10,10" ThumbnailHeight="124" />
+                  <views:ClipCard Margin="0,0,16,16" ThumbnailHeight="132" />
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
@@ -127,15 +127,17 @@
         </views:Plate>
 
         <!-- Activity -->
-        <views:Plate Grid.Column="2" Classes="card" Padding="18">
-          <StackPanel Spacing="14">
-            <TextBlock Classes="eyebrow" Text="ACTIVITY" />
-            <ScrollViewer MaxHeight="440">
+        <views:Plate Grid.Column="2" Classes="card" Padding="24,22">
+          <StackPanel Spacing="18">
+            <Grid ColumnDefinitions="*,Auto" MinHeight="31">
+              <TextBlock Classes="eyebrow" Text="ACTIVITY" VerticalAlignment="Center" />
+            </Grid>
+            <ScrollViewer MaxHeight="480">
             <ItemsControl ItemsSource="{Binding Main.Activity}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:ActivityItem">
-                  <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,14">
-                    <Panel VerticalAlignment="Top" Margin="0,0,12,0">
+                  <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,18">
+                    <Panel VerticalAlignment="Top" Margin="0,0,14,0">
                       <Border Classes="tile small" IsVisible="{Binding IsClip}">
                         <PathIcon Data="{StaticResource IconBolt}" />
                       </Border>

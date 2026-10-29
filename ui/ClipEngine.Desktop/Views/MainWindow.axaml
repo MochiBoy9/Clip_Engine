@@ -28,7 +28,7 @@
       <!-- The navigation rail -->
       <Border Background="{StaticResource RailBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
         <DockPanel>
-          <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,14,0,22" HorizontalAlignment="Center" IsHitTestVisible="False">
+          <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,14,0,28" HorizontalAlignment="Center" IsHitTestVisible="False">
             <views:Plate Width="40" Height="40" Cut="9" Background="{DynamicResource AccentBrush}">
               <PathIcon Data="{StaticResource IconPlay}" Width="20" Height="20" Margin="2,0,0,0"
                         Foreground="{DynamicResource AccentForegroundBrush}" />
@@ -38,7 +38,7 @@
 
           <!-- Engine status and the side panel, always in reach -->
           <StackPanel DockPanel.Dock="Bottom" Spacing="12" Margin="0,0,0,14" HorizontalAlignment="Center">
-            <Button Classes="icon" Width="40" Height="40" Command="{Binding ToggleSidePanelCommand}"
+            <Button Classes="icon" Width="40" Height="40" HorizontalAlignment="Center" Command="{Binding ToggleSidePanelCommand}"
                     ToolTip.Tip="{Binding SidePanelHotkey, StringFormat='Side panel over your game ({0})'}">
               <PathIcon Data="{StaticResource IconPanel}" />
             </Button>
@@ -48,14 +48,15 @@
               </Panel>
               <TextBlock Text="{Binding SidebarStatus}" FontFamily="{StaticResource DisplayFont}" FontSize="10"
                          FontWeight="SemiBold" Foreground="{StaticResource TextSecondary}" HorizontalAlignment="Center"
-                         TextTrimming="CharacterEllipsis" MaxWidth="68" />
+                         TextAlignment="Center" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
+                         MaxWidth="64" />
             </StackPanel>
           </StackPanel>
 
           <ListBox Classes="nav" ItemsSource="{Binding Nav}" SelectedItem="{Binding SelectedNav}">
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="vm:NavItem">
-                <Grid ColumnDefinitions="3,*" Height="58">
+                <Grid ColumnDefinitions="3,*" Height="62">
                   <Border Classes="navBar" />
                   <StackPanel Grid.Column="1" Spacing="4" HorizontalAlignment="Center" VerticalAlignment="Center"
                               Margin="0,0,3,0">
@@ -73,7 +74,7 @@
 
       <Grid Grid.Column="1" RowDefinitions="40,*">
         <!-- The title bar: where you are and what the engine is doing. Not clickable, so it drags the window. -->
-        <Grid ColumnDefinitions="*,Auto" Margin="28,0,150,0" IsHitTestVisible="False">
+        <Grid ColumnDefinitions="*,Auto" Margin="40,0,150,0" IsHitTestVisible="False">
           <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
             <TextBlock Text="CLIP ENGINE" FontFamily="{StaticResource DisplayFont}" FontSize="12" FontWeight="Bold"
                        LetterSpacing="1.8" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
@@ -101,17 +102,18 @@
         </Grid>
         <Border Height="1" VerticalAlignment="Bottom" Background="{StaticResource Divider}" IsHitTestVisible="False" />
 
-        <TransitioningContentControl Grid.Row="1" Content="{Binding CurrentPage}" Margin="28,22,28,0">
+        <!-- Pages keep 40 px clear of the window's right edge themselves, so their scrollbars can sit on it -->
+        <TransitioningContentControl Grid.Row="1" Content="{Binding CurrentPage}" Margin="40,32,0,0">
           <TransitioningContentControl.PageTransition>
-            <CrossFade Duration="0:0:0.1" />
+            <views:RiseTransition />
           </TransitioningContentControl.PageTransition>
         </TransitioningContentControl>
       </Grid>
     </Grid>
 
     <!-- Toast -->
-    <views:Plate IsVisible="{Binding HasToast}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Cut="8"
-                 Margin="76,0,0,24" Padding="12,9,16,9" Background="{StaticResource OverlayBrush}"
+    <views:Plate Classes="toast" IsVisible="{Binding HasToast}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Cut="8"
+                 Margin="76,0,0,28" Padding="12,9,16,9" Background="{StaticResource OverlayBrush}"
                  BorderBrush="{DynamicResource AccentBrush}">
       <StackPanel Orientation="Horizontal" Spacing="10">
         <Border Classes="tile small" IsVisible="{Binding !ToastIsError}">
