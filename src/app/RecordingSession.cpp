@@ -75,7 +75,7 @@ RecordingSession::RecordingSession(const Config& config, HMONITOR monitor, std::
     try {
       detector_ = std::make_unique<EventDetector>(
           gpu_, *capture_, std::move(rules), std::move(scoreboards), std::move(playerNames), detectionSampleMs,
-          config.detectionDebug, [this](const GameEvent& e) { OnEvent(e); },
+          config.readingQuality, config.detectionDebug, [this](const GameEvent& e) { OnEvent(e); },
           [this](const Scoreboard& board) {
             std::lock_guard lock(eventsMutex_);
             newScoreboards_.push_back(board);

@@ -54,13 +54,25 @@ Picture LoadPicture(const std::filesystem::path& path) {
 
 namespace {
 
-// Decodes the frame showing at `seconds` (or the last one, past the end).
-Picture LoadVideoFrame(const std::filesystem::path& path, double seconds) {
+// Decodes the frame showing at `seconds` (or the last one, past the end). length gets the
+// video's length in seconds, when it's known.
+Picture LoadVideoFrame(const std::filesystem::path& path, double seconds, double* length = nullptr) {
   winrt::com_ptr<IMFAttributes> attributes;
   winrt::check_hresult(MFCreateAttributes(attributes.put(), 1));
   winrt::check_hresult(attributes->SetUINT32(MF_SOURCE_READER_ENABLE_VIDEO_PROCESSING, TRUE));
   winrt::com_ptr<IMFSourceReader> reader;
   winrt::check_hresult(MFCreateSourceReaderFromURL(path.c_str(), attributes.get(), reader.put()));
+
+  if (length) {
+    PROPVARIANT duration;
+    PropVariantInit(&duration);
+    if (SUCCEEDED(reader->GetPresentationAttribute(static_cast<DWORD>(MF_SOURCE_READER_MEDIASOURCE), MF_PD_DURATION,
+                                                   &duration)) &&
+        duration.vt == VT_UI8) {
+      *length = static_cast<double>(duration.uhVal.QuadPart) / kHnsPerSecond;
+    }
+    PropVariantClear(&duration);
+  }
 
   const auto video = static_cast<DWORD>(MF_SOURCE_READER_FIRST_VIDEO_STREAM);
   winrt::check_hresult(reader->SetStreamSelection(static_cast<DWORD>(MF_SOURCE_READER_ALL_STREAMS), FALSE));
@@ -115,8 +127,8 @@ Picture LoadVideoFrame(const std::filesystem::path& path, double seconds) {
   return frame;
 }
 
-Picture LoadFrame(const std::filesystem::path& path, double seconds) {
-  return IsImage(path) ? LoadPicture(path) : LoadVideoFrame(path, seconds);
+Picture LoadFrame(const std::filesystem::path& path, double seconds, double* length = nullptr) {
+  return IsImage(path) ? LoadPicture(path) : LoadVideoFrame(path, seconds, length);
 }
 
 void SavePng(const Picture& frame, const std::filesystem::path& path) {
@@ -143,10 +155,12 @@ void SavePng(const Picture& frame, const std::filesystem::path& path) {
 
 int RunFrameCommand(const std::filesystem::path& input, const std::filesystem::path& output, double seconds) {
   try {
-    const Picture frame = LoadFrame(input, seconds);
+    double length = 0;
+    const Picture frame = LoadFrame(input, seconds, &length);
     if (output.has_parent_path()) std::filesystem::create_directories(output.parent_path());
     SavePng(frame, output);
     log::Info("Frame {}x{} saved to {}", frame.width, frame.height, winrt::to_string(output.wstring()));
+    if (length > 0) log::Info("Video length: {:.2f}", length);
     return 0;
   } catch (const winrt::hresult_error& e) {
     log::Error("Frame failed: {}", Describe(e));
@@ -156,7 +170,7 @@ int RunFrameCommand(const std::filesystem::path& input, const std::filesystem::p
   return 1;
 }
 
-int RunReadCommand(const std::filesystem::path& input, double seconds, const DetectionRule& rule) {
+int RunReadCommand(const std::filesystem::path& input, double seconds, const DetectionRule& rule, ReadQuality quality) {
   try {
     const auto ocr = CreateOcrEngine();
     if (!ocr) {
@@ -181,11 +195,18 @@ int RunReadCommand(const std::filesystem::path& input, double seconds, const Det
       std::memcpy(pixels.data() + static_cast<size_t>(y) * width * 4,
                   frame.bgra.data() + (static_cast<size_t>(top + y) * frame.width + left) * 4, static_cast<size_t>(width) * 4);
     }
-    std::vector<WordBox> words = ReadWords(ocr, pixels, width, height, rule.threshold);
+    // Big banners on a very large screen are read at half size at Low, as detection reads them.
+    const bool banner = rule.position == LinePosition::Anywhere && rule.event != EventType::Kill &&
+                        rule.event != EventType::Assist && rule.event != EventType::Revive;
+    const UINT shrink = ShrinksBanners(quality) && banner && frame.height >= 2000 && height >= 480 ? 2 : 1;
+    const auto reads = ReadWords(ocr, pixels, width, height, rule.threshold, shrink, quality);
+    std::vector<std::vector<std::vector<std::string>>> rows;
+    for (const auto& words : reads) rows.push_back(GroupIntoRows(words));
+    const size_t chosen = rule.ReadsText() ? ChooseRead(rule, rows) : 0;
     std::string text;
-    for (const auto& word : words) text += (text.empty() ? "" : " ") + word.text;
+    for (const auto& word : reads[chosen]) text += (text.empty() ? "" : " ") + word.text;
     log::Info("Read: {}", text);
-    int matches = rule.ReadsText() ? CountMatches(rule, GroupIntoRows(std::move(words))) : 0;
+    int matches = rule.ReadsText() ? CountMatches(rule, rows[chosen]) : 0;
 
     if (rule.LooksForImage()) {
       const Picture icon = LoadPicture(std::filesystem::path(winrt::to_hstring(rule.image).c_str()));

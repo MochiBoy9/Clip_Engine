@@ -2,6 +2,7 @@
 
 #include "capture/MonitorCapture.h"
 #include "detect/DetectionRules.h"
+#include "detect/OcrImage.h"
 
 #include <winrt/Windows.Media.Ocr.h>
 
@@ -27,10 +28,11 @@ class EventDetector {
   using Sink = std::function<void(const GameEvent&)>;
   using ScoreboardSink = std::function<void(const Scoreboard&)>;
 
-  // playerNames: for finding the player's row on a scoreboard.
+  // playerNames: for finding the player's row on a scoreboard. quality: how hard to work at
+  // reading (see ReadQuality).
   EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCapture& capture, std::vector<DetectionRule> rules,
-                std::vector<ScoreboardRule> scoreboards, std::vector<std::string> playerNames, int sampleMs, bool debug,
-                Sink sink, ScoreboardSink scoreboardSink);
+                std::vector<ScoreboardRule> scoreboards, std::vector<std::string> playerNames, int sampleMs,
+                ReadQuality quality, bool debug, Sink sink, ScoreboardSink scoreboardSink);
   ~EventDetector();
 
   EventDetector(const EventDetector&) = delete;
@@ -55,6 +57,7 @@ class EventDetector {
   std::vector<ScoreboardRule> scoreboards_;
   std::vector<std::string> playerNames_;
   int sampleMs_;
+  ReadQuality quality_;
   bool debug_;
   Sink sink_;
   ScoreboardSink scoreboardSink_;

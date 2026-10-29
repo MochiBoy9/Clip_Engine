@@ -2,6 +2,7 @@
 
 #include "core/Win.h"
 #include "detect/GameEvent.h"
+#include "detect/OcrImage.h"
 
 #include <filesystem>
 #include <optional>
@@ -42,6 +43,7 @@ struct Config {
 
   bool detection = true;          // read the screen for kills, deaths and other moments
   bool detectionDebug = false;    // log everything read off the screen, for tuning detection.ini
+  ReadQuality readingQuality = ReadQuality::Medium;  // how hard to work at reading the screen
   bool autoClip = true;           // save a clip around each detected moment
   std::set<EventType> autoClipEvents{kAllEventTypes.begin(), kAllEventTypes.end()};
   int clipBeforeSeconds = 10;     // how much of an automatic clip comes before the moment

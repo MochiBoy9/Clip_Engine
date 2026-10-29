@@ -4,6 +4,7 @@
 #include "app/AutoClipPlanner.h"
 #include "detect/DetectionRules.h"
 #include "detect/ImageMatch.h"
+#include "detect/OcrImage.h"
 #include "detect/TextMatcher.h"
 #include "media/ClipMetadata.h"
 
@@ -585,6 +586,166 @@ void TestMetadataBox(const char* scratch) {
 
 }  // namespace
 
+// The user's detection.ini replaces only the games it has rules for.
+void TestMergeRules() {
+  auto shipped = Parse(R"(
+[detection]
+sample_ms = 250
+
+[the_finals.kill]
+region = 0.3, 0.5, 0.4, 0.1
+words = ELIMINATION {number}
+
+[the_finals.scoreboard]
+kills = ELIMINATIONS
+
+[valorant.kill]
+words = {player}
+position = start
+
+[valorant.match_end]
+words = VICTORY
+)");
+  CHECK(shipped.editedGames.contains("the_finals"));
+  CHECK(shipped.editedGames.contains("valorant"));
+
+  auto user = Parse(R"(
+[detection]
+sample_ms = 200
+
+[game.my_game]
+name = My Game
+exe = MyGame.exe
+
+[valorant.kill]
+words = KILLED
+
+[the_finals.edited]
+
+[my_game.kill]
+words = KO
+)");
+  CHECK(user.warnings.empty());
+  CHECK(user.editedGames.contains("the_finals"));
+  CHECK(user.editedGames.contains("valorant"));
+  CHECK(user.sampleMsSet);
+
+  const auto merged = MergeDetectionRules(std::move(shipped), std::move(user));
+  CHECK(merged.sampleMs == 200);
+  // The Finals: every rule removed in Studio, but its scoreboard stays.
+  CHECK(merged.ForGame("the_finals").empty());
+  CHECK(merged.ScoreboardsForGame("the_finals").size() == 1);
+  // Valorant: the user's one rule instead of both shipped ones.
+  const auto valorant = merged.ForGame("valorant", {"Me"});
+  CHECK(valorant.size() == 1);
+  CHECK(valorant.size() == 1 && valorant[0].words.size() == 1 && valorant[0].words[0].words[0] == "KILLED");
+  CHECK(valorant.size() == 1 && valorant[0].sampleMs == 200);  // follows the winning [detection] sample_ms
+  CHECK(merged.ForGame("my_game").size() == 1);
+  CHECK(merged.games.size() == 1);
+
+  // A game the user's file doesn't mention keeps the shipped rules.
+  auto again = Parse("[the_finals.kill]\nwords = ELIMINATION {number}\n\n[valorant.match_end]\nwords = VICTORY\n");
+  const auto untouched = MergeDetectionRules(std::move(again), Parse("[overwatch.kill]\nwords = ELIMINATED\n"));
+  CHECK(untouched.ForGame("the_finals").size() == 1);
+  CHECK(untouched.ForGame("valorant").size() == 1);
+  CHECK(untouched.ForGame("overwatch").size() == 1);
+  CHECK(untouched.sampleMs == 250);
+}
+
+// With the region read several ways, each rule goes by the read that suits it.
+void TestChooseRead() {
+  DetectionRule rule;
+  rule.words = {MakePhrase("ELIMINATED")};
+  rule.exclude = {MakePhrase("BY")};
+  // One read missed the word; go by the one that has it.
+  CHECK(ChooseRead(rule, {Rows({"ELMNTD BOB"}), Rows({"ELIMINATED BOB"})}) == 1);
+  // Ties go to the first.
+  CHECK(ChooseRead(rule, {Rows({"ELIMINATED BOB"}), Rows({"ELIMINATED BOB"})}) == 0);
+  // A read that shows "BY" wins over one that lost it.
+  CHECK(ChooseRead(rule, {Rows({"ELIMINATED BY BOB"}), Rows({"ELIMINATED BOB"})}) == 0);
+  CHECK(ChooseRead(rule, {Rows({"ELIMINATED BOB"}), Rows({"ELIMINATED BY BOB"})}) == 1);
+  CHECK(ChooseRead(rule, {Rows({"ELIMINATED BOB"})}) == 0);
+}
+
+std::vector<uint8_t> Bgra(uint32_t width, uint32_t height, uint8_t background) {
+  std::vector<uint8_t> pixels(static_cast<size_t>(width) * height * 4, background);
+  for (size_t i = 3; i < pixels.size(); i += 4) pixels[i] = 255;
+  return pixels;
+}
+
+void Paint(std::vector<uint8_t>& pixels, uint32_t width, uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1, uint8_t r,
+           uint8_t g, uint8_t b) {
+  for (uint32_t y = y0; y < y1; ++y) {
+    for (uint32_t x = x0; x < x1; ++x) {
+      uint8_t* p = pixels.data() + (static_cast<size_t>(y) * width + x) * 4;
+      p[0] = b, p[1] = g, p[2] = r;
+    }
+  }
+}
+
+void TestReadQuality() {
+  CHECK(ParseReadQuality("High") == ReadQuality::High);
+  CHECK(ParseReadQuality("ultra") == ReadQuality::Ultra);
+  CHECK(!ParseReadQuality("best"));
+  CHECK(ToString(ReadQuality::Low) == "low");
+  CHECK(ReadPasses(ReadQuality::Low) == 1 && ReadPasses(ReadQuality::Medium) == 1);
+  CHECK(ReadPasses(ReadQuality::High) == 2 && ReadPasses(ReadQuality::Ultra) == 3);
+  CHECK(ScaledSampleMs(250, ReadQuality::Low) == 250);
+  CHECK(ScaledSampleMs(250, ReadQuality::Ultra) == 125);
+  CHECK(ScaledSampleMs(150, ReadQuality::Ultra) == 100);
+  CHECK(ShrinksBanners(ReadQuality::Low) && !ShrinksBanners(ReadQuality::High));
+
+  // Low reads short regions twice as big, as before; higher qualities enlarge more of them.
+  CHECK(OcrScale(400, 60, 1, ReadQuality::Low, 2600) == 2);
+  CHECK(OcrScale(400, 150, 1, ReadQuality::Low, 2600) == 1);
+  CHECK(OcrScale(400, 150, 1, ReadQuality::Medium, 2600) == 2);
+  CHECK(OcrScale(400, 60, 1, ReadQuality::High, 2600) == 3);
+  CHECK(OcrScale(1000, 60, 1, ReadQuality::Ultra, 2600) == 2);  // three times would be too wide
+  CHECK(OcrScale(1200, 900, 2, ReadQuality::Ultra, 2600) == 0.5);
+  CHECK(OcrScale(6000, 900, 1, ReadQuality::Low, 2600) == 1.0 / 3);  // shrunk to fit
+
+  // Bright text on a dark background comes out dark on white.
+  auto pixels = Bgra(40, 20, 30);
+  Paint(pixels, 40, 10, 5, 30, 15, 250, 40, 40);  // red text
+  const auto low = PrepareForOcr(pixels.data(), 40, 20, 0, 1, ReadQuality::Low, 0, 2600);
+  CHECK(low.width == 80 && low.height == 40);
+  CHECK(low.gray[0] == 255 - 30);
+  CHECK(low.gray[20 * 80 + 40] == 255 - 250);
+  // Medium stretches the brightness, so the background turns white and the text black.
+  const auto medium = PrepareForOcr(pixels.data(), 40, 20, 0, 1, ReadQuality::Medium, 0, 2600);
+  CHECK(medium.gray[0] == 255);
+  CHECK(medium.gray[20 * 80 + 40] == 0);
+  // and enlarges smoothly: the edge of the text is in between.
+  CHECK(medium.gray[20 * 80 + 20] > 0 && medium.gray[20 * 80 + 20] < 255);
+  // The cut pass makes it black and white.
+  const auto cut = PrepareForOcr(pixels.data(), 40, 20, 0, 1, ReadQuality::High, 1, 2600);
+  CHECK(cut.width == 120);  // High reads it three times as big
+  CHECK(std::ranges::all_of(cut.gray, [](uint8_t v) { return v == 0 || v == 255; }));
+  CHECK(cut.gray[0] == 255 && cut.gray[30 * 120 + 60] == 0);
+
+  // Dark text on a bright banner: the cut takes the rarer side as the text.
+  auto banner = Bgra(40, 20, 230);
+  Paint(banner, 40, 12, 6, 28, 14, 20, 20, 20);
+  const auto dark = PrepareForOcr(banner.data(), 40, 20, 0, 1, ReadQuality::High, 1, 2600);
+  CHECK(dark.gray[0] == 255 && dark.gray[30 * 120 + 60] == 0);
+
+  // With a threshold, pass 0 keeps only what's bright enough, pass 2 a little less bright too.
+  auto dim = Bgra(40, 20, 30);
+  Paint(dim, 40, 10, 5, 30, 15, 170, 170, 170);
+  CHECK(PrepareForOcr(dim.data(), 40, 20, 200, 1, ReadQuality::Ultra, 0, 2600).gray[30 * 120 + 60] == 255);
+  CHECK(PrepareForOcr(dim.data(), 40, 20, 200, 1, ReadQuality::Ultra, 2, 2600).gray[30 * 120 + 60] == 0);
+
+  // A flat region isn't stretched into specks.
+  const auto flat = Bgra(40, 20, 120);
+  CHECK(PrepareForOcr(flat.data(), 40, 20, 0, 1, ReadQuality::Medium, 0, 2600).gray[0] == 255 - 120);
+
+  std::array<uint32_t, 256> histogram{};
+  histogram[20] = 100;
+  histogram[220] = 30;
+  const int t = OtsuThreshold(histogram);
+  CHECK(t > 20 && t <= 220);
+}
+
 int main(int argc, char** argv) {
   TestTokenize();
   TestWordsMatch();
@@ -603,6 +764,9 @@ int main(int argc, char** argv) {
   TestMetadataRoundTrip();
   TestTrimmed();
   TestNumberPhrase();
+  TestMergeRules();
+  TestChooseRead();
+  TestReadQuality();
   if (argc > 1) TestShippedRulesParse(argv[1]);
   if (argc > 1) TestFinalsRules(argv[1]);
   if (argc > 2) TestMetadataBox(argv[2]);
