@@ -4,8 +4,8 @@
              xmlns:views="using:ClipEngine.Desktop.Views"
              x:Class="ClipEngine.Desktop.Views.ClipCard"
              x:DataType="vm:ClipItemViewModel">
-  <views:Plate Classes="clipCard" Padding="6" VerticalAlignment="Top">
-    <StackPanel Spacing="9">
+  <views:Plate Classes="clipCard" Padding="7" VerticalAlignment="Top">
+    <StackPanel Spacing="11">
       <Border Name="Thumb" CornerRadius="0" ClipToBounds="True" Height="{Binding $parent[views:ClipCard].ThumbnailHeight}"
               Background="{Binding Placeholder}">
         <Panel>
@@ -69,8 +69,8 @@
         </Panel>
       </Border>
       <!-- The clip's moments along its length -->
-      <views:EventRibbon Ticks="{Binding Ribbon}" Height="8" Margin="4,0" IsVisible="{Binding HasRibbon}" />
-      <StackPanel Margin="4,0,4,5" Spacing="1">
+      <views:EventRibbon Ticks="{Binding Ribbon}" Height="8" Margin="5,0" IsVisible="{Binding HasRibbon}" />
+      <StackPanel Margin="5,0,5,7" Spacing="3">
         <TextBlock Text="{Binding When}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis"
                    ToolTip.Tip="{Binding Title}" />
         <TextBlock Text="{Binding Caption}" Classes="caption" TextTrimming="CharacterEllipsis" />

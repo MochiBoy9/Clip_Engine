@@ -26,10 +26,10 @@
     </Style>
   </UserControl.Styles>
   <DockPanel Margin="0">
-    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,18">
-      <StackPanel VerticalAlignment="Center" Spacing="2">
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="0,0,40,22">
+      <StackPanel VerticalAlignment="Center" Spacing="4">
         <TextBlock Classes="h1" Text="Settings" />
-        <TextBlock Classes="caption" Text="{Binding SavedMessage, FallbackValue='Recording changes apply when you save; the engine restarts in a second.'}" />
+        <TextBlock Classes="caption" Text="{Binding SavedMessage, TargetNullValue='Recording changes apply when you save; the engine restarts in a second.'}" />
       </StackPanel>
       <Button Grid.Column="1" Classes="secondary" Content="Revert" Command="{Binding RevertCommand}" Margin="0,0,10,0"
               VerticalAlignment="Center" />
@@ -37,13 +37,13 @@
               VerticalAlignment="Center" />
     </Grid>
     <ScrollViewer>
-      <Grid ColumnDefinitions="1.25*,14,*" Margin="0,0,0,24">
+      <Grid ColumnDefinitions="1.25*,22,*" Margin="0,0,40,40">
         <StackPanel>
-        <views:Plate Classes="card" Padding="20" Margin="0,0,0,14">
+        <views:Plate Classes="card" Padding="26,24" Margin="0,0,0,22">
           <StackPanel>
-            <TextBlock Classes="eyebrow" Margin="0,0,0,14" Text="RECORDING" />
+            <TextBlock Classes="eyebrow" Margin="0,0,0,18" Text="RECORDING" />
             <Grid ColumnDefinitions="Auto,*,Auto">
-              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,14,0">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconClock}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
@@ -60,9 +60,9 @@
                 </StackPanel>
               </Panel>
             </Grid>
-            <Border Height="1" Background="{StaticResource Divider}" Margin="0,12" />
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <Grid ColumnDefinitions="Auto,*,Auto">
-              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,14,0">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconBolt}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
@@ -79,9 +79,9 @@
                 </StackPanel>
               </Panel>
             </Grid>
-            <Border Height="1" Background="{StaticResource Divider}" Margin="0,12" />
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <Grid ColumnDefinitions="Auto,*,Auto">
-              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,14,0">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconMonitor}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
@@ -92,9 +92,9 @@
                 <ComboBox Width="190" ItemsSource="{Binding FpsOptions}" SelectedItem="{Binding Fps}" />
               </Panel>
             </Grid>
-            <Border Height="1" Background="{StaticResource Divider}" Margin="0,12" />
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <Grid ColumnDefinitions="Auto,*,Auto">
-              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,14,0">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconDrive}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
@@ -111,9 +111,9 @@
                 </StackPanel>
               </Panel>
             </Grid>
-            <Border Height="1" Background="{StaticResource Divider}" Margin="0,12" />
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <Grid ColumnDefinitions="Auto,*,Auto">
-              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,14,0">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconClips}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
@@ -132,11 +132,11 @@
             </Grid>
           </StackPanel>
         </views:Plate>
-        <views:Plate Classes="card" Padding="20" Margin="0,0,0,14">
+        <views:Plate Classes="card" Padding="26,24" Margin="0,0,0,22">
           <StackPanel>
-            <TextBlock Classes="eyebrow" Margin="0,0,0,14" Text="AUDIO" />
+            <TextBlock Classes="eyebrow" Margin="0,0,0,18" Text="AUDIO" />
             <Grid ColumnDefinitions="Auto,*,Auto">
-              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,14,0">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconGames}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
@@ -147,9 +147,9 @@
                 <ToggleSwitch IsChecked="{Binding GameAudio}" OnContent="{x:Null}" OffContent="{x:Null}" />
               </Panel>
             </Grid>
-            <Border Height="1" Background="{StaticResource Divider}" Margin="0,12" />
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <Grid ColumnDefinitions="Auto,*,Auto">
-              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,14,0">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconMic}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
@@ -162,11 +162,11 @@
             </Grid>
           </StackPanel>
         </views:Plate>
-        <views:Plate Classes="card" Padding="20" Margin="0,0,0,14">
+        <views:Plate Classes="card" Padding="26,24" Margin="0,0,0,22">
           <StackPanel>
-            <TextBlock Classes="eyebrow" Margin="0,0,0,14" Text="AUTOMATIC CLIPS" />
+            <TextBlock Classes="eyebrow" Margin="0,0,0,18" Text="AUTOMATIC CLIPS" />
             <Grid ColumnDefinitions="Auto,*,Auto">
-              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,14,0">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconSparkle}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
@@ -177,10 +177,10 @@
                 <ToggleSwitch IsChecked="{Binding Detection}" OnContent="{x:Null}" OffContent="{x:Null}" />
               </Panel>
             </Grid>
-            <Border Height="1" Background="{StaticResource Divider}" Margin="0,12" />
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <StackPanel Spacing="0" IsEnabled="{Binding Detection}">
             <Grid ColumnDefinitions="Auto,*,Auto">
-              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,14,0">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconSparkle}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
@@ -198,9 +198,9 @@
                 </Border>
               </Panel>
             </Grid>
-            <Border Height="1" Background="{StaticResource Divider}" Margin="0,12" />
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <Grid ColumnDefinitions="Auto,*,Auto">
-              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,14,0">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconRecord}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
@@ -211,10 +211,10 @@
                 <ToggleSwitch IsChecked="{Binding AutoClip}" OnContent="{x:Null}" OffContent="{x:Null}" />
               </Panel>
             </Grid>
-            <Border Height="1" Background="{StaticResource Divider}" Margin="0,12" />
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <StackPanel IsEnabled="{Binding AutoClip}">
             <Grid ColumnDefinitions="Auto,*,Auto">
-              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,14,0">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconClock}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
@@ -231,9 +231,9 @@
                 </StackPanel>
               </Panel>
             </Grid>
-            <Border Height="1" Background="{StaticResource Divider}" Margin="0,12" />
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <Grid ColumnDefinitions="Auto,*,Auto">
-              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,14,0">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconClock}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
@@ -250,7 +250,7 @@
                 </StackPanel>
               </Panel>
             </Grid>
-            <Border Height="1" Background="{StaticResource Divider}" Margin="0,12" />
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <TextBlock Text="Clip these moments" FontWeight="SemiBold" FontSize="14" Margin="0,0,0,10" />
             <ItemsControl ItemsSource="{Binding AutoClipEvents}">
               <ItemsControl.ItemsPanel>
@@ -268,12 +268,12 @@
         </views:Plate>
         </StackPanel>
         <StackPanel Grid.Column="2">
-        <views:Plate Classes="card" Padding="20" Margin="0,0,0,14" DataContext="{Binding Supporter}" x:DataType="vm:SupporterViewModel"
+        <views:Plate Classes="card" Padding="26,24" Margin="0,0,0,22" DataContext="{Binding Supporter}" x:DataType="vm:SupporterViewModel"
                 IsVisible="{Binding $self.DataContext, Converter={x:Static ObjectConverters.IsNotNull}}">
           <StackPanel>
-            <TextBlock Classes="eyebrow" Margin="0,0,0,14" Text="SUPPORT" />
+            <TextBlock Classes="eyebrow" Margin="0,0,0,18" Text="SUPPORT" />
             <Grid ColumnDefinitions="Auto,*,Auto">
-              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,14,0">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconSparkle}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
@@ -284,7 +284,7 @@
                 <Button Classes="secondary" Content="Patreon" Command="{Binding OpenPatreonCommand}" IsVisible="{Binding HasPatreon}" />
               </Panel>
             </Grid>
-            <Border Height="1" Background="{StaticResource Divider}" Margin="0,12" />
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <TextBlock Text="Colour theme" FontWeight="SemiBold" FontSize="14" />
             <TextBlock Classes="caption" Text="{Binding ThemeCaption}" Margin="0,2,0,10" />
             <ItemsControl ItemsSource="{Binding Themes}">
@@ -301,7 +301,7 @@
               </ItemsControl.ItemTemplate>
             </ItemsControl>
             <StackPanel IsVisible="{Binding KeysEnabled}">
-              <Border Height="1" Background="{StaticResource Divider}" Margin="0,8,0,14" />
+              <Border Height="1" Background="{StaticResource Divider}" Margin="0,12,0,16" />
               <TextBlock Text="Supporter key" FontWeight="SemiBold" FontSize="14" />
               <TextBlock Classes="caption" Text="Patrons get a key in a Patreon message. It works forever, offline, on all your PCs."
                          TextWrapping="Wrap" Margin="0,2,0,12" IsVisible="{Binding ShowKeyBox}" />
@@ -315,7 +315,7 @@
                          Classes.error="{Binding MessageIsError}" />
             </StackPanel>
             <StackPanel IsVisible="{Binding HasCredits}">
-              <Border Height="1" Background="{StaticResource Divider}" Margin="0,12" />
+              <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
               <TextBlock Text="Thanks to our supporters" FontWeight="SemiBold" FontSize="14" Margin="0,0,0,8" />
               <ItemsControl ItemsSource="{Binding Credits}">
                 <ItemsControl.ItemsPanel>
@@ -332,12 +332,12 @@
             </StackPanel>
           </StackPanel>
         </views:Plate>
-        <views:Plate Classes="card" Padding="20" Margin="0,0,0,14" DataContext="{Binding Updates}" x:DataType="vm:UpdatesViewModel"
+        <views:Plate Classes="card" Padding="26,24" Margin="0,0,0,22" DataContext="{Binding Updates}" x:DataType="vm:UpdatesViewModel"
                 IsVisible="{Binding $self.DataContext, Converter={x:Static ObjectConverters.IsNotNull}}">
           <StackPanel>
-            <TextBlock Classes="eyebrow" Margin="0,0,0,14" Text="UPDATES" />
+            <TextBlock Classes="eyebrow" Margin="0,0,0,18" Text="UPDATES" />
             <Grid ColumnDefinitions="Auto,*,Auto">
-              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,14,0">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconImport}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
@@ -352,7 +352,7 @@
             <TextBlock Classes="caption" Text="{Binding AvailableNotes}" TextWrapping="Wrap" Margin="0,10,0,0"
                        IsVisible="{Binding AvailableNotes, Converter={x:Static ObjectConverters.IsNotNull}}" />
             <ProgressBar Minimum="0" Maximum="1" Value="{Binding Progress}" IsVisible="{Binding ShowProgress}" Margin="0,10,0,0" />
-            <Border Height="1" Background="{StaticResource Divider}" Margin="0,12" />
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <Grid ColumnDefinitions="*,Auto">
               <StackPanel VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
                 <TextBlock Text="Look for updates when Clip Engine starts" FontWeight="SemiBold" FontSize="14" />
@@ -360,7 +360,7 @@
               </StackPanel>
               <ToggleSwitch Grid.Column="1" IsChecked="{Binding CheckOnStart}" OnContent="{x:Null}" OffContent="{x:Null}" />
             </Grid>
-            <Border Height="1" Background="{StaticResource Divider}" Margin="0,12" />
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <Grid ColumnDefinitions="*,Auto">
               <StackPanel VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
                 <TextBlock Text="Install from a zip" FontWeight="SemiBold" FontSize="14" />
@@ -368,7 +368,7 @@
               </StackPanel>
               <Button Grid.Column="1" Classes="secondary" Content="Choose zip" Command="{Binding InstallFromZipCommand}" />
             </Grid>
-            <Border Height="1" Background="{StaticResource Divider}" Margin="0,12" />
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <TextBlock Text="Release source" FontWeight="SemiBold" FontSize="14" />
             <TextBlock Classes="caption" TextWrapping="Wrap" Margin="0,2,0,8"
                        Text="The GitHub repository updates come from. A private one needs a token that can read it (Contents: read)." />
@@ -381,11 +381,11 @@
                     IsVisible="{Binding HasToken}" Margin="0,8,0,0" />
           </StackPanel>
         </views:Plate>
-        <views:Plate Classes="card" Padding="20" Margin="0,0,0,14">
+        <views:Plate Classes="card" Padding="26,24" Margin="0,0,0,22">
           <StackPanel>
-            <TextBlock Classes="eyebrow" Margin="0,0,0,14" Text="HOTKEYS" />
+            <TextBlock Classes="eyebrow" Margin="0,0,0,18" Text="HOTKEYS" />
             <Grid ColumnDefinitions="Auto,*,Auto">
-              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,14,0">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconKeyboard}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
@@ -396,7 +396,7 @@
                 <TextBox Width="160" Text="{Binding SaveHotkey}" HorizontalContentAlignment="Center" FontWeight="SemiBold" />
               </Panel>
             </Grid>
-            <Border Height="1" Background="{StaticResource Divider}" Margin="0,12" />
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <Grid ColumnDefinitions="Auto,*,Auto">
               <Border Classes="tile record" VerticalAlignment="Center" Margin="0,0,14,0">
                 <PathIcon Data="{StaticResource IconRecord}" />
@@ -410,9 +410,9 @@
                 <TextBox Width="160" Text="{Binding RecordHotkey}" HorizontalContentAlignment="Center" FontWeight="SemiBold" />
               </Panel>
             </Grid>
-            <Border Height="1" Background="{StaticResource Divider}" Margin="0,12" />
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <Grid ColumnDefinitions="Auto,*,Auto">
-              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,14,0">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconMonitor}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
@@ -425,16 +425,16 @@
             </Grid>
           </StackPanel>
         </views:Plate>
-        <views:Plate Classes="card" Padding="20" Margin="0,0,0,14">
+        <views:Plate Classes="card" Padding="26,24" Margin="0,0,0,22">
           <StackPanel>
-            <TextBlock Classes="eyebrow" Margin="0,0,0,14" Text="STORAGE" />
+            <TextBlock Classes="eyebrow" Margin="0,0,0,18" Text="STORAGE" />
             <TextBlock Text="Clips folder" FontWeight="SemiBold" FontSize="14" />
             <TextBlock Classes="caption" Text="One folder per game is created inside it." Margin="0,2,0,12" />
             <Grid ColumnDefinitions="*,Auto,Auto">
               <TextBox Text="{Binding OutputDir}" Watermark="{Binding OutputDirShown}" />
               <Button Grid.Column="1" Classes="secondary" Content="Browse" Margin="10,0,0,0" Click="OnBrowse" />
             </Grid>
-            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16,0,14" />
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,18,0,16" />
             <Grid ColumnDefinitions="*,Auto">
               <StackPanel VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
                 <TextBlock Text="Delete old clips" FontWeight="SemiBold" FontSize="14" />
@@ -471,11 +471,11 @@
             </Grid>
           </StackPanel>
         </views:Plate>
-        <views:Plate Classes="card" Padding="20" Margin="0,0,0,14">
+        <views:Plate Classes="card" Padding="26,24" Margin="0,0,0,22">
           <StackPanel>
-            <TextBlock Classes="eyebrow" Margin="0,0,0,14" Text="APP" />
+            <TextBlock Classes="eyebrow" Margin="0,0,0,18" Text="APP" />
             <Grid ColumnDefinitions="Auto,*,Auto">
-              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,14,0">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconHome}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
@@ -486,9 +486,9 @@
                 <ToggleSwitch IsChecked="{Binding CloseToTray}" OnContent="{x:Null}" OffContent="{x:Null}" />
               </Panel>
             </Grid>
-            <Border Height="1" Background="{StaticResource Divider}" Margin="0,12" />
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <Grid ColumnDefinitions="Auto,*,Auto">
-              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,14,0">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconCheck}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
@@ -502,11 +502,11 @@
             </Grid>
           </StackPanel>
         </views:Plate>
-        <views:Plate Classes="card" Padding="20" Margin="0,0,0,14">
+        <views:Plate Classes="card" Padding="26,24" Margin="0,0,0,22">
           <StackPanel>
-            <TextBlock Classes="eyebrow" Margin="0,0,0,14" Text="SIDE PANEL AND SHARING" />
+            <TextBlock Classes="eyebrow" Margin="0,0,0,18" Text="SIDE PANEL AND SHARING" />
             <Grid ColumnDefinitions="Auto,*,Auto">
-              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,14,0">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconPanel}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
@@ -521,9 +521,9 @@
             <TextBlock Classes="caption" Foreground="{StaticResource WarnBrush}" Text="{Binding SidePanelHotkeyProblem}"
                        IsVisible="{Binding SidePanelHotkeyProblem, Converter={x:Static ObjectConverters.IsNotNull}}"
                        Margin="48,6,0,0" />
-            <Border Height="1" Background="{StaticResource Divider}" Margin="0,12" />
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <Grid ColumnDefinitions="Auto,*,Auto">
-              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,14,0">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconMonitor}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
@@ -537,9 +537,9 @@
                 </StackPanel>
               </Border>
             </Grid>
-            <Border Height="1" Background="{StaticResource Divider}" Margin="0,12" />
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <Grid ColumnDefinitions="Auto,*,Auto">
-              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,14,0">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconShare}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">

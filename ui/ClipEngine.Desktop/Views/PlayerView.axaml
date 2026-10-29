@@ -5,16 +5,16 @@
              x:Class="ClipEngine.Desktop.Views.PlayerView"
              x:DataType="vm:PlayerViewModel"
              Focusable="True">
-  <DockPanel Margin="0,0,0,24">
+  <DockPanel Margin="0,0,40,32">
     <!-- Title and what you can do with the clip -->
-    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,14">
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,22">
       <Button Classes="secondary" Command="{Binding BackCommand}" VerticalAlignment="Center">
         <StackPanel Orientation="Horizontal" Spacing="8">
           <PathIcon Data="{StaticResource IconBack}" Width="14" Height="14" />
           <TextBlock Text="{Binding BackLabel}" VerticalAlignment="Center" />
         </StackPanel>
       </Button>
-      <StackPanel Grid.Column="1" Margin="16,0" VerticalAlignment="Center" Spacing="2">
+      <StackPanel Grid.Column="1" Margin="20,0" VerticalAlignment="Center" Spacing="4">
         <StackPanel Orientation="Horizontal" Spacing="10">
           <TextBlock Classes="h1" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
           <Border Classes="pill accent" VerticalAlignment="Center" Padding="8,2"
@@ -71,9 +71,9 @@
     </Grid>
 
     <!-- Detected moments -->
-    <views:Plate DockPanel.Dock="Right" Classes="card" Width="300" Margin="12,0,0,0" Padding="16,16,8,12">
+    <views:Plate DockPanel.Dock="Right" Classes="card" Width="320" Margin="20,0,0,0" Padding="22,22,12,16">
       <DockPanel>
-        <StackPanel DockPanel.Dock="Top" Spacing="12" Margin="0,0,8,12">
+        <StackPanel DockPanel.Dock="Top" Spacing="14" Margin="0,0,10,14">
           <TextBlock Classes="h2" Text="Moments" />
           <ItemsControl ItemsSource="{Binding Counts}" IsVisible="{Binding HasMarkers}">
             <ItemsControl.ItemsPanel>
