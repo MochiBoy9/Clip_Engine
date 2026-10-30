@@ -37,6 +37,11 @@ constexpr int64_t kFocusSettle = 250 * kHnsPerMs;
 // SetWindowDisplayAffinity's "leave out of captures", as Clip Engine's own side panel uses.
 constexpr DWORD kExcludedFromCapture = 0x11;
 
+// Matching the monitor goes up to this. Every frame is copied, converted and encoded on the
+// GPU the game is using, so recording a 240 Hz monitor at 240 fps costs the game twice what
+// 120 fps does for clips that look much the same; a higher fps setting still records faster.
+constexpr UINT kMaxAutoFps = 120;
+
 UINT AutoBitrate(UINT width, UINT height, UINT fps) {
   const double bits = 0.1 * width * height * fps;  // about 12 Mbps at 1080p60, 60 Mbps at 1440p165
   return static_cast<UINT>(std::clamp(bits, 8e6, 150e6));
@@ -53,7 +58,7 @@ RecordingSession::RecordingSession(const Config& config, HMONITOR monitor, std::
       bufferDuration_(int64_t{config.bufferSeconds} * kHnsPerSecond),
       focusOnly_(config.gameFocus) {
   gpu_ = GpuDevice::Create();
-  fps_ = config.fps > 0 ? static_cast<UINT>(config.fps) : std::clamp<UINT>(RefreshRate(monitor), 24, 240);
+  fps_ = config.fps > 0 ? static_cast<UINT>(config.fps) : std::clamp<UINT>(RefreshRate(monitor), 24, kMaxAutoFps);
   capture_ = std::make_unique<MonitorCapture>(gpu_, monitor, fps_);
 
   VideoSettings video;

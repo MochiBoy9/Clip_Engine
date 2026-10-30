@@ -1,6 +1,7 @@
 #include "media/LongRecorder.h"
 
 #include "core/Log.h"
+#include "core/Power.h"
 
 #include <mfreadwrite.h>
 
@@ -84,6 +85,7 @@ void LongRecorder::Run() {
   winrt::init_apartment(winrt::apartment_type::multi_threaded);
   // Steady, but behind the game and the encoder.
   SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+  const EfficiencyMode efficiency;
 
   winrt::com_ptr<IMFSinkWriter> writer;
   std::array<DWORD, kStreamCount> trackOf{};

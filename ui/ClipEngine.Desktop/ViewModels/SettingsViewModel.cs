@@ -52,7 +52,7 @@ public sealed class SettingsViewModel : ObservableObject
 
     public IReadOnlyList<FpsOption> FpsOptions { get; } =
     [
-        new(0, "Match monitor"), new(30, "30 fps"), new(60, "60 fps"), new(120, "120 fps"),
+        new(0, "Match monitor (up to 120)"), new(30, "30 fps"), new(60, "60 fps"), new(120, "120 fps"),
         new(144, "144 fps"), new(165, "165 fps"), new(240, "240 fps"),
     ];
 

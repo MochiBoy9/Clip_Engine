@@ -595,13 +595,16 @@
     <Setter Property="AllowAutoHide" Value="True" />
   </Style>
 
-  <!-- A blinking red light while recording. Only its opacity animates, which is cheap to redraw. -->
+  <!-- A blinking red light while recording. Only its opacity animates, which is cheap to redraw, and
+       only while the main window is in front (its "awake" class): a running animation redraws the
+       window every frame, which is GPU time taken from the game when the window sits behind it,
+       and the side panel over the game keeps a steady light for the same reason. -->
   <Style Selector="Ellipse.liveDot">
     <Setter Property="Width" Value="8" />
     <Setter Property="Height" Value="8" />
     <Setter Property="Fill" Value="{StaticResource RecordBrush}" />
   </Style>
-  <Style Selector="Ellipse.liveDot.pulsing">
+  <Style Selector=".awake Ellipse.liveDot.pulsing">
     <Style.Animations>
       <Animation Duration="0:0:1.2" IterationCount="Infinite" PlaybackDirection="Alternate">
         <KeyFrame Cue="0%"><Setter Property="Opacity" Value="1" /></KeyFrame>

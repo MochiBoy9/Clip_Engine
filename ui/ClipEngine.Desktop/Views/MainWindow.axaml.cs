@@ -24,6 +24,9 @@ public partial class MainWindow : Window, IAppDialogs
         DragDrop.SetAllowDrop(this, true);
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
         AddHandler(DragDrop.DropEvent, OnDrop);
+        // In front, the window lives; behind the game or out of sight, it holds still and runs light.
+        Activated += (_, _) => Classes.Set("awake", true);
+        Deactivated += (_, _) => Classes.Set("awake", false);
         DataContextChanged += (_, _) =>
         {
             if (DataContext is MainViewModel vm)
@@ -103,6 +106,15 @@ public partial class MainWindow : Window, IAppDialogs
         if (DroppedClip(e) is { } path && DataContext is MainViewModel vm) _ = vm.ImportClipAsync(path);
     }
 
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (OperatingSystem.IsWindows() && (change.Property == IsVisibleProperty || change.Property == WindowStateProperty))
+        {
+            Win32.SetBackgroundMode(!IsVisible || WindowState == WindowState.Minimized);
+        }
+    }
+
     // Lets the tray's Quit close the window for real.
     internal void AllowClose() => _allowClose = true;
 
@@ -110,8 +122,10 @@ public partial class MainWindow : Window, IAppDialogs
     {
         if (!_allowClose && DataContext is MainViewModel { DesktopSettings.CloseToTray: true })
         {
-            // Keep recording in the background; the tray icon brings the window back.
+            // Keep recording in the background; the tray icon brings the window back. A clip playing
+            // in the window stops with it, rather than carry on decoding and playing out of sight.
             e.Cancel = true;
+            (DataContext as MainViewModel)?.PausePlayback();
             Hide();
             return;
         }

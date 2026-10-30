@@ -2,6 +2,7 @@
 
 #include "core/Clock.h"
 #include "core/Log.h"
+#include "core/Power.h"
 #include "detect/ImageMatch.h"
 #include "detect/Ocr.h"
 #include "detect/RuleTester.h"
@@ -111,11 +112,19 @@ struct EventDetector::Region {
 
 namespace {
 
+// SetWindowDisplayAffinity's "leave out of captures", as Clip Engine's own side panel uses.
+constexpr DWORD kExcludedFromCapture = 0x11;
+
 bool InFront(DWORD processId) {
   if (processId == 0) return true;
   DWORD front = 0;
-  if (HWND window = GetForegroundWindow()) GetWindowThreadProcessId(window, &front);
-  return front == processId;
+  HWND window = GetForegroundWindow();
+  if (window) GetWindowThreadProcessId(window, &front);
+  if (front == processId) return true;
+  // A window left out of captures, like the side panel, isn't in the frames that are read, so
+  // the game's HUD is still there to read around it; the recording treats it the same way.
+  DWORD affinity = 0;
+  return window && GetWindowDisplayAffinity(window, &affinity) && affinity == kExcludedFromCapture;
 }
 
 }  // namespace
@@ -302,6 +311,7 @@ void EventDetector::Run() {
   winrt::init_apartment(winrt::apartment_type::multi_threaded);
   // Reading the screen must never take time away from the game.
   SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+  const EfficiencyMode efficiency;
 
   try {
     const OcrEngine ocr = CreateOcrEngine();

@@ -12,7 +12,8 @@ internal static unsafe partial class Thumbnails
     private static readonly BlockingCollection<(string Path, int Width, TaskCompletionSource<Bitmap?> Result)> Queue = new();
     private static readonly Lazy<Thread> Worker = new(() =>
     {
-        var thread = new Thread(Run) { IsBackground = true, Name = "Thumbnails" };
+        // Behind the game: a thumbnail for a clip saved mid-match can wait a moment.
+        var thread = new Thread(Run) { IsBackground = true, Name = "Thumbnails", Priority = ThreadPriority.BelowNormal };
         if (OperatingSystem.IsWindows()) thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
         return thread;

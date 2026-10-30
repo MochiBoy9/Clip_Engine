@@ -2,6 +2,7 @@
 
 #include "core/Clock.h"
 #include "core/Log.h"
+#include "core/Power.h"
 #include "integrations/IntegrationSetup.h"
 #include "media/ClipMetadata.h"
 #include "media/Mp4Writer.h"
@@ -377,6 +378,7 @@ bool App::SaveRange(int64_t start, int64_t end, const char* trigger) {
     winrt::init_apartment(winrt::apartment_type::multi_threaded);
     // Low CPU and disk priority, so writing a clip never makes the game hitch.
     SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_BEGIN);
+    const EfficiencyMode efficiency;
     auto partial = path;
     partial += L".part";
     try {
@@ -469,6 +471,7 @@ void App::FinishLongRecording(std::string_view why) {
 
   saves_.push_back(std::async(std::launch::async, [recorder, metadata = std::move(metadata)]() mutable {
     winrt::init_apartment(winrt::apartment_type::multi_threaded);
+    const EfficiencyMode efficiency;
     try {
       metadata.seconds = recorder->Finish();
       const auto& path = recorder->File();

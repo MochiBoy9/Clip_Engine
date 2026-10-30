@@ -218,6 +218,41 @@ internal static unsafe partial class Win32
         SetWindowLongPtr(hwnd, GWL_EXSTYLE, style);
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PowerThrottlingState
+    {
+        public uint Version;
+        public uint ControlMask;
+        public uint StateMask;
+    }
+
+    private const int ProcessPowerThrottling = 4;
+    private const uint PowerThrottlingCurrentVersion = 1;
+    private const uint PowerThrottlingExecutionSpeed = 0x1;
+
+    [LibraryImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool SetProcessInformation(nint process, int informationClass, ref PowerThrottlingState information,
+                                                      uint size);
+
+    [LibraryImport("kernel32.dll")]
+    private static partial nint GetCurrentProcess();
+
+    // While the window is out of sight the app has little to do, so it runs in Windows' power-saving
+    // mode (EcoQoS): on efficiency cores and at lower clocks where the CPU has them, leaving the fast
+    // cores to the game. The recording engine is a separate process and isn't affected. Off again as
+    // soon as the window is back.
+    public static void SetBackgroundMode(bool background)
+    {
+        var state = new PowerThrottlingState
+        {
+            Version = PowerThrottlingCurrentVersion,
+            ControlMask = PowerThrottlingExecutionSpeed,
+            StateMask = background ? PowerThrottlingExecutionSpeed : 0,
+        };
+        SetProcessInformation(GetCurrentProcess(), ProcessPowerThrottling, ref state, (uint)Marshal.SizeOf<PowerThrottlingState>());
+    }
+
     // The middle of the window in front, in screen pixels: where the game is when one is playing.
     public static (int X, int Y)? ForegroundCenter()
     {

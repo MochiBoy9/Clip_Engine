@@ -193,6 +193,13 @@ public sealed class PlayerViewModel : ObservableObject
         _timer.Start();
     }
 
+    internal void Pause()
+    {
+        if (_player is null || !IsPlaying) return;
+        _player.Pause();
+        IsPlaying = false;
+    }
+
     private void PlayPause()
     {
         if (_player is null) return;
