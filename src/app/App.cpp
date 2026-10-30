@@ -28,7 +28,7 @@ constexpr int64_t kRetryDelay = 10 * kHnsPerSecond;
 constexpr DWORD kLoopWaitMs = 250;
 // Clip Engine's application on Discord, which the Discord status belongs to. discord_app_id in
 // the settings can name another one.
-constexpr char kDiscordAppId[] = "";
+constexpr char kDiscordAppId[] = "1565522043003338886";
 
 DWORD g_mainThread = 0;
 
