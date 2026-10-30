@@ -248,6 +248,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         CurrentPage = page;
     }
 
+    internal void PausePlayback()
+    {
+        if (CurrentPage is PlayerViewModel player) player.Pause();
+    }
+
     internal PlayerViewModel OpenPlayer(ClipItemViewModel clip)
     {
         var returnTo = CurrentPage is PlayerViewModel open ? open.ReturnTo : CurrentPage;

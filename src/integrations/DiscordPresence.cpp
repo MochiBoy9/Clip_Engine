@@ -2,6 +2,7 @@
 
 #include "core/Json.h"
 #include "core/Log.h"
+#include "core/Power.h"
 
 #include <chrono>
 #include <format>
@@ -35,6 +36,7 @@ constexpr uint32_t kMaxMessage = 64 * 1024;
 DiscordPresence::DiscordPresence(std::string appId) : appId_(std::move(appId)) {
   thread_ = std::thread([this] {
     SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+    const EfficiencyMode efficiency;
     try {
       Run();
     } catch (const std::exception& e) {
@@ -70,10 +72,17 @@ void DiscordPresence::Run() {
   while (true) {
     std::optional<PresenceState> wanted;
     {
+      // Sleep until there's a change that may go out: past Discord's rate limit and, while
+      // Discord isn't open, past the next time to look for it. Waking for a change that has to
+      // wait anyway would spin this thread flat out for as long as Discord stays closed.
+      auto ready = [&] {
+        const auto now = Clock::now();
+        return dirty_ && now >= nextSend && (pipe_ != INVALID_HANDLE_VALUE || now >= nextConnect);
+      };
       std::unique_lock lock(mutex_);
-      wake_.wait_for(lock, std::chrono::seconds(1), [&] { return stop_ || (dirty_ && Clock::now() >= nextSend); });
+      wake_.wait_for(lock, std::chrono::seconds(1), [&] { return stop_ || ready(); });
       if (stop_) break;
-      if (!dirty_ || Clock::now() < nextSend) continue;
+      if (!ready()) continue;
       wanted = wanted_;
     }
     // Nothing to show and nothing showing: no need to find Discord.

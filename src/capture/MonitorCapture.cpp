@@ -10,6 +10,7 @@
 #include <windows.graphics.directx.direct3d11.interop.h>
 
 #include <algorithm>
+#include <utility>
 
 namespace clip {
 
@@ -99,6 +100,11 @@ MonitorCapture::MonitorCapture(std::shared_ptr<GpuDevice> gpu, HMONITOR monitor,
 
 MonitorCapture::~MonitorCapture() {
   frameArrived_.revoke();
+  {
+    std::lock_guard lock(pendingMutex_);
+    if (pending_) pending_.Close();
+    pending_ = nullptr;
+  }
   if (session_) session_.Close();
   if (framePool_) framePool_.Close();
 }
@@ -106,29 +112,53 @@ MonitorCapture::~MonitorCapture() {
 void MonitorCapture::OnFrameArrived(const Direct3D11CaptureFramePool& pool,
                                     const winrt::Windows::Foundation::IInspectable&) {
   try {
-    const auto frame = pool.TryGetNextFrame();
+    auto frame = pool.TryGetNextFrame();
     if (!frame) return;
 
     const auto size = frame.ContentSize();
-    if (size.Width <= 0 || size.Height <= 0) return;
+    if (size.Width <= 0 || size.Height <= 0) {
+      frame.Close();
+      return;
+    }
     if (static_cast<UINT>(size.Width) != width_ || static_cast<UINT>(size.Height) != height_) {
       sizeChanged_ = true;
     }
 
-    const auto access = frame.Surface().as<::Windows::Graphics::DirectX::Direct3D11::IDirect3DDxgiInterfaceAccess>();
-    winrt::com_ptr<ID3D11Texture2D> surface;
-    winrt::check_hresult(access->GetInterface(IID_PPV_ARGS(surface.put())));
-
-    const D3D11_BOX box{0, 0, 0, std::min(width_, static_cast<UINT>(size.Width)),
-                        std::min(height_, static_cast<UINT>(size.Height)), 1};
+    // Keep only the newest: the one before goes back to Windows uncopied.
+    Direct3D11CaptureFrame older{nullptr};
     {
-      std::lock_guard lock(gpu_->contextLock);
-      gpu_->context->CopySubresourceRegion(latest_.get(), 0, 0, 0, 0, surface.get(), 0, &box);
+      std::lock_guard lock(pendingMutex_);
+      older = std::exchange(pending_, std::move(frame));
     }
-    hasFrame_ = true;
+    if (older) older.Close();
   } catch (const winrt::hresult_error& e) {
     log::Error("Capture frame failed: {}", Describe(e));
   }
+}
+
+ID3D11Texture2D* MonitorCapture::LatestFrame() const {
+  Direct3D11CaptureFrame frame{nullptr};
+  {
+    std::lock_guard lock(pendingMutex_);
+    frame = std::exchange(pending_, nullptr);
+  }
+  if (frame) {
+    try {
+      const auto size = frame.ContentSize();
+      const auto access = frame.Surface().as<::Windows::Graphics::DirectX::Direct3D11::IDirect3DDxgiInterfaceAccess>();
+      winrt::com_ptr<ID3D11Texture2D> surface;
+      winrt::check_hresult(access->GetInterface(IID_PPV_ARGS(surface.put())));
+      const D3D11_BOX box{0, 0, 0, std::min(width_, static_cast<UINT>(size.Width)),
+                          std::min(height_, static_cast<UINT>(size.Height)), 1};
+      gpu_->context->CopySubresourceRegion(latest_.get(), 0, 0, 0, 0, surface.get(), 0, &box);
+      hasFrame_ = true;
+    } catch (const winrt::hresult_error& e) {
+      log::Error("Capture frame failed: {}", Describe(e));
+    }
+    // The copy is queued on the GPU ahead of anything that draws into this buffer again.
+    frame.Close();
+  }
+  return hasFrame_ ? latest_.get() : nullptr;
 }
 
 }  // namespace clip

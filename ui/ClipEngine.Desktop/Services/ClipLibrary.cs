@@ -9,6 +9,12 @@ internal sealed class ClipLibrary : IDisposable
     private FileSystemWatcher? _watcher;
     private Timer? _debounce;
 
+    // What was read from each clip, kept while neither it nor its .json changes. Every clip saved
+    // while playing sets off a scan, and reading every clip in the library again each time would
+    // be a burst of disk reads on the drive the game loads from.
+    private readonly Dictionary<string, (DateTime Written, long Bytes, DateTime SidecarWritten, ClipFile File)> _known =
+        new(StringComparer.OrdinalIgnoreCase);
+
     public string Folder { get; private set; } = AppPaths.DefaultClipsDir;
 
     // Folders outside the clips folder that hold imported clips. Scanned, not watched.
@@ -22,6 +28,7 @@ internal sealed class ClipLibrary : IDisposable
         if (string.IsNullOrWhiteSpace(folder)) folder = AppPaths.DefaultClipsDir;
         if (_watcher is not null && string.Equals(Folder, folder, StringComparison.OrdinalIgnoreCase)) return;
         Folder = folder;
+        lock (_known) _known.Clear();
 
         _watcher?.Dispose();
         _watcher = null;
@@ -44,6 +51,7 @@ internal sealed class ClipLibrary : IDisposable
         Changed?.Invoke();
     }
 
+    // Safe to call from several threads at once.
     public IReadOnlyList<ClipFile> Scan()
     {
         var clips = new List<ClipFile>();
@@ -51,10 +59,14 @@ internal sealed class ClipLibrary : IDisposable
         ScanFolder(Folder, clips, seen);
         foreach (var extra in ExtraFolders) ScanFolder(extra, clips, seen);
         clips.Sort((a, b) => b.Created.CompareTo(a.Created));
+        lock (_known)
+        {
+            foreach (var path in _known.Keys.Where(p => !seen.Contains(p)).ToList()) _known.Remove(path);
+        }
         return clips;
     }
 
-    private static void ScanFolder(string folder, List<ClipFile> clips, HashSet<string> seen)
+    private void ScanFolder(string folder, List<ClipFile> clips, HashSet<string> seen)
     {
         if (!Directory.Exists(folder)) return;
         try
@@ -63,6 +75,17 @@ internal sealed class ClipLibrary : IDisposable
             {
                 if (!seen.Add(path)) continue;
                 var info = new FileInfo(path);
+                var sidecar = new FileInfo(ClipMetadataFile.SidecarPath(path));
+                var sidecarWritten = sidecar.Exists ? sidecar.LastWriteTimeUtc : DateTime.MinValue;
+                lock (_known)
+                {
+                    if (_known.TryGetValue(path, out var known) && known.Written == info.LastWriteTimeUtc &&
+                        known.Bytes == info.Length && known.SidecarWritten == sidecarWritten)
+                    {
+                        clips.Add(known.File);
+                        continue;
+                    }
+                }
                 var parent = info.Directory;
                 var metadata = ClipMetadataFile.Read(path);
                 var game = !string.IsNullOrWhiteSpace(metadata?.Game) ? metadata.Game
@@ -70,7 +93,9 @@ internal sealed class ClipLibrary : IDisposable
                                                            StringComparison.OrdinalIgnoreCase)
                         ? parent.Name
                         : "Other";
-                clips.Add(new ClipFile(path, game, info.LastWriteTime, info.Length, Mp4Info.ReadDuration(path), metadata));
+                var clip = new ClipFile(path, game, info.LastWriteTime, info.Length, Mp4Info.ReadDuration(path), metadata);
+                clips.Add(clip);
+                lock (_known) _known[path] = (info.LastWriteTimeUtc, info.Length, sidecarWritten, clip);
             }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)

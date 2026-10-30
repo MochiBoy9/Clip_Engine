@@ -22,7 +22,7 @@ output_dir =
 buffer_seconds = 60
 clip_seconds = 30
 
-# 0 means match the monitor's refresh rate.
+# 0 means match the monitor's refresh rate, up to 120 fps. Set 144, 165 or 240 to record faster.
 fps = 0
 
 # Video bitrate in megabits per second. 0 picks one from resolution and frame rate.

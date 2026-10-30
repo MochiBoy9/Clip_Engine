@@ -2,6 +2,7 @@
 
 #include "core/Clock.h"
 #include "core/Log.h"
+#include "core/Power.h"
 #include "integrations/IntegrationSetup.h"
 #include "integrations/StreamReaders.h"
 
@@ -27,6 +28,7 @@ void GameIntegration::Start() {
   thread_ = std::thread([this] {
     // Game events are never urgent next to the game itself.
     SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+    const EfficiencyMode efficiency;
     try {
       Run();
     } catch (const std::exception& e) {

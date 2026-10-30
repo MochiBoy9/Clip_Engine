@@ -7,7 +7,7 @@ Proprietary software. All rights reserved; see [LICENSE](LICENSE).
 ## What works today
 
 - Detects 23 games (see [Supported games](#supported-games)) and starts recording on the monitor the game is on, stopping when it closes.
-- Captures at the monitor's native resolution and refresh rate with Windows.Graphics.Capture. Nothing is injected into the game, so it is safe with anti-cheat.
+- Captures at the monitor's native resolution and refresh rate (up to 120 fps unless you pick 144, 165 or 240 in Settings) with Windows.Graphics.Capture. Nothing is injected into the game, so it is safe with anti-cheat.
 - Encodes on the GPU (NVIDIA, AMD or Intel) with H.264, switching to HEVC when the resolution and frame rate need it.
 - Records only the game: when you switch to another window, the video shows a "Game Not Found" card and game audio goes quiet until you're back, so nothing else on your PC ends up in a clip. Turn it off with **Record only the game** in Settings (`game_focus`).
 - Discord Rich Presence: while Discord is open, your status shows the game you're playing, how long you've been at it, your kills and deaths in the match and the clips you've saved. Turn it off with **Discord status** in Settings (`discord_presence`).

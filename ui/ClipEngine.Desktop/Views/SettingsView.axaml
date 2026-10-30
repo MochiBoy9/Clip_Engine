@@ -86,7 +86,7 @@
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
                 <TextBlock Text="Frame rate" FontWeight="SemiBold" FontSize="14" />
-                <TextBlock Classes="caption" Text="Match monitor records at your refresh rate." TextWrapping="Wrap" />
+                <TextBlock Classes="caption" Text="Match monitor records at your refresh rate, up to 120 fps, which keeps recording light on the game. Pick a higher rate to record faster." TextWrapping="Wrap" />
               </StackPanel>
               <Panel Grid.Column="2" VerticalAlignment="Center">
                 <ComboBox Width="190" ItemsSource="{Binding FpsOptions}" SelectedItem="{Binding Fps}" />
