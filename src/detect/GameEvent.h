@@ -5,6 +5,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace clip {
 
@@ -36,10 +37,23 @@ inline std::optional<EventType> ParseEventType(std::string_view name) {
   return std::nullopt;
 }
 
+// One rule's sighting of a moment: what it read and where, so the app can show why a moment
+// was counted. A moment seen by more than one rule (the killfeed and the score line) has a
+// witness for each, and those that saw it but weren't counted say so.
+struct Witness {
+  std::string rule;  // the detection.ini section, like the_finals.kill.killfeed
+  std::string text;  // what that rule read
+  // The box it read, as fractions of the frame, where the HUD drew it on this screen.
+  double left = 0, top = 0, width = 0, height = 0;
+  double offset = 0;     // seconds from the moment's time
+  bool counted = true;   // false: the same moment again, or another rule's count won
+};
+
 struct GameEvent {
   EventType type = EventType::Highlight;
   int64_t time = 0;  // QPC time in 100 ns units, like every other timestamp in the engine
   std::string text;  // what was read off the screen
+  std::vector<Witness> witnesses;  // empty for moments from a game's own API
 };
 
 }  // namespace clip

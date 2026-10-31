@@ -40,6 +40,19 @@ struct DetectionRule {
   int sampleMs = 0;
   bool sampleMsSet = false;  // sample_ms was given, rather than the default
 
+  // Moments seen by more than one rule. Matches of the same event from rules with merge_ms set,
+  // each within merge_ms of the one before, are the same moment or moments, and the rule
+  // with the highest priority among those that saw them says how many there were (see
+  // EventFuser). So the killfeed and the score line under the crosshair both see a kill, and
+  // it counts once.
+  int mergeMs = 0;
+  int priority = 1;
+  // How long a message must be gone before it counts again; 0 for the defaults in RuleTracker.
+  int forgetMs = 0;
+  // With position = start, the row may begin with a squad or club tag before the name, as
+  // The Finals shows [SMEDC] before each player in its killfeed.
+  bool skipTag = false;
+
   // An icon to look for instead of (or as well as) words: a picture cut from a screenshot,
   // where fully transparent pixels are ignored. image is as written in detection.ini until
   // the engine resolves it to a full path.
@@ -47,12 +60,21 @@ struct DetectionRule {
   double imageMatch = 0.85;  // how alike, 0-1, the region must be to the picture somewhere
   int imageScreen = 0;      // the height of the screen the picture was cut from; 0 means this one
 
+  // A sound to listen for instead of reading the screen: one or more WAV cuts of it, each
+  // starting kSoundLeadIn before the sound (see SoundMatch.h), resolved to full paths by the
+  // engine like image. soundMatch is how alike, 0-1, the game's audio must be to them.
+  std::vector<std::string> sounds;
+  double soundMatch = 0.44;
+  // Its sightings never count a moment on their own, only back up another rule's.
+  bool confirmOnly = false;
+
   // Phrases as written, kept when they mention {player} so the names can be filled in later.
   std::vector<std::string> playerWords;
   std::vector<std::string> playerExclude;
   bool NeedsPlayer() const { return !playerWords.empty() || !playerExclude.empty(); }
   bool ReadsText() const { return !words.empty() || !playerWords.empty(); }
   bool LooksForImage() const { return !image.empty(); }
+  bool ListensForSound() const { return !sounds.empty(); }
 };
 
 // How often a rule for this event is checked by default, given the [detection] sample_ms.
@@ -145,6 +167,7 @@ class RuleTracker {
   // are forgotten sooner, though never before a couple of missed reads.
   static constexpr int64_t kForgetMs = 3000;
   static constexpr int64_t kForgetUnnamedMs = 1200;
+  // forget_ms in detection.ini replaces both.
   int64_t ForgetMs(const std::string& key) const;
 
   struct Seen {

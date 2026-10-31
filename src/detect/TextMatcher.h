@@ -40,7 +40,8 @@ int CountPhrase(const std::vector<std::string>& tokens, const Phrase& phrase);
 
 // Whether the phrase starts (or ends) a row of text. One stray token of one or two characters
 // before (or after) it is allowed, since icons next to names tend to read as a letter or two.
-bool PhraseAtStart(const std::vector<std::string>& row, const Phrase& phrase);
+// With skipTag, a squad tag of up to six characters may come first too.
+bool PhraseAtStart(const std::vector<std::string>& row, const Phrase& phrase, bool skipTag = false);
 bool PhraseAtEnd(const std::vector<std::string>& row, const Phrase& phrase);
 
 // A word read off the screen and where it was, in pixels.

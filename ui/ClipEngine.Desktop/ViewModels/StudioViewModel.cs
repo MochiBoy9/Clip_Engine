@@ -82,6 +82,11 @@ public sealed class StudioViewModel : ObservableObject
     private RunningProgram? _newGameProgram;
     private Avalonia.Threading.DispatcherTimer? _frameTimer;
     private bool _reloadFrame;
+    private CancellationTokenSource? _workCancel;  // the read track or the test on marked clips, while it runs
+    private bool _isWorking;
+    private int _workProgress;
+    private string? _trackSummary;
+    private string? _markedSummary;
     private int _hudScale = 100;       // the game's HUD size, in percent, as set here
     private int _savedHudScale = 100;  // and as clip_engine.ini has it
 
@@ -99,7 +104,7 @@ public sealed class StudioViewModel : ObservableObject
         BackCommand = new RelayCommand(() => _main.ShowPage(_returnTo));
         AddRuleCommand = new RelayCommand(AddRule, () => _game is not null);
         DeleteRuleCommand = new RelayCommand(DeleteRule, () => _selectedRule is not null);
-        TestCommand = new RelayCommand(() => _ = TestAsync(), () => _selectedRule is not null && HasFrameSource && !IsBusy);
+        TestCommand = new RelayCommand(() => _ = TestAsync(), () => _selectedRule is { IsSound: false } && HasFrameSource && !IsBusy);
         SaveCommand = new RelayCommand(() => _ = SaveAsync(), () => HasChanges && !IsBusy);
         LoadFrameCommand = new RelayCommand(() => _ = LoadFrameAsync(), () => HasFrameSource && !IsBusy);
         OpenImageCommand = new RelayCommand(() => _ = OpenFileAsync());
@@ -107,6 +112,11 @@ public sealed class StudioViewModel : ObservableObject
         StartAddGameCommand = new RelayCommand(StartAddGame);
         CancelAddGameCommand = new RelayCommand(() => IsAddingGame = false);
         ConfirmAddGameCommand = new RelayCommand(ConfirmAddGame, () => CanAddGame);
+        TrackCommand = new RelayCommand(() => _ = TrackAsync(),
+                                        () => _selectedRule is { IsSound: false } && HasTimeline && !IsBusy && !IsWorking);
+        TestMarkedCommand = new RelayCommand(() => _ = TestMarkedAsync(), () => _game is not null && !IsBusy && !IsWorking);
+        CutSoundCommand = new RelayCommand(() => _ = CutSoundAsync(), () => _game is not null && HasTimeline && !IsBusy && !IsWorking);
+        CancelWorkCommand = new RelayCommand(() => _workCancel?.Cancel());
 
         LoadGames();
         // Start on the clip (and moment) the Studio was opened from; picking the game keeps it.
@@ -135,6 +145,41 @@ public sealed class StudioViewModel : ObservableObject
     public RelayCommand StartAddGameCommand { get; }
     public RelayCommand CancelAddGameCommand { get; }
     public RelayCommand ConfirmAddGameCommand { get; }
+    public RelayCommand TrackCommand { get; }
+    public RelayCommand TestMarkedCommand { get; }
+    public RelayCommand CutSoundCommand { get; }
+    public RelayCommand CancelWorkCommand { get; }
+
+    // Reading the picked rule's box all through the clip, or testing the game's rules on every
+    // clip with marks: what it found, and how far it has got.
+    public bool IsWorking
+    {
+        get => _isWorking;
+        private set
+        {
+            if (!Set(ref _isWorking, value)) return;
+            NotifyWorkCommands();
+        }
+    }
+    public int WorkProgress { get => _workProgress; private set => Set(ref _workProgress, value); }
+    public ObservableCollection<TrackRowViewModel> Track { get; } = [];
+    public bool HasTrack => Track.Count > 0 || _trackSummary is not null;
+    public string? TrackSummary { get => _trackSummary; private set { if (Set(ref _trackSummary, value)) Raise(nameof(HasTrack)); } }
+    public ObservableCollection<MarkedClipRow> MarkedResults { get; } = [];
+    public string? MarkedSummary
+    {
+        get => _markedSummary;
+        private set { if (Set(ref _markedSummary, value)) Raise(nameof(HasMarkedResults)); }
+    }
+    public bool HasMarkedResults => _markedSummary is not null;
+    // Clips of this game with marks of what really happened, from Check detection in the player.
+    public int MarkedClipCount => MarkedClips().Count;
+    public string TestMarkedTip => MarkedClipCount switch
+    {
+        0 => "Mark what really happened in some clips first (Check detection in the player), then test the rules on all of them at once",
+        1 => "Run the saved rules over the one clip you've marked and score them",
+        var n => $"Run the saved rules over the {n} clips you've marked and score them together",
+    };
 
     public string BackLabel => _returnTo is PlayerViewModel ? "Clip" : _returnTo is GamesPage ? "Games" : "Back";
 
@@ -229,6 +274,9 @@ public sealed class StudioViewModel : ObservableObject
             Matched = null;
             DeleteRuleCommand.NotifyCanExecuteChanged();
             TestCommand.NotifyCanExecuteChanged();
+            NotifyWorkCommands();
+            Track.Clear();
+            TrackSummary = null;
             RegionsChanged();
         }
     }
@@ -278,6 +326,9 @@ public sealed class StudioViewModel : ObservableObject
         Raise(nameof(HasFileSource));
         LoadFrameCommand.NotifyCanExecuteChanged();
         TestCommand.NotifyCanExecuteChanged();
+        NotifyWorkCommands();
+        Track.Clear();
+        TrackSummary = null;
     }
 
     public double FrameSeconds
@@ -331,6 +382,7 @@ public sealed class StudioViewModel : ObservableObject
         private set
         {
             if (!Set(ref _isBusy, value)) return;
+            NotifyWorkCommands();
             TestCommand.NotifyCanExecuteChanged();
             SaveCommand.NotifyCanExecuteChanged();
             LoadFrameCommand.NotifyCanExecuteChanged();
@@ -431,6 +483,13 @@ public sealed class StudioViewModel : ObservableObject
         HasChanges = false;
     }
 
+    // Picks the rule with this detection.ini section, as when opened from a moment it found.
+    internal void SelectRule(string section)
+    {
+        var rule = Rules.FirstOrDefault(r => string.Equals(r.Rule.Section, section, StringComparison.OrdinalIgnoreCase));
+        if (rule is not null) SelectedRule = rule;
+    }
+
     private void ShowRules(IEnumerable<StudioRule> rules)
     {
         Rules.Clear();
@@ -474,6 +533,8 @@ public sealed class StudioViewModel : ObservableObject
         {
             Sources.Add(clip);
         }
+        Raise(nameof(MarkedClipCount));
+        Raise(nameof(TestMarkedTip));
         if (_fileSource is not null) return;
         SelectedSource = Sources.FirstOrDefault(c => c.Path == _source?.Path)
                          ?? Sources.FirstOrDefault(c => string.Equals(c.Game, game, StringComparison.OrdinalIgnoreCase))
@@ -582,7 +643,7 @@ public sealed class StudioViewModel : ObservableObject
     private async Task SaveAsync()
     {
         if (_game is null) return;
-        var problem = Rules.FirstOrDefault(r => r.Words.Trim().Length == 0 && r.Rule.Image is null);
+        var problem = Rules.FirstOrDefault(r => r.Words.Trim().Length == 0 && r.Rule.Image is null && !r.IsSound);
         if (problem is not null)
         {
             SelectedRule = problem;
@@ -700,6 +761,154 @@ public sealed class StudioViewModel : ObservableObject
         return programs.OrderBy(p => p.Title, StringComparer.CurrentCultureIgnoreCase);
     }
 
+    private void NotifyWorkCommands()
+    {
+        TrackCommand.NotifyCanExecuteChanged();
+        TestMarkedCommand.NotifyCanExecuteChanged();
+        CutSoundCommand.NotifyCanExecuteChanged();
+    }
+
+    private List<ClipItemViewModel> MarkedClips() => _game is null ? [] : _main.Clips
+        .Where(c => string.Equals(c.Game, _game.Name, StringComparison.OrdinalIgnoreCase) && c.File.Metadata?.Labels is { Count: > 0 })
+        .ToList();
+
+    // What the picked rule reads all through the clip, each time it changes, so it's clear
+    // where it reads the moment, where it misreads it and where it reads something else.
+    private async Task TrackAsync()
+    {
+        if (_selectedRule is not { IsSound: false } rule || FrameSourcePath is not { } path) return;
+        IsWorking = true;
+        WorkProgress = 0;
+        Track.Clear();
+        TrackSummary = null;
+        _workCancel = new CancellationTokenSource();
+        ShowStatus("Reading the box all through the clip…");
+        try
+        {
+            var reads = await StudioTools.TrackAsync(path, rule.Rule, _testQuality.Name, _hudScale, 250,
+                p => Avalonia.Threading.Dispatcher.UIThread.Post(() => WorkProgress = p), _workCancel.Token);
+            foreach (var read in reads)
+            {
+                Track.Add(new TrackRowViewModel(read.Seconds, read.Text, read.Matches,
+                                                new RelayCommand(() => FrameSeconds = read.Seconds)));
+            }
+            var matched = reads.Count(r => r.Matches > 0);
+            TrackSummary = reads.Count == 0
+                ? "It read nothing anywhere in the clip."
+                : $"{reads.Count} changes in what it read; {matched} {(matched == 1 ? "matches" : "match")} the rule. Click one to see that frame.";
+            Raise(nameof(HasTrack));
+            ShowStatus(null);
+        }
+        catch (OperationCanceledException)
+        {
+            ShowStatus(null);
+        }
+        catch (Exception e) when (e is StudioFailedException or IOException or System.ComponentModel.Win32Exception)
+        {
+            ShowStatus($"Couldn't read the clip: {e.Message}", error: true);
+        }
+        finally
+        {
+            IsWorking = false;
+        }
+    }
+
+    // Runs the game's saved rules over every clip marked in Check detection, the way the engine
+    // reads the game, and scores them together: one bad clip can't hide among good ones.
+    private async Task TestMarkedAsync()
+    {
+        if (_game is null) return;
+        var clips = MarkedClips();
+        MarkedResults.Clear();
+        MarkedSummary = null;
+        if (clips.Count == 0)
+        {
+            ShowStatus($"No {_game.Name} clips are marked yet. Open one, use Check detection to mark what really happened, then test here.");
+            return;
+        }
+        IsWorking = true;
+        WorkProgress = 0;
+        _workCancel = new CancellationTokenSource();
+        ShowStatus(HasChanges ? "Testing the saved rules; save to test your changes too." : null);
+        var quality = _main.IsLive ? EngineSettings.Load(AppPaths.EngineSettingsFile).ReadingQuality : "medium";
+        var marked = new List<ClipEvent>();
+        var found = new List<ClipEvent>();
+        try
+        {
+            for (var i = 0; i < clips.Count; i++)
+            {
+                var clip = clips[i];
+                var index = i;
+                var events = await StudioTools.ScanAsync(clip.Path, _game.Name, quality,
+                    p => Avalonia.Threading.Dispatcher.UIThread.Post(() => WorkProgress = (index * 100 + p) / clips.Count),
+                    _workCancel.Token);
+                var labels = clip.File.Metadata?.Labels ?? [];
+                var result = DetectionAccuracy.Compare(labels, events);
+                MarkedResults.Add(new MarkedClipRow(clip.Title, result.Summary, result.Missed.Count + result.Extra.Count == 0,
+                                                    new RelayCommand(() => SelectedSource = clip)));
+                // Offset each clip's times so moments from different clips never pair up.
+                var offset = i * 100_000.0;
+                marked.AddRange(labels.Select(l => new ClipEvent { Type = l.Type, Time = l.Time + offset }));
+                found.AddRange(events.Select(e => new ClipEvent { Type = e.Type, Time = e.Time + offset }));
+            }
+            var total = DetectionAccuracy.Compare(marked, found);
+            MarkedSummary = $"{clips.Count} {(clips.Count == 1 ? "clip" : "clips")}: {total.Summary}";
+        }
+        catch (OperationCanceledException)
+        {
+            ShowStatus(null);
+        }
+        catch (Exception e) when (e is StudioFailedException or IOException or System.ComponentModel.Win32Exception)
+        {
+            ShowStatus($"Couldn't test the rules: {e.Message}", error: true);
+        }
+        finally
+        {
+            IsWorking = false;
+        }
+    }
+
+    // Cuts the sound at the frame (from just before it to a second after) out of the clip, and
+    // adds a rule that listens for it. It backs up the game's other rules for the same moment
+    // rather than counting alone, as game sounds can be close to other sounds.
+    private async Task CutSoundAsync()
+    {
+        if (_game is null || FrameSourcePath is not { } path) return;
+        var eventName = _selectedRule?.Event ?? "kill";
+        IsBusy = true;
+        try
+        {
+            var folder = Path.Combine(AppPaths.DataDir, "sounds");
+            var n = 1;
+            string file;
+            do file = Path.Combine(folder, $"{_game.Id}_{eventName}_{n++}.wav"); while (File.Exists(file));
+            var saved = await StudioTools.CutSoundAsync(path, FrameSourceSeconds, file);
+
+            var rule = new StudioRule { Game = _game.Id, Event = eventName, Suffix = "sound" };
+            rule.SetSetting("sound", saved);
+            rule.SetSetting("confirm_only", "true");
+            rule.SetSetting("merge_ms", "4000");
+            // The rules it backs up have to group with it.
+            foreach (var other in Rules.Where(r => r.Event == eventName && r.Rule.Setting("merge_ms") is null))
+                other.Rule.SetSetting("merge_ms", "4000");
+            var added = new StudioRuleViewModel(rule, this);
+            Rules.Add(added);
+            SelectedRule = added;
+            Raise(nameof(HasRules));
+            RuleChanged();
+            ShowStatus($"Added a rule that listens for the sound at {FrameTimeText}. Start the frame just as the sound plays. Save to use it.");
+        }
+        catch (Exception e) when (e is StudioFailedException or IOException or UnauthorizedAccessException
+                                      or System.ComponentModel.Win32Exception)
+        {
+            ShowStatus($"Couldn't cut the sound: {e.Message}", error: true);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
     private void ShowStatus(string? text, bool error = false)
     {
         StatusIsError = error;
@@ -712,6 +921,23 @@ public sealed class StudioViewModel : ObservableObject
         Frame = frame;
         ReadText = read;
         Matched = matched;
+    }
+
+    // For the preview tool: what reading through the clip and testing on marked clips show.
+    internal void ShowSampleTools()
+    {
+        foreach (var (at, text, matches) in new[]
+                 {
+                     (10.2, "", 0), (12.0, "ENTERRO ELIMINATED VEX", 1), (13.4, "ENTERRO ELIMlNATED VEX", 1),
+                     (15.1, "ELIMINATED BY VEX", 0), (17.6, "", 0),
+                 })
+        {
+            Track.Add(new TrackRowViewModel(at, text, matches, new RelayCommand(() => FrameSeconds = at)));
+        }
+        TrackSummary = "5 changes in what it read; 2 match the rule. Click one to see that frame.";
+        MarkedResults.Add(new MarkedClipRow("3 kills", "Caught 3 of 3 (100%), no false alarms.", true, new RelayCommand(() => { })));
+        MarkedResults.Add(new MarkedClipRow("2 kills, 1 death", "Caught 2 of 3 (66%), 1 false alarm.", false, new RelayCommand(() => { })));
+        MarkedSummary = "2 clips: Caught 5 of 6 (83%), 1 false alarm.";
     }
 
     private const string SampleIni = """
@@ -730,6 +956,18 @@ public sealed class StudioViewModel : ObservableObject
         cooldown_ms = 60000
         """;
 }
+
+// What the picked rule read at one time in the clip, from Read through the clip.
+public sealed class TrackRowViewModel(double seconds, string text, int matches, RelayCommand seek)
+{
+    public string TimeText { get; } = Format.Duration(TimeSpan.FromSeconds(seconds)) + $".{(int)(seconds * 10) % 10}";
+    public string Text { get; } = text.Length > 0 ? text : "(nothing)";
+    public bool IsMatch { get; } = matches > 0;
+    public RelayCommand SeekCommand { get; } = seek;
+}
+
+// How the rules did on one marked clip.
+public sealed record MarkedClipRow(string Title, string Summary, bool IsPerfect, RelayCommand OpenCommand);
 
 public sealed record EventOption(string Name, string Label, IBrush Brush)
 {
@@ -800,7 +1038,41 @@ public sealed class StudioRuleViewModel : ObservableObject
         }
     }
     public string Exclude { get => Rule.Exclude; set { Rule.Exclude = value ?? ""; Changed(nameof(Exclude)); } }
-    public string Summary => Rule.Words.Trim().Length > 0 ? Rule.Words : "No words yet";
+    public string Summary => IsSound ? $"Listens for {SoundText}"
+        : Rule.Words.Trim().Length > 0 ? Rule.Words : Rule.Image is not null ? $"Looks for {Path.GetFileName(Rule.Image)}" : "No words yet";
+
+    // A rule that listens to the game's audio for a sound cut from a clip, instead of a box.
+    public bool IsSound => Rule.Setting("sound") is not null;
+    public bool IsNotSound => !IsSound;
+    public string SoundText => string.Join(", ", (Rule.Setting("sound") ?? "")
+        .Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(Path.GetFileName));
+
+    // Never counts a moment alone, only backs up the game's other rules for it.
+    public bool ConfirmOnly
+    {
+        get => Rule.Setting("confirm_only") is "true" or "yes" or "1";
+        set
+        {
+            if (value == ConfirmOnly) return;
+            Rule.SetSetting("confirm_only", value ? "true" : null);
+            Changed(nameof(ConfirmOnly));
+        }
+    }
+
+    // How alike the audio must be to the sound, 0.3 to 0.9.
+    public double SoundMatch
+    {
+        get => double.TryParse(Rule.Setting("sound_match"), System.Globalization.NumberStyles.Float,
+                               System.Globalization.CultureInfo.InvariantCulture, out var m) ? m : 0.44;
+        set
+        {
+            var m = Math.Clamp(Math.Round(value, 2), 0.3, 0.9);
+            if (Math.Abs(m - SoundMatch) < 0.001) return;
+            Rule.SetSetting("sound_match", m.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture));
+            Changed(nameof(SoundMatch), nameof(SoundMatchText));
+        }
+    }
+    public string SoundMatchText => SoundMatch.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
 
     // 0 reads the box as it is; higher keeps only bright pixels, for text on busy backgrounds.
     public double Threshold

@@ -2,6 +2,8 @@
 
 #include "capture/MonitorCapture.h"
 #include "detect/DetectionRules.h"
+#include "detect/EventFuser.h"
+#include "detect/SoundWatch.h"
 #include "detect/OcrImage.h"
 
 #include <winrt/Windows.Media.Ocr.h>
@@ -47,10 +49,17 @@ class EventDetector {
   // 0, the default, reads it all the time.
   void SetGameProcess(DWORD processId) { gameProcess_ = processId; }
 
+  // The game's audio as it plays (48 kHz stereo), for the rules that listen for a sound.
+  // Called from the audio capture's thread.
+  void Hear(const int16_t* pcm, uint32_t frames, int64_t pts);
+  bool Listens() const { return sounds_ != nullptr; }
+
  private:
   struct Region;
   void Run();
   void Process(Region& region, int64_t time, const winrt::Windows::Media::Ocr::OcrEngine& ocr);
+  // The region's box as fractions of the screen, for a moment's witness.
+  Witness Where(const Region& region) const;
 
   std::shared_ptr<GpuDevice> gpu_;
   const MonitorCapture& capture_;
@@ -62,8 +71,20 @@ class EventDetector {
   bool debug_;
   Sink sink_;
   ScoreboardSink scoreboardSink_;
+  EventFuser fuser_;  // turns each rule's sightings into moments, for sink_
 
   std::vector<std::unique_ptr<Region>> regions_;
+
+  // Sounds heard on the audio thread, waiting for the reading thread to count them.
+  struct Heard {
+    const DetectionRule* rule;
+    int count;
+    int64_t time;
+    std::string text;
+  };
+  std::unique_ptr<SoundWatch> sounds_;
+  std::mutex heardMutex_;
+  std::vector<Heard> heard_;
   std::atomic<DWORD> gameProcess_{0};
 
   std::mutex mutex_;

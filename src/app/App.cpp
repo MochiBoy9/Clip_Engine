@@ -298,6 +298,13 @@ void App::HandleEvents() {
   if (!session_) return;
   for (const auto& event : session_->TakeNewEvents()) {
     log::Info("Detected {} in {}: {}", EventName(event.type), session_->Label(), event.text);
+    if (event.witnesses.size() > 1) {
+      std::string seen;
+      for (const auto& w : event.witnesses) {
+        seen += std::format("{}[{}] {:+.1f}s{}", seen.empty() ? "" : ", ", w.rule, w.offset, w.counted ? " (counted)" : "");
+      }
+      log::Info("Seen by {}", seen);
+    }
     if (event.type == EventType::MatchStart) {
       matchStarts_.push_back(event.time);
       presenceState_.kills = presenceState_.deaths = presenceState_.assists = 0;
@@ -368,7 +375,8 @@ bool App::SaveRange(int64_t start, int64_t end, const char* trigger) {
   // start itself counts toward the new match.
   metadata.match = MatchAt(end);
   for (const auto& event : session_->EventsBetween(clip->start, end)) {
-    metadata.markers.push_back({event.type, static_cast<double>(event.time - clip->start) / kHnsPerSecond, event.text});
+    metadata.markers.push_back(
+        {event.type, static_cast<double>(event.time - clip->start) / kHnsPerSecond, event.text, event.witnesses});
   }
 
   const auto path = ClipPath();
@@ -462,7 +470,8 @@ void App::FinishLongRecording(std::string_view why) {
   metadata.sessionSeconds = SessionSeconds(recorder->Start());
   metadata.match = MatchAt(recorder->Start());
   for (const auto& event : longEvents_) {
-    metadata.markers.push_back({event.type, static_cast<double>(event.time - recorder->Start()) / kHnsPerSecond, event.text});
+    metadata.markers.push_back(
+        {event.type, static_cast<double>(event.time - recorder->Start()) / kHnsPerSecond, event.text, event.witnesses});
   }
   longEvents_.clear();
   const double seconds = SessionSeconds(NowHns()) - metadata.sessionSeconds;

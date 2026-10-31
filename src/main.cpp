@@ -52,19 +52,22 @@ clip::DetectionRules LoadDetectionRules(const std::filesystem::path& dataDir) {
     auto rules = ParseDetectionRules(in);
     for (const auto& warning : rules.warnings) log::Warn("{} {}", winrt::to_string(file.wstring()), warning);
     rules.warnings.clear();
-    // Icons are found next to the detection.ini that names them, then in the other places
-    // it can be.
-    for (auto& rule : rules.rules) {
-      if (!rule.LooksForImage()) continue;
-      const std::filesystem::path image(winrt::to_hstring(rule.image).c_str());
-      if (image.is_absolute()) continue;
+    // Icons and sounds are found next to the detection.ini that names them, then in the other
+    // places they can be.
+    auto resolve = [&](std::string& name) {
+      const std::filesystem::path relative(winrt::to_hstring(name).c_str());
+      if (relative.is_absolute()) return;
       for (const auto& folder : {file.parent_path(), dataDir, ExeDir()}) {
         std::error_code ec;
-        if (std::filesystem::exists(folder / image, ec)) {
-          rule.image = winrt::to_string((folder / image).wstring());
-          break;
+        if (std::filesystem::exists(folder / relative, ec)) {
+          name = winrt::to_string((folder / relative).wstring());
+          return;
         }
       }
+    };
+    for (auto& rule : rules.rules) {
+      if (rule.LooksForImage()) resolve(rule.image);
+      for (auto& sound : rule.sounds) resolve(sound);
     }
     log::Info("Detection rules: {} ({} rules)", winrt::to_string(file.wstring()), rules.rules.size());
     return rules;
@@ -133,10 +136,16 @@ int RunTrimCommand(int argc, wchar_t** argv) {
 // clip_engine.exe --read <clip or image> [--at seconds] --region l,t,w,h [--threshold n] [--words "A|B"] [--exclude "C"]
 //                 [--position start|end] [--image icon.png] [--image-match 0.85] [--image-screen 1440]
 //                 [--quality low|medium|high|ultra] [--event kill] [--anchor top-right] [--aspect 16:9] [--hud-scale 100]
-// Detection Studio's helpers: grab a frame to draw on, and read a box of it the way detection does.
+// clip_engine.exe --track <clip> [the --read flags] [--every ms]
+// clip_engine.exe --cut-sound <clip> <out.wav> --at seconds
+// Detection Studio's helpers: grab a frame to draw on, read a box of it the way detection does,
+// read it all through a clip, and cut a sound out of a clip for a rule to listen for.
 int RunStudioCommand(int argc, wchar_t** argv) {
   using namespace clip;
-  const bool frame = std::wstring_view(argv[1]) == L"--frame";
+  const std::wstring_view command = argv[1];
+  // --frame and --cut-sound name a file to write after the input.
+  const bool frame = command == L"--frame" || command == L"--cut-sound";
+  int everyMs = 250;
   double seconds = 0;
   ReadQuality quality = ReadQuality::Medium;
   double hudScale = 1;
@@ -146,6 +155,7 @@ int RunStudioCommand(int argc, wchar_t** argv) {
     const std::wstring_view flag = argv[i];
     const std::string value = winrt::to_string(argv[i + 1]);
     if (flag == L"--at") seconds = _wtof(argv[i + 1]);
+    if (flag == L"--every") everyMs = _wtoi(argv[i + 1]);
     if (flag == L"--threshold") rule.threshold = std::clamp(_wtoi(argv[i + 1]), 0, 255);
     if (flag == L"--words") rule.words = ParsePhrases(value);
     if (flag == L"--exclude") rule.exclude = ParsePhrases(value);
@@ -174,10 +184,14 @@ int RunStudioCommand(int argc, wchar_t** argv) {
   }
   winrt::init_apartment(winrt::apartment_type::multi_threaded);
   if (FAILED(MFStartup(MF_VERSION))) {
-    log::Error("{} failed: Media Foundation is unavailable", frame ? "Frame" : "Read");
+    log::Error("{} failed: Media Foundation is unavailable", command == L"--frame" ? "Frame" : "Read");
     return 1;
   }
-  const int result = frame ? RunFrameCommand(argv[2], argv[3], seconds) : RunReadCommand(argv[2], seconds, rule, quality, hudScale);
+  int result = 1;
+  if (command == L"--frame") result = RunFrameCommand(argv[2], argv[3], seconds);
+  else if (command == L"--cut-sound") result = RunCutSoundCommand(argv[2], argv[3], seconds);
+  else if (command == L"--track") result = RunTrackCommand(argv[2], rule, quality, hudScale, everyMs);
+  else result = RunReadCommand(argv[2], seconds, rule, quality, hudScale);
   MFShutdown();
   return result;
 }
@@ -225,6 +239,8 @@ int wmain(int argc, wchar_t** argv) {
   if (argc >= 4 && std::wstring_view(argv[1]) == L"--trim") return RunTrimCommand(argc, argv);
   if (argc >= 4 && std::wstring_view(argv[1]) == L"--frame") return RunStudioCommand(argc, argv);
   if (argc >= 3 && std::wstring_view(argv[1]) == L"--read") return RunStudioCommand(argc, argv);
+  if (argc >= 3 && std::wstring_view(argv[1]) == L"--track") return RunStudioCommand(argc, argv);
+  if (argc >= 4 && std::wstring_view(argv[1]) == L"--cut-sound") return RunStudioCommand(argc, argv);
   if (argc >= 3 && std::wstring_view(argv[1]) == L"--scan") return RunScanCommand(argc, argv);
 
   // One copy at a time; two would fight over the hotkey and the GPU encoder.

@@ -206,4 +206,16 @@ public class DetectionIniTests
     [InlineData("!!!", "")]
     public void GameIdsSuitSectionNames(string name, string id) =>
         Assert.Equal(id, ClipEngine.Desktop.ViewModels.StudioViewModel.GameId(name));
+
+    [Fact]
+    public void SoundRulesKeepTheirSoundAndNeedNoWords()
+    {
+        var ini = DetectionIni.Parse("[the_finals.kill.sound]\nsound = sounds/a.wav | sounds/b.wav\nconfirm_only = true\nmerge_ms = 4000\n");
+        var rule = Assert.Single(ini.Rules);
+        Assert.Equal("sounds/a.wav | sounds/b.wav", rule.Setting("sound"));
+        ini.SetGame("the_finals", null, [rule]);
+        var text = ini.ToString();
+        Assert.Contains("sound = sounds/a.wav | sounds/b.wav\nconfirm_only = true\nmerge_ms = 4000", text);
+        Assert.DoesNotContain("words =", text);
+    }
 }

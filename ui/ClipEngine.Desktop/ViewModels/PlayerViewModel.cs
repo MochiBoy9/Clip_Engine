@@ -37,7 +37,15 @@ public sealed class PlayerViewModel : ObservableObject
         foreach (var e in clip.Events.OrderBy(e => e.Time))
         {
             MarkerViewModel? marker = null;
-            marker = new MarkerViewModel(e.Type, e.Time, e.Text, new RelayCommand(() => SeekTo(marker!.SeekSeconds, play: true)));
+            marker = new MarkerViewModel(e.Type, e.Time, e.Text, new RelayCommand(() =>
+            {
+                Select(marker!);
+                SeekTo(marker!.SeekSeconds, play: true);
+            }))
+            {
+                FoundBy = e.FoundBy,
+                StudioCommand = new RelayCommand(() => OpenStudioAt(marker!)),
+            };
             markers.Add(marker);
         }
         Markers = markers;
@@ -216,17 +224,41 @@ public sealed class PlayerViewModel : ObservableObject
         }
     }
 
+    // The moment picked in the list, which shows how it was found.
+    public MarkerViewModel? SelectedMarker { get; private set; }
+
+    private void Select(MarkerViewModel marker)
+    {
+        if (SelectedMarker is not null && SelectedMarker != marker) SelectedMarker.IsSelected = false;
+        marker.IsSelected = true;
+        SelectedMarker = marker;
+        Raise(nameof(SelectedMarker));
+    }
+
+    // Detection Studio on the frame where the moment was seen, with the rule that counted it.
+    private void OpenStudioAt(MarkerViewModel marker)
+    {
+        _player?.Pause();
+        IsPlaying = false;
+        var studio = _main.OpenStudio(clip: Clip, seconds: marker.Seconds);
+        var rule = marker.Witnesses.FirstOrDefault(w => w.Counted) ?? marker.Witnesses.FirstOrDefault();
+        if (rule is not null) studio.SelectRule(rule.Rule);
+    }
+
     private void PreviousMarker()
     {
         // Going back from just after a marker's lead-in replays that marker; tap again for the one before.
         var target = Markers.LastOrDefault(m => m.SeekSeconds < _position - 1.5);
+        if (target is not null) Select(target);
         SeekTo(target?.SeekSeconds ?? 0, play: true);
     }
 
     private void NextMarker()
     {
         var target = Markers.FirstOrDefault(m => m.SeekSeconds > _position + 0.25);
-        if (target is not null) SeekTo(target.SeekSeconds, play: true);
+        if (target is null) return;
+        Select(target);
+        SeekTo(target.SeekSeconds, play: true);
     }
 
     // play: true starts playback, null keeps whatever it was doing.
@@ -383,6 +415,9 @@ public sealed class PlayerViewModel : ObservableObject
         SetPosition(seconds);
         IsPlaying = playing;
     }
+
+    // For the preview tool: how one of the moments was found.
+    internal void ShowWhy(int index) => Select(Markers[index]);
 
     // For the preview tool: the Check detection panel with some marks and a result.
     internal void ShowCheck()

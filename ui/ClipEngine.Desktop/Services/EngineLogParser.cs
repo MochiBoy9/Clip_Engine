@@ -39,6 +39,14 @@ internal sealed record LongRecordingSaved(string Path, double Seconds, double Me
 internal sealed record ScanFound(string Type, double Seconds, string Text) : EngineEvent;
 internal sealed record ScanProgress(int Percent) : EngineEvent;
 internal sealed record ScanDone(int Count) : EngineEvent;
+// --scan: a rule that saw the moment found just before, and whether it was the one that counted it.
+internal sealed record ScanWitness(string Rule, double Offset, bool Counted, string Text) : EngineEvent;
+// --track: what the box read at a time (when it changed), how far it has got, and the end.
+internal sealed record TrackRead(double Seconds, int Matches, string Text) : EngineEvent;
+internal sealed record TrackProgress(int Percent) : EngineEvent;
+internal sealed record TrackDone(int Reads) : EngineEvent;
+// --cut-sound: where the sound was saved.
+internal sealed record SoundSaved(string Path) : EngineEvent;
 // The player's totals in the match, from the game's API or its scoreboard.
 internal sealed record ScoreboardRead(string Game, IReadOnlyDictionary<string, int> Stats) : EngineEvent;
 
@@ -126,6 +134,21 @@ internal static partial class EngineLogParser
     [GeneratedRegex(@"^Scan done: (\d+) moments$")]
     private static partial Regex ScanDoneRegex();
 
+    [GeneratedRegex(@"^Scan witness (\S+) ([+-][\d.]+)s (counted|agreed): ?(.*)$")]
+    private static partial Regex ScanWitnessRegex();
+
+    [GeneratedRegex(@"^Track at ([\d.]+): (\d+) \| ?(.*)$")]
+    private static partial Regex TrackReadRegex();
+
+    [GeneratedRegex(@"^Track progress (\d+)%$")]
+    private static partial Regex TrackProgressRegex();
+
+    [GeneratedRegex(@"^Track done: (\d+) reads$")]
+    private static partial Regex TrackDoneRegex();
+
+    [GeneratedRegex(@"^Sound saved to (.+)$")]
+    private static partial Regex SoundSavedRegex();
+
     [GeneratedRegex(@"^(.+) (detected|closed)$")]
     private static partial Regex GameRegex();
 
@@ -189,6 +212,12 @@ internal static partial class EngineLogParser
         if ((m = ScanFoundRegex().Match(text)).Success) return new ScanFound(m.Groups[1].Value, Double(m.Groups[2]), m.Groups[3].Value);
         if ((m = ScanProgressRegex().Match(text)).Success) return new ScanProgress(Int(m.Groups[1]));
         if ((m = ScanDoneRegex().Match(text)).Success) return new ScanDone(Int(m.Groups[1]));
+        if ((m = ScanWitnessRegex().Match(text)).Success)
+            return new ScanWitness(m.Groups[1].Value, Double(m.Groups[2]), m.Groups[3].Value == "counted", m.Groups[4].Value);
+        if ((m = TrackReadRegex().Match(text)).Success) return new TrackRead(Double(m.Groups[1]), Int(m.Groups[2]), m.Groups[3].Value);
+        if ((m = TrackProgressRegex().Match(text)).Success) return new TrackProgress(Int(m.Groups[1]));
+        if ((m = TrackDoneRegex().Match(text)).Success) return new TrackDone(Int(m.Groups[1]));
+        if ((m = SoundSavedRegex().Match(text)).Success) return new SoundSaved(m.Groups[1].Value);
         if ((m = GameRegex().Match(text)).Success)
             return m.Groups[2].Value == "detected" ? new GameDetected(m.Groups[1].Value) : new GameClosed(m.Groups[1].Value);
         return null;

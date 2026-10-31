@@ -2,7 +2,9 @@
 
 #include "core/Clock.h"
 #include "core/Log.h"
+#include "detect/EventFuser.h"
 #include "detect/ImageMatch.h"
+#include "detect/SoundWatch.h"
 #include "detect/Ocr.h"
 
 #include <mferror.h>
@@ -16,6 +18,7 @@
 #include <cmath>
 #include <cstring>
 #include <cwctype>
+#include <format>
 #include <map>
 #include <memory>
 #include <optional>
@@ -143,6 +146,79 @@ struct VideoReader {
     buffer->Unlock();
     for (size_t i = 3; i < frame.bgra.size(); i += 4) frame.bgra[i] = 255;  // RGB32 leaves alpha undefined
     return frame;
+  }
+};
+
+// A video's game audio (its first audio track), read alongside its frames for the rules that
+// listen for a sound. Throws when the video has no audio.
+struct AudioReader {
+  winrt::com_ptr<IMFSourceReader> reader;
+  UINT32 rate = 48000;
+  UINT32 channels = 2;
+  int64_t position = 0;  // where the audio read so far ends
+  bool done = false;
+
+  explicit AudioReader(const std::filesystem::path& path) {
+    winrt::check_hresult(MFCreateSourceReaderFromURL(path.c_str(), nullptr, reader.put()));
+    winrt::check_hresult(reader->SetStreamSelection(static_cast<DWORD>(MF_SOURCE_READER_ALL_STREAMS), FALSE));
+    winrt::check_hresult(reader->SetStreamSelection(Stream(), TRUE));
+    winrt::com_ptr<IMFMediaType> type;
+    winrt::check_hresult(MFCreateMediaType(type.put()));
+    winrt::check_hresult(type->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Audio));
+    winrt::check_hresult(type->SetGUID(MF_MT_SUBTYPE, MFAudioFormat_PCM));
+    winrt::check_hresult(type->SetUINT32(MF_MT_AUDIO_BITS_PER_SAMPLE, 16));
+    winrt::check_hresult(reader->SetCurrentMediaType(Stream(), nullptr, type.get()));
+    winrt::com_ptr<IMFMediaType> current;
+    winrt::check_hresult(reader->GetCurrentMediaType(Stream(), current.put()));
+    rate = MFGetAttributeUINT32(current.get(), MF_MT_AUDIO_SAMPLES_PER_SECOND, 48000);
+    channels = std::max<UINT32>(1, MFGetAttributeUINT32(current.get(), MF_MT_AUDIO_NUM_CHANNELS, 2));
+  }
+
+  static DWORD Stream() { return static_cast<DWORD>(MF_SOURCE_READER_FIRST_AUDIO_STREAM); }
+
+  void Seek(double seconds) {
+    PROPVARIANT at;
+    PropVariantInit(&at);
+    at.vt = VT_I8;
+    at.hVal.QuadPart = static_cast<int64_t>(std::llround(std::max(0.0, seconds) * kHnsPerSecond));
+    winrt::check_hresult(reader->SetCurrentPosition(GUID_NULL, at));
+    position = 0;
+    done = false;
+  }
+
+  // The next stretch of audio and its time, or false at the end.
+  bool Next(std::vector<int16_t>& pcm, int64_t& time) {
+    while (true) {
+      DWORD index = 0, flags = 0;
+      LONGLONG at = 0;
+      winrt::com_ptr<IMFSample> sample;
+      winrt::check_hresult(reader->ReadSample(Stream(), 0, &index, &flags, &at, sample.put()));
+      if (sample) {
+        winrt::com_ptr<IMFMediaBuffer> buffer;
+        winrt::check_hresult(sample->ConvertToContiguousBuffer(buffer.put()));
+        BYTE* data = nullptr;
+        DWORD bytes = 0;
+        winrt::check_hresult(buffer->Lock(&data, nullptr, &bytes));
+        pcm.assign(reinterpret_cast<const int16_t*>(data), reinterpret_cast<const int16_t*>(data) + bytes / 2);
+        buffer->Unlock();
+        time = at;
+        position = at + static_cast<int64_t>(pcm.size() / channels) * kHnsPerSecond / rate;
+        return true;
+      }
+      if (flags & MF_SOURCE_READERF_ENDOFSTREAM) {
+        done = true;
+        return false;
+      }
+    }
+  }
+
+  // Hands the watch the audio up to `until` (100 ns units).
+  void ReadUntil(int64_t until, SoundWatch& watch, const SoundWatch::Found& found) {
+    std::vector<int16_t> pcm;
+    int64_t at = 0;
+    while (!done && position < until && Next(pcm, at)) {
+      watch.Push(pcm.data(), pcm.size() / channels, static_cast<int>(rate), static_cast<int>(channels), at, found);
+    }
   }
 };
 
@@ -298,6 +374,121 @@ int RunReadCommand(const std::filesystem::path& input, double seconds, const Det
   return 1;
 }
 
+int RunTrackCommand(const std::filesystem::path& input, const DetectionRule& rule, ReadQuality quality, double hudScale,
+                    int everyMs) {
+  try {
+    const auto ocr = CreateOcrEngine();
+    if (!ocr && rule.ReadsText()) {
+      log::Error("Track failed: Windows text recognition isn't installed. Add English under Settings > Time & language > Language.");
+      return 1;
+    }
+    double length = 0;
+    VideoReader video(input, &length);
+    const PixelBox box = BoxOn(PlaceRegion(rule.region, video.width, video.height, hudScale), video.width, video.height);
+    if (box.TooSmall()) {
+      log::Error("Track failed: the box is too small to read");
+      return 1;
+    }
+    std::optional<ImageMatcher> matcher;
+    if (rule.LooksForImage()) matcher.emplace(IconMatcher(rule, video.width, video.height, hudScale));
+    const UINT width = box.right - box.left;
+    const UINT height = box.bottom - box.top;
+    const int intervalMs = std::clamp(everyMs, 50, 5000);
+
+    int reads = 0, lastPercent = -1;
+    int64_t dueMs = 0, time = 0;
+    std::string lastText = "\n";
+    int lastMatches = -1;
+    while (auto sample = video.Next(time)) {
+      const int64_t ms = time / kHnsPerMs;
+      if (ms < dueMs) continue;
+      dueMs = ms + intervalMs;
+      const Picture frame = video.ToPicture(sample.get());
+      const auto pixels = Crop(frame, box.left, box.top, width, height);
+      std::string text;
+      int matches = 0;
+      if (rule.ReadsText()) {
+        const auto read = ReadWords(ocr, pixels, width, height, rule.threshold, BannerShrink(rule, quality, frame.height, height), quality);
+        std::vector<std::vector<std::vector<std::string>>> rows;
+        for (const auto& words : read) rows.push_back(GroupIntoRows(words));
+        if (rows.empty()) rows.emplace_back();
+        const size_t chosen = ChooseRead(rule, rows);
+        if (chosen < read.size()) {
+          for (const auto& word : read[chosen]) text += (text.empty() ? "" : " ") + word.text;
+        }
+        matches = CountMatches(rule, rows[chosen]);
+      }
+      if (matcher) {
+        const double alike = matcher->BestMatch(
+            ToGray(pixels.data(), static_cast<int>(width), static_cast<int>(height), static_cast<size_t>(width) * 4, false));
+        text = std::format("{}image {:.2f} alike", text.empty() ? std::string() : text + " | ", alike);
+        if (alike >= rule.imageMatch) ++matches;
+      }
+      ++reads;
+      // Only what changed, so a long clip doesn't print the same read hundreds of times.
+      if (text != lastText || matches != lastMatches) {
+        log::Info("Track at {:.2f}: {} | {}", ms / 1000.0, matches, text);
+        lastText = text;
+        lastMatches = matches;
+      }
+      if (length > 0) {
+        const int percent = std::clamp(static_cast<int>(ms / 10.0 / length), 0, 100);
+        if (percent / 5 != lastPercent / 5) {
+          lastPercent = percent;
+          log::Info("Track progress {}%", percent);
+        }
+      }
+    }
+    log::Info("Track done: {} reads", reads);
+    return 0;
+  } catch (const winrt::hresult_error& e) {
+    log::Error("Track failed: {}", Describe(e));
+  } catch (const std::exception& e) {
+    log::Error("Track failed: {}", e.what());
+  }
+  return 1;
+}
+
+int RunCutSoundCommand(const std::filesystem::path& input, const std::filesystem::path& output, double seconds) {
+  try {
+    AudioReader audio(input);
+    // From the lead-in before the sound to a second after it.
+    const double from = std::max(0.0, seconds - kSoundLeadIn / 1000.0);
+    const double to = seconds + 1.0;
+    audio.Seek(from);
+    SoundResampler resampler(static_cast<int>(audio.rate), static_cast<int>(audio.channels));
+    std::vector<float> cut;
+    std::vector<int16_t> pcm;
+    int64_t at = 0;
+    const auto fromHns = static_cast<int64_t>(from * kHnsPerSecond);
+    const auto toHns = static_cast<int64_t>(to * kHnsPerSecond);
+    while (audio.position < toHns && audio.Next(pcm, at)) {
+      // Seeking lands a little early; drop what comes before the cut.
+      const size_t frames = pcm.size() / audio.channels;
+      size_t skip = 0;
+      if (at < fromHns) skip = std::min<size_t>(frames, static_cast<size_t>((fromHns - at) * audio.rate / kHnsPerSecond));
+      resampler.Push(pcm.data() + skip * audio.channels, frames - skip, cut);
+    }
+    cut.resize(std::min(cut.size(), static_cast<size_t>((to - from) * kSoundRate)));
+    if (cut.size() < static_cast<size_t>(kSoundRate) / 2) {
+      log::Error("Cut failed: there isn't enough of the clip's audio there");
+      return 1;
+    }
+    if (output.has_parent_path()) std::filesystem::create_directories(output.parent_path());
+    if (!SaveSoundCut(output, cut)) {
+      log::Error("Cut failed: couldn't write {}", winrt::to_string(output.wstring()));
+      return 1;
+    }
+    log::Info("Sound saved to {}", winrt::to_string(output.wstring()));
+    return 0;
+  } catch (const winrt::hresult_error& e) {
+    log::Error("Cut failed: {}", Describe(e));
+  } catch (const std::exception& e) {
+    log::Error("Cut failed: {}", e.what());
+  }
+  return 1;
+}
+
 int RunScanCommand(const std::filesystem::path& input, const std::vector<DetectionRule>& rules, ReadQuality quality,
                    double hudScale) {
   try {
@@ -321,6 +512,7 @@ int RunScanCommand(const std::filesystem::path& input, const std::vector<Detecti
     };
     std::vector<std::unique_ptr<Watch>> watches;
     for (const auto& rule : rules) {
+      if (rule.ListensForSound()) continue;  // see sounds below
       if (rule.ReadsText() && !ocr && !rule.LooksForImage()) continue;
       auto watch = std::make_unique<Watch>(rule);
       watch->box = BoxOn(PlaceRegion(rule.region, video.width, video.height, hudScale), video.width, video.height);
@@ -337,7 +529,17 @@ int RunScanCommand(const std::filesystem::path& input, const std::vector<Detecti
       watch->intervalMs = ScaledSampleMs(rule.sampleMs > 0 ? rule.sampleMs : 250, quality);
       watches.push_back(std::move(watch));
     }
-    if (watches.empty()) {
+    // The rules that listen hear the clip's game audio as it goes.
+    SoundWatch sounds(rules, [](const std::string& warning) { log::Warn("Scan: {}", warning); });
+    std::optional<AudioReader> audio;
+    if (!sounds.Empty()) {
+      try {
+        audio.emplace(input);
+      } catch (const winrt::hresult_error& e) {
+        log::Warn("Scan: the clip's audio can't be read ({}), so its sounds aren't listened for", Describe(e));
+      }
+    }
+    if (watches.empty() && !audio) {
       if (ocr) log::Error("Scan failed: none of this game's rules fit the video");
       else log::Error("Scan failed: Windows text recognition isn't installed. Add English under Settings > Time & language > Language.");
       return 1;
@@ -345,11 +547,27 @@ int RunScanCommand(const std::filesystem::path& input, const std::vector<Detecti
     log::Info("Scanning {}x{} video with {} rules at reading quality {}", video.width, video.height, watches.size(),
               ToString(quality));
 
+    // Moments seen by more than one rule count once, as in game.
     int found = 0;
+    EventFuser fuser(
+        [&](const GameEvent& e) {
+          log::Info("Scan found {} at {:.2f}: {}", EventName(e.type), static_cast<double>(e.time) / kHnsPerSecond, e.text);
+          for (const auto& w : e.witnesses) {
+            log::Info("Scan witness {} {:+.2f}s {}: {}", w.rule, w.offset, w.counted ? "counted" : "agreed", w.text);
+          }
+          ++found;
+        },
+        [](const std::string& note) { log::Info("Scan note: {}", note); });
     int lastPercent = -1;
     int64_t time = 0;
     while (auto sample = video.Next(time)) {
       const int64_t ms = time / kHnsPerMs;
+      if (audio) {
+        audio->ReadUntil(time, sounds, [&](const DetectionRule& rule, int count, int64_t at, const std::string& text) {
+          fuser.Add(rule, count, at, text);
+        });
+      }
+      fuser.Flush(time);
       if (std::ranges::none_of(watches, [&](const auto& w) { return w->dueMs <= ms; })) continue;
       const Picture frame = video.ToPicture(sample.get());
       // Rules that look at the same box share one read of it.
@@ -387,11 +605,13 @@ int RunScanCommand(const std::filesystem::path& input, const std::vector<Detecti
           fresh += watch->tracker.UpdateMatches(alike >= rule.imageMatch ? std::vector<std::string>{""} : std::vector<std::string>{}, ms);
           if (text.empty()) text = "icon: " + rule.name;
         }
-        if (text.size() > 80) text = text.substr(0, 80) + "...";
-        for (int i = 0; i < fresh; ++i) {
-          log::Info("Scan found {} at {:.2f}: {}", EventName(rule.event), ms / 1000.0, text);
-          ++found;
-        }
+        if (text.size() > 120) text = text.substr(0, 120) + "...";
+        Witness where;
+        where.left = static_cast<double>(watch->box.left) / video.width;
+        where.top = static_cast<double>(watch->box.top) / video.height;
+        where.width = static_cast<double>(width) / video.width;
+        where.height = static_cast<double>(height) / video.height;
+        fuser.Add(rule, fresh, ms * kHnsPerMs, text, where);
       }
       if (length > 0) {
         const int percent = std::clamp(static_cast<int>(ms / 10.0 / length), 0, 100);
@@ -401,6 +621,7 @@ int RunScanCommand(const std::filesystem::path& input, const std::vector<Detecti
         }
       }
     }
+    fuser.FlushAll();
     log::Info("Scan done: {} moments", found);
     return 0;
   } catch (const winrt::hresult_error& e) {

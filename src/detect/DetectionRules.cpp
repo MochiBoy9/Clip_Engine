@@ -137,8 +137,16 @@ DetectionRules ParseDetectionRules(std::istream& in) {
       rule->words.clear();
       rule->playerWords.clear();
     }
-    if (rule && !rule->ReadsText() && !rule->LooksForImage()) {
-      warn(std::format("[{}] has no words or image, so it can never match; ignoring it", rule->name));
+    if (rule && rule->ListensForSound() && (rule->ReadsText() || rule->LooksForImage())) {
+      warn(std::format("[{}] has a sound and something to look for on screen; it listens only. Give the rest its "
+                       "own [{}.<name>] section",
+                       rule->name, rule->name));
+      rule->words.clear();
+      rule->playerWords.clear();
+      rule->image.clear();
+    }
+    if (rule && !rule->ReadsText() && !rule->LooksForImage() && !rule->ListensForSound()) {
+      warn(std::format("[{}] has no words, image or sound, so it can never match; ignoring it", rule->name));
       result.rules.pop_back();
     }
     if (game && (game->name.empty() || game->executables.empty())) {
@@ -315,6 +323,37 @@ DetectionRules ParseDetectionRules(std::istream& in) {
         rule->sampleMs = ms;
         rule->sampleMsSet = true;
       } else warn(std::format("[{}] sample_ms must be 100 to 5000", rule->name));
+    } else if (key == "merge_ms") {
+      int ms = 0;
+      if (ParseInt(value, ms) && ms >= 0 && ms <= 30000) rule->mergeMs = ms;
+      else warn(std::format("[{}] merge_ms must be 0 to 30000", rule->name));
+    } else if (key == "priority") {
+      int p = 0;
+      if (ParseInt(value, p) && p >= 0 && p <= 100) rule->priority = p;
+      else warn(std::format("[{}] priority must be 0 to 100", rule->name));
+    } else if (key == "forget_ms") {
+      int ms = 0;
+      if (ParseInt(value, ms) && ms >= 0 && ms <= 60000) rule->forgetMs = ms;
+      else warn(std::format("[{}] forget_ms must be 0 to 60000", rule->name));
+    } else if (key == "skip_tag") {
+      const std::string v = Lower(value);
+      if (v == "true" || v == "yes" || v == "1") rule->skipTag = true;
+      else if (v == "false" || v == "no" || v == "0") rule->skipTag = false;
+      else warn(std::format("[{}] skip_tag must be true or false", rule->name));
+    } else if (key == "sound") {
+      rule->sounds.clear();
+      for (auto& file : Split(value, '|')) {
+        if (!file.empty()) rule->sounds.push_back(std::move(file));
+      }
+    } else if (key == "sound_match") {
+      double m = 0;
+      if (ParseDouble(value, m) && m > 0 && m <= 1) rule->soundMatch = m;
+      else warn(std::format("[{}] sound_match must be a fraction above 0, up to 1", rule->name));
+    } else if (key == "confirm_only") {
+      const std::string v = Lower(value);
+      if (v == "true" || v == "yes" || v == "1") rule->confirmOnly = true;
+      else if (v == "false" || v == "no" || v == "0") rule->confirmOnly = false;
+      else warn(std::format("[{}] confirm_only must be true or false", rule->name));
     } else if (key == "image") {
       rule->image = value;
     } else if (key == "image_match") {
@@ -515,7 +554,7 @@ std::vector<std::string> FindMatches(const DetectionRule& rule, const std::vecto
     const bool excluded = std::ranges::any_of(rule.exclude, [&](const Phrase& p) { return CountPhrase(row, p) > 0; });
     if (excluded) continue;
     const auto match = std::ranges::find_if(rule.words, [&](const Phrase& p) {
-      return rule.position == LinePosition::Start ? PhraseAtStart(row, p) : PhraseAtEnd(row, p);
+      return rule.position == LinePosition::Start ? PhraseAtStart(row, p, rule.skipTag) : PhraseAtEnd(row, p);
     });
     if (match != rule.words.end()) matches.push_back(HasNumber(*match) ? std::string() : MatchKey(rule, row));
   }
@@ -543,6 +582,7 @@ size_t ChooseRead(const DetectionRule& rule, const std::vector<std::vector<std::
 }
 
 int64_t RuleTracker::ForgetMs(const std::string& key) const {
+  if (rule_->forgetMs > 0) return rule_->forgetMs;
   if (!key.empty()) return kForgetMs;
   return std::max<int64_t>(kForgetUnnamedMs, int64_t{3} * rule_->sampleMs);
 }

@@ -25,9 +25,11 @@ Proprietary software. All rights reserved; see [LICENSE](LICENSE).
 - Clips grouped by match: each match's result, kills, assists, deaths and revives, every moment on one colored ribbon, and its best clips.
 - Star clips as favorites, and optionally have old clips cleaned up by age or by a size limit. Favorites are always kept.
 - Works on any screen shape and HUD size: each box keeps to the edge or middle of the HUD it sits next to, so the killfeed is read in the right place on ultrawide, 16:10 and 4:3 screens, and a game's HUD size set in Detection Studio moves and resizes every box with it.
+- How each moment was found: pick a moment in the player to see every rule that saw it, what each one read off the screen (or heard), which one counted it, and open that frame in Detection Studio with the rule picked.
+- A moment the HUD shows in more than one place counts once. In The Finals a kill comes from the killfeed by your name, backed up by the score line under the crosshair and the elimination chime, so the score line fading in and out no longer counts one kill two or three times.
 - Check detection (in the player): mark what really happened in a clip, run the game's rules over the whole clip the way the engine reads the game, and see what they caught, missed and found that wasn't there.
 - Moments over the game: the in-game notice also shows each kill with the match's count, multi-kills, streaks, revives, the match's line when it ends and a new personal best. Turn it off in Settings.
-- Detection Studio (Games page, or the scan button in the player): add any game, or fix how one is read. Pick a frame from a clip or a screenshot, draw a box where the game shows a kill, type the words it shows, test it on that frame exactly as the engine would read it in game, and save.
+- Detection Studio (Games page, or the scan button in the player): add any game, or fix how one is read. Pick a frame from a clip or a screenshot, draw a box where the game shows a kill, type the words it shows, test it on that frame exactly as the engine would read it in game, and save. Read the box all through a clip to see every change in what it reads, listen for a sound cut from a clip, and test the saved rules on every clip you've marked in Check detection at once.
 
 ![Home screen](docs/screenshots/1-home.png)
 
@@ -40,7 +42,8 @@ Proprietary software. All rights reserved; see [LICENSE](LICENSE).
 | League of Legends | Official Live Client Data API: kills, deaths, assists, multi-kills, aces, first blood, dragons, Baron and steals, game start and result |
 | Rocket League | Official Stats API: goals, assists, demolitions, saves, kickoff and the match result |
 | Valorant, Marvel Rivals, Rainbow Six Siege, Delta Force, Deadlock, Halo Infinite, Destiny 2, Team Fortress 2 | The killfeed, by your in-game name (set it on the Games page), plus round and match banners and medals |
-| The Finals, Overwatch, Battlefield 6, Fortnite, Apex Legends, PUBG, Call of Duty, ARC Raiders | The HUD's kill, death, revive and match messages |
+| The Finals | Kills and deaths from the killfeed by your in-game name, backed up by the score line and the elimination chime, so each counts once; assists, revives and match messages from the HUD |
+| Overwatch, Battlefield 6, Fortnite, Apex Legends, PUBG, Call of Duty, ARC Raiders | The HUD's kill, death, revive and match messages |
 | Escape from Tarkov | Deaths and the end of each raid (Tarkov shows no kills on screen) |
 | Roblox, Minecraft | Recorded, with clips on the hotkey; add rules for the experiences you play in Detection Studio |
 

@@ -156,10 +156,19 @@ bool MatchesAt(const std::vector<std::string>& row, const Phrase& phrase, size_t
 
 }  // namespace
 
-bool PhraseAtStart(const std::vector<std::string>& row, const Phrase& phrase) {
+bool PhraseAtStart(const std::vector<std::string>& row, const Phrase& phrase, bool skipTag) {
   if (phrase.words.empty()) return false;
   if (MatchesAt(row, phrase, 0)) return true;
-  return !row.empty() && row[0].size() <= 2 && MatchesAt(row, phrase, 1);
+  if (!row.empty() && row[0].size() <= 2 && MatchesAt(row, phrase, 1)) return true;
+  if (!skipTag || row.empty() || row[0].size() > 6) return false;
+  // The tag, maybe with its frame read as a stray letter or two after it. Something must
+  // follow the name, as the player killed does in a killfeed: a row that ends with it after
+  // a short word is someone else's kill, of the player, by someone without a tag.
+  for (size_t at = 1; at <= 3 && at < row.size(); ++at) {
+    if (at > 1 && row[at - 1].size() > 2) break;
+    if (at + phrase.words.size() < row.size() && MatchesAt(row, phrase, at)) return true;
+  }
+  return false;
 }
 
 bool PhraseAtEnd(const std::vector<std::string>& row, const Phrase& phrase) {

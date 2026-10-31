@@ -10,6 +10,24 @@ internal sealed class ClipEvent
     [JsonPropertyName("type")] public string Type { get; set; } = "";
     [JsonPropertyName("time")] public double Time { get; set; }
     [JsonPropertyName("text")] public string Text { get; set; } = "";
+
+    // How the engine found it: one entry for each rule that saw it (see Witness in
+    // src/detect/GameEvent.h). Null for moments from a game's own API and older clips.
+    [JsonPropertyName("found_by")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<ClipWitness>? FoundBy { get; set; }
+}
+
+internal sealed class ClipWitness
+{
+    [JsonPropertyName("rule")] public string Rule { get; set; } = "";
+    [JsonPropertyName("text")] public string Text { get; set; } = "";
+    // Seconds from the moment's time to when this rule saw it.
+    [JsonPropertyName("offset")] public double Offset { get; set; }
+    // False when another rule's count won, or it saw the same moment again.
+    [JsonPropertyName("counted")] public bool Counted { get; set; } = true;
+    // The box it read: left, top, width, height as fractions of the frame.
+    [JsonPropertyName("box")] public double[] Box { get; set; } = [];
 }
 
 // What the engine knows about a clip: see src/media/ClipMetadata.cpp.

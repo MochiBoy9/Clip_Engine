@@ -144,6 +144,18 @@ class JsonReader {
     return true;
   }
 
+  bool Bool(bool& out) {
+    SkipSpace();
+    for (const auto& [word, value] : {std::pair{std::string_view("true"), true}, std::pair{std::string_view("false"), false}}) {
+      if (s_.substr(i_, word.size()) == word) {
+        i_ += word.size();
+        out = value;
+        return true;
+      }
+    }
+    return false;
+  }
+
   bool Skip() {
     SkipSpace();
     if (i_ >= s_.size()) return false;
@@ -197,8 +209,20 @@ std::string ToJson(const ClipMetadata& metadata) {
   json += std::format("  \"title\": \"{}\",\n  \"events\": [", Escape(Summarize(metadata.markers)));
   for (size_t i = 0; i < metadata.markers.size(); ++i) {
     const auto& m = metadata.markers[i];
-    json += std::format("{}\n    {{ \"type\": \"{}\", \"time\": {:.2f}, \"text\": \"{}\" }}", i == 0 ? "" : ",",
+    json += std::format("{}\n    {{ \"type\": \"{}\", \"time\": {:.2f}, \"text\": \"{}\"", i == 0 ? "" : ",",
                         EventName(m.type), m.seconds, Escape(m.text));
+    if (!m.witnesses.empty()) {
+      json += ", \"found_by\": [";
+      for (size_t k = 0; k < m.witnesses.size(); ++k) {
+        const auto& w = m.witnesses[k];
+        json += std::format("{}\n      {{ \"rule\": \"{}\", \"text\": \"{}\", \"offset\": {:.2f}, \"counted\": {}, "
+                            "\"box\": [{:.4f}, {:.4f}, {:.4f}, {:.4f}] }}",
+                            k == 0 ? "" : ",", Escape(w.rule), Escape(w.text), w.offset, w.counted ? "true" : "false",
+                            w.left, w.top, w.width, w.height);
+      }
+      json += "\n    ]";
+    }
+    json += " }";
   }
   json += metadata.markers.empty() ? "]\n}\n" : "\n  ]\n}\n";
   return json;
@@ -239,6 +263,29 @@ std::optional<ClipMetadata> ParseMetadataJson(std::string_view json) {
             if (name == "type") return r.String(type);
             if (name == "time") return r.Number(marker.seconds);
             if (name == "text") return r.String(marker.text);
+            if (name == "found_by") {
+              return r.Array([&] {
+                Witness w;
+                if (!r.Object([&](const std::string& key) {
+                      if (key == "rule") return r.String(w.rule);
+                      if (key == "text") return r.String(w.text);
+                      if (key == "offset") return r.Number(w.offset);
+                      if (key == "counted") return r.Bool(w.counted);
+                      if (key == "box") {
+                        double v[4]{};
+                        size_t n = 0;
+                        if (!r.Array([&] { return n < 4 ? r.Number(v[n++]) : r.Skip(); })) return false;
+                        w.left = v[0], w.top = v[1], w.width = v[2], w.height = v[3];
+                        return true;
+                      }
+                      return r.Skip();
+                    })) {
+                  return false;
+                }
+                marker.witnesses.push_back(std::move(w));
+                return true;
+              });
+            }
             return r.Skip();
           })) {
         return false;
@@ -258,7 +305,7 @@ ClipMetadata Trimmed(const ClipMetadata& metadata, double from, double to) {
   if (out.sessionSeconds >= 0) out.sessionSeconds += from;
   out.markers.clear();
   for (const auto& m : metadata.markers) {
-    if (m.seconds >= from && m.seconds <= to) out.markers.push_back({m.type, m.seconds - from, m.text});
+    if (m.seconds >= from && m.seconds <= to) out.markers.push_back({m.type, m.seconds - from, m.text, m.witnesses});
   }
   return out;
 }
