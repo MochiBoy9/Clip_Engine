@@ -60,12 +60,21 @@ struct DetectionRule {
   double imageMatch = 0.85;  // how alike, 0-1, the region must be to the picture somewhere
   int imageScreen = 0;      // the height of the screen the picture was cut from; 0 means this one
 
+  // A sound to listen for instead of reading the screen: one or more WAV cuts of it, each
+  // starting kSoundLeadIn before the sound (see SoundMatch.h), resolved to full paths by the
+  // engine like image. soundMatch is how alike, 0-1, the game's audio must be to them.
+  std::vector<std::string> sounds;
+  double soundMatch = 0.44;
+  // Its sightings never count a moment on their own, only back up another rule's.
+  bool confirmOnly = false;
+
   // Phrases as written, kept when they mention {player} so the names can be filled in later.
   std::vector<std::string> playerWords;
   std::vector<std::string> playerExclude;
   bool NeedsPlayer() const { return !playerWords.empty() || !playerExclude.empty(); }
   bool ReadsText() const { return !words.empty() || !playerWords.empty(); }
   bool LooksForImage() const { return !image.empty(); }
+  bool ListensForSound() const { return !sounds.empty(); }
 };
 
 // How often a rule for this event is checked by default, given the [detection] sample_ms.

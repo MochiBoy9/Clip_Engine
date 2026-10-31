@@ -4,6 +4,8 @@
 #include "app/AutoClipPlanner.h"
 #include "detect/DetectionRules.h"
 #include "detect/EventFuser.h"
+#include "detect/SoundMatch.h"
+#include "detect/SoundWatch.h"
 #include "detect/ImageMatch.h"
 #include "detect/OcrImage.h"
 #include "detect/TextMatcher.h"
@@ -12,6 +14,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -340,6 +343,97 @@ void TestFuser() {
   fuser.Add(death, 1, 400'100 * kMs, "ELIMINATED BY");
   fuser.FlushAll();
   CHECK(events.size() == 9);
+}
+
+// The Finals' elimination chime, as shipped, heard in noise and not heard in noise alone.
+void TestSounds(const char* iniPath) {
+  std::ifstream in(iniPath);
+  const auto rules = ParseDetectionRules(in).ForGame("the_finals");
+  auto sound = std::ranges::find_if(rules, [](const DetectionRule& r) { return r.ListensForSound(); });
+  CHECK(sound != rules.end());
+  if (sound == rules.end()) return;
+  CHECK(sound->confirmOnly && sound->event == EventType::Kill);
+  std::vector<DetectionRule> listening{*sound};
+  const auto folder = std::filesystem::path(iniPath).parent_path();
+  for (auto& file : listening[0].sounds) file = (folder / file).string();
+  const auto chime = LoadSoundCut(listening[0].sounds[0]);
+  CHECK(chime.has_value() && chime->size() > 12000);
+  if (!chime) return;
+
+  // Four seconds of game noise at 48 kHz stereo, with the chime at 2 s in one of them.
+  auto play = [&](bool withChime) {
+    std::vector<int16_t> pcm(48000 * 4 * 2);
+    uint32_t seed = 12345;
+    for (auto& s : pcm) {
+      seed = seed * 1664525 + 1013904223;
+      s = static_cast<int16_t>(static_cast<int>(seed >> 16) % 1200 - 600);
+    }
+    if (withChime) {
+      for (size_t i = 0; i < chime->size(); ++i) {
+        for (int k = 0; k < 3; ++k) {
+          const size_t frame = 96000 + i * 3 + k;
+          for (int c = 0; c < 2; ++c) {
+            pcm[frame * 2 + c] = static_cast<int16_t>(std::clamp<int>(pcm[frame * 2 + c] + static_cast<int>((*chime)[i] * 32767), -32768, 32767));
+          }
+        }
+      }
+    }
+    std::vector<double> heard;
+    SoundWatch watch(listening, [](const std::string& w) { std::printf("%s\n", w.c_str()); });
+    CHECK(!watch.Empty());
+    // As WASAPI hands it over, 10 ms at a time.
+    for (size_t at = 0; at < pcm.size() / 2; at += 480) {
+      watch.Push(pcm.data() + at * 2, 480, 48000, 2, static_cast<int64_t>(at) * 10'000'000 / 48000,
+                 [&](const DetectionRule&, int count, int64_t time, const std::string&) {
+                   for (int i = 0; i < count; ++i) heard.push_back(time / 1e7);
+                 });
+    }
+    return heard;
+  };
+  const auto heard = play(true);
+  CHECK(heard.size() == 1);
+  // The cut starts 0.3 s before the chime, and so does the stretch that matched it.
+  if (heard.size() == 1) CHECK(std::abs(heard[0] - 2.3) < 0.1);
+  CHECK(play(false).empty());
+}
+
+void TestSoundCutRoundTrip(const char* scratch) {
+  std::vector<float> samples(1600);
+  for (size_t i = 0; i < samples.size(); ++i) samples[i] = static_cast<float>(std::sin(i * 0.1) * 0.5);
+  const auto path = std::filesystem::path(scratch) / "cut.wav";
+  CHECK(SaveSoundCut(path, samples));
+  const auto back = LoadSoundCut(path);
+  CHECK(back && back->size() == samples.size());
+  if (back) CHECK(std::abs((*back)[100] - samples[100]) < 0.001);
+  std::string error;
+  CHECK(!LoadSoundCut(std::filesystem::path(scratch) / "missing.wav", &error) && !error.empty());
+}
+
+void TestConfirmOnly() {
+  DetectionRule chime = FusedRule("chime", 1);
+  chime.confirmOnly = true;
+  const DetectionRule score = FusedRule("score", 1);
+  std::vector<GameEvent> events;
+  EventFuser fuser([&](const GameEvent& e) { events.push_back(e); });
+  // Heard with nothing seen: not a kill.
+  fuser.Add(chime, 1, 0, "sound");
+  fuser.Flush(20'000 * kMs);
+  CHECK(events.empty());
+  // Heard, then seen: one kill, with the sound as a witness.
+  fuser.Add(chime, 1, 30'000 * kMs, "sound");
+  fuser.Add(score, 1, 30'300 * kMs, "ELIMINATION 250");
+  fuser.Flush(31'500 * kMs);
+  CHECK(events.size() == 1);
+  if (events.size() == 1) {
+    CHECK(events[0].time == 30'300 * kMs);
+    CHECK(events[0].witnesses.size() == 2 && events[0].witnesses[1].rule == "chime");
+  }
+  // Seen only after the group settled on the sound alone: still one kill, with both.
+  fuser.Add(chime, 1, 60'000 * kMs, "sound");
+  fuser.Flush(61'200 * kMs);
+  fuser.Add(score, 1, 61'500 * kMs, "ELIMINATION 250");
+  CHECK(events.size() == 2);
+  if (events.size() == 2) CHECK(events[1].witnesses.size() == 2);
 }
 
 void TestForgetMs() {
@@ -996,7 +1090,10 @@ int main(int argc, char** argv) {
   TestFuser();
   TestForgetMs();
   TestWitnessRoundTrip();
+  TestConfirmOnly();
   if (argc > 1) TestShippedRulesParse(argv[1]);
+  if (argc > 1) TestSounds(argv[1]);
+  if (argc > 2) TestSoundCutRoundTrip(argv[2]);
   if (argc > 1) TestFinalsRules(argv[1]);
   if (argc > 1) TestFinalsKillfeed(argv[1]);
   if (argc > 2) TestMetadataBox(argv[2]);

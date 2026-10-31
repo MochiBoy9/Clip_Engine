@@ -4,6 +4,7 @@
 #include "core/Log.h"
 #include "detect/EventFuser.h"
 #include "detect/ImageMatch.h"
+#include "detect/SoundWatch.h"
 #include "detect/Ocr.h"
 
 #include <mferror.h>
@@ -144,6 +145,55 @@ struct VideoReader {
     buffer->Unlock();
     for (size_t i = 3; i < frame.bgra.size(); i += 4) frame.bgra[i] = 255;  // RGB32 leaves alpha undefined
     return frame;
+  }
+};
+
+// A video's game audio (its first audio track), read alongside its frames for the rules that
+// listen for a sound. Throws when the video has no audio.
+struct AudioReader {
+  winrt::com_ptr<IMFSourceReader> reader;
+  UINT32 rate = 48000;
+  UINT32 channels = 2;
+  int64_t position = 0;  // where the audio read so far ends
+  bool done = false;
+
+  explicit AudioReader(const std::filesystem::path& path) {
+    winrt::check_hresult(MFCreateSourceReaderFromURL(path.c_str(), nullptr, reader.put()));
+    winrt::check_hresult(reader->SetStreamSelection(static_cast<DWORD>(MF_SOURCE_READER_ALL_STREAMS), FALSE));
+    winrt::check_hresult(reader->SetStreamSelection(Stream(), TRUE));
+    winrt::com_ptr<IMFMediaType> type;
+    winrt::check_hresult(MFCreateMediaType(type.put()));
+    winrt::check_hresult(type->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Audio));
+    winrt::check_hresult(type->SetGUID(MF_MT_SUBTYPE, MFAudioFormat_PCM));
+    winrt::check_hresult(type->SetUINT32(MF_MT_AUDIO_BITS_PER_SAMPLE, 16));
+    winrt::check_hresult(reader->SetCurrentMediaType(Stream(), nullptr, type.get()));
+    winrt::com_ptr<IMFMediaType> current;
+    winrt::check_hresult(reader->GetCurrentMediaType(Stream(), current.put()));
+    rate = MFGetAttributeUINT32(current.get(), MF_MT_AUDIO_SAMPLES_PER_SECOND, 48000);
+    channels = std::max<UINT32>(1, MFGetAttributeUINT32(current.get(), MF_MT_AUDIO_NUM_CHANNELS, 2));
+  }
+
+  static DWORD Stream() { return static_cast<DWORD>(MF_SOURCE_READER_FIRST_AUDIO_STREAM); }
+
+  // Hands the watch the audio up to `until` (100 ns units).
+  void ReadUntil(int64_t until, SoundWatch& watch, const SoundWatch::Found& found) {
+    while (!done && position < until) {
+      DWORD index = 0, flags = 0;
+      LONGLONG at = 0;
+      winrt::com_ptr<IMFSample> sample;
+      winrt::check_hresult(reader->ReadSample(Stream(), 0, &index, &flags, &at, sample.put()));
+      if (flags & MF_SOURCE_READERF_ENDOFSTREAM) done = true;
+      if (!sample) continue;
+      winrt::com_ptr<IMFMediaBuffer> buffer;
+      winrt::check_hresult(sample->ConvertToContiguousBuffer(buffer.put()));
+      BYTE* data = nullptr;
+      DWORD bytes = 0;
+      winrt::check_hresult(buffer->Lock(&data, nullptr, &bytes));
+      const size_t frames = bytes / (2 * channels);
+      watch.Push(reinterpret_cast<const int16_t*>(data), frames, static_cast<int>(rate), static_cast<int>(channels), at, found);
+      buffer->Unlock();
+      position = at + static_cast<int64_t>(frames) * kHnsPerSecond / rate;
+    }
   }
 };
 
@@ -322,6 +372,7 @@ int RunScanCommand(const std::filesystem::path& input, const std::vector<Detecti
     };
     std::vector<std::unique_ptr<Watch>> watches;
     for (const auto& rule : rules) {
+      if (rule.ListensForSound()) continue;  // see sounds below
       if (rule.ReadsText() && !ocr && !rule.LooksForImage()) continue;
       auto watch = std::make_unique<Watch>(rule);
       watch->box = BoxOn(PlaceRegion(rule.region, video.width, video.height, hudScale), video.width, video.height);
@@ -338,7 +389,17 @@ int RunScanCommand(const std::filesystem::path& input, const std::vector<Detecti
       watch->intervalMs = ScaledSampleMs(rule.sampleMs > 0 ? rule.sampleMs : 250, quality);
       watches.push_back(std::move(watch));
     }
-    if (watches.empty()) {
+    // The rules that listen hear the clip's game audio as it goes.
+    SoundWatch sounds(rules, [](const std::string& warning) { log::Warn("Scan: {}", warning); });
+    std::optional<AudioReader> audio;
+    if (!sounds.Empty()) {
+      try {
+        audio.emplace(input);
+      } catch (const winrt::hresult_error& e) {
+        log::Warn("Scan: the clip's audio can't be read ({}), so its sounds aren't listened for", Describe(e));
+      }
+    }
+    if (watches.empty() && !audio) {
       if (ocr) log::Error("Scan failed: none of this game's rules fit the video");
       else log::Error("Scan failed: Windows text recognition isn't installed. Add English under Settings > Time & language > Language.");
       return 1;
@@ -361,6 +422,11 @@ int RunScanCommand(const std::filesystem::path& input, const std::vector<Detecti
     int64_t time = 0;
     while (auto sample = video.Next(time)) {
       const int64_t ms = time / kHnsPerMs;
+      if (audio) {
+        audio->ReadUntil(time, sounds, [&](const DetectionRule& rule, int count, int64_t at, const std::string& text) {
+          fuser.Add(rule, count, at, text);
+        });
+      }
       fuser.Flush(time);
       if (std::ranges::none_of(watches, [&](const auto& w) { return w->dueMs <= ms; })) continue;
       const Picture frame = video.ToPicture(sample.get());

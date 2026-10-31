@@ -82,6 +82,7 @@ class RecordingSession {
   std::unique_ptr<AudioCapture> gameAudio_;
   std::unique_ptr<AudioCapture> micAudio_;
   std::unique_ptr<EventDetector> detector_;
+  std::atomic<EventDetector*> listener_{nullptr};  // detector_ while it listens to the game's audio
 
   int64_t bufferDuration_;
   mutable std::mutex eventsMutex_;

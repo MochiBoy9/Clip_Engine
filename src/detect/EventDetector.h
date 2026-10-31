@@ -3,6 +3,7 @@
 #include "capture/MonitorCapture.h"
 #include "detect/DetectionRules.h"
 #include "detect/EventFuser.h"
+#include "detect/SoundWatch.h"
 #include "detect/OcrImage.h"
 
 #include <winrt/Windows.Media.Ocr.h>
@@ -48,6 +49,11 @@ class EventDetector {
   // 0, the default, reads it all the time.
   void SetGameProcess(DWORD processId) { gameProcess_ = processId; }
 
+  // The game's audio as it plays (48 kHz stereo), for the rules that listen for a sound.
+  // Called from the audio capture's thread.
+  void Hear(const int16_t* pcm, uint32_t frames, int64_t pts);
+  bool Listens() const { return sounds_ != nullptr; }
+
  private:
   struct Region;
   void Run();
@@ -68,6 +74,17 @@ class EventDetector {
   EventFuser fuser_;  // turns each rule's sightings into moments, for sink_
 
   std::vector<std::unique_ptr<Region>> regions_;
+
+  // Sounds heard on the audio thread, waiting for the reading thread to count them.
+  struct Heard {
+    const DetectionRule* rule;
+    int count;
+    int64_t time;
+    std::string text;
+  };
+  std::unique_ptr<SoundWatch> sounds_;
+  std::mutex heardMutex_;
+  std::vector<Heard> heard_;
   std::atomic<DWORD> gameProcess_{0};
 
   std::mutex mutex_;

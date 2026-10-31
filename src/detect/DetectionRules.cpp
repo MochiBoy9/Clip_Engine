@@ -137,8 +137,16 @@ DetectionRules ParseDetectionRules(std::istream& in) {
       rule->words.clear();
       rule->playerWords.clear();
     }
-    if (rule && !rule->ReadsText() && !rule->LooksForImage()) {
-      warn(std::format("[{}] has no words or image, so it can never match; ignoring it", rule->name));
+    if (rule && rule->ListensForSound() && (rule->ReadsText() || rule->LooksForImage())) {
+      warn(std::format("[{}] has a sound and something to look for on screen; it listens only. Give the rest its "
+                       "own [{}.<name>] section",
+                       rule->name, rule->name));
+      rule->words.clear();
+      rule->playerWords.clear();
+      rule->image.clear();
+    }
+    if (rule && !rule->ReadsText() && !rule->LooksForImage() && !rule->ListensForSound()) {
+      warn(std::format("[{}] has no words, image or sound, so it can never match; ignoring it", rule->name));
       result.rules.pop_back();
     }
     if (game && (game->name.empty() || game->executables.empty())) {
@@ -332,6 +340,20 @@ DetectionRules ParseDetectionRules(std::istream& in) {
       if (v == "true" || v == "yes" || v == "1") rule->skipTag = true;
       else if (v == "false" || v == "no" || v == "0") rule->skipTag = false;
       else warn(std::format("[{}] skip_tag must be true or false", rule->name));
+    } else if (key == "sound") {
+      rule->sounds.clear();
+      for (auto& file : Split(value, '|')) {
+        if (!file.empty()) rule->sounds.push_back(std::move(file));
+      }
+    } else if (key == "sound_match") {
+      double m = 0;
+      if (ParseDouble(value, m) && m > 0 && m <= 1) rule->soundMatch = m;
+      else warn(std::format("[{}] sound_match must be a fraction above 0, up to 1", rule->name));
+    } else if (key == "confirm_only") {
+      const std::string v = Lower(value);
+      if (v == "true" || v == "yes" || v == "1") rule->confirmOnly = true;
+      else if (v == "false" || v == "no" || v == "0") rule->confirmOnly = false;
+      else warn(std::format("[{}] confirm_only must be true or false", rule->name));
     } else if (key == "image") {
       rule->image = value;
     } else if (key == "image_match") {

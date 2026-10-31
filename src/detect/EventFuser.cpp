@@ -19,12 +19,13 @@ void EventFuser::Add(const DetectionRule& rule, int count, int64_t time, const s
   where.text = text;
   where.offset = 0;
   where.counted = true;
-  if (rule.mergeMs <= 0) {
+  if (rule.mergeMs <= 0 && !rule.confirmOnly) {
     for (int i = 0; i < count; ++i) Emit(rule.event, time, text, {where});
     return;
   }
 
-  const int64_t merge = int64_t{rule.mergeMs} * kTicksPerMs;
+  // A rule that only backs others up has to wait for them however it's set.
+  const int64_t merge = int64_t{rule.mergeMs > 0 ? rule.mergeMs : 2000} * kTicksPerMs;
   auto group = std::ranges::find_if(groups_, [&](const Group& g) {
     return g.event == rule.event && time >= g.first && time - g.last <= std::max(merge, g.merge);
   });
@@ -34,8 +35,13 @@ void EventFuser::Add(const DetectionRule& rule, int count, int64_t time, const s
   }
   group->last = std::max(group->last, time);
   group->merge = std::max(group->merge, merge);
-  group->sightings.push_back({rule.name, rule.priority, count, time, where});
+  group->sightings.push_back({rule.name, rule.priority, rule.confirmOnly, count, time, where});
   if (!group->settled) return;
+  // Only a backing-up rule had seen it: settle it again now that something can count it.
+  if (group->emitted == 0) {
+    Settle(*group);
+    return;
+  }
 
   // Already counted: this counts only if it shows there were more.
   const int target = Count(*group);
@@ -64,11 +70,13 @@ void EventFuser::FlushAll() {
 
 int EventFuser::Count(const Group& group, std::string* rule) {
   int best = -1;
-  for (const auto& s : group.sightings) best = std::max(best, s.priority);
+  for (const auto& s : group.sightings) {
+    if (!s.confirmOnly) best = std::max(best, s.priority);
+  }
   // Of the rules with the highest priority, the one that saw the most.
   std::map<std::string, int> counts;
   for (const auto& s : group.sightings) {
-    if (s.priority == best) counts[s.rule] += s.count;
+    if (!s.confirmOnly && s.priority == best) counts[s.rule] += s.count;
   }
   int most = 0;
   for (const auto& [name, count] : counts) {
@@ -84,6 +92,13 @@ void EventFuser::Settle(Group& group) {
   group.settled = true;
   std::string counting;
   group.emitted = Count(group, &counting);
+  if (group.emitted == 0) {
+    if (note_) {
+      note_(std::format("[{}] noticed a {} nothing else saw; not counted", group.sightings.front().rule,
+                        EventName(group.event)));
+    }
+    return;
+  }
 
   // One moment for each of the counting rule's sightings, at its time.
   struct Moment {

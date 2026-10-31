@@ -94,6 +94,10 @@ RecordingSession::RecordingSession(const Config& config, HMONITOR monitor, std::
             std::lock_guard lock(eventsMutex_);
             newScoreboards_.push_back(board);
           });
+      if (detector_->Listens()) {
+        if (gameAudio_) listener_ = detector_.get();
+        else log::Info("Game audio is off in Settings, so the game's sounds aren't listened for");
+      }
     } catch (const winrt::hresult_error& e) {
       log::Warn("Recording without event detection: {}", Describe(e));
     }
@@ -105,9 +109,11 @@ RecordingSession::RecordingSession(const Config& config, HMONITOR monitor, std::
 RecordingSession::~RecordingSession() {
   stop_ = true;
   if (pacer_.joinable()) pacer_.join();
-  detector_.reset();
+  // The audio thread hands sounds to the detector, so it stops first.
+  listener_ = nullptr;
   micAudio_.reset();
   gameAudio_.reset();
+  detector_.reset();
   micAudioEncoder_.reset();
   gameAudioEncoder_.reset();
   capture_.reset();
@@ -158,6 +164,9 @@ void RecordingSession::StartAudio(AudioCapture::Source source, int stream, std::
           pcm = silence.data();
         }
         target->Push(pcm, frames, pts);
+        if (followFocus) {
+          if (EventDetector* detector = listener_) detector->Hear(pcm, frames, pts);
+        }
       } catch (const winrt::hresult_error& e) {
         log::Error("Audio encoding failed: {}", Describe(e));
       }

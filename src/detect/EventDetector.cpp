@@ -179,6 +179,7 @@ EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCaptur
   };
 
   for (const auto& rule : rules_) {
+    if (rule.ListensForSound()) continue;  // see sounds_ below
     const D3D11_BOX box = boxFor(rule.region);
     if (box.right < box.left + 8 || box.bottom < box.top + 8) {
       log::Warn("Detection rule {} covers too little of the screen; skipping it", rule.name);
@@ -275,6 +276,9 @@ EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCaptur
     best->intervalMs = std::min(best->intervalMs, inner->intervalMs);
   }
 
+  sounds_ = std::make_unique<SoundWatch>(rules_, [](const std::string& warning) { log::Warn("{}", warning); });
+  if (sounds_->Empty()) sounds_.reset();
+
   size_t read = 0;
   for (auto& region : regions_) {
     if (region->within) continue;
@@ -294,6 +298,7 @@ EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCaptur
 
   log::Info("Watching {} screen regions ({} read directly) for {} detection rules, reading quality {}", regions_.size(),
             read, rules_.size(), ToString(quality_));
+  if (sounds_) log::Info("Listening to the game's audio for its sounds");
   if (std::abs(screenW / screenH - kDefaultAspect) > 0.02 || hudScale != 1) {
     log::Info("Regions placed for a {}x{} screen with the HUD at {:.0f}%", capture_.Width(), capture_.Height(), hudScale * 100);
   }
@@ -335,10 +340,11 @@ void EventDetector::Run() {
       direct.push_back(region.get());
       tickMs = std::min(tickMs, region->intervalMs);
     }
-    if (direct.empty()) {
+    if (direct.empty() && !sounds_) {
       winrt::uninit_apartment();
       return;
     }
+    if (direct.empty()) tickMs = 250;
 
     auto next = std::chrono::steady_clock::now();
     bool wasInFront = true;
@@ -392,12 +398,27 @@ void EventDetector::Run() {
       }
 
       for (Region* region : ready) Process(*region, region->copyTime, ocr);
+      std::vector<Heard> heard;
+      {
+        std::lock_guard lock(heardMutex_);
+        heard.swap(heard_);
+      }
+      for (const auto& h : heard) fuser_.Add(*h.rule, h.count, h.time, h.text);
       fuser_.Flush(NowHns());
     }
   } catch (const winrt::hresult_error& e) {
     log::Error("Event detection stopped: {}", Describe(e));
   }
   winrt::uninit_apartment();
+}
+
+void EventDetector::Hear(const int16_t* pcm, uint32_t frames, int64_t pts) {
+  if (!sounds_) return;
+  sounds_->Push(pcm, frames, 48000, 2, pts, [&](const DetectionRule& rule, int count, int64_t time, const std::string& text) {
+    if (debug_) log::Info("Heard [{}]: {}", rule.name, text);
+    std::lock_guard lock(heardMutex_);
+    heard_.push_back({&rule, count, time, text});
+  });
 }
 
 Witness EventDetector::Where(const Region& region) const {

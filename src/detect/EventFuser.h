@@ -19,7 +19,8 @@ namespace clip {
 // look, it's settled: the rule with the highest priority among those that saw it says how
 // many there were, and the others back it up. A rule that alone saw it still counts it, so a
 // kill one rule misread isn't lost. Sightings that come after it's settled count only when
-// they raise that number, as a second kill in the killfeed does. Rules without merge_ms count
+// they raise that number, as a second kill in the killfeed does. A confirm_only rule (a sound)
+// never counts a moment by itself; it only backs up the others. Rules without merge_ms count
 // everything they see, at once, as before.
 //
 // Every moment carries a witness for each sighting in it, which the app shows as why it counted.
@@ -48,6 +49,7 @@ class EventFuser {
   struct Sighting {
     std::string rule;
     int priority = 1;
+    bool confirmOnly = false;
     int count = 1;
     int64_t time = 0;
     Witness witness;

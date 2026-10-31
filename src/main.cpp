@@ -52,19 +52,22 @@ clip::DetectionRules LoadDetectionRules(const std::filesystem::path& dataDir) {
     auto rules = ParseDetectionRules(in);
     for (const auto& warning : rules.warnings) log::Warn("{} {}", winrt::to_string(file.wstring()), warning);
     rules.warnings.clear();
-    // Icons are found next to the detection.ini that names them, then in the other places
-    // it can be.
-    for (auto& rule : rules.rules) {
-      if (!rule.LooksForImage()) continue;
-      const std::filesystem::path image(winrt::to_hstring(rule.image).c_str());
-      if (image.is_absolute()) continue;
+    // Icons and sounds are found next to the detection.ini that names them, then in the other
+    // places they can be.
+    auto resolve = [&](std::string& name) {
+      const std::filesystem::path relative(winrt::to_hstring(name).c_str());
+      if (relative.is_absolute()) return;
       for (const auto& folder : {file.parent_path(), dataDir, ExeDir()}) {
         std::error_code ec;
-        if (std::filesystem::exists(folder / image, ec)) {
-          rule.image = winrt::to_string((folder / image).wstring());
-          break;
+        if (std::filesystem::exists(folder / relative, ec)) {
+          name = winrt::to_string((folder / relative).wstring());
+          return;
         }
       }
+    };
+    for (auto& rule : rules.rules) {
+      if (rule.LooksForImage()) resolve(rule.image);
+      for (auto& sound : rule.sounds) resolve(sound);
     }
     log::Info("Detection rules: {} ({} rules)", winrt::to_string(file.wstring()), rules.rules.size());
     return rules;

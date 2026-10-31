@@ -30,6 +30,8 @@ add_executable(clip_engine
   src/detect/RuleTester.cpp
   src/detect/Scoreboard.cpp
   src/detect/ScreenRegion.cpp
+  src/detect/SoundMatch.cpp
+  src/detect/SoundWatch.cpp
   src/detect/TextMatcher.cpp
   src/game/GameDetector.cpp
   src/integrations/DiscordActivity.cpp
@@ -67,9 +69,10 @@ target_link_libraries(clip_engine PRIVATE
   ws2_32 winhttp advapi32
 )
 
-# The detection rules ship next to the executable.
+# The detection rules ship next to the executable, with the sounds they listen for.
 add_custom_command(TARGET clip_engine POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/assets/detection.ini $<TARGET_FILE_DIR:clip_engine>)
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/assets/detection.ini $<TARGET_FILE_DIR:clip_engine>
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets/sounds $<TARGET_FILE_DIR:clip_engine>/sounds)
 
 # Tests for the parts of detection that don't need Windows APIs.
 enable_testing()
@@ -77,6 +80,8 @@ add_executable(clip_engine_tests
   tests/DetectTests.cpp
   src/detect/DetectionRules.cpp
   src/detect/EventFuser.cpp
+  src/detect/SoundMatch.cpp
+  src/detect/SoundWatch.cpp
   src/detect/ImageMatch.cpp
   src/detect/OcrImage.cpp
   src/detect/Scoreboard.cpp
