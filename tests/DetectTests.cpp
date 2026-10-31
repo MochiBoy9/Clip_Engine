@@ -272,6 +272,21 @@ void TestFinalsKillfeed(const char* path) {
   CHECK(std::ranges::none_of(nameless, [](const DetectionRule& r) { return r.name == "the_finals.kill.killfeed"; }));
 }
 
+// Detection Studio tests a killfeed rule with the player's name filled in, as the engine runs it.
+void TestSetPhrases() {
+  DetectionRule rule;
+  rule.position = LinePosition::Start;
+  rule.skipTag = true;
+  SetPhrases(rule, "{player}", "", {"CAPN_OSPUZE"});
+  CHECK(rule.playerWords.size() == 1 && rule.words.size() == 1);
+  CHECK(CountMatches(rule, Rows({"SMEDC CAPN_OSPUZE > MrBean"})) == 1);
+  CHECK(CountMatches(rule, Rows({"KEAYS Eclipz > SMEDC CAPN_OSPUZE"})) == 0);
+  // Without a name there's nothing to look for, and it's kept to fill in later.
+  DetectionRule nameless;
+  SetPhrases(nameless, "{player} | ELIMINATED", "BY", {});
+  CHECK(nameless.words.size() == 1 && nameless.playerWords.size() == 1 && nameless.exclude.size() == 1);
+}
+
 DetectionRule FusedRule(const char* name, int priority, int mergeMs = 4000) {
   DetectionRule rule;
   rule.name = name;
@@ -1091,6 +1106,7 @@ int main(int argc, char** argv) {
   TestForgetMs();
   TestWitnessRoundTrip();
   TestConfirmOnly();
+  TestSetPhrases();
   if (argc > 1) TestShippedRulesParse(argv[1]);
   if (argc > 1) TestSounds(argv[1]);
   if (argc > 2) TestSoundCutRoundTrip(argv[2]);

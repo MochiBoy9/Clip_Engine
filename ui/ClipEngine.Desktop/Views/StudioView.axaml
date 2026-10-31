@@ -3,11 +3,12 @@
              xmlns:vm="using:ClipEngine.Desktop.ViewModels"
              xmlns:views="using:ClipEngine.Desktop.Views"
              x:Class="ClipEngine.Desktop.Views.StudioView"
-             x:DataType="vm:StudioViewModel">
+             x:DataType="vm:StudioViewModel"
+             Focusable="True">
   <DockPanel Margin="0,0,40,32">
     <!-- Title, the game, and saving -->
-    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,22">
-      <Button Classes="secondary" Command="{Binding BackCommand}" VerticalAlignment="Center">
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,18">
+      <Button Classes="secondary" Command="{Binding BackCommand}" VerticalAlignment="Center" ToolTip.Tip="Back (Esc)">
         <StackPanel Orientation="Horizontal" Spacing="8">
           <PathIcon Data="{StaticResource IconBack}" Width="14" Height="14" />
           <TextBlock Text="{Binding BackLabel}" VerticalAlignment="Center" />
@@ -19,13 +20,17 @@
       </StackPanel>
       <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
         <ComboBox Width="200" ItemsSource="{Binding Games}" SelectedItem="{Binding SelectedGame}"
-                  ToolTip.Tip="The game to make rules for" />
+                  ToolTip.Tip="The game to make rules for. Changes to each game are kept until you save." />
         <Button Classes="secondary" Command="{Binding StartAddGameCommand}"
                 ToolTip.Tip="Record and detect moments in a game Clip Engine doesn't know yet">
           <TextBlock Text="Add a game" />
         </Button>
+        <Button Classes="secondary" Command="{Binding DiscardCommand}" IsVisible="{Binding HasUnsaved}"
+                ToolTip.Tip="{Binding UnsavedText, StringFormat='Throw away: {0}'}">
+          <TextBlock Text="Discard" />
+        </Button>
         <Button Classes="accent" Command="{Binding SaveCommand}"
-                ToolTip.Tip="Save these rules; the engine restarts to use them">
+                ToolTip.Tip="Save every game's changes (Ctrl+S); the engine restarts to use them">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <PathIcon Data="{StaticResource IconCheck}" Width="14" Height="14" />
             <TextBlock Text="Save rules" VerticalAlignment="Center" />
@@ -35,7 +40,7 @@
     </Grid>
 
     <!-- Adding a game: its name and the program it runs as -->
-    <views:Plate DockPanel.Dock="Top" Classes="card" Padding="24,22" Margin="0,0,0,20" IsVisible="{Binding IsAddingGame}">
+    <views:Plate DockPanel.Dock="Top" Classes="card" Padding="24,22" Margin="0,0,0,18" IsVisible="{Binding IsAddingGame}">
       <StackPanel Spacing="12">
         <StackPanel Spacing="2">
           <TextBlock Classes="h2" Text="Add a game" />
@@ -64,9 +69,8 @@
       </StackPanel>
     </views:Plate>
 
-    <!-- What went wrong, or what just happened -->
-    <Border DockPanel.Dock="Top" Classes="inset" Padding="14,10" Margin="0,0,0,20"
-            IsVisible="{Binding HasStatus}">
+    <!-- What went wrong, what just happened, or what isn't saved yet -->
+    <Border DockPanel.Dock="Top" Classes="inset" Padding="14,10" Margin="0,0,0,18" IsVisible="{Binding HasStatus}">
       <StackPanel Orientation="Horizontal" Spacing="10">
         <PathIcon Data="{StaticResource IconAlert}" Width="14" Height="14" Foreground="{StaticResource WarnBrush}"
                   IsVisible="{Binding StatusIsError}" />
@@ -77,193 +81,405 @@
     </Border>
 
     <!-- The rules, and the picked one's settings -->
-    <views:Plate DockPanel.Dock="Right" Classes="card" Width="352" Margin="20,0,0,0" Padding="22,20,12,20">
+    <views:Plate DockPanel.Dock="Right" Classes="card" Width="384" Margin="18,0,0,0" Padding="22,20,12,20">
       <DockPanel>
-        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,10,12">
-          <TextBlock Classes="h2" Text="Rules" VerticalAlignment="Center" />
-          <Button Grid.Column="1" Classes="secondary" Command="{Binding AddRuleCommand}" Padding="12,6"
-                  ToolTip.Tip="Add a rule, then draw its box on the frame">
-            <TextBlock Text="+ Add rule" FontSize="13" />
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+          <StackPanel VerticalAlignment="Center" Spacing="2">
+            <TextBlock Classes="h2" Text="Rules" />
+            <TextBlock Classes="caption" FontSize="11" Text="{Binding UnsavedText}" Foreground="{StaticResource WarnBrush}"
+                       IsVisible="{Binding HasUnsaved}" TextTrimming="CharacterEllipsis" />
+          </StackPanel>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+            <Button Classes="icon" Command="{Binding DuplicateRuleCommand}" ToolTip.Tip="Copy the picked rule (Ctrl+D)">
+              <PathIcon Data="{StaticResource IconCopy}" Width="14" Height="14" />
+            </Button>
+            <Button Classes="icon danger" Command="{Binding DeleteRuleCommand}" ToolTip.Tip="Remove the picked rule (Delete)">
+              <PathIcon Data="{StaticResource IconTrash}" Width="14" Height="14" />
+            </Button>
+          </StackPanel>
+        </Grid>
+
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,8,*" Margin="0,0,0,12">
+          <Button Classes="secondary" Command="{Binding AddRuleCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                  ToolTip.Tip="Add a rule that reads words in a box, then draw its box on the frame">
+            <TextBlock Text="+ Box rule" FontSize="13" />
+          </Button>
+          <Button Grid.Column="2" Classes="secondary" Command="{Binding CutSoundCommand}" HorizontalAlignment="Stretch"
+                  HorizontalContentAlignment="Center"
+                  ToolTip.Tip="Cut the sound that starts at this frame out of the clip, and add a rule that listens for it to back up the picked rule's moment">
+            <TextBlock Text="+ Sound at this frame" FontSize="13" />
           </Button>
         </Grid>
 
-        <!-- Whose rules these are, and going back to the built-in ones -->
-        <Border DockPanel.Dock="Top" Classes="inset" Padding="10,8" Margin="0,0,10,12">
-          <Grid ColumnDefinitions="*,Auto">
-            <TextBlock Classes="caption" Text="{Binding RulesOrigin}" TextWrapping="Wrap" VerticalAlignment="Center" />
-            <Button Grid.Column="1" Classes="secondary" Command="{Binding UseBuiltInCommand}" Padding="10,4" Margin="8,0,0,0"
-                    IsVisible="{Binding HasBuiltInRules}" VerticalAlignment="Center"
-                    ToolTip.Tip="Put the game's built-in rules back in the editor; save to use them again">
-              <TextBlock Text="Use built-in" FontSize="12" />
-            </Button>
-          </Grid>
-        </Border>
-
-        <!-- The game's HUD size, which moves every box with it -->
-        <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,10,12">
-          <Grid ColumnDefinitions="*,Auto">
-            <TextBlock Classes="caption" Text="HUD size in the game" />
-            <TextBlock Grid.Column="1" Classes="caption" Text="{Binding HudScaleText}" FontFeatures="tnum" />
-          </Grid>
-          <Slider Minimum="50" Maximum="200" Value="{Binding HudScale}"
-                  ToolTip.Tip="Match the game's own HUD or interface scale setting. The boxes move and resize with it, on any screen shape, ultrawide included" />
-        </StackPanel>
-
-        <TextBlock DockPanel.Dock="Top" Classes="caption" TextWrapping="Wrap" Margin="0,0,10,12"
-                   IsVisible="{Binding !HasRules}"
-                   Text="No rules for this game yet. Add one, draw a box where the game shows a kill (or any moment), and type the words it shows." />
-
-        <ListBox DockPanel.Dock="Top" Classes="rules" ItemsSource="{Binding Rules}" SelectedItem="{Binding SelectedRule}"
-                 MaxHeight="190" Margin="0,0,10,14" IsVisible="{Binding HasRules}">
-          <ListBox.ItemTemplate>
-            <DataTemplate x:DataType="vm:StudioRuleViewModel">
-              <Grid ColumnDefinitions="Auto,*">
-                <Border Width="3" Height="30" CornerRadius="0" Background="{Binding Brush}" Margin="0,0,12,0" />
-                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                  <TextBlock Text="{Binding Label}" FontWeight="SemiBold" FontSize="13" />
-                  <TextBlock Text="{Binding Summary}" Classes="caption" TextTrimming="CharacterEllipsis" />
-                </StackPanel>
-              </Grid>
-            </DataTemplate>
-          </ListBox.ItemTemplate>
-        </ListBox>
-
-        <Border DockPanel.Dock="Top" Height="1" Background="{StaticResource Divider}" Margin="0,0,10,16"
-                IsVisible="{Binding HasSelectedRule}" />
-
-        <ScrollViewer IsVisible="{Binding HasSelectedRule}">
-          <StackPanel DataContext="{Binding SelectedRule}" x:DataType="vm:StudioRuleViewModel" Spacing="16" Margin="0,0,10,0">
-            <StackPanel Spacing="6">
-              <TextBlock Classes="caption" Text="Saves a clip moment for" />
-              <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Events}" SelectedItem="{Binding EventOption}" />
-            </StackPanel>
-            <!-- What it reads: words in a box -->
-            <StackPanel Spacing="16" IsVisible="{Binding IsNotSound}">
-              <StackPanel Spacing="6">
-                <TextBlock Classes="caption" Text="When the box shows any of these" />
-                <TextBox Text="{Binding Words}" Watermark="ELIMINATED | KNOCKED OUT" />
-                <TextBlock Classes="caption" FontSize="11" TextWrapping="Wrap"
-                           Text="Separate choices with |. Close misreads still count, so ELIMINATED matches ELIMINATEO." />
-              </StackPanel>
-              <StackPanel Spacing="6">
-                <TextBlock Classes="caption" Text="But not when it also shows" />
-                <TextBox Text="{Binding Exclude}" Watermark="Optional, e.g. BY" />
-              </StackPanel>
-              <StackPanel Spacing="6">
-                <TextBlock Classes="caption" Text="Where the words are" />
-                <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Positions}" SelectedItem="{Binding Position}"
-                          ToolTip.Tip="In a killfeed, the player who got the kill starts a row and the one who died ends it" />
-              </StackPanel>
-              <StackPanel Spacing="4">
-                <Grid ColumnDefinitions="*,Auto">
-                  <TextBlock Classes="caption" Text="Brightness filter" />
-                  <TextBlock Grid.Column="1" Classes="caption" Text="{Binding ThresholdText}" FontFeatures="tnum" />
-                </Grid>
-                <Slider Minimum="0" Maximum="250" Value="{Binding Threshold}"
-                        ToolTip.Tip="Keeps only bright pixels: turn it up when the text sits on a busy background" />
-              </StackPanel>
-            </StackPanel>
-            <!-- Or what it listens for -->
-            <StackPanel Spacing="16" IsVisible="{Binding IsSound}">
-              <StackPanel Spacing="6">
-                <TextBlock Classes="caption" Text="Listens to the game for" />
-                <TextBlock Text="{Binding SoundText}" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap" />
-                <TextBlock Classes="caption" FontSize="11" TextWrapping="Wrap"
-                           Text="Sounds cut from your clips. Cut a few more of the same sound from other clips to make it surer." />
-              </StackPanel>
-              <StackPanel Spacing="4">
-                <Grid ColumnDefinitions="*,Auto">
-                  <TextBlock Classes="caption" Text="How alike it must sound" />
-                  <TextBlock Grid.Column="1" Classes="caption" Text="{Binding SoundMatchText}" FontFeatures="tnum" />
-                </Grid>
-                <Slider Minimum="0.3" Maximum="0.9" Value="{Binding SoundMatch}"
-                        ToolTip.Tip="Lower hears it through more noise, but mistakes more sounds for it" />
-              </StackPanel>
-              <CheckBox IsChecked="{Binding ConfirmOnly}"
-                        ToolTip.Tip="Only backs up the game's other rules for this moment, and never counts one alone">
-                <TextBlock Text="Only back up the other rules" TextWrapping="Wrap" />
-              </CheckBox>
-            </StackPanel>
-            <StackPanel Spacing="4">
+        <ScrollViewer x:Name="RuleEditor">
+          <StackPanel Margin="0,0,10,0">
+            <!-- Whose rules these are, and going back to the built-in ones -->
+            <Border Classes="inset" Padding="10,8" Margin="0,0,0,12">
               <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Classes="caption" Text="Wait before counting again" />
-                <TextBlock Grid.Column="1" Classes="caption" Text="{Binding CooldownText}" FontFeatures="tnum" />
+                <TextBlock Classes="caption" Text="{Binding RulesOrigin}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Classes="secondary" Command="{Binding UseBuiltInCommand}" Padding="10,4" Margin="8,0,0,0"
+                        IsVisible="{Binding HasBuiltInRules}" VerticalAlignment="Center"
+                        ToolTip.Tip="Put the game's built-in rules back in the editor; save to use them again">
+                  <TextBlock Text="Use built-in" FontSize="12" />
+                </Button>
               </Grid>
-              <Slider Minimum="0" Maximum="60" Value="{Binding CooldownSeconds}"
-                      ToolTip.Tip="How long after a match before the same rule can match again" />
+            </Border>
+
+            <!-- The game's HUD size, which moves every box with it -->
+            <StackPanel Spacing="2" Margin="0,0,0,10">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="caption" Text="HUD size in the game" />
+                <TextBlock Grid.Column="1" Classes="caption" Text="{Binding HudScaleText}" FontFeatures="tnum" />
+              </Grid>
+              <Slider Minimum="50" Maximum="200" Value="{Binding HudScale}"
+                      ToolTip.Tip="Match the game's own HUD or interface scale setting. The boxes move and resize with it, on any screen shape, ultrawide included" />
             </StackPanel>
-            <TextBlock Classes="caption" FontSize="11" Text="{Binding RegionText}" TextWrapping="Wrap" IsVisible="{Binding IsNotSound}" />
+
+            <TextBlock Classes="caption" TextWrapping="Wrap" Margin="0,0,0,12"
+                       IsVisible="{Binding !HasRules}"
+                       Text="No rules for this game yet. Add a box rule, draw it where the game shows a kill (or any moment), and type the words it shows." />
+
+            <ListBox Classes="rules" ItemsSource="{Binding Rules}" SelectedItem="{Binding SelectedRule}" ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                     Margin="0,0,0,12" IsVisible="{Binding HasRules}">
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:StudioRuleViewModel">
+                  <Grid ColumnDefinitions="Auto,*,Auto">
+                    <Border Width="3" Height="30" CornerRadius="0" Background="{Binding Brush}" Margin="0,0,12,0" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Text="{Binding Summary}" Classes="caption" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <Panel Grid.Column="2" Margin="8,0,0,0" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding RoleText}" FontSize="11" Foreground="{StaticResource TextTertiary}"
+                                 IsVisible="{Binding !IsOff}" />
+                      <TextBlock Text="Off" FontSize="11" FontWeight="Bold" Foreground="{StaticResource WarnBrush}"
+                                 IsVisible="{Binding IsOff}" ToolTip.Tip="It can't run yet: see How it works" />
+                    </Panel>
+                  </Grid>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,0,0,14"
+                    IsVisible="{Binding HasSelectedRule}" />
+            <StackPanel Spacing="16" IsVisible="{Binding HasSelectedRule}">
+            <!-- How the picked rule works, in plain words, with the game's other rules -->
+            <Border Classes="inset" Padding="12,10">
+              <StackPanel Spacing="8">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Classes="eyebrow" Text="HOW IT WORKS" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" Text="{Binding SelectedRule.RoleText}" FontSize="11" FontWeight="SemiBold"
+                             Foreground="{DynamicResource AccentBrush}" />
+                </Grid>
+                <ItemsControl ItemsSource="{Binding SelectedRule.Explanation}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="x:String">
+                      <Grid ColumnDefinitions="12,*" Margin="0,0,0,5">
+                        <Ellipse Width="4" Height="4" Fill="{StaticResource TextTertiary}" VerticalAlignment="Top" Margin="0,7,0,0" />
+                        <TextBlock Grid.Column="1" Text="{Binding}" TextWrapping="Wrap" FontSize="12"
+                                   Foreground="{StaticResource TextSecondary}" />
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </Border>
+
+            <!-- A rule that looks for the player's name: set it right here -->
+            <StackPanel Spacing="6" IsVisible="{Binding SelectedRule.NeedsPlayer, FallbackValue=False}">
+              <TextBlock Classes="caption" Text="Your in-game name, which this rule looks for" />
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBox Text="{Binding PlayerNames.Names}" Watermark="As it shows in the killfeed, without #tag" />
+                <Button Grid.Column="1" Classes="accent" Content="Save" Command="{Binding PlayerNames.SaveCommand}" Margin="8,0,0,0" />
+              </Grid>
+              <TextBlock Classes="caption" FontSize="11" Text="{Binding PlayerNames.Message}" IsVisible="{Binding PlayerNames.HasMessage}"
+                         TextWrapping="Wrap" />
+            </StackPanel>
+
+            <StackPanel DataContext="{Binding SelectedRule}" x:DataType="vm:StudioRuleViewModel" Spacing="16">
+              <StackPanel Spacing="6">
+                <TextBlock Classes="caption" Text="Saves a clip moment for" />
+                <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Events}" SelectedItem="{Binding EventOption}" />
+              </StackPanel>
+              <!-- What it reads: words in a box -->
+              <StackPanel Spacing="16" IsVisible="{Binding IsNotSound}">
+                <StackPanel Spacing="6">
+                  <TextBlock Classes="caption" Text="When the box shows any of these" />
+                  <TextBox Text="{Binding Words}" Watermark="ELIMINATED | KNOCKED OUT" />
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Button Classes="secondary" Command="{Binding InsertPlayerCommand}" Padding="8,3"
+                            ToolTip.Tip="Adds {player}, which stands for your in-game name: for a killfeed">
+                      <TextBlock Text="+ Your name" FontSize="12" />
+                    </Button>
+                    <Button Classes="secondary" Command="{Binding InsertNumberCommand}" Padding="8,3"
+                            ToolTip.Tip="Adds {number}, which stands for any number on the row: for a score line like ELIMINATION +100">
+                      <TextBlock Text="+ Any number" FontSize="12" />
+                    </Button>
+                  </StackPanel>
+                  <TextBlock Classes="caption" FontSize="11" TextWrapping="Wrap"
+                             Text="Separate choices with |. Close misreads still count, so ELIMINATED matches ELIMINATEO." />
+                </StackPanel>
+                <StackPanel Spacing="6">
+                  <TextBlock Classes="caption" Text="But not when it also shows" />
+                  <TextBox Text="{Binding Exclude}" Watermark="Optional, e.g. BY" />
+                </StackPanel>
+                <StackPanel Spacing="6">
+                  <TextBlock Classes="caption" Text="Where the words are" />
+                  <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Positions}" SelectedItem="{Binding Position}"
+                            ToolTip.Tip="In a killfeed, the player who got the kill starts a row and the one who died ends it" />
+                  <CheckBox IsChecked="{Binding SkipTag}" IsVisible="{Binding IsStartPosition}"
+                            ToolTip.Tip="For games like The Finals that show [TAG] before each player">
+                    <TextBlock Text="A squad or club tag may come first" TextWrapping="Wrap" />
+                  </CheckBox>
+                </StackPanel>
+                <StackPanel Spacing="2">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="caption" Text="Brightness filter" />
+                    <TextBlock Grid.Column="1" Classes="caption" Text="{Binding ThresholdText}" FontFeatures="tnum" />
+                  </Grid>
+                  <Slider Minimum="0" Maximum="250" Value="{Binding Threshold}"
+                          ToolTip.Tip="Keeps only bright pixels: turn it up when the text sits on a busy background" />
+                </StackPanel>
+              </StackPanel>
+              <!-- Or what it listens for -->
+              <StackPanel Spacing="16" IsVisible="{Binding IsSound}">
+                <StackPanel Spacing="6">
+                  <TextBlock Classes="caption" Text="Listens to the game for" />
+                  <TextBlock Text="{Binding SoundText}" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap" />
+                  <TextBlock Classes="caption" FontSize="11" TextWrapping="Wrap"
+                             Text="Sounds cut from your clips. Cut a few more of the same sound from other clips to make it surer." />
+                </StackPanel>
+                <StackPanel Spacing="2">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="caption" Text="How alike it must sound" />
+                    <TextBlock Grid.Column="1" Classes="caption" Text="{Binding SoundMatchText}" FontFeatures="tnum" />
+                  </Grid>
+                  <Slider Minimum="0.3" Maximum="0.9" Value="{Binding SoundMatch}"
+                          ToolTip.Tip="Lower hears it through more noise, but mistakes more sounds for it" />
+                </StackPanel>
+                <CheckBox IsChecked="{Binding ConfirmOnly}"
+                          ToolTip.Tip="Only backs up the game's other rules for this moment, and never counts one alone">
+                  <TextBlock Text="Only back up the other rules" TextWrapping="Wrap" />
+                </CheckBox>
+              </StackPanel>
+              <StackPanel Spacing="2">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Classes="caption" Text="Wait before counting again" />
+                  <TextBlock Grid.Column="1" Classes="caption" Text="{Binding CooldownText}" FontFeatures="tnum" />
+                </Grid>
+                <Slider Minimum="0" Maximum="60" Value="{Binding CooldownSeconds}"
+                        ToolTip.Tip="How long after a match before the same rule can match again" />
+              </StackPanel>
+            </StackPanel>
+
+            <!-- The rarer settings, with the engine's defaults shown -->
+            <Button Classes="secondary" Command="{Binding ToggleFineTuneCommand}" HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Left">
+              <TextBlock Text="{Binding FineTuneLabel}" FontSize="12" />
+            </Button>
+            <StackPanel DataContext="{Binding SelectedRule}" x:DataType="vm:StudioRuleViewModel" Spacing="16"
+                        IsVisible="{Binding $parent[UserControl].((vm:StudioViewModel)DataContext).ShowFineTune}">
+              <StackPanel Spacing="6">
+                <TextBlock Classes="caption" Text="Rule name" />
+                <TextBox Text="{Binding EditName}" Watermark="{Binding Label}"
+                         ToolTip.Tip="Shown in the list and in why a moment counted. Saved as the section name in detection.ini" />
+              </StackPanel>
+              <StackPanel Spacing="4">
+                <CheckBox IsChecked="{Binding CountsOnce}"
+                          ToolTip.Tip="When the game shows a moment in more than one place (killfeed and score line), rules with this on count it once together">
+                  <TextBlock Text="{Binding TeamLabel}" TextWrapping="Wrap" />
+                </CheckBox>
+                <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding CountsOnce}">
+                  <TextBlock Classes="caption" Text="Same moment when seen within" />
+                  <TextBlock Grid.Column="1" Classes="caption" Text="{Binding MergeText}" FontFeatures="tnum" />
+                </Grid>
+                <Slider Minimum="0.5" Maximum="15" Value="{Binding MergeSeconds}" IsVisible="{Binding CountsOnce}" />
+                <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding CountsOnce}">
+                  <TextBlock Classes="caption" Text="Priority: the highest says how many" />
+                  <TextBlock Grid.Column="1" Classes="caption" Text="{Binding PriorityText}" FontFeatures="tnum" />
+                </Grid>
+                <Slider Minimum="0" Maximum="10" Value="{Binding Priority}" IsVisible="{Binding CountsOnce}"
+                        ToolTip.Tip="Give the rule that reads most reliably (a killfeed with your name) the highest" />
+              </StackPanel>
+              <StackPanel Spacing="2" IsVisible="{Binding IsNotSound}">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Classes="caption" Text="Read the box every" />
+                  <TextBlock Grid.Column="1" Classes="caption" Text="{Binding SampleText}" FontFeatures="tnum" />
+                </Grid>
+                <Slider Minimum="0" Maximum="2000" Value="{Binding SampleMs}"
+                        ToolTip.Tip="Lower catches short popups but uses more of your CPU. All the way left uses the default" />
+              </StackPanel>
+              <StackPanel Spacing="2" IsVisible="{Binding IsNotSound}">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Classes="caption" Text="Counts again once gone for" />
+                  <TextBlock Grid.Column="1" Classes="caption" Text="{Binding ForgetText}" FontFeatures="tnum" />
+                </Grid>
+                <Slider Minimum="0" Maximum="10000" Value="{Binding ForgetMs}"
+                        ToolTip.Tip="Raise it for a popup that fades and is easily missed for a read or two, so it isn't counted twice. All the way left uses the default" />
+              </StackPanel>
+              <StackPanel Spacing="2" IsVisible="{Binding IsImage}">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Classes="caption" Text="How alike the picture must be" />
+                  <TextBlock Grid.Column="1" Classes="caption" Text="{Binding ImageMatchText}" FontFeatures="tnum" />
+                </Grid>
+                <Slider Minimum="0.5" Maximum="0.99" Value="{Binding ImageMatch}" />
+              </StackPanel>
+              <TextBlock Classes="caption" FontSize="11" Text="{Binding RegionText}" TextWrapping="Wrap" IsVisible="{Binding IsNotSound}" />
+            </StackPanel>
+            </StackPanel>
           </StackPanel>
         </ScrollViewer>
       </DockPanel>
     </views:Plate>
 
-    <!-- The frame, where to take it from, and the test -->
+    <!-- The frame: where it comes from, the picture, and testing -->
     <views:Plate Classes="card" Padding="10">
       <DockPanel>
-        <StackPanel DockPanel.Dock="Bottom" Margin="6,12,6,0" Spacing="10">
-          <!-- Test result for the picked rule -->
-          <Border Classes="inset" Padding="12,8" IsVisible="{Binding HasSelectedRule}">
-            <Grid ColumnDefinitions="Auto,*,Auto">
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button Classes="accent" Command="{Binding TestCommand}"
-                        ToolTip.Tip="Read the box on this frame the way the engine does in game">
-                  <TextBlock Text="Test on this frame" />
-                </Button>
-                <ComboBox Width="110" ItemsSource="{x:Static vm:StudioViewModel.Qualities}" SelectedItem="{Binding TestQuality}"
-                          VerticalAlignment="Center"
-                          ToolTip.Tip="The reading quality to test at. The engine uses the one picked in Settings." />
-              </StackPanel>
-              <StackPanel Grid.Column="1" Margin="14,0" VerticalAlignment="Center" Spacing="1">
-                <TextBlock Classes="caption" Text="Reads" IsVisible="{Binding HasReadText}" />
-                <TextBlock Text="{Binding ReadText}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
-                           IsVisible="{Binding HasReadText}" />
-                <TextBlock Classes="caption" TextWrapping="Wrap" IsVisible="{Binding !HasReadText}"
-                           Text="Find a frame where the game shows the moment, then test: you'll see what the engine reads in the box." />
-              </StackPanel>
-              <Panel Grid.Column="2" VerticalAlignment="Center">
-                <Border Classes="pill" Background="{StaticResource SuccessSoftBrush}" BorderBrush="#8034D17D" IsVisible="{Binding IsMatch}">
-                  <StackPanel Orientation="Horizontal" Spacing="6">
-                    <PathIcon Data="{StaticResource IconCheck}" Width="11" Height="11" Foreground="{StaticResource SuccessBrush}" />
-                    <TextBlock Text="Match" FontSize="12" FontWeight="Bold" />
+        <!-- Where the frame comes from, and moving through it -->
+        <StackPanel DockPanel.Dock="Top" Margin="6,4,6,10" Spacing="8">
+          <Grid ColumnDefinitions="240,10,*,10,Auto">
+            <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Sources}" SelectedItem="{Binding SelectedSource}"
+                      PlaceholderText="{Binding FileSourceName, FallbackValue='No clips yet', TargetNullValue='No clips yet'}"
+                      VerticalAlignment="Center" ToolTip.Tip="Any of your clips or long recordings">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:ClipItemViewModel">
+                  <StackPanel>
+                    <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Classes="caption" FontSize="11" Text="{Binding Game}" TextTrimming="CharacterEllipsis" />
                   </StackPanel>
-                </Border>
-                <Border Classes="pill" Background="{StaticResource WarnSoftBrush}" BorderBrush="#80FF8A2B" IsVisible="{Binding IsNoMatch}">
-                  <TextBlock Text="No match" FontSize="12" FontWeight="Bold" />
-                </Border>
-              </Panel>
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <Grid Grid.Column="2" ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto" IsVisible="{Binding HasTimeline}"
+                  VerticalAlignment="Center">
+              <Button Classes="icon" Command="{Binding PreviousMomentCommand}" ToolTip.Tip="Previous moment in the clip (Up)">
+                <PathIcon Data="{StaticResource IconPrevMarker}" Width="12" Height="12" />
+              </Button>
+              <Button Grid.Column="1" Classes="icon" Command="{Binding SecondBackCommand}" Margin="4,0,0,0"
+                      ToolTip.Tip="Back a second (Shift+Left)">
+                <TextBlock Text="-1s" FontSize="11" FontWeight="SemiBold" />
+              </Button>
+              <Button Grid.Column="2" Classes="icon" Command="{Binding FrameBackCommand}" Margin="4,0,0,0"
+                      ToolTip.Tip="Back a tenth of a second (Left)">
+                <TextBlock Text="-0.1" FontSize="11" FontWeight="SemiBold" />
+              </Button>
+              <Slider Grid.Column="3" Minimum="0" Maximum="{Binding SourceDuration}" Value="{Binding FrameSeconds}"
+                      VerticalAlignment="Center" Margin="10,0"
+                      ToolTip.Tip="Move through the clip to find a frame showing the moment" />
+              <Button Grid.Column="4" Classes="icon" Command="{Binding FrameForwardCommand}"
+                      ToolTip.Tip="On a tenth of a second (Right)">
+                <TextBlock Text="+0.1" FontSize="11" FontWeight="SemiBold" />
+              </Button>
+              <Button Grid.Column="5" Classes="icon" Command="{Binding SecondForwardCommand}" Margin="4,0,0,0"
+                      ToolTip.Tip="On a second (Shift+Right)">
+                <TextBlock Text="+1s" FontSize="11" FontWeight="SemiBold" />
+              </Button>
+              <Button Grid.Column="6" Classes="icon" Command="{Binding NextMomentCommand}" Margin="4,0,0,0"
+                      ToolTip.Tip="Next moment in the clip (Down)">
+                <PathIcon Data="{StaticResource IconNextMarker}" Width="12" Height="12" />
+              </Button>
+              <TextBlock Grid.Column="7" Text="{Binding FrameTimeText}" FontFeatures="tnum" FontSize="13" FontWeight="SemiBold"
+                         VerticalAlignment="Center" Margin="12,0,0,0" MinWidth="44" />
             </Grid>
-          </Border>
+            <Button Grid.Column="4" Classes="secondary" Command="{Binding OpenImageCommand}" VerticalAlignment="Center"
+                    ToolTip.Tip="Take the frame from another video (one recorded with another app, say) or a screenshot">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <PathIcon Data="{StaticResource IconImport}" Width="14" Height="14" />
+                <TextBlock Text="Open file" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </Grid>
 
-          <!-- Going further than one frame: the whole clip, the clip's sound, every marked clip -->
-          <Border Classes="inset" Padding="12,8">
-            <StackPanel Spacing="8">
-              <Grid ColumnDefinitions="Auto,*,Auto">
-                <StackPanel Orientation="Horizontal" Spacing="8">
+          <!-- Jump to a moment the clip already has -->
+          <ItemsControl ItemsSource="{Binding SourceMoments}" IsVisible="{Binding IsClipSource}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:MarkerViewModel">
+                <Button Classes="secondary" Command="{Binding SeekCommand}" Padding="10,3" Margin="0,0,6,0"
+                        ToolTip.Tip="{Binding Text}">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Ellipse Width="7" Height="7" Fill="{Binding Brush}" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding TimeText}" FontSize="12" Foreground="{StaticResource TextTertiary}"
+                               FontFeatures="tnum" />
+                  </StackPanel>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+
+        <!-- Testing: this frame, all through the clip, or every marked clip -->
+        <Border DockPanel.Dock="Bottom" Classes="inset" Margin="6,12,6,0" Padding="12,10" Height="184">
+          <DockPanel>
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,10">
+              <Border Classes="segments">
+                <StackPanel Orientation="Horizontal" Spacing="2">
+                  <RadioButton Classes="segment" GroupName="studioTest" Content="This frame" IsChecked="{Binding IsFrameTab}" />
+                  <RadioButton Classes="segment" GroupName="studioTest" Content="Whole clip" IsChecked="{Binding IsClipTab}" />
+                  <RadioButton Classes="segment" GroupName="studioTest" IsChecked="{Binding IsMarkedTab}">
+                    <TextBlock>
+                      <Run Text="Marked clips" />
+                      <Run Text="{Binding MarkedClipCount, StringFormat='({0})'}" Foreground="{StaticResource TextTertiary}" />
+                    </TextBlock>
+                  </RadioButton>
+                </StackPanel>
+              </Border>
+              <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsWorking}">
+                <ProgressBar Width="90" Minimum="0" Maximum="100" Value="{Binding WorkProgress}" VerticalAlignment="Center" />
+                <Button Classes="secondary" Content="Stop" Command="{Binding CancelWorkCommand}" />
+              </StackPanel>
+            </Grid>
+
+            <Panel>
+              <!-- This frame: what the picked rule reads in its box -->
+              <StackPanel Spacing="10" IsVisible="{Binding IsFrameTab}">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Classes="accent" Command="{Binding TestCommand}"
+                            ToolTip.Tip="Read the box on this frame the way the engine does in game (Ctrl+Enter)">
+                      <TextBlock Text="Test on this frame" />
+                    </Button>
+                    <ComboBox Width="110" ItemsSource="{x:Static vm:StudioViewModel.Qualities}" SelectedItem="{Binding TestQuality}"
+                              VerticalAlignment="Center"
+                              ToolTip.Tip="The reading quality to test at. The engine uses the one picked in Settings." />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Margin="14,0" VerticalAlignment="Center" Spacing="1">
+                    <TextBlock Classes="caption" Text="Reads" IsVisible="{Binding HasReadText}" />
+                    <TextBlock Text="{Binding ReadText}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                               FontFamily="{StaticResource MonoFont}" IsVisible="{Binding HasReadText}" />
+                    <TextBlock Classes="caption" TextWrapping="Wrap" IsVisible="{Binding !HasReadText}"
+                               Text="Find a frame where the game shows the moment, then test: you'll see what the engine reads in the box." />
+                  </StackPanel>
+                  <Panel Grid.Column="2" VerticalAlignment="Center">
+                    <Border Classes="pill" Background="{StaticResource SuccessSoftBrush}" BorderBrush="#8034D17D" IsVisible="{Binding IsMatch}">
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Data="{StaticResource IconCheck}" Width="11" Height="11" Foreground="{StaticResource SuccessBrush}" />
+                        <TextBlock Text="Match" FontSize="12" FontWeight="Bold" />
+                      </StackPanel>
+                    </Border>
+                    <Border Classes="pill" Background="{StaticResource WarnSoftBrush}" BorderBrush="#80FF8A2B" IsVisible="{Binding IsNoMatch}">
+                      <TextBlock Text="No match" FontSize="12" FontWeight="Bold" />
+                    </Border>
+                  </Panel>
+                </Grid>
+                <TextBlock Classes="caption" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource TextTertiary}"
+                           Text="Draw: drag on the frame for the picked rule's box, drag a box to move it, drag a corner to resize. Keys: Left/Right step a tenth of a second (Shift for a second), Up/Down jump between moments, Ctrl+Enter tests, Ctrl+S saves, Ctrl+D copies a rule, Delete removes it." />
+              </StackPanel>
+
+              <!-- Whole clip: everything the picked rule reads, start to end -->
+              <DockPanel IsVisible="{Binding IsClipTab}">
+                <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*" Margin="0,0,0,8">
                   <Button Classes="secondary" Command="{Binding TrackCommand}"
                           ToolTip.Tip="Read the picked rule's box all through the clip and list every change in what it reads">
                     <TextBlock Text="Read through the clip" />
                   </Button>
-                  <Button Classes="secondary" Command="{Binding CutSoundCommand}"
-                          ToolTip.Tip="Cut the sound that starts at this frame out of the clip and add a rule that listens for it">
-                    <TextBlock Text="Listen for the sound here" />
-                  </Button>
-                  <Button Classes="secondary" Command="{Binding TestMarkedCommand}" ToolTip.Tip="{Binding TestMarkedTip}">
-                    <TextBlock>
-                      <Run Text="Test on marked clips" />
-                      <Run Text="{Binding MarkedClipCount, StringFormat='({0})'}" Foreground="{StaticResource TextTertiary}" />
-                    </TextBlock>
-                  </Button>
-                </StackPanel>
-                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsWorking}">
-                  <ProgressBar Width="90" Minimum="0" Maximum="100" Value="{Binding WorkProgress}" VerticalAlignment="Center" />
-                  <Button Classes="secondary" Content="Stop" Command="{Binding CancelWorkCommand}" />
-                </StackPanel>
-              </Grid>
-
-              <StackPanel Spacing="6" IsVisible="{Binding HasTrack}">
-                <TextBlock Classes="caption" Text="{Binding TrackSummary}" TextWrapping="Wrap" />
-                <ScrollViewer MaxHeight="110" HorizontalScrollBarVisibility="Disabled">
+                  <TextBlock Grid.Column="1" Classes="caption" Margin="12,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap"
+                             Text="{Binding TrackSummary, TargetNullValue='Shows where the picked rule reads the moment, where it misreads it, and where it reads something else.'}" />
+                </Grid>
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
                   <ItemsControl ItemsSource="{Binding Track}">
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="vm:TrackRowViewModel">
@@ -284,85 +500,68 @@
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
                 </ScrollViewer>
-              </StackPanel>
+              </DockPanel>
 
-              <StackPanel Spacing="6" IsVisible="{Binding HasMarkedResults}">
-                <TextBlock Text="{Binding MarkedSummary}" FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap" />
-                <ScrollViewer MaxHeight="110" HorizontalScrollBarVisibility="Disabled">
+              <!-- Marked clips: every rule of the game, over every clip marked in Check detection -->
+              <DockPanel IsVisible="{Binding IsMarkedTab}">
+                <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*" Margin="0,0,0,8">
+                  <Button Classes="secondary" Command="{Binding TestMarkedCommand}" ToolTip.Tip="{Binding TestMarkedTip}">
+                    <TextBlock Text="Test all rules on marked clips" />
+                  </Button>
+                  <TextBlock Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" FontSize="13"
+                             FontWeight="SemiBold" Text="{Binding MarkedSummary}" IsVisible="{Binding HasMarkedResults}" />
+                  <TextBlock Grid.Column="1" Classes="caption" Margin="12,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap"
+                             IsVisible="{Binding !HasMarkedResults}"
+                             Text="Runs every rule, unsaved changes included, over each clip you've marked in Check detection, and lists what they missed or found extra." />
+                </Grid>
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
                   <ItemsControl ItemsSource="{Binding MarkedResults}">
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="vm:MarkedClipRow">
-                        <Button Classes="marker" Command="{Binding OpenCommand}" Padding="6,3" Margin="0"
-                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
-                                ToolTip.Tip="Take frames from this clip">
-                          <Grid ColumnDefinitions="Auto,*,Auto">
-                            <Ellipse Width="7" Height="7" Margin="0,0,8,0" VerticalAlignment="Center"
-                                     Fill="{StaticResource SuccessBrush}" IsVisible="{Binding IsPerfect}" />
-                            <Ellipse Width="7" Height="7" Margin="0,0,8,0" VerticalAlignment="Center"
-                                     Fill="{StaticResource WarnBrush}" IsVisible="{Binding !IsPerfect}" />
-                            <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="12" TextTrimming="CharacterEllipsis"
-                                       VerticalAlignment="Center" />
-                            <TextBlock Grid.Column="2" Text="{Binding Summary}" FontSize="12" Margin="10,0,0,0"
-                                       Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center" />
-                          </Grid>
-                        </Button>
+                        <StackPanel>
+                          <Button Classes="marker" Command="{Binding OpenCommand}" Padding="6,3" Margin="0"
+                                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                  ToolTip.Tip="Take frames from this clip">
+                            <Grid ColumnDefinitions="Auto,*,Auto">
+                              <Ellipse Width="7" Height="7" Margin="0,0,8,0" VerticalAlignment="Center"
+                                       Fill="{StaticResource SuccessBrush}" IsVisible="{Binding IsPerfect}" />
+                              <Ellipse Width="7" Height="7" Margin="0,0,8,0" VerticalAlignment="Center"
+                                       Fill="{StaticResource WarnBrush}" IsVisible="{Binding !IsPerfect}" />
+                              <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="12" FontWeight="SemiBold"
+                                         TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                              <TextBlock Grid.Column="2" Text="{Binding Summary}" FontSize="12" Margin="10,0,0,0"
+                                         Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center" />
+                            </Grid>
+                          </Button>
+                          <ItemsControl ItemsSource="{Binding Moments}" Margin="15,0,0,2" IsVisible="{Binding HasMoments}">
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate x:DataType="vm:MarkedMomentRow">
+                                <Button Classes="marker" Command="{Binding SeekCommand}" Padding="6,2" Margin="0"
+                                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                        ToolTip.Tip="Show this moment's frame">
+                                  <Grid ColumnDefinitions="50,40,90,*">
+                                    <TextBlock Text="{Binding Kind}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"
+                                               Foreground="{StaticResource WarnBrush}" />
+                                    <TextBlock Grid.Column="1" Text="{Binding TimeText}" FontSize="11" FontFeatures="tnum"
+                                               Foreground="{StaticResource TextTertiary}" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="2" Text="{Binding Label}" FontSize="11" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="3" Text="{Binding Detail}" FontSize="11" TextTrimming="CharacterEllipsis"
+                                               Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"
+                                               ToolTip.Tip="{Binding Detail}" />
+                                  </Grid>
+                                </Button>
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+                        </StackPanel>
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
                 </ScrollViewer>
-              </StackPanel>
-            </StackPanel>
-          </Border>
-
-          <!-- Where the frame comes from -->
-          <Grid ColumnDefinitions="260,14,*,14,Auto">
-            <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Sources}" SelectedItem="{Binding SelectedSource}"
-                      PlaceholderText="{Binding FileSourceName, FallbackValue='No clips yet', TargetNullValue='No clips yet'}"
-                      VerticalAlignment="Center" ToolTip.Tip="Any of your clips or long recordings">
-              <ComboBox.ItemTemplate>
-                <DataTemplate x:DataType="vm:ClipItemViewModel">
-                  <StackPanel>
-                    <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
-                    <TextBlock Classes="caption" FontSize="11" Text="{Binding Game}" TextTrimming="CharacterEllipsis" />
-                  </StackPanel>
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-            <Grid Grid.Column="2" ColumnDefinitions="*,Auto" IsVisible="{Binding HasTimeline}" VerticalAlignment="Center">
-              <Slider Minimum="0" Maximum="{Binding SourceDuration}" Value="{Binding FrameSeconds}" VerticalAlignment="Center"
-                      ToolTip.Tip="Move through the clip to find a frame showing the moment" />
-              <TextBlock Grid.Column="1" Text="{Binding FrameTimeText}" FontFeatures="tnum" FontSize="13" FontWeight="SemiBold"
-                         VerticalAlignment="Center" Margin="12,0,0,0" />
-            </Grid>
-            <Button Grid.Column="4" Classes="secondary" Command="{Binding OpenImageCommand}" VerticalAlignment="Center"
-                    ToolTip.Tip="Take the frame from another video (one recorded with another app, say) or a screenshot">
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <PathIcon Data="{StaticResource IconImport}" Width="14" Height="14" />
-                <TextBlock Text="Open a video or screenshot" VerticalAlignment="Center" />
-              </StackPanel>
-            </Button>
-          </Grid>
-
-          <!-- Jump to a moment the clip already has -->
-          <ItemsControl ItemsSource="{Binding SourceMoments}" IsVisible="{Binding IsClipSource}">
-            <ItemsControl.ItemsPanel>
-              <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="vm:MarkerViewModel">
-                <Button Classes="secondary" Command="{Binding SeekCommand}" Padding="10,4" Margin="0,0,6,6"
-                        ToolTip.Tip="{Binding Text}">
-                  <StackPanel Orientation="Horizontal" Spacing="6">
-                    <Ellipse Width="7" Height="7" Fill="{Binding Brush}" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding TimeText}" FontSize="12" Foreground="{StaticResource TextTertiary}"
-                               FontFeatures="tnum" />
-                  </StackPanel>
-                </Button>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-        </StackPanel>
+              </DockPanel>
+            </Panel>
+          </DockPanel>
+        </Border>
 
         <Border Background="Black" CornerRadius="0" ClipToBounds="True">
           <Panel>
@@ -372,7 +571,7 @@
                         Spacing="8" MaxWidth="380" IsHitTestVisible="False">
               <TextBlock Classes="h2" Text="No frame yet" HorizontalAlignment="Center" />
               <TextBlock Classes="body" TextWrapping="Wrap" TextAlignment="Center"
-                         Text="Pick any of your clips below, or open a video or screenshot. Then draw a box over the part of the screen that shows the moment." />
+                         Text="Pick any of your clips above, or open a video or screenshot. Then draw a box over the part of the screen that shows the moment." />
             </StackPanel>
             <Border IsVisible="{Binding IsBusy}" Classes="pill" HorizontalAlignment="Right" VerticalAlignment="Top"
                     Margin="16" IsHitTestVisible="False">

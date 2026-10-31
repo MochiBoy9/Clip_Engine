@@ -121,6 +121,12 @@ DetectionRules MergeDetectionRules(DetectionRules shipped, DetectionRules user);
 // "A | B" as phrases, as the words and exclude settings are read. Phrases mentioning {player} are left out.
 std::vector<Phrase> ParsePhrases(const std::string& value);
 
+// Sets the rule's words and exclude from "A | B" as detection.ini has them, with {player} filled
+// in from playerNames, as ForGame does. Detection Studio tests a rule this way, so a killfeed
+// rule that looks for your name reads the frame as it would in game.
+void SetPhrases(DetectionRule& rule, const std::string& words, const std::string& exclude,
+                const std::vector<std::string>& playerNames);
+
 // What the rule matches in one read of its region, given as rows of tokens: one entry per
 // match, holding the other words around it (in a killfeed, the player names) so the same
 // message can be recognized in the next read. Entries are empty when the words stand alone.
