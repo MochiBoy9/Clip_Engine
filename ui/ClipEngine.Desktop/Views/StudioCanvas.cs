@@ -96,7 +96,7 @@ internal sealed class StudioCanvas : Control
             var pen = new Pen(rule.Brush, selected ? 2.5 : 1.5, selected ? null : new DashStyle([4, 3], 0));
             context.DrawRectangle(selected ? null : new SolidColorBrush(Colors.Black, 0.12), pen, box, 3, 3);
 
-            var label = new FormattedText(rule.Label, System.Globalization.CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+            var label = new FormattedText(rule.Title, System.Globalization.CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
                                           LabelFace, 11, LabelText);
             var tag = TagRect(box, new Size(label.Width + 12, label.Height + 4), picture,
                               boxed.Where(r => !ReferenceEquals(r, rule)).Select(r => BoxRect(r, picture)).ToList());

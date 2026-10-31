@@ -43,8 +43,9 @@ std::filesystem::path ExeDir() {
 
 // The rules that ship with the app, with the user's own detection.ini (written by Detection
 // Studio, or by hand) laid over them: a game the user's file has rules for uses those, and
-// every other game the shipped ones, so fixes in an update still reach it.
-clip::DetectionRules LoadDetectionRules(const std::filesystem::path& dataDir) {
+// every other game the shipped ones, so fixes in an update still reach it. userFile stands in
+// for the user's file, as when Detection Studio tests rules that aren't saved yet.
+clip::DetectionRules LoadDetectionRules(const std::filesystem::path& dataDir, std::filesystem::path userFile = {}) {
   using namespace clip;
   auto load = [&](const std::filesystem::path& file) -> std::optional<DetectionRules> {
     std::ifstream in(file);
@@ -73,7 +74,7 @@ clip::DetectionRules LoadDetectionRules(const std::filesystem::path& dataDir) {
     return rules;
   };
   auto shipped = load(ExeDir() / L"detection.ini");
-  auto user = load(dataDir / L"detection.ini");
+  auto user = load(userFile.empty() ? dataDir / L"detection.ini" : userFile);
   if (!shipped && !user) {
     log::Warn("detection.ini wasn't found next to the app, so only the hotkey saves clips");
     return {};
@@ -134,12 +135,13 @@ int RunTrimCommand(int argc, wchar_t** argv) {
 
 // clip_engine.exe --frame <clip or image> <out.png> [--at seconds]
 // clip_engine.exe --read <clip or image> [--at seconds] --region l,t,w,h [--threshold n] [--words "A|B"] [--exclude "C"]
-//                 [--position start|end] [--image icon.png] [--image-match 0.85] [--image-screen 1440]
+//                 [--position start|end] [--skip-tag true] [--image icon.png] [--image-match 0.85] [--image-screen 1440]
 //                 [--quality low|medium|high|ultra] [--event kill] [--anchor top-right] [--aspect 16:9] [--hud-scale 100]
 // clip_engine.exe --track <clip> [the --read flags] [--every ms]
 // clip_engine.exe --cut-sound <clip> <out.wav> --at seconds
 // Detection Studio's helpers: grab a frame to draw on, read a box of it the way detection does,
-// read it all through a clip, and cut a sound out of a clip for a rule to listen for.
+// read it all through a clip, and cut a sound out of a clip for a rule to listen for. {player}
+// in the words is filled in with the player's names, as it is in game.
 int RunStudioCommand(int argc, wchar_t** argv) {
   using namespace clip;
   const std::wstring_view command = argv[1];
@@ -151,14 +153,16 @@ int RunStudioCommand(int argc, wchar_t** argv) {
   double hudScale = 1;
   DetectionRule rule;
   rule.name = "studio";
+  std::string words, exclude;
   for (int i = frame ? 4 : 3; i + 1 < argc; i += 2) {
     const std::wstring_view flag = argv[i];
     const std::string value = winrt::to_string(argv[i + 1]);
     if (flag == L"--at") seconds = _wtof(argv[i + 1]);
     if (flag == L"--every") everyMs = _wtoi(argv[i + 1]);
     if (flag == L"--threshold") rule.threshold = std::clamp(_wtoi(argv[i + 1]), 0, 255);
-    if (flag == L"--words") rule.words = ParsePhrases(value);
-    if (flag == L"--exclude") rule.exclude = ParsePhrases(value);
+    if (flag == L"--words") words = value;
+    if (flag == L"--exclude") exclude = value;
+    if (flag == L"--skip-tag") rule.skipTag = value == "true";
     if (flag == L"--position") rule.position = value == "start" ? LinePosition::Start : value == "end" ? LinePosition::End : LinePosition::Anywhere;
     if (flag == L"--image") rule.image = value;
     if (flag == L"--image-match") rule.imageMatch = std::clamp(_wtof(argv[i + 1]), 0.05, 1.0);
@@ -182,6 +186,7 @@ int RunStudioCommand(int argc, wchar_t** argv) {
     if (flag == L"--aspect") ParseAspect(value, rule.region.aspect);
     if (flag == L"--hud-scale") hudScale = std::clamp(_wtof(argv[i + 1]), 25.0, 400.0) / 100;
   }
+  SetPhrases(rule, words, exclude, ReadPlayerNames(DataDir() / L"clip_engine.ini"));
   winrt::init_apartment(winrt::apartment_type::multi_threaded);
   if (FAILED(MFStartup(MF_VERSION))) {
     log::Error("{} failed: Media Foundation is unavailable", command == L"--frame" ? "Frame" : "Read");
@@ -197,13 +202,16 @@ int RunStudioCommand(int argc, wchar_t** argv) {
 }
 
 // clip_engine.exe --scan <clip> --game <id or name> [--quality low|medium|high|ultra] [--hud-scale 100]
+//                 [--rules detection.ini]
 // Runs a game's rules (yours where you've changed them) over a whole clip, for checking
-// detection against what really happened in it.
+// detection against what really happened in it. --rules reads your rules from that file instead
+// of your detection.ini, so Detection Studio can test changes before they're saved.
 int RunScanCommand(int argc, wchar_t** argv) {
   using namespace clip;
   std::string game;
   ReadQuality quality = ReadQuality::Medium;
   std::optional<double> hudScale;
+  std::filesystem::path userRules;
   for (int i = 3; i + 1 < argc; i += 2) {
     const std::wstring_view flag = argv[i];
     const std::string value = winrt::to_string(argv[i + 1]);
@@ -212,10 +220,11 @@ int RunScanCommand(int argc, wchar_t** argv) {
       if (const auto q = ParseReadQuality(value)) quality = *q;
     }
     if (flag == L"--hud-scale") hudScale = std::clamp(_wtof(argv[i + 1]), 25.0, 400.0) / 100;
+    if (flag == L"--rules") userRules = argv[i + 1];
   }
   winrt::init_apartment(winrt::apartment_type::multi_threaded);
   const auto dataDir = DataDir();
-  const DetectionRules rules = LoadDetectionRules(dataDir);
+  const DetectionRules rules = LoadDetectionRules(dataDir, userRules);
   // The game by its id, or by the name its clips are filed under.
   std::vector<GameProfile> custom;
   for (const auto& g : rules.games) custom.push_back({g.id, g.name, {}, GameApi::None});

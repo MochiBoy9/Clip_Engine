@@ -3,6 +3,7 @@ using Avalonia.Headless;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using ClipEngine.Desktop;
 using ClipEngine.Desktop.Services;
 using ClipEngine.Desktop.ViewModels;
@@ -85,6 +86,19 @@ var studio = vm.OpenStudio(clip: vm.Clips[0], seconds: 12.4);
 studio.ShowSample(SampleFrame(), "ENTERRO ELIMINATED VEX", matched: true);
 studio.ShowSampleTools();
 Save(window, "9-studio.png");
+
+// Testing every rule on the clips marked in Check detection, with what they missed.
+studio.ShowSampleTab(2);
+Save(window, "15-studio-marked-clips.png");
+
+// The score line rule's fine-tuning, and how it works with the killfeed.
+studio.ShowSampleTab(0);
+studio.SelectRule("the_finals.kill.score_line");
+studio.ShowFineTune = true;
+Settle();
+window.GetVisualDescendants().OfType<Avalonia.Controls.ScrollViewer>().First(v => v.Name == "RuleEditor").ScrollToEnd();
+Save(window, "16-studio-fine-tune.png");
+studio.ShowFineTune = false;
 
 // The side panel as it sits on the edge of the screen.
 var panel = new SidePanelWindow { DataContext = vm, Width = 344, Height = 900 };

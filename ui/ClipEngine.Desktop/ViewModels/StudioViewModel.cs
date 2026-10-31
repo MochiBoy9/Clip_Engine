@@ -21,6 +21,8 @@ public sealed record RunningProgram(string Title, string Exe)
 // Detection Studio: make or fix the rules that spot kills and other moments in any game. Pick a
 // frame from any of your clips or long recordings (or another video or a screenshot), draw a box
 // where the game shows the moment, type the words it shows, test it on the frame, and save.
+// Each rule says in plain words what it does and how it works with the game's other rules
+// (RuleExplainer), and changes to several games are kept until they're saved together.
 //
 // A game Clip Engine knows starts from its built-in rules, which can be changed like any others.
 // Saving makes them the user's own for that game (in DetectionIni.UserFile), used instead of the
@@ -89,6 +91,15 @@ public sealed class StudioViewModel : ObservableObject
     private string? _markedSummary;
     private int _hudScale = 100;       // the game's HUD size, in percent, as set here
     private int _savedHudScale = 100;  // and as clip_engine.ini has it
+    // Unsaved changes to games other than the one shown, kept until they're saved or discarded.
+    private readonly Dictionary<string, GameDraft> _drafts = [];
+    private readonly FrameCache _frames = new(24);
+    private readonly int _sampleMs;  // [detection] sample_ms, how often the screen is read
+    private bool _leaving;           // Back was pressed once with changes unsaved
+    private int _testTab;
+    private bool _showFineTune;
+
+    private sealed record GameDraft(StudioGameOption Game, List<StudioRule> Rules, int HudScale);
 
     internal StudioViewModel(MainViewModel main, object returnTo, string? gameName = null, ClipItemViewModel? clip = null,
                              double seconds = 0)
@@ -97,15 +108,30 @@ public sealed class StudioViewModel : ObservableObject
         _returnTo = returnTo;
         _shipped = main.IsLive ? DetectionIni.LoadShipped() : DetectionIni.Parse(SampleIni);
         _user = main.IsLive ? DetectionIni.LoadUser() : DetectionIni.NewChanges();
+        _sampleMs = _user.SampleMs ?? _shipped.SampleMs ?? 250;
+        PlayerNames = new PlayerNamesViewModel(AppPaths.EngineSettingsFile);
+        PlayerNames.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PlayerNamesViewModel.HasSavedNames)) RefreshRules();
+        };
         // Tests read the box the way the engine does at the quality picked in Settings.
         var quality = main.IsLive ? EngineSettings.Load(AppPaths.EngineSettingsFile).ReadingQuality : "medium";
         _testQuality = Qualities.FirstOrDefault(q => q.Name == quality) ?? Qualities[1];
 
-        BackCommand = new RelayCommand(() => _main.ShowPage(_returnTo));
+        BackCommand = new RelayCommand(Back);
         AddRuleCommand = new RelayCommand(AddRule, () => _game is not null);
         DeleteRuleCommand = new RelayCommand(DeleteRule, () => _selectedRule is not null);
+        DuplicateRuleCommand = new RelayCommand(DuplicateRule, () => _selectedRule is not null);
+        DiscardCommand = new RelayCommand(Discard, () => HasUnsaved);
+        ToggleFineTuneCommand = new RelayCommand(() => ShowFineTune = !ShowFineTune);
+        FrameBackCommand = new RelayCommand(() => StepFrame(-0.1), () => HasTimeline);
+        FrameForwardCommand = new RelayCommand(() => StepFrame(0.1), () => HasTimeline);
+        SecondBackCommand = new RelayCommand(() => StepFrame(-1), () => HasTimeline);
+        SecondForwardCommand = new RelayCommand(() => StepFrame(1), () => HasTimeline);
+        PreviousMomentCommand = new RelayCommand(() => JumpMoment(-1), () => SourceMoments.Count > 0);
+        NextMomentCommand = new RelayCommand(() => JumpMoment(1), () => SourceMoments.Count > 0);
         TestCommand = new RelayCommand(() => _ = TestAsync(), () => _selectedRule is { IsSound: false } && HasFrameSource && !IsBusy);
-        SaveCommand = new RelayCommand(() => _ = SaveAsync(), () => HasChanges && !IsBusy);
+        SaveCommand = new RelayCommand(() => _ = SaveAsync(), () => HasUnsaved && !IsBusy);
         LoadFrameCommand = new RelayCommand(() => _ = LoadFrameAsync(), () => HasFrameSource && !IsBusy);
         OpenImageCommand = new RelayCommand(() => _ = OpenFileAsync());
         UseBuiltInCommand = new RelayCommand(UseBuiltIn, () => CanUseBuiltIn);
@@ -149,6 +175,45 @@ public sealed class StudioViewModel : ObservableObject
     public RelayCommand TestMarkedCommand { get; }
     public RelayCommand CutSoundCommand { get; }
     public RelayCommand CancelWorkCommand { get; }
+    public RelayCommand DuplicateRuleCommand { get; }
+    public RelayCommand DiscardCommand { get; }
+    public RelayCommand ToggleFineTuneCommand { get; }
+    public RelayCommand FrameBackCommand { get; }
+    public RelayCommand FrameForwardCommand { get; }
+    public RelayCommand SecondBackCommand { get; }
+    public RelayCommand SecondForwardCommand { get; }
+    public RelayCommand PreviousMomentCommand { get; }
+    public RelayCommand NextMomentCommand { get; }
+
+    // The player's in-game names, which killfeed rules look for, editable right where a rule needs them.
+    public PlayerNamesViewModel PlayerNames { get; }
+    // Without the engine (the preview tool) there's no settings file, so rules run as if a name were set.
+    internal bool HasPlayerNames => !_main.IsLive || PlayerNames.HasSavedNames;
+    internal int SampleMs => _sampleMs;
+
+    // Testing below the frame: this frame (0), all through the clip (1), or every marked clip (2).
+    public int TestTab
+    {
+        get => _testTab;
+        set
+        {
+            if (!Set(ref _testTab, Math.Clamp(value, 0, 2))) return;
+            Raise(nameof(IsFrameTab));
+            Raise(nameof(IsClipTab));
+            Raise(nameof(IsMarkedTab));
+        }
+    }
+    public bool IsFrameTab { get => _testTab == 0; set { if (value) TestTab = 0; } }
+    public bool IsClipTab { get => _testTab == 1; set { if (value) TestTab = 1; } }
+    public bool IsMarkedTab { get => _testTab == 2; set { if (value) TestTab = 2; } }
+
+    // The rarer settings of a rule, shown or hidden for every rule at once.
+    public bool ShowFineTune
+    {
+        get => _showFineTune;
+        set { if (Set(ref _showFineTune, value)) Raise(nameof(FineTuneLabel)); }
+    }
+    public string FineTuneLabel => _showFineTune ? "Hide fine-tuning" : "Fine-tune: timing, counting once, priority";
 
     // Reading the picked rule's box all through the clip, or testing the game's rules on every
     // clip with marks: what it found, and how far it has got.
@@ -177,8 +242,8 @@ public sealed class StudioViewModel : ObservableObject
     public string TestMarkedTip => MarkedClipCount switch
     {
         0 => "Mark what really happened in some clips first (Check detection in the player), then test the rules on all of them at once",
-        1 => "Run the saved rules over the one clip you've marked and score them",
-        var n => $"Run the saved rules over the {n} clips you've marked and score them together",
+        1 => "Run every rule, unsaved changes included, over the one clip you've marked and score them",
+        var n => $"Run every rule, unsaved changes included, over the {n} clips you've marked and score them together",
     };
 
     public string BackLabel => _returnTo is PlayerViewModel ? "Clip" : _returnTo is GamesPage ? "Games" : "Back";
@@ -188,7 +253,10 @@ public sealed class StudioViewModel : ObservableObject
         get => _game;
         set
         {
-            if (value is null || !Set(ref _game, value)) return;
+            if (value is null || ReferenceEquals(value, _game)) return;
+            // Keep this game's unsaved changes for when it's picked again, or saved with the rest.
+            if (_game is not null && HasChanges) _drafts[_game.Id] = new(_game, Rules.Select(r => r.Rule).ToList(), _hudScale);
+            Set(ref _game, value);
             LoadRules();
             LoadSources();
             AddRuleCommand.NotifyCanExecuteChanged();
@@ -327,6 +395,7 @@ public sealed class StudioViewModel : ObservableObject
         LoadFrameCommand.NotifyCanExecuteChanged();
         TestCommand.NotifyCanExecuteChanged();
         NotifyWorkCommands();
+        NotifyStepCommands();
         Track.Clear();
         TrackSummary = null;
     }
@@ -411,13 +480,39 @@ public sealed class StudioViewModel : ObservableObject
     public bool IsMatch => _matched == true;
     public bool IsNoMatch => _matched == false;
 
+    // Changes not saved yet, in the game shown or any other.
+    public bool HasUnsaved => _hasChanges || _drafts.Count > 0;
+    public string UnsavedText
+    {
+        get
+        {
+            var games = _drafts.Values.Select(d => d.Game.Name).ToList();
+            if (_hasChanges && _game is not null) games.Insert(0, _game.Name);
+            return games.Count switch
+            {
+                0 => "",
+                1 => $"Unsaved changes to {games[0]}",
+                _ => $"Unsaved changes to {string.Join(", ", games.Take(games.Count - 1))} and {games[^1]}",
+            };
+        }
+    }
+
+    private void RaiseUnsaved()
+    {
+        Raise(nameof(HasUnsaved));
+        Raise(nameof(UnsavedText));
+        SaveCommand.NotifyCanExecuteChanged();
+        DiscardCommand.NotifyCanExecuteChanged();
+        _leaving = false;
+    }
+
     public bool HasChanges
     {
         get => _hasChanges;
         private set
         {
             if (!Set(ref _hasChanges, value)) return;
-            SaveCommand.NotifyCanExecuteChanged();
+            RaiseUnsaved();
             UseBuiltInCommand.NotifyCanExecuteChanged();
             Raise(nameof(RulesOrigin));
         }
@@ -459,8 +554,17 @@ public sealed class StudioViewModel : ObservableObject
     {
         HasChanges = true;
         Matched = null;
+        RefreshRules();
         RegionsChanged();
     }
+
+    // What each rule does depends on the others for the same moment, so they're all told again.
+    private void RefreshRules()
+    {
+        foreach (var rule in Rules) rule.Refresh();
+    }
+
+    internal IReadOnlyList<StudioRule> AllRules => Rules.Select(r => r.Rule).ToList();
 
     private void RegionsChanged() => RegionsVersion++;
 
@@ -477,10 +581,21 @@ public sealed class StudioViewModel : ObservableObject
         if (_game is null) return;
         _ownRules = _user.EditedGames.Contains(_game.Id);
         _savedHudScale = _hudScale = _main.IsLive ? LoadHudScale(_game.Id) : 100;
+        if (_drafts.Remove(_game.Id, out var draft))
+        {
+            _hudScale = draft.HudScale;
+            Raise(nameof(HudScale));
+            Raise(nameof(HudScaleText));
+            ShowRules(draft.Rules);
+            HasChanges = true;
+            RaiseUnsaved();
+            return;
+        }
         Raise(nameof(HudScale));
         Raise(nameof(HudScaleText));
         ShowRules((_ownRules ? _user : _shipped).RulesFor(_game.Id));
         HasChanges = false;
+        RaiseUnsaved();
     }
 
     // Picks the rule with this detection.ini section, as when opened from a moment it found.
@@ -552,6 +667,20 @@ public sealed class StudioViewModel : ObservableObject
         RuleChanged();
     }
 
+    // A copy of the picked rule, to try a change beside the original or cover another part of the HUD.
+    private void DuplicateRule()
+    {
+        if (_selectedRule is null) return;
+        var copy = _selectedRule.Rule.Clone();
+        copy.Suffix = copy.Suffix.Length > 0 ? copy.Suffix + "_copy" : "copy";
+        var rule = new StudioRuleViewModel(copy, this);
+        Rules.Insert(Rules.IndexOf(_selectedRule) + 1, rule);
+        SelectedRule = rule;
+        Raise(nameof(GameCaption));
+        RuleChanged();
+        ShowStatus($"Copied the rule as \"{rule.Name}\". Change it, test it, and save.");
+    }
+
     private void DeleteRule()
     {
         if (_selectedRule is null) return;
@@ -566,9 +695,16 @@ public sealed class StudioViewModel : ObservableObject
     private string? FrameSourcePath => _fileSource ?? _source?.Path;
     private double FrameSourceSeconds => HasTimeline ? _frameSeconds : 0;
 
+    // Frames already seen come from memory, so stepping back and forth through a moment is instant.
     private async Task LoadFrameAsync()
     {
         if (FrameSourcePath is not { } path) return;
+        var seconds = FrameSourceSeconds;
+        if (_frames.TryGet(path, seconds) is { } seen)
+        {
+            ShowFrame(seen);
+            return;
+        }
         if (IsBusy)
         {
             _reloadFrame = true;
@@ -577,18 +713,19 @@ public sealed class StudioViewModel : ObservableObject
         IsBusy = true;
         try
         {
-            var (png, length) = await StudioTools.GrabFrameAsync(path, FrameSourceSeconds);
+            var (png, length) = await StudioTools.GrabFrameAsync(path, seconds);
             if (path == _fileSource && length is > 0 && _fileLength is null)
             {
                 _fileLength = length;
                 Raise(nameof(SourceDuration));
                 Raise(nameof(HasTimeline));
+                NotifyStepCommands();
             }
-            Bitmap frame;
-            await using (var stream = File.OpenRead(png)) frame = new Bitmap(stream);
-            var old = Frame;
-            Frame = frame;
-            old?.Dispose();
+            var bytes = await File.ReadAllBytesAsync(png);
+            _frames.Add(path, seconds, bytes);
+            // The frame moved on while this one was read: show the one wanted now instead.
+            if (FrameSourcePath == path && FrameSourceSeconds == seconds) ShowFrame(bytes);
+            else _reloadFrame = true;
             ShowStatus(null);
         }
         catch (Exception e) when (e is StudioFailedException or IOException or UnauthorizedAccessException
@@ -605,6 +742,44 @@ public sealed class StudioViewModel : ObservableObject
                 _ = LoadFrameAsync();
             }
         }
+    }
+
+    private void ShowFrame(byte[] png)
+    {
+        using var stream = new MemoryStream(png);
+        var old = Frame;
+        Frame = new Bitmap(stream);
+        old?.Dispose();
+    }
+
+    // Moves the frame by a step and shows it at once, rather than waiting for the slider to settle.
+    private void StepFrame(double by)
+    {
+        if (!HasTimeline) return;
+        var to = Math.Round(Math.Clamp(_frameSeconds + by, 0, Math.Max(0, SourceDuration - 0.05)), 1);
+        if (!Set(ref _frameSeconds, to, nameof(FrameSeconds))) return;
+        Raise(nameof(FrameTimeText));
+        _frameTimer?.Stop();
+        if (_main.IsLive) _ = LoadFrameAsync();
+    }
+
+    // Jumps to the clip's next or previous moment, just after it shows.
+    private void JumpMoment(int direction)
+    {
+        var times = SourceMoments.Select(m => Math.Round(m.Seconds + 0.3, 1)).ToList();
+        var next = direction > 0 ? times.Where(t => t > _frameSeconds + 0.05).DefaultIfEmpty(-1).Min()
+            : times.Where(t => t < _frameSeconds - 0.05).DefaultIfEmpty(-1).Max();
+        if (next >= 0) FrameSeconds = next;
+    }
+
+    private void NotifyStepCommands()
+    {
+        FrameBackCommand.NotifyCanExecuteChanged();
+        FrameForwardCommand.NotifyCanExecuteChanged();
+        SecondBackCommand.NotifyCanExecuteChanged();
+        SecondForwardCommand.NotifyCanExecuteChanged();
+        PreviousMomentCommand.NotifyCanExecuteChanged();
+        NextMomentCommand.NotifyCanExecuteChanged();
     }
 
     // Any video (one recorded with something else, say) or a screenshot.
@@ -628,7 +803,10 @@ public sealed class StudioViewModel : ObservableObject
             var (text, matches) = await StudioTools.ReadAsync(path, FrameSourceSeconds, _selectedRule.Rule, _testQuality.Name, _hudScale);
             ReadText = text.Length > 0 ? text : "(nothing readable)";
             Matched = matches > 0;
-            ShowStatus(null);
+            TestTab = 0;
+            ShowStatus(_selectedRule.Rule.NeedsPlayer && !HasPlayerNames
+                ? "This rule looks for your in-game name, and none is set: enter it in the rule's settings to test it."
+                : null, error: _selectedRule.Rule.NeedsPlayer && !HasPlayerNames);
         }
         catch (Exception e) when (e is StudioFailedException or IOException or System.ComponentModel.Win32Exception)
         {
@@ -643,51 +821,43 @@ public sealed class StudioViewModel : ObservableObject
     private async Task SaveAsync()
     {
         if (_game is null) return;
-        var problem = Rules.FirstOrDefault(r => r.Words.Trim().Length == 0 && r.Rule.Image is null && !r.IsSound);
-        if (problem is not null)
+        // Every game with changes is saved together; a rule with nothing to look for stops it.
+        if (FindEmptyRule() is { } empty)
         {
-            SelectedRule = problem;
+            if (!ReferenceEquals(empty.Game, _game)) SelectedGame = empty.Game;
+            SelectedRule = Rules.FirstOrDefault(r => ReferenceEquals(r.Rule, empty.Rule)) ?? SelectedRule;
             ShowStatus("Each rule needs at least one word to look for.", error: true);
             return;
         }
 
-        // Several rules for one event need their own section names: [game.kill], [game.kill.2], ...
-        // A rule keeps its name (like the built-in [game.kill.score]) unless another has it.
-        foreach (var group in Rules.GroupBy(r => r.Event))
+        var games = Pending().ToList();
+        var savedNames = new List<string>();
+        var builtInNames = new List<string>();
+        foreach (var (game, rules, hudScale) in games)
         {
-            var used = new HashSet<string>();
-            foreach (var rule in group)
+            if (_main.IsLive && hudScale != (ReferenceEquals(game, _game) ? _savedHudScale : LoadHudScale(game.Id)))
             {
-                if (used.Add(rule.Rule.Suffix)) continue;
-                var n = 2;
-                while (!used.Add(n.ToString(System.Globalization.CultureInfo.InvariantCulture))) n++;
-                rule.Rule.Suffix = n.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                try
+                {
+                    HudScales.Save(AppPaths.EngineSettingsFile, game.Id, hudScale);
+                    if (ReferenceEquals(game, _game)) _savedHudScale = hudScale;
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    ShowStatus($"Couldn't save the HUD size: {e.Message}", error: true);
+                    return;
+                }
             }
+            if (Apply(_user, game, rules)) builtInNames.Add(game.Name);
+            else savedNames.Add(game.Name);
         }
-        if (_main.IsLive && _hudScale != _savedHudScale)
-        {
-            try
-            {
-                HudScales.Save(AppPaths.EngineSettingsFile, _game.Id, _hudScale);
-                _savedHudScale = _hudScale;
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                ShowStatus($"Couldn't save the HUD size: {e.Message}", error: true);
-                return;
-            }
-        }
-        var custom = _game.IsCustom ? new StudioGame(_game.Id, _game.Name, _game.Executables) : null;
-        var rules = Rules.Select(r => r.Rule).ToList();
-        // The same as the built-in rules: drop the user's copy, so later fixes to them arrive.
-        var builtIn = custom is null && DetectionIni.RulesText(rules) == _shipped.RulesText(_game.Id);
-        if (builtIn) _user.RemoveGame(_game.Id);
-        else _user.SetGame(_game.Id, custom, rules);
-        _ownRules = !builtIn;
+        _ownRules = _game is not null && _user.EditedGames.Contains(_game.Id);
         RaiseOrigin();
+        _drafts.Clear();
         if (!_main.IsLive)
         {
             HasChanges = false;
+            RaiseUnsaved();
             return;
         }
         try
@@ -700,10 +870,88 @@ public sealed class StudioViewModel : ObservableObject
             return;
         }
         HasChanges = false;
-        ShowStatus(builtIn
-            ? $"{_game.Name} uses its built-in rules again. The engine is restarting to use them."
-            : $"Saved your rules for {_game.Name} to {DetectionIni.UserFile}. The engine is restarting to use them.");
+        RaiseUnsaved();
+        var said = new List<string>();
+        if (savedNames.Count > 0) said.Add($"Saved your rules for {string.Join(", ", savedNames)}.");
+        if (builtInNames.Count > 0) said.Add($"{string.Join(", ", builtInNames)} {(builtInNames.Count == 1 ? "uses its" : "use their")} built-in rules again.");
+        ShowStatus(string.Join(" ", said) + " The engine is restarting to use them.");
         await _main.RestartEngineAsync();
+    }
+
+    // Every game with unsaved changes: the one shown, and those kept from before.
+    private IEnumerable<(StudioGameOption Game, List<StudioRule> Rules, int HudScale)> Pending()
+    {
+        if (_game is not null && _hasChanges) yield return (_game, Rules.Select(r => r.Rule).ToList(), _hudScale);
+        foreach (var draft in _drafts.Values) yield return (draft.Game, draft.Rules, draft.HudScale);
+    }
+
+    private (StudioGameOption Game, StudioRule Rule)? FindEmptyRule()
+    {
+        foreach (var (game, rules, _) in Pending())
+        {
+            if (rules.FirstOrDefault(r => r.Words.Trim().Length == 0 && r.Image is null && !r.IsSound) is { } rule) return (game, rule);
+        }
+        return null;
+    }
+
+    // Writes the game's rules into the user's copy (or a draft of it). Returns whether they're the
+    // built-in ones, which drops the user's copy of the game, so later fixes to them arrive.
+    private bool Apply(DetectionIni target, StudioGameOption game, List<StudioRule> rules)
+    {
+        NameSections(rules);
+        var custom = game.IsCustom ? new StudioGame(game.Id, game.Name, game.Executables) : null;
+        var builtIn = custom is null && DetectionIni.RulesText(rules) == _shipped.RulesText(game.Id);
+        if (builtIn) target.RemoveGame(game.Id);
+        else target.SetGame(game.Id, custom, rules);
+        return builtIn;
+    }
+
+    // Several rules for one event need their own section names: [game.kill], [game.kill.2], ...
+    // A rule keeps its name (like the built-in [game.kill.score]) unless another has it.
+    internal static void NameSections(IEnumerable<StudioRule> rules)
+    {
+        foreach (var group in rules.GroupBy(r => r.Event))
+        {
+            var used = new HashSet<string>();
+            foreach (var rule in group)
+            {
+                rule.Suffix = SectionName(rule.Suffix);
+                if (used.Add(rule.Suffix)) continue;
+                var n = 2;
+                while (!used.Add(n.ToString(System.Globalization.CultureInfo.InvariantCulture))) n++;
+                rule.Suffix = n.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
+        }
+    }
+
+    // A name as a section can have it: "Score line" -> "score_line".
+    internal static string SectionName(string name)
+    {
+        var id = new string(name.Trim().ToLowerInvariant()
+                                .Select(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' ? c : '_').ToArray());
+        while (id.Contains("__")) id = id.Replace("__", "_");
+        return id.Trim('_', '.');
+    }
+
+    // Leaving with changes unsaved asks once, so they aren't lost by a stray click.
+    private void Back()
+    {
+        if (HasUnsaved && !_leaving && _main.IsLive)
+        {
+            _leaving = true;
+            ShowStatus($"{UnsavedText}. Save them, or press Back again to leave without saving.", error: true);
+            return;
+        }
+        _main.ShowPage(_returnTo);
+    }
+
+    // Puts back the saved rules of every game, dropping the changes.
+    private void Discard()
+    {
+        _drafts.Clear();
+        HasChanges = false;
+        LoadRules();
+        ShowStatus(_game is null ? null : $"Put back the saved rules for {_game.Name}.");
     }
 
     private void StartAddGame()
@@ -779,6 +1027,7 @@ public sealed class StudioViewModel : ObservableObject
         if (_selectedRule is not { IsSound: false } rule || FrameSourcePath is not { } path) return;
         IsWorking = true;
         WorkProgress = 0;
+        TestTab = 1;
         Track.Clear();
         TrackSummary = null;
         _workCancel = new CancellationTokenSource();
@@ -828,9 +1077,26 @@ public sealed class StudioViewModel : ObservableObject
         }
         IsWorking = true;
         WorkProgress = 0;
+        TestTab = 2;
         _workCancel = new CancellationTokenSource();
-        ShowStatus(HasChanges ? "Testing the saved rules; save to test your changes too." : null);
+        ShowStatus(null);
         var quality = _main.IsLive ? EngineSettings.Load(AppPaths.EngineSettingsFile).ReadingQuality : "medium";
+        // Unsaved changes are tested as they are, from a draft of the user's rules.
+        string? draft = null;
+        if (HasUnsaved && _main.IsLive)
+        {
+            try
+            {
+                draft = WriteDraft();
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                ShowStatus($"Couldn't test your changes: {e.Message}", error: true);
+                IsWorking = false;
+                return;
+            }
+        }
+        var hud = _hudScale;
         var marked = new List<ClipEvent>();
         var found = new List<ClipEvent>();
         try
@@ -841,18 +1107,18 @@ public sealed class StudioViewModel : ObservableObject
                 var index = i;
                 var events = await StudioTools.ScanAsync(clip.Path, _game.Name, quality,
                     p => Avalonia.Threading.Dispatcher.UIThread.Post(() => WorkProgress = (index * 100 + p) / clips.Count),
-                    _workCancel.Token);
+                    _workCancel.Token, draft, draft is null ? null : hud);
                 var labels = clip.File.Metadata?.Labels ?? [];
                 var result = DetectionAccuracy.Compare(labels, events);
                 MarkedResults.Add(new MarkedClipRow(clip.Title, result.Summary, result.Missed.Count + result.Extra.Count == 0,
-                                                    new RelayCommand(() => SelectedSource = clip)));
+                                                    new RelayCommand(() => SelectedSource = clip), MomentRows(clip, result)));
                 // Offset each clip's times so moments from different clips never pair up.
                 var offset = i * 100_000.0;
                 marked.AddRange(labels.Select(l => new ClipEvent { Type = l.Type, Time = l.Time + offset }));
                 found.AddRange(events.Select(e => new ClipEvent { Type = e.Type, Time = e.Time + offset }));
             }
             var total = DetectionAccuracy.Compare(marked, found);
-            MarkedSummary = $"{clips.Count} {(clips.Count == 1 ? "clip" : "clips")}: {total.Summary}";
+            MarkedSummary = $"{clips.Count} {(clips.Count == 1 ? "clip" : "clips")}{(draft is null ? "" : ", with your unsaved changes")}: {total.Summary}";
         }
         catch (OperationCanceledException)
         {
@@ -867,6 +1133,46 @@ public sealed class StudioViewModel : ObservableObject
             IsWorking = false;
         }
     }
+
+    // The user's rules with every unsaved change in, for testing before saving.
+    private string WriteDraft()
+    {
+        var draft = DetectionIni.Parse(_user.ToString());
+        foreach (var (game, rules, _) in Pending()) Apply(draft, game, rules.Select(r => r.Clone()).ToList());
+        var file = Path.Combine(AppPaths.DataDir, "Studio", "draft-detection.ini");
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, draft.ToString());
+        return file;
+    }
+
+    // Each moment the rules missed or found extra in a marked clip, to jump to it and see why.
+    private IReadOnlyList<MarkedMomentRow> MomentRows(ClipItemViewModel clip, AccuracyResult result)
+    {
+        void Open(double at)
+        {
+            SelectedSource = clip;
+            FrameSeconds = Math.Round(at + 0.3, 1);
+        }
+        return result.Missed.Select(m => new MarkedMomentRow(false, EventKinds.Label(m.Type), m.Time,
+                                                              "Marked, but no rule found it here", new RelayCommand(() => Open(m.Time))))
+            .Concat(result.Extra.Select(e => new MarkedMomentRow(true, EventKinds.Label(e.Type), e.Time,
+                FoundByText(e), new RelayCommand(() => Open(e.Time)))))
+            .OrderBy(r => r.Seconds)
+            .ToList();
+    }
+
+    // Which rules found a moment that isn't marked, and what they read.
+    private static string FoundByText(ClipEvent found)
+    {
+        var counted = found.FoundBy?.Where(w => w.Counted).ToList() ?? [];
+        if (counted.Count == 0) return found.Text.Length > 0 ? $"Not marked. Read \"{found.Text}\"" : "Not marked";
+        return "Not marked. Found by " + string.Join(", ", counted.Select(w =>
+            $"{RuleExplainer.Name(new StudioRule { Event = found.Type, Suffix = RuleSuffix(w.Rule) })}{(w.Text.Length > 0 ? $" reading \"{w.Text}\"" : "")}"));
+    }
+
+    // "the_finals.kill.score_line" -> "score_line".
+    private static string RuleSuffix(string section) =>
+        section.Split('.') is { Length: > 2 } parts ? string.Join('.', parts.Skip(2)) : "";
 
     // Cuts the sound at the frame (from just before it to a second after) out of the clip, and
     // adds a rule that listens for it. It backs up the game's other rules for the same moment
@@ -896,7 +1202,8 @@ public sealed class StudioViewModel : ObservableObject
             SelectedRule = added;
             Raise(nameof(HasRules));
             RuleChanged();
-            ShowStatus($"Added a rule that listens for the sound at {FrameTimeText}. Start the frame just as the sound plays. Save to use it.");
+            ShowStatus($"Added a rule that listens for the sound at {FrameTimeText}, backing up the other {EventKinds.Label(eventName)} rules. "
+                       + "Start the frame just as the sound plays. Save to use it.");
         }
         catch (Exception e) when (e is StudioFailedException or IOException or UnauthorizedAccessException
                                       or System.ComponentModel.Win32Exception)
@@ -935,16 +1242,31 @@ public sealed class StudioViewModel : ObservableObject
             Track.Add(new TrackRowViewModel(at, text, matches, new RelayCommand(() => FrameSeconds = at)));
         }
         TrackSummary = "5 changes in what it read; 2 match the rule. Click one to see that frame.";
-        MarkedResults.Add(new MarkedClipRow("3 kills", "Caught 3 of 3 (100%), no false alarms.", true, new RelayCommand(() => { })));
-        MarkedResults.Add(new MarkedClipRow("2 kills, 1 death", "Caught 2 of 3 (66%), 1 false alarm.", false, new RelayCommand(() => { })));
+        MarkedResults.Add(new MarkedClipRow("3 kills", "Caught 3 of 3 (100%), no false alarms.", true, new RelayCommand(() => { }), []));
+        MarkedResults.Add(new MarkedClipRow("2 kills, 1 death", "Caught 2 of 3 (66%), 1 false alarm.", false, new RelayCommand(() => { }),
+        [
+            new(false, "Kill", 8.4, "Marked, but no rule found it here", new RelayCommand(() => { })),
+            new(true, "Death", 21.0, "Not marked. Found by Killfeed reading \"VEX ENTERRO\"", new RelayCommand(() => { })),
+        ]));
         MarkedSummary = "2 clips: Caught 5 of 6 (83%), 1 false alarm.";
     }
+
+    // For the preview tool: show a page of the sample's tools.
+    internal void ShowSampleTab(int tab) => TestTab = tab;
 
     private const string SampleIni = """
         [the_finals.kill]
         region = 0.65, 0.125, 0.33, 0.045
         words = ELIMINATED | KNOCKED OUT
         exclude = BY
+        merge_ms = 4000
+        priority = 2
+
+        [the_finals.kill.score_line]
+        region = 0.30, 0.52, 0.40, 0.24
+        words = ELIMINATION {number}
+        forget_ms = 3000
+        merge_ms = 4000
 
         [the_finals.revive]
         region = 0.65, 0.172, 0.33, 0.045
@@ -966,8 +1288,20 @@ public sealed class TrackRowViewModel(double seconds, string text, int matches, 
     public RelayCommand SeekCommand { get; } = seek;
 }
 
-// How the rules did on one marked clip.
-public sealed record MarkedClipRow(string Title, string Summary, bool IsPerfect, RelayCommand OpenCommand);
+// How the rules did on one marked clip, with each moment they missed or found extra.
+public sealed record MarkedClipRow(string Title, string Summary, bool IsPerfect, RelayCommand OpenCommand,
+                                   IReadOnlyList<MarkedMomentRow> Moments)
+{
+    public bool HasMoments => Moments.Count > 0;
+}
+
+// A moment a marked clip's test missed (IsExtra false) or found without a mark, to jump to.
+public sealed record MarkedMomentRow(bool IsExtra, string Label, double Seconds, string Detail, RelayCommand SeekCommand)
+{
+    public bool IsMissed => !IsExtra;
+    public string Kind => IsExtra ? "Extra" : "Missed";
+    public string TimeText => Format.Duration(TimeSpan.FromSeconds(Seconds));
+}
 
 public sealed record EventOption(string Name, string Label, IBrush Brush)
 {
@@ -1002,9 +1336,160 @@ public sealed class StudioRuleViewModel : ObservableObject
     {
         Rule = rule;
         _owner = owner;
+        InsertPlayerCommand = new RelayCommand(() => AddWord("{player}"));
+        InsertNumberCommand = new RelayCommand(() => AddWord("{number}"));
     }
 
     internal StudioRule Rule { get; }
+
+    public RelayCommand InsertPlayerCommand { get; }
+    public RelayCommand InsertNumberCommand { get; }
+
+    // What the rule is called among the game's rules: "Killfeed", "Score line", or the moment.
+    public string Name => RuleExplainer.Name(Rule);
+
+    // The name as typed, kept as it is while typing; the section is named from it.
+    public string EditName
+    {
+        get => _editName ??= Rule.Suffix.Length == 0 ? "" : Name;
+        set
+        {
+            _editName = value ?? "";
+            var suffix = StudioViewModel.SectionName(_editName);
+            if (suffix == Rule.Suffix) return;
+            Rule.Suffix = suffix;
+            Changed(nameof(Title));
+        }
+    }
+    private string? _editName;
+    public string Title => Name == Label ? Label : $"{Label} · {Name}";
+
+    // What it does among the game's rules, and why, in plain words.
+    private RuleRole RoleValue => RuleExplainer.Role(Rule, _owner.AllRules, _owner.HasPlayerNames);
+    public string RoleText => RuleExplainer.RoleText(RoleValue);
+    public bool IsOff => RoleValue == RuleRole.Off;
+    public bool IsLeading => RoleValue is RuleRole.Decides;
+    public IReadOnlyList<string> Explanation => RuleExplainer.Explain(Rule, _owner.AllRules, _owner.HasPlayerNames, _owner.SampleMs);
+    // It looks for the player's name: Studio offers to set it right there.
+    public bool NeedsPlayer => Rule.NeedsPlayer;
+    public bool IsMissingPlayer => Rule.NeedsPlayer && !_owner.HasPlayerNames;
+
+    // Told again when any rule of the game changes, since what this one does depends on them.
+    internal void Refresh()
+    {
+        foreach (var name in new[] { nameof(RoleText), nameof(IsOff), nameof(IsLeading), nameof(Explanation), nameof(NeedsPlayer),
+                                     nameof(IsMissingPlayer), nameof(Title), nameof(Name), nameof(MergeText),
+                                     nameof(TeamLabel), nameof(SampleText), nameof(ForgetText) })
+            Raise(name);
+    }
+
+    private void AddWord(string token)
+    {
+        var words = Rule.Words.Trim();
+        Words = words.Length == 0 ? token : $"{words} | {token}";
+    }
+
+    // Fine-tuning: the engine's rarer settings, each with its default shown.
+
+    // Counting a moment once with the game's other rules for it (merge_ms), within this many seconds.
+    public bool CountsOnce
+    {
+        get => RuleExplainer.Merge(Rule) > 0;
+        set
+        {
+            if (value == CountsOnce) return;
+            Rule.SetSetting("merge_ms", value ? "4000" : null);
+            Changed(nameof(CountsOnce), nameof(MergeSeconds), nameof(MergeText));
+        }
+    }
+    public string TeamLabel => $"Count once with the other {Label} rules";
+    public double MergeSeconds
+    {
+        get => Math.Max(1, RuleExplainer.Merge(Rule) / 1000.0);
+        set
+        {
+            var ms = (int)Math.Clamp(Math.Round(value * 2) / 2 * 1000, 500, 30_000);
+            if (!CountsOnce || ms == RuleExplainer.Merge(Rule)) return;
+            Rule.SetSetting("merge_ms", ms.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            Changed(nameof(MergeSeconds), nameof(MergeText));
+        }
+    }
+    public string MergeText => CountsOnce ? RuleExplainer.Seconds(RuleExplainer.Merge(Rule)) : "Off";
+
+    // Which of those rules says how many there were: the highest.
+    public double Priority
+    {
+        get => RuleExplainer.Priority(Rule);
+        set
+        {
+            var p = (int)Math.Clamp(Math.Round(value), 0, 10);
+            if (p == RuleExplainer.Priority(Rule)) return;
+            Rule.SetSetting("priority", p == 1 ? null : p.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            Changed(nameof(Priority), nameof(PriorityText));
+        }
+    }
+    public string PriorityText => RuleExplainer.Priority(Rule).ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    // How often the box is read, in ms; 0 for the engine's default for the moment.
+    public double SampleMs
+    {
+        get => Rule.IntSetting("sample_ms") ?? 0;
+        set
+        {
+            var ms = (int)Math.Round(value / 50) * 50;
+            ms = ms < 100 ? 0 : Math.Min(ms, 2000);
+            if (ms == (Rule.IntSetting("sample_ms") ?? 0)) return;
+            Rule.SetSetting("sample_ms", ms == 0 ? null : ms.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            Changed(nameof(SampleMs), nameof(SampleText));
+        }
+    }
+    public string SampleText => Rule.IntSetting("sample_ms") is { } ms
+        ? $"{ms} ms"
+        : $"Default ({RuleExplainer.DefaultSampleMs(Rule.Event, _owner.SampleMs)} ms)";
+
+    // How long a message must be gone before it counts again, in ms; 0 for the default.
+    public double ForgetMs
+    {
+        get => Rule.IntSetting("forget_ms") ?? 0;
+        set
+        {
+            var ms = (int)Math.Round(value / 100) * 100;
+            ms = Math.Clamp(ms, 0, 10_000);
+            if (ms == (Rule.IntSetting("forget_ms") ?? 0)) return;
+            Rule.SetSetting("forget_ms", ms == 0 ? null : ms.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            Changed(nameof(ForgetMs), nameof(ForgetText));
+        }
+    }
+    public string ForgetText => Rule.IntSetting("forget_ms") is { } ms and > 0 ? RuleExplainer.Seconds(ms) : "Default";
+
+    // With the words at the start of a row, a squad tag like [SMEDC] may come before the name.
+    public bool SkipTag
+    {
+        get => Rule.SkipTag;
+        set
+        {
+            if (value == SkipTag) return;
+            Rule.SetSetting("skip_tag", value ? "true" : null);
+            Changed(nameof(SkipTag));
+        }
+    }
+    public bool IsStartPosition => Rule.Position == "start";
+
+    // How alike the box must be to the picture, for a rule that looks for an icon.
+    public bool IsImage => Rule.Image is { Length: > 0 } && !IsSound;
+    public double ImageMatch
+    {
+        get => double.TryParse(Rule.Setting("image_match"), System.Globalization.NumberStyles.Float,
+                               System.Globalization.CultureInfo.InvariantCulture, out var m) ? m : 0.85;
+        set
+        {
+            var m = Math.Clamp(Math.Round(value, 2), 0.5, 0.99);
+            if (Math.Abs(m - ImageMatch) < 0.001) return;
+            Rule.SetSetting("image_match", m.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture));
+            Changed(nameof(ImageMatch), nameof(ImageMatchText));
+        }
+    }
+    public string ImageMatchText => ImageMatch.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
 
     public IReadOnlyList<EventOption> Events => _owner.Events;
 
@@ -1015,7 +1500,7 @@ public sealed class StudioRuleViewModel : ObservableObject
         {
             if (value is null || value.Name == Rule.Event) return;
             Rule.Event = value.Name;
-            Changed(nameof(EventOption), nameof(Event), nameof(Label), nameof(Brush));
+            Changed(nameof(EventOption), nameof(Event), nameof(Label), nameof(Brush), nameof(Title));
         }
     }
 
@@ -1024,6 +1509,11 @@ public sealed class StudioRuleViewModel : ObservableObject
     public IBrush Brush => EventKinds.Brush(Rule.Event);
 
     public string Words { get => Rule.Words; set { Rule.Words = value ?? ""; Changed(nameof(Words), nameof(Summary)); } }
+    // {player} and {number} read as what they stand for.
+    public string Summary => IsSound ? $"Listens for {SoundText}"
+        : Rule.Words.Trim().Length > 0 ? Rule.Words.Replace("{player}", "your name", StringComparison.OrdinalIgnoreCase)
+                                                  .Replace("{number}", "a number", StringComparison.OrdinalIgnoreCase)
+        : Rule.Image is not null ? $"Looks for {Path.GetFileName(Rule.Image)}" : "No words yet";
 
     public IReadOnlyList<PositionOption> Positions => PositionOption.All;
 
@@ -1034,15 +1524,13 @@ public sealed class StudioRuleViewModel : ObservableObject
         {
             if (value is null || value.Name == Rule.Position) return;
             Rule.SetSetting("position", value.Name == "anywhere" ? null : value.Name);
-            Changed(nameof(Position));
+            Changed(nameof(Position), nameof(IsStartPosition));
         }
     }
     public string Exclude { get => Rule.Exclude; set { Rule.Exclude = value ?? ""; Changed(nameof(Exclude)); } }
-    public string Summary => IsSound ? $"Listens for {SoundText}"
-        : Rule.Words.Trim().Length > 0 ? Rule.Words : Rule.Image is not null ? $"Looks for {Path.GetFileName(Rule.Image)}" : "No words yet";
 
     // A rule that listens to the game's audio for a sound cut from a clip, instead of a box.
-    public bool IsSound => Rule.Setting("sound") is not null;
+    public bool IsSound => Rule.IsSound;
     public bool IsNotSound => !IsSound;
     public string SoundText => string.Join(", ", (Rule.Setting("sound") ?? "")
         .Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(Path.GetFileName));
@@ -1050,7 +1538,7 @@ public sealed class StudioRuleViewModel : ObservableObject
     // Never counts a moment alone, only backs up the game's other rules for it.
     public bool ConfirmOnly
     {
-        get => Rule.Setting("confirm_only") is "true" or "yes" or "1";
+        get => Rule.ConfirmOnly;
         set
         {
             if (value == ConfirmOnly) return;

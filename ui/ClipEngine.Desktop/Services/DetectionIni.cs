@@ -24,6 +24,28 @@ internal sealed class StudioRule
 
     public string Position => Setting("position") ?? "anywhere";
     public string? Image => Setting("image");
+    public bool SkipTag => Flag("skip_tag");
+    public bool ConfirmOnly => Flag("confirm_only");
+    public bool IsSound => Setting("sound") is not null;
+    // Mentions the player's own name, which the engine fills in, and leaves the rule off without one.
+    public bool NeedsPlayer => (Words + "|" + Exclude).Contains("{player}", StringComparison.OrdinalIgnoreCase);
+
+    public int? IntSetting(string key) =>
+        int.TryParse(Setting(key), NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : null;
+
+    private bool Flag(string key) => Setting(key)?.Trim().ToLowerInvariant() is "true" or "yes" or "1";
+
+    // A copy to change without changing this one.
+    public StudioRule Clone()
+    {
+        var copy = new StudioRule
+        {
+            Game = Game, Event = Event, Suffix = Suffix, Left = Left, Top = Top, Width = Width, Height = Height,
+            Words = Words, Exclude = Exclude, CooldownMs = CooldownMs, Threshold = Threshold,
+        };
+        copy.Other.AddRange(Other);
+        return copy;
+    }
 
     public string? Setting(string key) => Other.LastOrDefault(kv => kv.Key == key).Value;
 
@@ -187,6 +209,10 @@ internal sealed class DetectionIni
 
     // Takes the game out of this copy, so it goes back to its built-in rules. [game.<id>] stays.
     public void RemoveGame(string gameId) => RemoveSections(name => name.StartsWith(gameId + ".", StringComparison.Ordinal));
+
+    // How often the screen is read, from [detection] sample_ms; null when this copy doesn't say.
+    public int? SampleMs => int.TryParse(Setting("detection", "sample_ms"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var ms)
+        ? ms : null;
 
     private string? Setting(string section, string key) =>
         Sections().LastOrDefault(s => s.Name == section).Body?.LastOrDefault(kv => kv.Key == key).Value;

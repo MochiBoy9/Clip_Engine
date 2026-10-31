@@ -30,6 +30,8 @@ public sealed class PlayerNamesViewModel : ObservableObject
     }
 
     public bool HasChanges => _names.Trim() != _saved;
+    // Some name is saved, so rules that look for it run.
+    public bool HasSavedNames => _saved.Length > 0;
 
     public string Message
     {
@@ -59,6 +61,7 @@ public sealed class PlayerNamesViewModel : ObservableObject
         _saved = _names = string.Join(", ", names);
         Raise(nameof(Names));
         Raise(nameof(HasChanges));
+        Raise(nameof(HasSavedNames));
         SaveCommand.NotifyCanExecuteChanged();
         Message = names.Count == 0 ? "Cleared." : "Saved. It's used from the next time a game starts.";
     }

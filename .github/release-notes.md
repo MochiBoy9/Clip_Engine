@@ -1,19 +1,19 @@
-## Clip Engine 0.8.0
+## Clip Engine 0.9.0
 
-Sharper kill detection for The Finals, a way to see why each kill counted, and a stronger Detection Studio.
+Detection Studio is easier to find your way around, and it now tells you exactly how each rule works.
 
-- **Each kill counts once.** The Finals shows a kill in the killfeed and again as a score line under your crosshair. The score line fades in and out, so one kill was sometimes counted twice. Now the killfeed, read by your in-game name, decides how many kills there were and the score line backs it up. A kill only one of them saw still counts.
-- **Hears the elimination chime.** Clip Engine listens for The Finals' elimination sound in the game audio and uses it to back up each kill. The sound never counts a kill on its own.
-- **See why a kill counted.** Each moment in the player shows a check when two signs agreed. Open it to see everything that saw the kill, what it read and when, with a button that opens that rule in Detection Studio.
-- **Detection Studio, upgraded:**
-  - **Read through the clip** shows everything a rule reads from start to end, so you can see where it misses.
-  - **Listen for the sound here** turns the sound at the playhead into a rule, for any game that plays one on a kill.
-  - **Test on marked clips** runs your rules over every clip you've marked and shows what they caught, missed or added.
-- Deaths in The Finals are now read from the killfeed too.
+- **See how every rule works.** Pick a rule and Studio says in plain words what it reads and how often, when it saves a moment, how it tells a repeat from a new one, and how it works with the game's other rules: which one decides the count, which back it up, and which can't run yet. The list shows each rule's part at a glance, and warns when two rules would save the same kill twice.
+- **Fine-tune any rule.** How often it reads its box, how long a message must be gone before it counts again, counting a moment once with the other rules for it, which rule decides, and squad tags before a name in a killfeed. Each shows the engine's default, so nothing is hidden.
+- **Testing a killfeed rule works.** Testing a rule that looks for your in-game name now fills your name in, as the engine does in game; before, it always said "No match". You can set your name right in the rule that needs it.
+- **Test your changes before saving.** Test all rules on marked clips runs your unsaved changes too, and lists every kill they missed or found extra. Click one to jump to that frame and see why.
+- **A roomier, quicker Studio:**
+  - The frame is bigger, with the clip picker and moments above it and testing in three tabs below: this frame, the whole clip and marked clips.
+  - Step through a clip a tenth of a second or a second at a time, and jump between its moments. Frames you've seen come back instantly.
+  - Copy or remove a rule from the toolbar, and give rules their own names.
+  - Changes to several games are kept until you save them all together, Discard throws them away, and leaving with changes unsaved asks first.
+  - Keys: Left/Right step, Shift for a second, Up/Down jump between moments, Ctrl+Enter tests, Ctrl+S saves, Ctrl+D copies, Delete removes.
 
-**Set your in-game name** on the Games page so the killfeed can find your kills. If you saved your own rules for The Finals in Detection Studio, they're used instead of the new ones; choose **Use built-in** there and save to switch.
-
-Everything from 0.7.2 is included.
+Everything from 0.8.0 is included.
 
 ## Install
 

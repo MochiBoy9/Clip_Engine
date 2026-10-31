@@ -94,6 +94,7 @@ internal static class StudioTools
         ];
         if (rule.Setting("anchor") is { } anchor) args.AddRange(["--anchor", anchor]);
         if (rule.Setting("aspect") is { } aspect) args.AddRange(["--aspect", aspect]);
+        if (rule.SkipTag) args.AddRange(["--skip-tag", "true"]);
         // Icons are found next to detection.ini, like the engine looks for them.
         if (rule.Image is { Length: > 0 } image)
         {
@@ -110,14 +111,19 @@ internal static class StudioTools
         : new[] { AppPaths.DataDir, AppContext.BaseDirectory }.Select(d => Path.Combine(d, name)).FirstOrDefault(File.Exists) ?? name;
 
     // Runs the game's rules over the whole clip (--scan), as detection would have in game, and
-    // returns the moments they find. progress gets how far it has got, 0 to 100.
+    // returns the moments they find. progress gets how far it has got, 0 to 100. rulesFile, when
+    // given, stands in for the user's detection.ini, for testing rules that aren't saved yet.
     public static async Task<IReadOnlyList<ClipEvent>> ScanAsync(string clip, string game, string quality, Action<int> progress,
-                                                                CancellationToken cancel = default)
+                                                                CancellationToken cancel = default, string? rulesFile = null,
+                                                                int? hudScale = null)
     {
         Require();
         var found = new List<ClipEvent>();
         var done = false;
-        var (exitCode, failure) = await EngineCommand.RunAsync(["--scan", clip, "--game", game, "--quality", quality], e =>
+        List<string> args = ["--scan", clip, "--game", game, "--quality", quality];
+        if (rulesFile is not null) args.AddRange(["--rules", rulesFile]);
+        if (hudScale is { } hud) args.AddRange(["--hud-scale", hud.ToString(CultureInfo.InvariantCulture)]);
+        var (exitCode, failure) = await EngineCommand.RunAsync(args, e =>
         {
             if (e is ScanFound f) lock (found) found.Add(new ClipEvent { Type = f.Type, Time = f.Seconds, Text = f.Text });
             // Each rule that saw the moment just found.

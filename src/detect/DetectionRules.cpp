@@ -88,6 +88,14 @@ std::vector<Phrase> ParsePhrases(const std::string& value) {
   return ParsePhrases(value, withPlayer);
 }
 
+void SetPhrases(DetectionRule& rule, const std::string& words, const std::string& exclude,
+                const std::vector<std::string>& playerNames) {
+  rule.words = ParsePhrases(words, rule.playerWords);
+  rule.exclude = ParsePhrases(exclude, rule.playerExclude);
+  AddPlayerPhrases(rule.playerWords, playerNames, rule.words);
+  AddPlayerPhrases(rule.playerExclude, playerNames, rule.exclude);
+}
+
 std::vector<DetectionRule> DetectionRules::ForGame(const std::string& game, const std::vector<std::string>& playerNames,
                                                    std::vector<std::string>* needingName) const {
   std::vector<DetectionRule> result;
