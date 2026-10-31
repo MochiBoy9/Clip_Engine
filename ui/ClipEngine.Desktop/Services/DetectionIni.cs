@@ -266,7 +266,8 @@ internal sealed class DetectionIni
     private static void WriteRule(StringBuilder block, StudioRule rule)
     {
         block.Append($"\n[{rule.Section}]\nregion = {rule.RegionText}\n");
-        if (rule.Words.Trim().Length > 0 || rule.Image is null) block.Append($"words = {rule.Words.Trim()}\n");
+        if (rule.Words.Trim().Length > 0 || (rule.Image is null && rule.Setting("sound") is null))
+            block.Append($"words = {rule.Words.Trim()}\n");
         if (rule.Exclude.Trim().Length > 0) block.Append($"exclude = {rule.Exclude.Trim()}\n");
         if (rule.CooldownMs != 1000) block.Append($"cooldown_ms = {rule.CooldownMs}\n");
         if (rule.Threshold > 0) block.Append($"threshold = {rule.Threshold}\n");

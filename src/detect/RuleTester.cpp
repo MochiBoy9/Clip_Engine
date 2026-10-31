@@ -18,6 +18,7 @@
 #include <cmath>
 #include <cstring>
 #include <cwctype>
+#include <format>
 #include <map>
 #include <memory>
 #include <optional>
@@ -175,24 +176,48 @@ struct AudioReader {
 
   static DWORD Stream() { return static_cast<DWORD>(MF_SOURCE_READER_FIRST_AUDIO_STREAM); }
 
-  // Hands the watch the audio up to `until` (100 ns units).
-  void ReadUntil(int64_t until, SoundWatch& watch, const SoundWatch::Found& found) {
-    while (!done && position < until) {
+  void Seek(double seconds) {
+    PROPVARIANT at;
+    PropVariantInit(&at);
+    at.vt = VT_I8;
+    at.hVal.QuadPart = static_cast<int64_t>(std::llround(std::max(0.0, seconds) * kHnsPerSecond));
+    winrt::check_hresult(reader->SetCurrentPosition(GUID_NULL, at));
+    position = 0;
+    done = false;
+  }
+
+  // The next stretch of audio and its time, or false at the end.
+  bool Next(std::vector<int16_t>& pcm, int64_t& time) {
+    while (true) {
       DWORD index = 0, flags = 0;
       LONGLONG at = 0;
       winrt::com_ptr<IMFSample> sample;
       winrt::check_hresult(reader->ReadSample(Stream(), 0, &index, &flags, &at, sample.put()));
-      if (flags & MF_SOURCE_READERF_ENDOFSTREAM) done = true;
-      if (!sample) continue;
-      winrt::com_ptr<IMFMediaBuffer> buffer;
-      winrt::check_hresult(sample->ConvertToContiguousBuffer(buffer.put()));
-      BYTE* data = nullptr;
-      DWORD bytes = 0;
-      winrt::check_hresult(buffer->Lock(&data, nullptr, &bytes));
-      const size_t frames = bytes / (2 * channels);
-      watch.Push(reinterpret_cast<const int16_t*>(data), frames, static_cast<int>(rate), static_cast<int>(channels), at, found);
-      buffer->Unlock();
-      position = at + static_cast<int64_t>(frames) * kHnsPerSecond / rate;
+      if (sample) {
+        winrt::com_ptr<IMFMediaBuffer> buffer;
+        winrt::check_hresult(sample->ConvertToContiguousBuffer(buffer.put()));
+        BYTE* data = nullptr;
+        DWORD bytes = 0;
+        winrt::check_hresult(buffer->Lock(&data, nullptr, &bytes));
+        pcm.assign(reinterpret_cast<const int16_t*>(data), reinterpret_cast<const int16_t*>(data) + bytes / 2);
+        buffer->Unlock();
+        time = at;
+        position = at + static_cast<int64_t>(pcm.size() / channels) * kHnsPerSecond / rate;
+        return true;
+      }
+      if (flags & MF_SOURCE_READERF_ENDOFSTREAM) {
+        done = true;
+        return false;
+      }
+    }
+  }
+
+  // Hands the watch the audio up to `until` (100 ns units).
+  void ReadUntil(int64_t until, SoundWatch& watch, const SoundWatch::Found& found) {
+    std::vector<int16_t> pcm;
+    int64_t at = 0;
+    while (!done && position < until && Next(pcm, at)) {
+      watch.Push(pcm.data(), pcm.size() / channels, static_cast<int>(rate), static_cast<int>(channels), at, found);
     }
   }
 };
@@ -345,6 +370,121 @@ int RunReadCommand(const std::filesystem::path& input, double seconds, const Det
     log::Error("Read failed: {}", Describe(e));
   } catch (const std::exception& e) {
     log::Error("Read failed: {}", e.what());
+  }
+  return 1;
+}
+
+int RunTrackCommand(const std::filesystem::path& input, const DetectionRule& rule, ReadQuality quality, double hudScale,
+                    int everyMs) {
+  try {
+    const auto ocr = CreateOcrEngine();
+    if (!ocr && rule.ReadsText()) {
+      log::Error("Track failed: Windows text recognition isn't installed. Add English under Settings > Time & language > Language.");
+      return 1;
+    }
+    double length = 0;
+    VideoReader video(input, &length);
+    const PixelBox box = BoxOn(PlaceRegion(rule.region, video.width, video.height, hudScale), video.width, video.height);
+    if (box.TooSmall()) {
+      log::Error("Track failed: the box is too small to read");
+      return 1;
+    }
+    std::optional<ImageMatcher> matcher;
+    if (rule.LooksForImage()) matcher.emplace(IconMatcher(rule, video.width, video.height, hudScale));
+    const UINT width = box.right - box.left;
+    const UINT height = box.bottom - box.top;
+    const int intervalMs = std::clamp(everyMs, 50, 5000);
+
+    int reads = 0, lastPercent = -1;
+    int64_t dueMs = 0, time = 0;
+    std::string lastText = "\n";
+    int lastMatches = -1;
+    while (auto sample = video.Next(time)) {
+      const int64_t ms = time / kHnsPerMs;
+      if (ms < dueMs) continue;
+      dueMs = ms + intervalMs;
+      const Picture frame = video.ToPicture(sample.get());
+      const auto pixels = Crop(frame, box.left, box.top, width, height);
+      std::string text;
+      int matches = 0;
+      if (rule.ReadsText()) {
+        const auto read = ReadWords(ocr, pixels, width, height, rule.threshold, BannerShrink(rule, quality, frame.height, height), quality);
+        std::vector<std::vector<std::vector<std::string>>> rows;
+        for (const auto& words : read) rows.push_back(GroupIntoRows(words));
+        if (rows.empty()) rows.emplace_back();
+        const size_t chosen = ChooseRead(rule, rows);
+        if (chosen < read.size()) {
+          for (const auto& word : read[chosen]) text += (text.empty() ? "" : " ") + word.text;
+        }
+        matches = CountMatches(rule, rows[chosen]);
+      }
+      if (matcher) {
+        const double alike = matcher->BestMatch(
+            ToGray(pixels.data(), static_cast<int>(width), static_cast<int>(height), static_cast<size_t>(width) * 4, false));
+        text = std::format("{}image {:.2f} alike", text.empty() ? std::string() : text + " | ", alike);
+        if (alike >= rule.imageMatch) ++matches;
+      }
+      ++reads;
+      // Only what changed, so a long clip doesn't print the same read hundreds of times.
+      if (text != lastText || matches != lastMatches) {
+        log::Info("Track at {:.2f}: {} | {}", ms / 1000.0, matches, text);
+        lastText = text;
+        lastMatches = matches;
+      }
+      if (length > 0) {
+        const int percent = std::clamp(static_cast<int>(ms / 10.0 / length), 0, 100);
+        if (percent / 5 != lastPercent / 5) {
+          lastPercent = percent;
+          log::Info("Track progress {}%", percent);
+        }
+      }
+    }
+    log::Info("Track done: {} reads", reads);
+    return 0;
+  } catch (const winrt::hresult_error& e) {
+    log::Error("Track failed: {}", Describe(e));
+  } catch (const std::exception& e) {
+    log::Error("Track failed: {}", e.what());
+  }
+  return 1;
+}
+
+int RunCutSoundCommand(const std::filesystem::path& input, const std::filesystem::path& output, double seconds) {
+  try {
+    AudioReader audio(input);
+    // From the lead-in before the sound to a second after it.
+    const double from = std::max(0.0, seconds - kSoundLeadIn / 1000.0);
+    const double to = seconds + 1.0;
+    audio.Seek(from);
+    SoundResampler resampler(static_cast<int>(audio.rate), static_cast<int>(audio.channels));
+    std::vector<float> cut;
+    std::vector<int16_t> pcm;
+    int64_t at = 0;
+    const auto fromHns = static_cast<int64_t>(from * kHnsPerSecond);
+    const auto toHns = static_cast<int64_t>(to * kHnsPerSecond);
+    while (audio.position < toHns && audio.Next(pcm, at)) {
+      // Seeking lands a little early; drop what comes before the cut.
+      const size_t frames = pcm.size() / audio.channels;
+      size_t skip = 0;
+      if (at < fromHns) skip = std::min<size_t>(frames, static_cast<size_t>((fromHns - at) * audio.rate / kHnsPerSecond));
+      resampler.Push(pcm.data() + skip * audio.channels, frames - skip, cut);
+    }
+    cut.resize(std::min(cut.size(), static_cast<size_t>((to - from) * kSoundRate)));
+    if (cut.size() < static_cast<size_t>(kSoundRate) / 2) {
+      log::Error("Cut failed: there isn't enough of the clip's audio there");
+      return 1;
+    }
+    if (output.has_parent_path()) std::filesystem::create_directories(output.parent_path());
+    if (!SaveSoundCut(output, cut)) {
+      log::Error("Cut failed: couldn't write {}", winrt::to_string(output.wstring()));
+      return 1;
+    }
+    log::Info("Sound saved to {}", winrt::to_string(output.wstring()));
+    return 0;
+  } catch (const winrt::hresult_error& e) {
+    log::Error("Cut failed: {}", Describe(e));
+  } catch (const std::exception& e) {
+    log::Error("Cut failed: {}", e.what());
   }
   return 1;
 }

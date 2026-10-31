@@ -137,28 +137,52 @@
               <TextBlock Classes="caption" Text="Saves a clip moment for" />
               <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Events}" SelectedItem="{Binding EventOption}" />
             </StackPanel>
-            <StackPanel Spacing="6">
-              <TextBlock Classes="caption" Text="When the box shows any of these" />
-              <TextBox Text="{Binding Words}" Watermark="ELIMINATED | KNOCKED OUT" />
-              <TextBlock Classes="caption" FontSize="11" TextWrapping="Wrap"
-                         Text="Separate choices with |. Close misreads still count, so ELIMINATED matches ELIMINATEO." />
+            <!-- What it reads: words in a box -->
+            <StackPanel Spacing="16" IsVisible="{Binding IsNotSound}">
+              <StackPanel Spacing="6">
+                <TextBlock Classes="caption" Text="When the box shows any of these" />
+                <TextBox Text="{Binding Words}" Watermark="ELIMINATED | KNOCKED OUT" />
+                <TextBlock Classes="caption" FontSize="11" TextWrapping="Wrap"
+                           Text="Separate choices with |. Close misreads still count, so ELIMINATED matches ELIMINATEO." />
+              </StackPanel>
+              <StackPanel Spacing="6">
+                <TextBlock Classes="caption" Text="But not when it also shows" />
+                <TextBox Text="{Binding Exclude}" Watermark="Optional, e.g. BY" />
+              </StackPanel>
+              <StackPanel Spacing="6">
+                <TextBlock Classes="caption" Text="Where the words are" />
+                <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Positions}" SelectedItem="{Binding Position}"
+                          ToolTip.Tip="In a killfeed, the player who got the kill starts a row and the one who died ends it" />
+              </StackPanel>
+              <StackPanel Spacing="4">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Classes="caption" Text="Brightness filter" />
+                  <TextBlock Grid.Column="1" Classes="caption" Text="{Binding ThresholdText}" FontFeatures="tnum" />
+                </Grid>
+                <Slider Minimum="0" Maximum="250" Value="{Binding Threshold}"
+                        ToolTip.Tip="Keeps only bright pixels: turn it up when the text sits on a busy background" />
+              </StackPanel>
             </StackPanel>
-            <StackPanel Spacing="6">
-              <TextBlock Classes="caption" Text="But not when it also shows" />
-              <TextBox Text="{Binding Exclude}" Watermark="Optional, e.g. BY" />
-            </StackPanel>
-            <StackPanel Spacing="6">
-              <TextBlock Classes="caption" Text="Where the words are" />
-              <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Positions}" SelectedItem="{Binding Position}"
-                        ToolTip.Tip="In a killfeed, the player who got the kill starts a row and the one who died ends it" />
-            </StackPanel>
-            <StackPanel Spacing="4">
-              <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Classes="caption" Text="Brightness filter" />
-                <TextBlock Grid.Column="1" Classes="caption" Text="{Binding ThresholdText}" FontFeatures="tnum" />
-              </Grid>
-              <Slider Minimum="0" Maximum="250" Value="{Binding Threshold}"
-                      ToolTip.Tip="Keeps only bright pixels: turn it up when the text sits on a busy background" />
+            <!-- Or what it listens for -->
+            <StackPanel Spacing="16" IsVisible="{Binding IsSound}">
+              <StackPanel Spacing="6">
+                <TextBlock Classes="caption" Text="Listens to the game for" />
+                <TextBlock Text="{Binding SoundText}" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap" />
+                <TextBlock Classes="caption" FontSize="11" TextWrapping="Wrap"
+                           Text="Sounds cut from your clips. Cut a few more of the same sound from other clips to make it surer." />
+              </StackPanel>
+              <StackPanel Spacing="4">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Classes="caption" Text="How alike it must sound" />
+                  <TextBlock Grid.Column="1" Classes="caption" Text="{Binding SoundMatchText}" FontFeatures="tnum" />
+                </Grid>
+                <Slider Minimum="0.3" Maximum="0.9" Value="{Binding SoundMatch}"
+                        ToolTip.Tip="Lower hears it through more noise, but mistakes more sounds for it" />
+              </StackPanel>
+              <CheckBox IsChecked="{Binding ConfirmOnly}"
+                        ToolTip.Tip="Only backs up the game's other rules for this moment, and never counts one alone">
+                <TextBlock Text="Only back up the other rules" TextWrapping="Wrap" />
+              </CheckBox>
             </StackPanel>
             <StackPanel Spacing="4">
               <Grid ColumnDefinitions="*,Auto">
@@ -168,7 +192,7 @@
               <Slider Minimum="0" Maximum="60" Value="{Binding CooldownSeconds}"
                       ToolTip.Tip="How long after a match before the same rule can match again" />
             </StackPanel>
-            <TextBlock Classes="caption" FontSize="11" Text="{Binding RegionText}" TextWrapping="Wrap" />
+            <TextBlock Classes="caption" FontSize="11" Text="{Binding RegionText}" TextWrapping="Wrap" IsVisible="{Binding IsNotSound}" />
           </StackPanel>
         </ScrollViewer>
       </DockPanel>
@@ -209,6 +233,85 @@
                 </Border>
               </Panel>
             </Grid>
+          </Border>
+
+          <!-- Going further than one frame: the whole clip, the clip's sound, every marked clip -->
+          <Border Classes="inset" Padding="12,8">
+            <StackPanel Spacing="8">
+              <Grid ColumnDefinitions="Auto,*,Auto">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Button Classes="secondary" Command="{Binding TrackCommand}"
+                          ToolTip.Tip="Read the picked rule's box all through the clip and list every change in what it reads">
+                    <TextBlock Text="Read through the clip" />
+                  </Button>
+                  <Button Classes="secondary" Command="{Binding CutSoundCommand}"
+                          ToolTip.Tip="Cut the sound that starts at this frame out of the clip and add a rule that listens for it">
+                    <TextBlock Text="Listen for the sound here" />
+                  </Button>
+                  <Button Classes="secondary" Command="{Binding TestMarkedCommand}" ToolTip.Tip="{Binding TestMarkedTip}">
+                    <TextBlock>
+                      <Run Text="Test on marked clips" />
+                      <Run Text="{Binding MarkedClipCount, StringFormat='({0})'}" Foreground="{StaticResource TextTertiary}" />
+                    </TextBlock>
+                  </Button>
+                </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsWorking}">
+                  <ProgressBar Width="90" Minimum="0" Maximum="100" Value="{Binding WorkProgress}" VerticalAlignment="Center" />
+                  <Button Classes="secondary" Content="Stop" Command="{Binding CancelWorkCommand}" />
+                </StackPanel>
+              </Grid>
+
+              <StackPanel Spacing="6" IsVisible="{Binding HasTrack}">
+                <TextBlock Classes="caption" Text="{Binding TrackSummary}" TextWrapping="Wrap" />
+                <ScrollViewer MaxHeight="110" HorizontalScrollBarVisibility="Disabled">
+                  <ItemsControl ItemsSource="{Binding Track}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:TrackRowViewModel">
+                        <Button Classes="marker" Command="{Binding SeekCommand}" Padding="6,3" Margin="0"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                          <Grid ColumnDefinitions="56,Auto,*">
+                            <TextBlock Text="{Binding TimeText}" FontSize="12" FontFeatures="tnum"
+                                       Foreground="{StaticResource TextTertiary}" VerticalAlignment="Center" />
+                            <Panel Grid.Column="1" Width="16" Margin="0,0,6,0" VerticalAlignment="Center">
+                              <PathIcon Data="{StaticResource IconCheck}" Width="10" Height="10"
+                                        Foreground="{StaticResource SuccessBrush}" IsVisible="{Binding IsMatch}" />
+                            </Panel>
+                            <TextBlock Grid.Column="2" Text="{Binding Text}" FontSize="12" FontFamily="{StaticResource MonoFont}"
+                                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding Text}" />
+                          </Grid>
+                        </Button>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </ScrollViewer>
+              </StackPanel>
+
+              <StackPanel Spacing="6" IsVisible="{Binding HasMarkedResults}">
+                <TextBlock Text="{Binding MarkedSummary}" FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap" />
+                <ScrollViewer MaxHeight="110" HorizontalScrollBarVisibility="Disabled">
+                  <ItemsControl ItemsSource="{Binding MarkedResults}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:MarkedClipRow">
+                        <Button Classes="marker" Command="{Binding OpenCommand}" Padding="6,3" Margin="0"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                ToolTip.Tip="Take frames from this clip">
+                          <Grid ColumnDefinitions="Auto,*,Auto">
+                            <Ellipse Width="7" Height="7" Margin="0,0,8,0" VerticalAlignment="Center"
+                                     Fill="{StaticResource SuccessBrush}" IsVisible="{Binding IsPerfect}" />
+                            <Ellipse Width="7" Height="7" Margin="0,0,8,0" VerticalAlignment="Center"
+                                     Fill="{StaticResource WarnBrush}" IsVisible="{Binding !IsPerfect}" />
+                            <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="12" TextTrimming="CharacterEllipsis"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="2" Text="{Binding Summary}" FontSize="12" Margin="10,0,0,0"
+                                       Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center" />
+                          </Grid>
+                        </Button>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </ScrollViewer>
+              </StackPanel>
+            </StackPanel>
           </Border>
 
           <!-- Where the frame comes from -->

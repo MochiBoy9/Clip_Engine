@@ -37,6 +37,18 @@ int RunFrameCommand(const std::filesystem::path& input, const std::filesystem::p
 int RunReadCommand(const std::filesystem::path& input, double seconds, const DetectionRule& rule, ReadQuality quality,
                    double hudScale = 1);
 
+// clip_engine.exe --track <clip> [the --read flags] [--every ms]
+// Reads the box all through the clip, every `everyMs`, and logs "Track at <seconds>: <matches> | <text>"
+// whenever what it reads changes, "Track progress <n>%" and "Track done: <reads> reads". For
+// seeing what a rule makes of a whole clip in Detection Studio.
+int RunTrackCommand(const std::filesystem::path& input, const DetectionRule& rule, ReadQuality quality, double hudScale,
+                    int everyMs);
+
+// clip_engine.exe --cut-sound <clip> <out.wav> --at seconds
+// Cuts the clip's game audio from a little before `seconds` to a second after, as a rule's
+// sound (see SoundMatch.h), and logs "Sound saved to <path>".
+int RunCutSoundCommand(const std::filesystem::path& input, const std::filesystem::path& output, double seconds);
+
 // clip_engine.exe --scan <clip> --game <id or name> [--quality low|medium|high|ultra] [--hud-scale 100]
 // Runs the game's rules over the whole video, frame by frame, as detection would have in game,
 // and logs "Scan found <event> at <seconds>: <text>" for each moment, "Scan progress <n>%" as

@@ -83,6 +83,7 @@ vm.ShowMatches = false;
 // Detection Studio, testing the kill rule on a frame from that clip.
 var studio = vm.OpenStudio(clip: vm.Clips[0], seconds: 12.4);
 studio.ShowSample(SampleFrame(), "ENTERRO ELIMINATED VEX", matched: true);
+studio.ShowSampleTools();
 Save(window, "9-studio.png");
 
 // The side panel as it sits on the edge of the screen.

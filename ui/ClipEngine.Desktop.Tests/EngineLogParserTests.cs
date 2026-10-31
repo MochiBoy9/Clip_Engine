@@ -22,6 +22,21 @@ public class EngineLogParserTests
     }
 
     [Fact]
+    public void StudioTools()
+    {
+        var w = Assert.IsType<ScanWitness>(Parse("Scan witness the_finals.kill.score_line +0.49s agreed: ELIMINATION + 250"));
+        Assert.Equal(("the_finals.kill.score_line", 0.49, false, "ELIMINATION + 250"), (w.Rule, w.Offset, w.Counted, w.Text));
+        Assert.True(Assert.IsType<ScanWitness>(Parse("Scan witness the_finals.kill.killfeed -0.20s counted: SMEDC CAPN")).Counted);
+        var t = Assert.IsType<TrackRead>(Parse("Track at 15.25: 1 | ELIMINATED MRBEAN ELIMINATION + 250"));
+        Assert.Equal((15.25, 1, "ELIMINATED MRBEAN ELIMINATION + 250"), (t.Seconds, t.Matches, t.Text));
+        Assert.Equal("", Assert.IsType<TrackRead>(Parse("Track at 3.00: 0 | ")).Text);
+        Assert.Equal(40, Assert.IsType<TrackProgress>(Parse("Track progress 40%")).Percent);
+        Assert.Equal(120, Assert.IsType<TrackDone>(Parse("Track done: 120 reads")).Reads);
+        Assert.Equal(@"C:\x\sounds\the_finals_kill_1.wav",
+                     Assert.IsType<SoundSaved>(Parse(@"Sound saved to C:\x\sounds\the_finals_kill_1.wav")).Path);
+    }
+
+    [Fact]
     public void IgnoresOtherText() => Assert.Null(EngineLogParser.ParseLine("Clip Engine is already running."));
 
     [Fact]

@@ -87,7 +87,9 @@ internal sealed class StudioCanvas : Control
             }
         }
 
-        foreach (var rule in rules.OrderBy(r => r.IsSelected))
+        // Rules that listen for a sound have no box.
+        var boxed = rules.Where(r => !r.IsSound).ToList();
+        foreach (var rule in boxed.OrderBy(r => r.IsSelected))
         {
             var box = BoxRect(rule, picture);
             var selected = ReferenceEquals(rule, SelectedRule);
@@ -97,7 +99,7 @@ internal sealed class StudioCanvas : Control
             var label = new FormattedText(rule.Label, System.Globalization.CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
                                           LabelFace, 11, LabelText);
             var tag = TagRect(box, new Size(label.Width + 12, label.Height + 4), picture,
-                              rules.Where(r => !ReferenceEquals(r, rule)).Select(r => BoxRect(r, picture)).ToList());
+                              boxed.Where(r => !ReferenceEquals(r, rule)).Select(r => BoxRect(r, picture)).ToList());
             context.DrawRectangle(rule.Brush, null, tag, 4, 4);
             context.DrawText(label, new Point(tag.X + 6, tag.Y + 2));
 
@@ -118,18 +120,18 @@ internal sealed class StudioCanvas : Control
         var point = e.GetPosition(this);
         _anchor = ToFraction(point, picture);
 
-        if (SelectedRule is { } picked && CornerAt(BoxRect(picked, picture), point) is { } corner)
+        if (SelectedRule is { IsSound: false } picked && CornerAt(BoxRect(picked, picture), point) is { } corner)
         {
             _drag = Drag.Resize;
             _corner = corner;
         }
-        else if (rules.Where(r => BoxRect(r, picture).Contains(point)).OrderByDescending(r => r.IsSelected).FirstOrDefault()
+        else if (rules.Where(r => !r.IsSound && BoxRect(r, picture).Contains(point)).OrderByDescending(r => r.IsSelected).FirstOrDefault()
                  is { } hit)
         {
             SelectedRule = hit;
             _drag = Drag.Move;
         }
-        else if (SelectedRule is not null && picture.Contains(point))
+        else if (SelectedRule is { IsSound: false } && picture.Contains(point))
         {
             _drag = Drag.Draw;
         }
@@ -149,9 +151,9 @@ internal sealed class StudioCanvas : Control
         var picture = Picture;
         if (_drag == Drag.None)
         {
-            Cursor = SelectedRule is { } picked && CornerAt(BoxRect(picked, picture), point) is { } c
+            Cursor = SelectedRule is { IsSound: false } picked && CornerAt(BoxRect(picked, picture), point) is { } c
                 ? new Cursor(c is 0 or 2 ? StandardCursorType.TopLeftCorner : StandardCursorType.TopRightCorner)
-                : Rules?.Any(r => BoxRect(r, picture).Contains(point)) == true
+                : Rules?.Any(r => !r.IsSound && BoxRect(r, picture).Contains(point)) == true
                     ? new Cursor(StandardCursorType.SizeAll)
                     : null;
             return;
