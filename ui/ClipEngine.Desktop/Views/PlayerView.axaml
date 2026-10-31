@@ -104,18 +104,55 @@
             <ItemsControl ItemsSource="{Binding Markers}" Margin="0,0,8,0">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:MarkerViewModel">
-                  <Button Classes="marker" Command="{Binding SeekCommand}" HorizontalAlignment="Stretch"
-                          HorizontalContentAlignment="Stretch" ToolTip.Tip="{Binding Text}">
-                    <Grid ColumnDefinitions="Auto,*,Auto">
-                      <Border Width="3" Height="26" CornerRadius="0" Background="{Binding Brush}" Margin="0,0,12,0" />
-                      <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding Label}" FontWeight="SemiBold" FontSize="13" />
-                        <TextBlock Text="{Binding Text}" Classes="caption" TextTrimming="CharacterEllipsis" />
+                  <StackPanel>
+                    <Button Classes="marker" Classes.active="{Binding IsSelected}" Command="{Binding SeekCommand}"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                            ToolTip.Tip="Jump to it and see how it was found">
+                      <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                        <Border Width="3" Height="26" CornerRadius="0" Background="{Binding Brush}" Margin="0,0,12,0" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                          <TextBlock Text="{Binding Label}" FontWeight="SemiBold" FontSize="13" />
+                          <TextBlock Text="{Binding Text}" Classes="caption" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <PathIcon Grid.Column="2" Data="{StaticResource IconCheck}" Width="11" Height="11" Margin="8,0,0,0"
+                                  Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center"
+                                  IsVisible="{Binding IsConfirmed}" ToolTip.Tip="{Binding ConfirmedTip}" />
+                        <TextBlock Grid.Column="3" Text="{Binding TimeText}" Classes="caption" VerticalAlignment="Center"
+                                   FontFeatures="tnum" Margin="8,0,0,0" />
+                      </Grid>
+                    </Button>
+                    <!-- How it was found: every rule that saw it, what each read, and which one counted it -->
+                    <Border IsVisible="{Binding IsSelected}" Classes="inset" Padding="10,8" Margin="15,2,0,8">
+                      <StackPanel Spacing="8">
+                        <TextBlock Classes="caption" Text="{Binding WhySummary}" TextWrapping="Wrap" />
+                        <ItemsControl ItemsSource="{Binding Witnesses}">
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:WitnessViewModel">
+                              <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,6">
+                                <Ellipse Width="7" Height="7" Fill="{Binding Brush}" VerticalAlignment="Top" Margin="0,5,8,0" />
+                                <StackPanel Grid.Column="1" Spacing="1">
+                                  <TextBlock FontSize="12">
+                                    <Run Text="{Binding Name}" FontWeight="SemiBold" />
+                                    <Run Text="{Binding Detail}" Foreground="{StaticResource TextTertiary}" />
+                                  </TextBlock>
+                                  <TextBlock Classes="caption" Text="{Binding Text}" TextWrapping="Wrap" FontFamily="{StaticResource MonoFont}"
+                                             ToolTip.Tip="What this rule read off the screen" />
+                                </StackPanel>
+                              </Grid>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Button Classes="secondary" Command="{Binding StudioCommand}" IsVisible="{Binding HasWitnesses}"
+                                HorizontalAlignment="Left" Padding="8,3"
+                                ToolTip.Tip="Open this frame in Detection Studio with the rule that counted it, to see its box and fix it">
+                          <StackPanel Orientation="Horizontal" Spacing="6">
+                            <PathIcon Data="{StaticResource IconScan}" Width="11" Height="11" />
+                            <TextBlock Text="See it in Studio" FontSize="12" />
+                          </StackPanel>
+                        </Button>
                       </StackPanel>
-                      <TextBlock Grid.Column="2" Text="{Binding TimeText}" Classes="caption" VerticalAlignment="Center"
-                                 FontFeatures="tnum" Margin="8,0,0,0" />
-                    </Grid>
-                  </Button>
+                    </Border>
+                  </StackPanel>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>

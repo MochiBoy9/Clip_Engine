@@ -43,6 +43,46 @@ public class ClipMetadataTests : IDisposable
     }
 
     [Fact]
+    public void KeepsHowEachMomentWasFound()
+    {
+        const string withWitnesses = """
+            {
+              "version": 2, "game": "The Finals", "trigger": "auto", "seconds": 20.00, "title": "1 kill",
+              "events": [
+                { "type": "kill", "time": 15.50, "text": "SMEDC CAPN OSPUZE MRBEAN", "found_by": [
+                  { "rule": "the_finals.kill.killfeed", "text": "SMEDC CAPN OSPUZE MRBEAN", "offset": 0.00, "counted": true, "box": [0.7000, 0.0300, 0.3000, 0.2000] },
+                  { "rule": "the_finals.kill.score_line", "text": "ELIMINATION + 250", "offset": 0.49, "counted": false, "box": [0.3000, 0.5200, 0.4000, 0.2400] }
+                ] },
+                { "type": "death", "time": 18.00, "text": "ELIMINATED BY" }
+              ]
+            }
+            """;
+        var m = ClipMetadataFile.Parse(withWitnesses);
+        Assert.NotNull(m);
+        var found = m.Events[0].FoundBy;
+        Assert.NotNull(found);
+        Assert.Equal(2, found.Count);
+        Assert.True(found[0].Counted);
+        Assert.False(found[1].Counted);
+        Assert.Equal(0.49, found[1].Offset);
+        Assert.Equal([0.3, 0.52, 0.4, 0.24], found[1].Box);
+        Assert.Null(m.Events[1].FoundBy);
+
+        // Saving the clip's metadata (a favorite, marks) keeps them.
+        var clip = Path.Combine(_dir, "kept.mp4");
+        ClipMetadataFile.WriteSidecar(clip, m);
+        var again = ClipMetadataFile.ReadSidecar(clip);
+        Assert.Equal(2, again?.Events[0].FoundBy?.Count);
+        Assert.DoesNotContain("found_by\": null", File.ReadAllText(ClipMetadataFile.SidecarPath(clip)));
+
+        var marker = new ViewModels.MarkerViewModel("kill", 15.5, "", new ViewModels.RelayCommand(() => { })) { FoundBy = found };
+        Assert.True(marker.IsConfirmed);
+        Assert.Equal("Killfeed", marker.Witnesses[0].Name);
+        Assert.Equal("Counted from the killfeed, and the score line saw it too.", marker.WhySummary);
+        Assert.Equal("Agreed · +0.5s", marker.Witnesses[1].Detail);
+    }
+
+    [Fact]
     public void BadJsonIsIgnored() => Assert.Null(ClipMetadataFile.Parse("{ not json"));
 
     [Fact]

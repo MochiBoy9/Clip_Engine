@@ -431,6 +431,13 @@ public sealed class StudioViewModel : ObservableObject
         HasChanges = false;
     }
 
+    // Picks the rule with this detection.ini section, as when opened from a moment it found.
+    internal void SelectRule(string section)
+    {
+        var rule = Rules.FirstOrDefault(r => string.Equals(r.Rule.Section, section, StringComparison.OrdinalIgnoreCase));
+        if (rule is not null) SelectedRule = rule;
+    }
+
     private void ShowRules(IEnumerable<StudioRule> rules)
     {
         Rules.Clear();

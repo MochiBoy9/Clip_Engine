@@ -68,6 +68,12 @@ Save(window, "7-trim.png");
 vm.OpenPlayer(vm.Clips[0]).ShowCheck();
 Save(window, "13-check-detection.png");
 
+// How a kill was found: the killfeed counted it and the score line agreed.
+var why = vm.OpenPlayer(vm.Clips[0]);
+why.ShowAt(17.6, playing: false);
+why.ShowWhy(2);
+Save(window, "14-why-this-kill.png");
+
 // The Clips page grouped by match.
 vm.ShowPage(vm.ClipsPage);
 vm.ShowMatches = true;
@@ -220,6 +226,25 @@ internal static class Sample
         return timelines;
     }
 
+    // How the newest clip's kills were found, as the engine saves it: the killfeed counted each
+    // and the score line under the crosshair agreed, except one only the score line saw.
+    private static List<ClipWitness>? FoundBy(int index, string type, string text)
+    {
+        if (index != 0 || type != "kill") return null;
+        var name = text.Split(' ').Last().ToUpperInvariant();
+        var feed = new ClipWitness
+        {
+            Rule = "the_finals.kill.killfeed", Text = $"SMEDC MOCHI {name}", Counted = true, Box = [0.7, 0.03, 0.3, 0.2],
+        };
+        var score = new ClipWitness
+        {
+            Rule = "the_finals.kill.score_line", Text = $"ELIMINATED {name} ELIMINATION + 250", Offset = 0.3, Counted = false,
+            Box = [0.3, 0.52, 0.4, 0.24],
+        };
+        if (name == "HAZE") return [new ClipWitness { Rule = score.Rule, Text = score.Text, Box = score.Box }];
+        return [feed, score];
+    }
+
     // Detected moments for some of the sample clips, like the engine writes into each clip.
     // The first four were recorded with match tracking; the two oldest are from before it.
     private static ClipMetadata? Moments(int index, string game, int seconds, DateTime saved)
@@ -246,7 +271,7 @@ internal static class Sample
             SessionSeconds = Math.Max(0, (saved.AddSeconds(-seconds) - sessionStart).TotalSeconds),
             Match = index switch { 0 => 2, 1 => 1, _ => 1 },
             Favorite = index == 2,
-            Events = events.Select(e => new ClipEvent { Type = e.Type, Time = e.Time, Text = e.Text }).ToList(),
+            Events = events.Select(e => new ClipEvent { Type = e.Type, Time = e.Time, Text = e.Text, FoundBy = FoundBy(index, e.Type, e.Text) }).ToList(),
         };
         metadata.Title = string.Join(", ", metadata.Events.GroupBy(e => e.Type)
             .Select(g => EventKinds.Count(g.Key, g.Count()).ToLowerInvariant()));

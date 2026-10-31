@@ -250,7 +250,7 @@ void TestFinalsKillfeed(const char* path) {
   };
   const DetectionRule& kill = named("the_finals.kill.killfeed");
   const DetectionRule& death = named("the_finals.death.killfeed");
-  CHECK(kill.skipTag && kill.mergeMs > 0 && kill.priority > named("the_finals.kill").priority);
+  CHECK(kill.skipTag && kill.mergeMs > 0 && kill.priority > named("the_finals.kill.score_line").priority);
   auto count = [](const DetectionRule& r, std::initializer_list<const char*> lines) { return CountMatches(r, Rows(lines)); };
 
   CHECK(count(kill, {"SMEDC CAPN_OSPUZE > MrBean", "KEAYS Eclipz > SUNBO Kloudd"}) == 1);

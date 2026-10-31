@@ -100,11 +100,13 @@ public sealed record RibbonTick(double Fraction, IBrush Brush)
         seconds > 0 ? events.Select(e => new RibbonTick(e.Time / seconds, EventKinds.Brush(e.Type))).ToList() : [];
 }
 
-// A detected moment on the player's timeline.
-public sealed class MarkerViewModel(string type, double seconds, string text, RelayCommand seek)
+// A detected moment on the player's timeline, and how it was found.
+public sealed class MarkerViewModel(string type, double seconds, string text, RelayCommand seek) : ObservableObject
 {
     // Jumping to a marker starts a little before it, so you see what led up to it.
     private const double LeadIn = 2;
+
+    private bool _isSelected;
 
     public string Type { get; } = type;
     public string Label { get; } = EventKinds.Label(type);
@@ -114,6 +116,80 @@ public sealed class MarkerViewModel(string type, double seconds, string text, Re
     public string TimeText { get; } = Format.Duration(TimeSpan.FromSeconds(seconds));
     public IBrush Brush { get; } = EventKinds.Brush(type);
     public RelayCommand SeekCommand { get; } = seek;
+
+    // Each rule that saw it, the one that counted it first.
+    public IReadOnlyList<WitnessViewModel> Witnesses { get; private init; } = [];
+    internal IReadOnlyList<ClipWitness>? FoundBy
+    {
+        init => Witnesses = (value ?? []).OrderByDescending(w => w.Counted).ThenBy(w => w.Offset)
+            .Select(w => new WitnessViewModel(w, Brush)).ToList();
+    }
+    public bool HasWitnesses => Witnesses.Count > 0;
+    // Seen by more than one rule, so a misread of one alone couldn't have made it up.
+    public bool IsConfirmed => Witnesses.Select(w => w.Rule).Distinct().Count() > 1;
+    public string ConfirmedTip => IsConfirmed ? $"Seen by {Witnesses.Select(w => w.Rule).Distinct().Count()} rules" : "";
+
+    public string WhySummary
+    {
+        get
+        {
+            if (!HasWitnesses) return "From the game's own events, or saved before Clip Engine kept how each moment was found.";
+            var counted = Witnesses.FirstOrDefault(w => w.Counted) ?? Witnesses[0];
+            var others = Witnesses.Where(w => w.Rule != counted.Rule).Select(w => w.Name.ToLowerInvariant()).Distinct().ToList();
+            return others.Count == 0
+                ? $"Only the {counted.Name.ToLowerInvariant()} saw it."
+                : $"Counted from the {counted.Name.ToLowerInvariant()}, and the {string.Join(" and the ", others)} saw it too.";
+        }
+    }
+
+    // Selected in the list: shows how it was found.
+    public bool IsSelected { get => _isSelected; set => Set(ref _isSelected, value); }
+
+    // Opens Detection Studio on this moment, with the rule that counted it picked.
+    public RelayCommand? StudioCommand { get; init; }
+    public bool HasStudio => StudioCommand is not null;
+}
+
+// One rule's sighting of a moment.
+public sealed class WitnessViewModel
+{
+    private static readonly IBrush Muted = new ImmutableSolidColorBrush(Color.FromRgb(0x8A, 0x93, 0x9E));
+
+    internal WitnessViewModel(ClipWitness witness, IBrush moment)
+    {
+        Rule = witness.Rule;
+        Name = RuleNames.Describe(witness.Rule);
+        Text = witness.Text;
+        Counted = witness.Counted;
+        var when = Math.Abs(witness.Offset) < 0.05 ? "" : $" · {witness.Offset.ToString("+0.0;-0.0", CultureInfo.InvariantCulture)}s";
+        Detail = (witness.Counted ? "Counted" : "Agreed") + when;
+        Box = witness.Box.Length == 4 ? witness.Box : null;
+        Brush = witness.Counted ? moment : Muted;
+    }
+
+    public string Rule { get; }
+    public string Name { get; }
+    public string Text { get; }
+    public bool Counted { get; }
+    public string Detail { get; }
+    public IBrush Brush { get; }
+    // Where it read, as fractions of the frame: left, top, width, height.
+    internal double[]? Box { get; }
+}
+
+// Names for detection.ini sections a player can read: "the_finals.kill.killfeed" is the killfeed.
+internal static class RuleNames
+{
+    public static string Describe(string section)
+    {
+        var parts = section.Split('.');
+        if (parts.Length >= 3)
+        {
+            var name = string.Join(" ", parts[2..]).Replace('_', ' ').Trim();
+            if (name.Length > 0) return char.ToUpperInvariant(name[0]) + name[1..];
+        }
+        return parts.Length >= 2 ? $"{EventKinds.Label(parts[1])} rule" : section;
+    }
 }
 
 // Names and colours for the event types in src/detect/GameEvent.h.

@@ -649,6 +649,9 @@
   <Style Selector="Button.marker:pressed /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{StaticResource ControlBrush}" />
   </Style>
+  <Style Selector="Button.marker.active /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource ControlBrush}" />
+  </Style>
   <!-- Motion. Short and only on interaction: hover, press, selection and page changes. Nothing loops except the live
        dot, and only colours, opacity and render transforms move, so layout never reruns while something animates. -->
   <Style Selector="views|Plate.card, views|Plate.clipCard">
