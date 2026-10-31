@@ -2,6 +2,7 @@
 
 #include "capture/MonitorCapture.h"
 #include "detect/DetectionRules.h"
+#include "detect/EventFuser.h"
 #include "detect/OcrImage.h"
 
 #include <winrt/Windows.Media.Ocr.h>
@@ -51,6 +52,8 @@ class EventDetector {
   struct Region;
   void Run();
   void Process(Region& region, int64_t time, const winrt::Windows::Media::Ocr::OcrEngine& ocr);
+  // The region's box as fractions of the screen, for a moment's witness.
+  Witness Where(const Region& region) const;
 
   std::shared_ptr<GpuDevice> gpu_;
   const MonitorCapture& capture_;
@@ -62,6 +65,7 @@ class EventDetector {
   bool debug_;
   Sink sink_;
   ScoreboardSink scoreboardSink_;
+  EventFuser fuser_;  // turns each rule's sightings into moments, for sink_
 
   std::vector<std::unique_ptr<Region>> regions_;
   std::atomic<DWORD> gameProcess_{0};

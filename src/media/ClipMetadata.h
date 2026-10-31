@@ -17,6 +17,7 @@ struct ClipMetadata {
     EventType type;
     double seconds;  // from the start of the clip
     std::string text;
+    std::vector<Witness> witnesses = {};  // how it was found, saved as found_by
   };
 
   std::string game;

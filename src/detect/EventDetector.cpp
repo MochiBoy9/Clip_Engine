@@ -86,6 +86,7 @@ struct EventDetector::Region {
     ImageMatcher matcher;
     double match;
     bool found = false;
+    double alike = 0;  // how alike it was at the last look
   };
   std::vector<Icon> icons;
 
@@ -150,7 +151,8 @@ EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCaptur
       quality_(quality),
       debug_(debug),
       sink_(std::move(sink)),
-      scoreboardSink_(std::move(scoreboardSink)) {
+      scoreboardSink_(std::move(scoreboardSink)),
+      fuser_([this](const GameEvent& e) { sink_(e); }, [](const std::string& note) { log::Info("{}", note); }) {
   const double screenW = capture_.Width();
   const double screenH = capture_.Height();
   // Where the HUD draws each region on this screen, at the HUD size the player set.
@@ -390,11 +392,23 @@ void EventDetector::Run() {
       }
 
       for (Region* region : ready) Process(*region, region->copyTime, ocr);
+      fuser_.Flush(NowHns());
     }
   } catch (const winrt::hresult_error& e) {
     log::Error("Event detection stopped: {}", Describe(e));
   }
   winrt::uninit_apartment();
+}
+
+Witness EventDetector::Where(const Region& region) const {
+  const double w = capture_.Width();
+  const double h = capture_.Height();
+  Witness where;
+  where.left = region.box.left / w;
+  where.top = region.box.top / h;
+  where.width = (region.box.right - region.box.left) / w;
+  where.height = (region.box.bottom - region.box.top) / h;
+  return where;
 }
 
 void EventDetector::Process(Region& region, int64_t time, const OcrEngine& ocr) {
@@ -432,7 +446,7 @@ void EventDetector::Process(Region& region, int64_t time, const OcrEngine& ocr) 
       const size_t chosen = ChooseRead(tracker.Rule(), rows);
       const int fresh = tracker.Update(rows[chosen], ms);
       if (debug_ && fresh > 0 && chosen > 0) log::Info("[{}] found in read {} of the region", tracker.Rule().name, chosen + 1);
-      for (int i = 0; i < fresh; ++i) sink_(GameEvent{tracker.Rule().event, time, Shorten(text, 80)});
+      fuser_.Add(tracker.Rule(), fresh, time, Shorten(text, 120), Where(target));
     }
   };
   if (region.board) {
@@ -482,9 +496,11 @@ void EventDetector::Process(Region& region, int64_t time, const OcrEngine& ocr) 
       const double alike = icon.matcher.BestMatch(*gray);
       if (debug_ && (alike >= icon.match) != icon.found) log::Info("Icon [{}]: {:.2f}", icon.tracker.Rule().name, alike);
       icon.found = alike >= icon.match;
+      icon.alike = alike;
     }
     const int fresh = icon.tracker.UpdateMatches(icon.found ? std::vector<std::string>{""} : std::vector<std::string>{}, ms);
-    for (int i = 0; i < fresh; ++i) sink_(GameEvent{icon.tracker.Rule().event, time, "icon: " + icon.tracker.Rule().name});
+    fuser_.Add(icon.tracker.Rule(), fresh, time, std::format("icon: {} ({:.2f} alike)", icon.tracker.Rule().name, icon.alike),
+               Where(region));
   }
 }
 

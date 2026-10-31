@@ -3,6 +3,7 @@
 
 #include "app/AutoClipPlanner.h"
 #include "detect/DetectionRules.h"
+#include "detect/EventFuser.h"
 #include "detect/ImageMatch.h"
 #include "detect/OcrImage.h"
 #include "detect/TextMatcher.h"
@@ -238,6 +239,148 @@ void TestFinalsRules(const char* path) {
   CHECK(kills.Update(Rows({"fliMINATED nssmnvnn", "FLOW STATE 40 + 40 FANS"}), 5000) == 0);
   CHECK(kills.Update(Rows({"fillWINATfD SA5SVRfWAR", "ELIMINATION + 250", "FLOW STATE"}), 5250) == 1);
   CHECK(kills.Update(Rows({"fillWINATfD SA5SVRfWAR", "ELIMINATION + 250"}), 5500) == 0);
+}
+
+// The Finals' killfeed: "[SMEDC] CAPN_OSPUZE > [KEAYS] Eclipz", a squad tag before each name.
+void TestFinalsKillfeed(const char* path) {
+  std::ifstream in(path);
+  const auto rules = ParseDetectionRules(in).ForGame("the_finals", {"CAPN_OSPUZE"});
+  auto named = [&](const char* name) -> const DetectionRule& {
+    return *std::ranges::find_if(rules, [&](const DetectionRule& r) { return r.name == name; });
+  };
+  const DetectionRule& kill = named("the_finals.kill.killfeed");
+  const DetectionRule& death = named("the_finals.death.killfeed");
+  CHECK(kill.skipTag && kill.mergeMs > 0 && kill.priority > named("the_finals.kill").priority);
+  auto count = [](const DetectionRule& r, std::initializer_list<const char*> lines) { return CountMatches(r, Rows(lines)); };
+
+  CHECK(count(kill, {"SMEDC CAPN_OSPUZE > MrBean", "KEAYS Eclipz > SUNBO Kloudd"}) == 1);
+  CHECK(count(kill, {"[SMEDC] CAPN_OSPUZE I > KEAYS Eclipz"}) == 1);
+  CHECK(count(kill, {"CAPN_OSPUZE > KEAYS Eclipz"}) == 1);
+  CHECK(count(death, {"SMEDC CAPN_OSPUZE > MrBean"}) == 0);
+  CHECK(count(kill, {"KEAYS Eclipz > SMEDC CAPN_OSPUZE"}) == 0);
+  CHECK(count(death, {"KEAYS Eclipz > SMEDC CAPN_OSPUZE"}) == 1);
+  // Someone without a tag killing the player isn't the player's kill.
+  CHECK(count(kill, {"Bob CAPN_OSPUZE"}) == 0);
+  // A teammate's kill.
+  CHECK(count(kill, {"4JEFF Jaadoo > KEAYS Eclipz"}) == 0);
+  // Without a name, the killfeed rules aren't used and the score line counts alone.
+  std::ifstream again(path);
+  const auto nameless = ParseDetectionRules(again).ForGame("the_finals");
+  CHECK(std::ranges::none_of(nameless, [](const DetectionRule& r) { return r.name == "the_finals.kill.killfeed"; }));
+}
+
+DetectionRule FusedRule(const char* name, int priority, int mergeMs = 4000) {
+  DetectionRule rule;
+  rule.name = name;
+  rule.event = EventType::Kill;
+  rule.priority = priority;
+  rule.mergeMs = mergeMs;
+  return rule;
+}
+
+constexpr int64_t kMs = 10'000;  // 100 ns units
+
+void TestFuser() {
+  const DetectionRule feed = FusedRule("feed", 2);
+  const DetectionRule score = FusedRule("score", 1);
+  std::vector<GameEvent> events;
+  std::vector<std::string> notes;
+  EventFuser fuser([&](const GameEvent& e) { events.push_back(e); }, [&](const std::string& n) { notes.push_back(n); });
+
+  // One kill from a recorded match: the killfeed line, then the score line read three times
+  // as it faded, which used to be three kills.
+  fuser.Add(feed, 1, 15'500 * kMs, "SMEDC CAPN OSPUZE KEAYS ECLIPZ", Witness{"", "", 0.7, 0.03, 0.3, 0.2});
+  fuser.Add(score, 1, 15'990 * kMs, "ELIMINATION 250");
+  fuser.Flush(16'000 * kMs);
+  CHECK(events.empty());  // still waiting for every rule to have a look
+  fuser.Flush(16'600 * kMs);
+  CHECK(events.size() == 1);
+  CHECK(events[0].time == 15'500 * kMs);
+  CHECK(events[0].witnesses.size() == 2);
+  CHECK(events[0].witnesses[0].rule == "feed" && events[0].witnesses[0].counted);
+  CHECK(events[0].witnesses[0].left == 0.7);
+  CHECK(events[0].witnesses[1].rule == "score" && !events[0].witnesses[1].counted);
+  CHECK(std::abs(events[0].witnesses[1].offset - 0.49) < 0.001);
+  fuser.Add(score, 1, 17'280 * kMs, "ELIMIYATJON 250");
+  fuser.Add(score, 1, 19'370 * kMs, "KEAYS IMINATION 250");
+  fuser.Flush(20'000 * kMs);
+  CHECK(events.size() == 1);
+  CHECK(notes.size() == 2);
+
+  // Long after: the killfeed was misread, so the score line counts it alone.
+  fuser.Add(score, 1, 60'000 * kMs, "ELIMINATION 250");
+  fuser.Flush(61'000 * kMs);
+  CHECK(events.size() == 2);
+  CHECK(events[1].witnesses.size() == 1 && events[1].witnesses[0].counted);
+
+  // A double kill: two killfeed lines a second apart and one score line.
+  fuser.Add(feed, 1, 100'000 * kMs, "A");
+  fuser.Add(score, 1, 100'200 * kMs, "ELIMINATION 250");
+  fuser.Flush(101'000 * kMs);
+  fuser.Add(feed, 1, 101'100 * kMs, "B");
+  fuser.Flush(101'200 * kMs);
+  CHECK(events.size() == 4);
+  CHECK(events[3].text == "B");
+
+  // Two killfeed lines in one read count twice once it settles.
+  fuser.Add(feed, 2, 200'000 * kMs, "A B");
+  fuser.FlushAll();
+  CHECK(events.size() == 6);
+
+  // A rule without merge_ms counts at once.
+  DetectionRule plain = FusedRule("plain", 1, 0);
+  fuser.Add(plain, 1, 300'000 * kMs, "KILL");
+  CHECK(events.size() == 7);
+  CHECK(events[6].witnesses.size() == 1 && events[6].witnesses[0].rule == "plain");
+
+  // Deaths are their own groups.
+  DetectionRule death = FusedRule("death", 1);
+  death.event = EventType::Death;
+  fuser.Add(feed, 1, 400'000 * kMs, "A");
+  fuser.Add(death, 1, 400'100 * kMs, "ELIMINATED BY");
+  fuser.FlushAll();
+  CHECK(events.size() == 9);
+}
+
+void TestForgetMs() {
+  DetectionRule rule = FusedRule("score", 1);
+  rule.words = ParsePhrases("ELIMINATION {number}");
+  rule.cooldownMs = 0;
+  RuleTracker plain(rule);
+  DetectionRule longer = rule;
+  longer.forgetMs = 3000;
+  RuleTracker patient(longer);
+  // The score line lost for a second and a half as it fades, then read again.
+  for (RuleTracker* t : {&plain, &patient}) CHECK(t->Update(Rows({"ELIMINATION + 250"}), 0) == 1);
+  CHECK(plain.Update(Rows({"ELIMINATION + 250"}), 1500) == 1);
+  CHECK(patient.Update(Rows({"ELIMINATION + 250"}), 1500) == 0);
+  CHECK(patient.Update(Rows({}), 4600) == 0);
+  CHECK(patient.Update(Rows({"ELIMINATION + 250"}), 4800) == 1);
+}
+
+void TestWitnessRoundTrip() {
+  ClipMetadata m;
+  m.game = "The Finals";
+  m.trigger = "auto";
+  m.seconds = 20;
+  Witness counted{"the_finals.kill.killfeed", "SMEDC CAPN OSPUZE \"MrBean\"", 0.7, 0.03, 0.3, 0.2, 0, true};
+  Witness agreed{"the_finals.kill", "ELIMINATION 250", 0.3, 0.52, 0.4, 0.24, 0.49, false};
+  m.markers.push_back({EventType::Kill, 15.5, "SMEDC CAPN OSPUZE", {counted, agreed}});
+  m.markers.push_back({EventType::Death, 18, "ELIMINATED BY", {}});
+  const std::string json = ToJson(m);
+  CHECK(json.find("\"found_by\"") != std::string::npos);
+  const auto back = ParseMetadataJson(json);
+  CHECK(back.has_value());
+  if (!back) return;
+  CHECK(back->markers.size() == 2);
+  CHECK(back->markers[0].witnesses.size() == 2);
+  CHECK(back->markers[0].witnesses[0].text == counted.text);
+  CHECK(back->markers[0].witnesses[0].counted && !back->markers[0].witnesses[1].counted);
+  CHECK(std::abs(back->markers[0].witnesses[1].offset - 0.49) < 0.001);
+  CHECK(std::abs(back->markers[0].witnesses[1].top - 0.52) < 0.0001);
+  CHECK(back->markers[1].witnesses.empty());
+  // Trimming keeps them.
+  CHECK(Trimmed(*back, 10, 20).markers[0].witnesses.size() == 2);
 }
 
 void TestTracker() {
@@ -850,8 +993,12 @@ int main(int argc, char** argv) {
   TestChooseRead();
   TestReadQuality();
   TestPlaceRegion();
+  TestFuser();
+  TestForgetMs();
+  TestWitnessRoundTrip();
   if (argc > 1) TestShippedRulesParse(argv[1]);
   if (argc > 1) TestFinalsRules(argv[1]);
+  if (argc > 1) TestFinalsKillfeed(argv[1]);
   if (argc > 2) TestMetadataBox(argv[2]);
   if (g_failures == 0) std::printf("All detection tests passed\n");
   return g_failures == 0 ? 0 : 1;

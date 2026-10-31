@@ -2,6 +2,7 @@
 
 #include "core/Clock.h"
 #include "core/Log.h"
+#include "detect/EventFuser.h"
 #include "detect/ImageMatch.h"
 #include "detect/Ocr.h"
 
@@ -345,11 +346,22 @@ int RunScanCommand(const std::filesystem::path& input, const std::vector<Detecti
     log::Info("Scanning {}x{} video with {} rules at reading quality {}", video.width, video.height, watches.size(),
               ToString(quality));
 
+    // Moments seen by more than one rule count once, as in game.
     int found = 0;
+    EventFuser fuser(
+        [&](const GameEvent& e) {
+          log::Info("Scan found {} at {:.2f}: {}", EventName(e.type), static_cast<double>(e.time) / kHnsPerSecond, e.text);
+          for (const auto& w : e.witnesses) {
+            log::Info("Scan witness {} {:+.2f}s {}: {}", w.rule, w.offset, w.counted ? "counted" : "agreed", w.text);
+          }
+          ++found;
+        },
+        [](const std::string& note) { log::Info("Scan note: {}", note); });
     int lastPercent = -1;
     int64_t time = 0;
     while (auto sample = video.Next(time)) {
       const int64_t ms = time / kHnsPerMs;
+      fuser.Flush(time);
       if (std::ranges::none_of(watches, [&](const auto& w) { return w->dueMs <= ms; })) continue;
       const Picture frame = video.ToPicture(sample.get());
       // Rules that look at the same box share one read of it.
@@ -387,11 +399,13 @@ int RunScanCommand(const std::filesystem::path& input, const std::vector<Detecti
           fresh += watch->tracker.UpdateMatches(alike >= rule.imageMatch ? std::vector<std::string>{""} : std::vector<std::string>{}, ms);
           if (text.empty()) text = "icon: " + rule.name;
         }
-        if (text.size() > 80) text = text.substr(0, 80) + "...";
-        for (int i = 0; i < fresh; ++i) {
-          log::Info("Scan found {} at {:.2f}: {}", EventName(rule.event), ms / 1000.0, text);
-          ++found;
-        }
+        if (text.size() > 120) text = text.substr(0, 120) + "...";
+        Witness where;
+        where.left = static_cast<double>(watch->box.left) / video.width;
+        where.top = static_cast<double>(watch->box.top) / video.height;
+        where.width = static_cast<double>(width) / video.width;
+        where.height = static_cast<double>(height) / video.height;
+        fuser.Add(rule, fresh, ms * kHnsPerMs, text, where);
       }
       if (length > 0) {
         const int percent = std::clamp(static_cast<int>(ms / 10.0 / length), 0, 100);
@@ -401,6 +415,7 @@ int RunScanCommand(const std::filesystem::path& input, const std::vector<Detecti
         }
       }
     }
+    fuser.FlushAll();
     log::Info("Scan done: {} moments", found);
     return 0;
   } catch (const winrt::hresult_error& e) {
