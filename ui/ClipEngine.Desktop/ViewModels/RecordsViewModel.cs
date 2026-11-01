@@ -41,7 +41,7 @@ public sealed class RecordsViewModel : ObservableObject
     {
         _book = book;
         Records = book.Records.Select(r => new RecordCard(r)).ToList();
-        GameTotals = book.Games.Select(g => new GameTotalsRow(g)).ToList();
+        GameTotals = book.Games.Select(g => new GameTotalsRow(g, game => Main.OpenStudio(game))).ToList();
         RecentMatches = book.Matches.Take(ShownMatches).Select(m => new MatchRow(m, IsRecordMatch(m))).ToList();
         Totals =
         [
@@ -176,7 +176,7 @@ public sealed class RecordCard
 
 public sealed class GameTotalsRow
 {
-    internal GameTotalsRow(GameTotals totals)
+    internal GameTotalsRow(GameTotals totals, Action<string>? tune = null)
     {
         Game = totals.Game;
         Initials = Format.Initials(totals.Game);
@@ -188,7 +188,31 @@ public sealed class GameTotalsRow
         Assists = totals.Assists.ToString("N0", CultureInfo.CurrentCulture);
         KillDeath = totals.KillDeathRatio.ToString("0.00", CultureInfo.CurrentCulture);
         Best = PlayerRecords.Plural(totals.BestKills, "kill");
+
+        // How detection did against the game's scoreboard, when it was read.
+        if (totals.Check is { } check)
+        {
+            var matches = PlayerRecords.Plural(check.Matches, "match", "matches");
+            var line = check.BoardKills > 0
+                ? $"Caught {check.CaughtKills} of the {PlayerRecords.Plural(check.BoardKills, "kill")} the scoreboard showed ({check.KillShare:0%})"
+                : "The scoreboard showed no kills";
+            if (check.ExtraKills > 0) line += $", {check.ExtraKills} extra";
+            CheckText = $"{line} · last {matches}";
+            CheckTip = $"Kills and deaths counted in your last {matches} with the scoreboard read, against the scoreboard. "
+                       + $"Deaths: caught {check.CaughtDeaths} of {check.BoardDeaths}"
+                       + (check.ExtraDeaths > 0 ? $", {check.ExtraDeaths} extra." : ".")
+                       + (check.Matches < DetectionCheck.Enough ? " A few more matches and it's a fair check." : "");
+            NeedsTuning = check.NeedsTuning;
+        }
+        TuneCommand = new RelayCommand(() => tune?.Invoke(Game), () => tune is not null);
     }
+
+    public string? CheckText { get; }
+    public string? CheckTip { get; }
+    public bool HasCheck => CheckText is not null;
+    // Detection keeps missing kills in this game, or counting ones that weren't there.
+    public bool NeedsTuning { get; }
+    public RelayCommand TuneCommand { get; }
 
     public string Game { get; }
     public string Initials { get; }

@@ -110,7 +110,7 @@
             <ItemsControl ItemsSource="{Binding GameTotals}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:GameTotalsRow">
-                  <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,16">
+                  <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto" Margin="0,0,0,16">
                     <Border Width="38" Height="38" CornerRadius="2" Background="{Binding Gradient}" Margin="0,0,12,0">
                       <TextBlock Text="{Binding Initials}" FontWeight="Black" Foreground="White"
                                  HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -133,6 +133,15 @@
                         <TextBlock Classes="caption" Text="best match" HorizontalAlignment="Right" />
                       </StackPanel>
                     </StackPanel>
+                    <!-- Detection against the game's own scoreboard -->
+                    <Grid Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" ColumnDefinitions="*,Auto" Margin="0,6,0,0"
+                          IsVisible="{Binding HasCheck}">
+                      <TextBlock Classes="caption" Text="{Binding CheckText}" TextWrapping="Wrap" VerticalAlignment="Center"
+                                 ToolTip.Tip="{Binding CheckTip}" />
+                      <Button Grid.Column="1" Classes="secondary" Padding="10,4" FontSize="13" Margin="10,0,0,0"
+                              Content="Tune its rules" Command="{Binding TuneCommand}" IsVisible="{Binding NeedsTuning}"
+                              ToolTip.Tip="Open Detection Studio for this game, to fix the rules that miss kills or count extra ones" />
+                    </Grid>
                   </Grid>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>

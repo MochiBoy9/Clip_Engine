@@ -57,6 +57,49 @@ public class PlayerRecordsTests
     }
 
     [Fact]
+    public void ChecksTheCountAgainstTheScoreboard()
+    {
+        var book = PlayerRecords.Build([Parse(Valorant)], []);
+        // Match 1: 4 kills and 1 death counted by the time the board said 9 and 2.
+        Assert.Equal(new ScoreboardCheck(9, 4, 2, 1), book.Matches[1].Check);
+        Assert.Equal((5, 0), (book.Matches[1].Check!.MissedKills, book.Matches[1].Check!.ExtraKills));
+        // Match 2 had no scoreboard read.
+        Assert.Null(book.Matches[0].Check);
+        var game = Assert.Single(book.Games);
+        Assert.Equal(new DetectionCheck(1, 9, 4, 0, 2, 1, 0), game.Check);
+        Assert.False(game.Check!.NeedsTuning);  // one match says too little
+    }
+
+    [Fact]
+    public void AKillRightAtTheReadMayOrMayNotBeOnTheBoard()
+    {
+        IReadOnlyList<(double, string, string)> moments =
+        [
+            (10, "kill", ""), (20, "kill", ""), (49, "kill", ""), (52, "kill", ""), (60, "death", ""),
+        ];
+        TimelineScores Read(int kills, string source = "screen") => new(50, 1, new Dictionary<string, int> { ["kills"] = kills }, source);
+        // 2 kills well before the read, and 2 within the slack either side: 2 to 4 all agree.
+        Assert.Equal(new ScoreboardCheck(3, 3, 0, 0), PlayerRecords.Check(moments, [Read(3)]));
+        Assert.Equal(new ScoreboardCheck(4, 4, 0, 0), PlayerRecords.Check(moments, [Read(4)]));
+        Assert.Equal(new ScoreboardCheck(6, 4, 0, 0), PlayerRecords.Check(moments, [Read(6)]));  // 2 missed
+        Assert.Equal(new ScoreboardCheck(1, 2, 0, 0), PlayerRecords.Check(moments, [Read(1)]));  // 1 extra
+        // The game's own API isn't a check on detection.
+        Assert.Null(PlayerRecords.Check(moments, [Read(3, "api")]));
+    }
+
+    [Fact]
+    public void AGameThatKeepsMissingKillsNeedsTuning()
+    {
+        ScoreboardCheck Match(int board, int counted, int extra = 0) => new(board, counted + extra, 0, 0);
+        Assert.True(DetectionCheck.Of([Match(10, 6), Match(10, 7), Match(10, 8)])!.NeedsTuning);   // 70% caught
+        Assert.False(DetectionCheck.Of([Match(10, 9), Match(10, 9), Match(10, 10)])!.NeedsTuning); // 93%
+        // A kill or two over now and then is fine; one in five isn't.
+        Assert.False(DetectionCheck.Of([Match(10, 10, 1), Match(10, 10), Match(10, 10)])!.NeedsTuning);
+        Assert.True(DetectionCheck.Of([Match(10, 10, 2), Match(10, 10, 2), Match(10, 10, 2)])!.NeedsTuning);
+        Assert.Null(DetectionCheck.Of([]));
+    }
+
+    [Fact]
     public void FindsPersonalBests()
     {
         var book = PlayerRecords.Build([Parse(Valorant)], []);
