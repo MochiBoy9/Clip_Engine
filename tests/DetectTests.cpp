@@ -451,6 +451,114 @@ void TestConfirmOnly() {
   if (events.size() == 2) CHECK(events[1].witnesses.size() == 2);
 }
 
+// What text recognition gets wrong about keywords and names, and how a killfeed row is read.
+void TestKeywordsAndNames() {
+  // A keyword run into the next word still counts, but an exclude word stuck to it cancels it.
+  DetectionRule kill;
+  kill.event = EventType::Kill;
+  SetPhrases(kill, "ELIMINATED", "BY | YOU WERE", {});
+  CHECK(CountMatches(kill, Rows({"ELIMINATED XXSNIPER"})) == 1);
+  CHECK(CountMatches(kill, Rows({"ELIMINATEDXXSNIPER"})) == 1);
+  CHECK(CountMatches(kill, Rows({"ELIMINATED BY BOB"})) == 0);
+  CHECK(CountMatches(kill, Rows({"ELIMINATEDBY BOB"})) == 0);
+  CHECK(FindMatches(kill, Rows({"ELIMINATEDXXSNIPER"})) == std::vector<std::string>{"XXSNIPER"});
+  // Another form of a keyword is another word.
+  CHECK(!WordsMatch("DEFEATED", "DEFEAT"));
+  CHECK(!WordsMatch("ASSISTED", "ASSIST"));
+  CHECK(!WordsMatch("REVIVED", "REVIVE"));
+  CHECK(WordsMatch("REVIVED", "REVIVED"));
+  CHECK(WordsMatch("DEFEAT", "DEFEAT"));
+  CHECK(RunOnLength("ELIMINATEDBY", "ELIMINATED") == 10);
+  CHECK(RunOnLength("ELIMINATEDX", "ELIMINATED") == 0);  // a stray letter is a misread, not a run-on
+  CHECK(RunOnLength("DEFEATED", "DEFEAT") == 0);
+  DetectionRule end;
+  end.event = EventType::MatchEnd;
+  SetPhrases(end, "VICTORY | DEFEAT", "", {});
+  CHECK(CountMatches(end, Rows({"ENEMY DEFEATED"})) == 0);
+  CHECK(CountMatches(end, Rows({"DEFEAT"})) == 1);
+
+  // Names: another player whose name starts with the player's isn't them.
+  CHECK(NameMatches("ENTERRO", "ENTERRO"));
+  CHECK(NameMatches("ENTERR0", "ENTERRO"));
+  CHECK(NameMatches("ENTEPRO", "ENTERRO"));  // a misread letter
+  CHECK(!NameMatches("ENTERROX", "ENTERRO"));
+  CHECK(!NameMatches("ENTERROXX", "ENTERRO"));
+  CHECK(!NameMatches("ENTERROR2", "ENTERRO"));
+  // A four-letter name may have one look-alike letter misread, and only that.
+  CHECK(NameMatches("IUKE", "LUKE"));
+  CHECK(NameMatches("LUKE", "LUKE"));
+  CHECK(!NameMatches("IUKF", "LUKE"));
+  CHECK(!NameMatches("DUKE", "LUKE"));
+  CHECK(!NameMatches("KAI", "KAL"));
+
+  // Accented names read the same as they're typed.
+  CHECK(Tokenize("Jos\xC3\xA9 \xC5\x81ukasz \xC3\x86on") == (std::vector<std::string>{"JOSE", "LUKASZ", "AEON"}));
+  CHECK(Tokenize("A\xC3\x97" "B \xE2\x86\x92 C") == (std::vector<std::string>{"A", "B", "C"}));
+
+  // A killfeed row with only the player's name is their death, not a kill as well.
+  DetectionRule start;
+  start.event = EventType::Kill;
+  start.position = LinePosition::Start;
+  SetPhrases(start, "{player}", "", {"Enterro"});
+  DetectionRule finish;
+  finish.event = EventType::Death;
+  finish.position = LinePosition::End;
+  SetPhrases(finish, "{player}", "", {"Enterro"});
+  CHECK(CountMatches(start, Rows({"Enterro"})) == 0);
+  CHECK(CountMatches(start, Rows({"Enterro X"})) == 0);  // an icon after the name
+  CHECK(CountMatches(finish, Rows({"Enterro"})) == 1);
+  CHECK(CountMatches(start, Rows({"Enterro Bob"})) == 1);
+  CHECK(CountMatches(start, Rows({"Enterror Bob"})) == 0);
+  // A rule with words around the name isn't held to that.
+  DetectionRule suicide;
+  suicide.event = EventType::Death;
+  suicide.position = LinePosition::Start;
+  SetPhrases(suicide, "{player} COMMITTED SUICIDE", "", {"Enterro"});
+  CHECK(CountMatches(suicide, Rows({"Enterro committed suicide"})) == 1);
+
+  // An assister listed between the killer and the player killed.
+  DetectionRule assist;
+  assist.event = EventType::Assist;
+  assist.position = LinePosition::Middle;
+  SetPhrases(assist, "{player}", "", {"Enterro"});
+  CHECK(CountMatches(assist, Rows({"Killer + Enterro  Victim"})) == 1);
+  CHECK(CountMatches(assist, Rows({"Enterro Victim"})) == 0);
+  CHECK(CountMatches(assist, Rows({"Killer Enterro"})) == 0);
+  CHECK(CountMatches(assist, Rows({"Killer + Enterro X"})) == 0);
+}
+
+// A sound is recognized only once it has played out, after the killfeed showed the same kill;
+// it still backs that kill up.
+void TestLateSound() {
+  DetectionRule chime = FusedRule("chime", 1);
+  chime.confirmOnly = true;
+  const DetectionRule feed = FusedRule("feed", 2);
+  std::vector<GameEvent> events;
+  std::vector<std::string> notes;
+  EventFuser fuser([&](const GameEvent& e) { events.push_back(e); }, [&](const std::string& n) { notes.push_back(n); });
+  fuser.SetHoldMs(EventFuser::kSoundHoldMs);
+  fuser.Add(feed, 1, 10'200 * kMs, "ME BOB");
+  fuser.Flush(10'500 * kMs);
+  fuser.Add(chime, 1, 10'000 * kMs, "sound: 0.61 alike");  // began before the killfeed showed it
+  fuser.Flush(11'500 * kMs);
+  CHECK(events.empty());  // still waiting for a sound
+  fuser.Flush(12'300 * kMs);
+  CHECK(events.size() == 1);
+  if (events.size() == 1) {
+    CHECK(events[0].time == 10'200 * kMs);
+    CHECK(events[0].witnesses.size() == 2 && events[0].witnesses[1].rule == "chime");
+    CHECK(std::abs(events[0].witnesses[1].offset + 0.2) < 0.001);
+  }
+  CHECK(notes.empty());
+  // Two kills far apart: the late sound joins the one it's nearest.
+  fuser.Add(feed, 1, 30'000 * kMs, "ME ANN");
+  fuser.Add(feed, 1, 36'000 * kMs, "ME CAT");
+  fuser.Add(chime, 1, 35'800 * kMs, "sound");
+  fuser.Flush(40'000 * kMs);
+  CHECK(events.size() == 3);
+  if (events.size() == 3) CHECK(events[1].witnesses.size() == 1 && events[2].witnesses.size() == 2);
+}
+
 void TestForgetMs() {
   DetectionRule rule = FusedRule("score", 1);
   rule.words = ParsePhrases("ELIMINATION {number}");
@@ -1106,6 +1214,8 @@ int main(int argc, char** argv) {
   TestForgetMs();
   TestWitnessRoundTrip();
   TestConfirmOnly();
+  TestLateSound();
+  TestKeywordsAndNames();
   TestSetPhrases();
   if (argc > 1) TestShippedRulesParse(argv[1]);
   if (argc > 1) TestSounds(argv[1]);

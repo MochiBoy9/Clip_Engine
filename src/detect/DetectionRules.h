@@ -19,6 +19,7 @@ enum class LinePosition {
   Anywhere,  // anywhere in the region (the default)
   Start,     // first on a row: in a killfeed, the player who got the kill
   End,       // last on a row: in a killfeed, the player who died
+  Middle,    // between two names on a row: in a killfeed that names them, an assister
 };
 
 // Stands for the player's own in-game names (player_names in clip_engine.ini) in words and exclude.

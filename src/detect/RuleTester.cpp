@@ -558,6 +558,7 @@ int RunScanCommand(const std::filesystem::path& input, const std::vector<Detecti
           ++found;
         },
         [](const std::string& note) { log::Info("Scan note: {}", note); });
+    if (!sounds.Empty()) fuser.SetHoldMs(EventFuser::kSoundHoldMs);
     int lastPercent = -1;
     int64_t time = 0;
     while (auto sample = video.Next(time)) {

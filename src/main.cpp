@@ -135,7 +135,7 @@ int RunTrimCommand(int argc, wchar_t** argv) {
 
 // clip_engine.exe --frame <clip or image> <out.png> [--at seconds]
 // clip_engine.exe --read <clip or image> [--at seconds] --region l,t,w,h [--threshold n] [--words "A|B"] [--exclude "C"]
-//                 [--position start|end] [--skip-tag true] [--image icon.png] [--image-match 0.85] [--image-screen 1440]
+//                 [--position start|middle|end] [--skip-tag true] [--image icon.png] [--image-match 0.85] [--image-screen 1440]
 //                 [--quality low|medium|high|ultra] [--event kill] [--anchor top-right] [--aspect 16:9] [--hud-scale 100]
 // clip_engine.exe --track <clip> [the --read flags] [--every ms]
 // clip_engine.exe --cut-sound <clip> <out.wav> --at seconds
@@ -163,7 +163,12 @@ int RunStudioCommand(int argc, wchar_t** argv) {
     if (flag == L"--words") words = value;
     if (flag == L"--exclude") exclude = value;
     if (flag == L"--skip-tag") rule.skipTag = value == "true";
-    if (flag == L"--position") rule.position = value == "start" ? LinePosition::Start : value == "end" ? LinePosition::End : LinePosition::Anywhere;
+    if (flag == L"--position") {
+      rule.position = value == "start"    ? LinePosition::Start
+                      : value == "end"    ? LinePosition::End
+                      : value == "middle" ? LinePosition::Middle
+                                          : LinePosition::Anywhere;
+    }
     if (flag == L"--image") rule.image = value;
     if (flag == L"--image-match") rule.imageMatch = std::clamp(_wtof(argv[i + 1]), 0.05, 1.0);
     if (flag == L"--image-screen") rule.imageScreen = std::max(0, _wtoi(argv[i + 1]));

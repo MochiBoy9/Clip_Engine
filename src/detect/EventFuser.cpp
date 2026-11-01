@@ -26,9 +26,19 @@ void EventFuser::Add(const DetectionRule& rule, int count, int64_t time, const s
 
   // A rule that only backs others up has to wait for them however it's set.
   const int64_t merge = int64_t{rule.mergeMs > 0 ? rule.mergeMs : 2000} * kTicksPerMs;
-  auto group = std::ranges::find_if(groups_, [&](const Group& g) {
-    return g.event == rule.event && time >= g.first && time - g.last <= std::max(merge, g.merge);
-  });
+  // The group this sighting belongs to: the nearest one of its event it falls within merge_ms
+  // of. A sighting can come in after others with an earlier time: a sound is only recognized
+  // once it has finished playing, a second or so after the killfeed showed the same kill.
+  auto group = groups_.end();
+  int64_t nearest = 0;
+  for (auto g = groups_.begin(); g != groups_.end(); ++g) {
+    if (g->event != rule.event) continue;
+    const int64_t window = std::max(merge, g->merge);
+    const int64_t distance = time < g->first ? g->first - time : time > g->last ? time - g->last : 0;
+    if (distance > window || (group != groups_.end() && distance >= nearest)) continue;
+    group = g;
+    nearest = distance;
+  }
   if (group == groups_.end()) {
     groups_.push_back({rule.event, time, time, merge, {}, 0, false});
     group = groups_.end() - 1;
@@ -49,14 +59,14 @@ void EventFuser::Add(const DetectionRule& rule, int count, int64_t time, const s
     for (int i = group->emitted; i < target; ++i) Emit(rule.event, time, text, {where});
     group->emitted = target;
   } else if (note_) {
-    note_(std::format("[{}] saw the same {} again {:.1f}s after it was counted; not counted again", rule.name,
-                      EventName(rule.event), static_cast<double>(time - group->first) / (kTicksPerMs * 1000)));
+    note_(std::format("[{}] saw the same {} again {:.1f}s from when it was counted; not counted again", rule.name,
+                      EventName(rule.event), static_cast<double>(std::llabs(time - group->first)) / (kTicksPerMs * 1000)));
   }
 }
 
 void EventFuser::Flush(int64_t now) {
   for (auto& group : groups_) {
-    if (!group.settled && now - group.first >= kHoldMs * kTicksPerMs) Settle(group);
+    if (!group.settled && now - group.first >= holdMs_ * kTicksPerMs) Settle(group);
   }
   std::erase_if(groups_, [&](const Group& g) { return g.settled && now - g.last > g.merge; });
 }

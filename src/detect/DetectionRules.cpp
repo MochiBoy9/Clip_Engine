@@ -72,10 +72,13 @@ void AddPlayerPhrases(const std::vector<std::string>& sources, const std::vector
                       std::vector<Phrase>& out) {
   for (const auto& source : sources) {
     const auto at = Lower(source).find(kPlayerPlaceholder);
+    // {player} on its own is matched as a name, more strictly than words (NameMatches).
+    const bool nameOnly = Lower(Trim(source)) == kPlayerPlaceholder;
     for (const auto& name : names) {
       std::string text = source;
       text.replace(at, kPlayerPlaceholder.size(), " " + name + " ");
       auto phrase = MakePhrase(text);
+      phrase.name = nameOnly;
       if (!phrase.words.empty()) out.push_back(std::move(phrase));
     }
   }
@@ -320,7 +323,8 @@ DetectionRules ParseDetectionRules(std::istream& in) {
       if (v == "anywhere") rule->position = LinePosition::Anywhere;
       else if (v == "start") rule->position = LinePosition::Start;
       else if (v == "end") rule->position = LinePosition::End;
-      else warn(std::format("[{}] position must be anywhere, start or end", rule->name));
+      else if (v == "middle") rule->position = LinePosition::Middle;
+      else warn(std::format("[{}] position must be anywhere, start, middle or end", rule->name));
     } else if (key == "cooldown_ms") {
       int ms = 0;
       if (ParseInt(value, ms) && ms >= 0) rule->cooldownMs = ms;
@@ -433,8 +437,37 @@ bool IsNumber(std::string_view token) {
 
 bool IsRuleWord(const DetectionRule& rule, const std::string& token) {
   return std::ranges::any_of(rule.words, [&](const Phrase& p) {
-    return std::ranges::any_of(p.words, [&](const std::string& w) { return WordsMatch(token, w); });
+    for (size_t k = 0; k < p.words.size(); ++k) {
+      if (PhraseWordMatches(p, k, token)) return true;
+    }
+    return false;
   });
+}
+
+// Splits keywords text recognition ran into the next word ("ELIMINATEDBY" into ELIMINATED
+// and BY), so an exclude word stuck to one still cancels it and a name stuck to one still
+// tells one message from another. Names are never split: they don't run on (NameMatches).
+void SplitRunOns(const DetectionRule& rule, std::vector<std::string>& tokens, std::vector<size_t>* rowOf = nullptr) {
+  auto runOn = [&](const std::string& token) -> size_t {
+    for (const auto* phrases : {&rule.words, &rule.exclude}) {
+      for (const auto& phrase : *phrases) {
+        if (phrase.name) continue;
+        for (const auto& word : phrase.words) {
+          if (const size_t length = RunOnLength(token, word)) return length;
+        }
+      }
+    }
+    return 0;
+  };
+  for (size_t i = 0; i < tokens.size(); ++i) {
+    const size_t length = runOn(tokens[i]);
+    if (length == 0 || length >= tokens[i].size()) continue;
+    std::string rest = tokens[i].substr(length);
+    tokens[i].resize(length);
+    tokens.insert(tokens.begin() + static_cast<std::ptrdiff_t>(i) + 1, std::move(rest));
+    if (rowOf) rowOf->insert(rowOf->begin() + static_cast<std::ptrdiff_t>(i) + 1, (*rowOf)[i]);
+    ++i;
+  }
 }
 
 // Whether a word can tell one message from another, as a player name does. The rule's own
@@ -470,7 +503,7 @@ size_t MatchLength(const Phrase& phrase, const std::vector<std::string>& tokens,
   for (size_t k = 0; k < phrase.words.size(); ++k, ++i) {
     if (i >= tokens.size()) return 0;
     if (phrase.words[k] != kNumberWord || k == 0) {
-      if (!WordsMatch(tokens[i], phrase.words[k])) return 0;
+      if (!PhraseWordMatches(phrase, k, tokens[i])) return 0;
       continue;
     }
     if (tokens[i].size() == 1 && !WordsMatch(tokens[i], kNumberWord) && i + 1 < tokens.size() &&
@@ -506,6 +539,24 @@ std::vector<Span> FindSpans(const std::vector<Phrase>& phrases, const std::vecto
   return spans;
 }
 
+// Whether the phrase sits between two names on the row, as an assister's name does in a
+// killfeed that lists them ("KILLER + ASSISTER  VICTIM"): never first or last on it.
+bool PhraseInMiddle(const DetectionRule& rule, const std::vector<std::string>& row, const Phrase& phrase) {
+  const size_t n = phrase.words.size();
+  if (n == 0 || row.size() < n + 2) return false;
+  for (size_t at = 1; at + n < row.size(); ++at) {
+    bool match = true;
+    for (size_t k = 0; k < n && match; ++k) match = PhraseWordMatches(phrase, k, row[at + k]);
+    if (!match) continue;
+    const bool before = std::ranges::any_of(row.begin(), row.begin() + static_cast<std::ptrdiff_t>(at),
+                                            [&](const std::string& t) { return IsName(rule, t); });
+    const bool after = std::ranges::any_of(row.begin() + static_cast<std::ptrdiff_t>(at + n), row.end(),
+                                           [&](const std::string& t) { return IsName(rule, t); });
+    if (before && after) return true;
+  }
+  return false;
+}
+
 }  // namespace
 
 std::vector<std::string> FindMatches(const DetectionRule& rule, const std::vector<std::vector<std::string>>& rows) {
@@ -520,6 +571,7 @@ std::vector<std::string> FindMatches(const DetectionRule& rule, const std::vecto
       tokens.insert(tokens.end(), rows[r].begin(), rows[r].end());
       rowOf.insert(rowOf.end(), rows[r].size(), r);
     }
+    SplitRunOns(rule, tokens, &rowOf);
     const auto spans = FindSpans(rule.words, tokens, rowOf);
     const auto excluded = FindSpans(rule.exclude, tokens, rowOf);
 
@@ -558,11 +610,25 @@ std::vector<std::string> FindMatches(const DetectionRule& rule, const std::vecto
 
   // Row by row, as in a killfeed: each row that starts (or ends) with the words counts once,
   // and exclude only cancels the rows it's on.
-  for (const auto& row : rows) {
+  for (std::vector<std::string> row : rows) {
+    SplitRunOns(rule, row);
     const bool excluded = std::ranges::any_of(rule.exclude, [&](const Phrase& p) { return CountPhrase(row, p) > 0; });
     if (excluded) continue;
     const auto match = std::ranges::find_if(rule.words, [&](const Phrase& p) {
-      return rule.position == LinePosition::Start ? PhraseAtStart(row, p, rule.skipTag) : PhraseAtEnd(row, p);
+      switch (rule.position) {
+        case LinePosition::Start: {
+          const size_t end = PhraseStartEnd(row, p, rule.skipTag);
+          if (end == 0) return false;
+          // The player's name alone at the start is a kill only with someone after it. A row
+          // that is just the name is their death to a fall, the zone or their own grenade, or a
+          // killer whose name wasn't read, and the death rule counts it.
+          if (!p.name) return true;
+          return std::ranges::any_of(row.begin() + static_cast<std::ptrdiff_t>(end), row.end(),
+                                     [&](const std::string& token) { return IsName(rule, token); });
+        }
+        case LinePosition::Middle: return PhraseInMiddle(rule, row, p);
+        default: return PhraseAtEnd(row, p);
+      }
     });
     if (match != rule.words.end()) matches.push_back(HasNumber(*match) ? std::string() : MatchKey(rule, row));
   }
@@ -582,7 +648,8 @@ size_t ChooseRead(const DetectionRule& rule, const std::vector<std::vector<std::
     const int count = CountMatches(rule, reads[i]);
     if (count > mostCount) mostCount = count, most = i;
     if (count < fewestCount) fewestCount = count, fewest = i;
-    for (const auto& row : reads[i]) {
+    for (std::vector<std::string> row : reads[i]) {
+      SplitRunOns(rule, row);
       excluded = excluded || std::ranges::any_of(rule.exclude, [&](const Phrase& p) { return CountPhrase(row, p) > 0; });
     }
   }

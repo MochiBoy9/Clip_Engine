@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdint>
 #include <iterator>
 
 namespace clip {
@@ -46,18 +47,56 @@ int EditDistance(std::string_view a, std::string_view b, int limit) {
 
 }  // namespace
 
+namespace {
+
+// The unaccented letters of U+00C0 to U+00FF, upper case; '-' where the character isn't a letter
+// (the multiplication and division signs). AE and SS are spelled out below.
+constexpr std::string_view kLatin1 = "AAAAAA?CEEEEIIIIDNOOOOO-OUUUUYTSAAAAAA?CEEEEIIIIDNOOOOO-OUUUUYTY";
+// And of U+0100 to U+017F (Latin Extended-A), two by two upper and lower case.
+constexpr std::string_view kLatinA =
+    "AAAAAACCCCCCCCDDDDEEEEEEEEEEGGGGGGGGHHHHIIIIIIIIIIIIJJKKKLLLLLLLLLLNNNNNNNNNOOOOOOOORRRRRRSSSSSSSSTTTTTTUUUUUUUUUUUUWWYYYZZZZZZS";
+
+// The letters an accented Latin letter stands for, or empty when the character isn't one.
+std::string_view Unaccented(uint32_t c) {
+  if (c == 0xC6 || c == 0xE6) return "AE";
+  if (c == 0xDF) return "SS";
+  if (c >= 0xC0 && c <= 0xFF) {
+    const auto& letter = kLatin1[c - 0xC0];
+    return letter == '-' ? std::string_view() : std::string_view(&letter, 1);
+  }
+  if (c >= 0x100 && c <= 0x17F) return std::string_view(&kLatinA[c - 0x100], 1);
+  return {};
+}
+
+}  // namespace
+
 std::vector<std::string> Tokenize(std::string_view text) {
   std::vector<std::string> tokens;
   std::string current;
-  for (char c : text) {
-    if (IsAlnum(c)) {
-      current += static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-    } else if (!current.empty()) {
-      tokens.push_back(std::move(current));
-      current.clear();
+  auto split = [&] {
+    if (!current.empty()) tokens.push_back(std::move(current));
+    current.clear();
+  };
+  for (size_t i = 0; i < text.size(); ++i) {
+    const auto c = static_cast<unsigned char>(text[i]);
+    if (c < 0x80) {
+      if (IsAlnum(static_cast<char>(c))) current += static_cast<char>(std::toupper(c));
+      else split();
+      continue;
     }
+    // A two-byte UTF-8 character: Latin-1 and Latin Extended-A letters are folded to their
+    // letters; anything else (symbols, other scripts) separates words, as before.
+    if ((c & 0xE0) == 0xC0 && i + 1 < text.size() && (static_cast<unsigned char>(text[i + 1]) & 0xC0) == 0x80) {
+      const uint32_t code = ((c & 0x1Fu) << 6) | (static_cast<unsigned char>(text[i + 1]) & 0x3Fu);
+      ++i;
+      if (const auto letters = Unaccented(code); !letters.empty()) {
+        current += letters;
+        continue;
+      }
+    }
+    split();
   }
-  if (!current.empty()) tokens.push_back(std::move(current));
+  split();
   return tokens;
 }
 
@@ -80,6 +119,44 @@ Phrase MakePhrase(std::string_view text) {
 
 bool HasNumber(const Phrase& phrase) { return std::ranges::find(phrase.words, kNumberWord) != phrase.words.end(); }
 
+namespace {
+
+// Endings that make another word of a keyword: DEFEATED, ASSISTED, REVIVED, ELIMINATING,
+// and plurals, which are scoreboard headings (ELIMINATIONS).
+bool IsWordEnding(std::string_view word, std::string_view rest) {
+  if (rest == "ED" || rest == "ING" || rest == "ER" || rest == "ERS" || rest == "S" || rest == "ES") return true;
+  return rest == "D" && !word.empty() && word.back() == 'E';
+}
+
+// The token with digits read as the letters they look like, when the word is all letters.
+std::string AsWordLetters(std::string_view token, std::string_view word) {
+  const bool wordIsLetters = std::ranges::all_of(word, [](char c) { return std::isalpha(static_cast<unsigned char>(c)) != 0; });
+  std::string candidate(token);
+  if (wordIsLetters) std::ranges::transform(candidate, candidate.begin(), AsLetter);
+  return candidate;
+}
+
+int Tolerance(std::string_view word) { return word.size() >= 9 ? 2 : word.size() >= 5 ? 1 : 0; }
+
+// Letters text recognition mistakes for one another on small HUD text.
+bool LookAlike(char a, char b) {
+  static constexpr std::string_view kPairs[] = {"IL", "IJ", "OD", "OQ", "DQ", "UV", "CG", "MN", "EF"};
+  return std::ranges::any_of(kPairs, [&](std::string_view p) { return (p[0] == a && p[1] == b) || (p[0] == b && p[1] == a); });
+}
+
+}  // namespace
+
+size_t RunOnLength(std::string_view token, std::string_view word) {
+  // OCR often runs a keyword into the next word ("ELIMINATEDPLAYER"). Only a letter off
+  // there, or another form of the word would pass for it (ELIMINATION for ELIMINATED).
+  // Only with at least two more characters: one more is a misread the word itself allows for.
+  if (word.size() < 6 || token.size() < word.size() + 2 || word == kNumberWord) return 0;
+  const std::string candidate = AsWordLetters(token, word);
+  if (EditDistance(std::string_view(candidate).substr(0, word.size()), word, 1) > 1) return 0;
+  if (IsWordEnding(word, std::string_view(candidate).substr(word.size()))) return 0;
+  return word.size();
+}
+
 bool WordsMatch(std::string_view token, std::string_view word) {
   if (token.empty() || word.empty()) return false;
   // A number, maybe with an O read for a 0 or an S for a 5, but never a distance like 15M.
@@ -91,13 +168,11 @@ bool WordsMatch(std::string_view token, std::string_view word) {
     return lookalikes && digits * 2 >= std::ssize(token);
   }
 
-  const bool wordIsLetters = std::ranges::all_of(word, [](char c) { return std::isalpha(static_cast<unsigned char>(c)) != 0; });
-  std::string candidate(token);
-  if (wordIsLetters) std::ranges::transform(candidate, candidate.begin(), AsLetter);
+  const std::string candidate = AsWordLetters(token, word);
   if (candidate == word) return true;
 
   // Short words must match exactly; longer ones may lose or gain a letter.
-  const int tolerance = word.size() >= 9 ? 2 : word.size() >= 5 ? 1 : 0;
+  const int tolerance = Tolerance(word);
   if (tolerance == 0) return false;
 
   // A plural is another word, and closer to the word without its S than with it.
@@ -106,14 +181,37 @@ bool WordsMatch(std::string_view token, std::string_view word) {
           EditDistance(candidate, word, tolerance)) {
     return false;
   }
-  if (EditDistance(candidate, word, tolerance) <= tolerance) return true;
-
-  // OCR often runs a keyword into the next word ("ELIMINATEDPLAYER"). Only a letter off
-  // there, or another form of the word would pass for it (ELIMINATION for ELIMINATED).
-  if (word.size() >= 6 && candidate.size() > word.size()) {
-    return EditDistance(std::string_view(candidate).substr(0, word.size()), word, 1) <= 1;
+  // So is the word with an ending: REVIVED isn't REVIVE, DEFEATED isn't DEFEAT.
+  if (candidate.size() > word.size() && candidate.starts_with(word) &&
+      IsWordEnding(word, std::string_view(candidate).substr(word.size()))) {
+    return false;
   }
-  return false;
+  if (EditDistance(candidate, word, tolerance) <= tolerance) return true;
+  return RunOnLength(token, word) > 0;
+}
+
+bool NameMatches(std::string_view token, std::string_view word) {
+  if (token.empty() || word.empty()) return false;
+  const std::string candidate = AsWordLetters(token, word);
+  if (candidate == word) return true;
+  // Another player whose name begins with this one: ENTERROR isn't ENTERRO.
+  if (candidate.size() > word.size() && candidate.starts_with(word)) return false;
+  if (candidate.size() >= word.size() + 2) return false;
+  const int tolerance = Tolerance(word);
+  if (tolerance > 0) return EditDistance(candidate, word, tolerance) <= tolerance;
+  // Four letters: one look-alike letter misread, and nothing else.
+  if (word.size() != 4 || candidate.size() != 4) return false;
+  int misread = 0;
+  for (size_t i = 0; i < 4; ++i) {
+    if (candidate[i] == word[i]) continue;
+    if (!LookAlike(candidate[i], word[i])) return false;
+    ++misread;
+  }
+  return misread <= 1;
+}
+
+bool PhraseWordMatches(const Phrase& phrase, size_t k, std::string_view token) {
+  return phrase.name ? NameMatches(token, phrase.words[k]) : WordsMatch(token, phrase.words[k]);
 }
 
 bool SameText(std::string_view rawA, std::string_view rawB) {
@@ -133,7 +231,7 @@ int CountPhrase(const std::vector<std::string>& tokens, const Phrase& phrase) {
   int count = 0;
   for (size_t i = 0; i + n <= tokens.size();) {
     bool match = true;
-    for (size_t k = 0; k < n && match; ++k) match = WordsMatch(tokens[i + k], phrase.words[k]);
+    for (size_t k = 0; k < n && match; ++k) match = PhraseWordMatches(phrase, k, tokens[i + k]);
     if (match) {
       ++count;
       i += n;
@@ -149,26 +247,31 @@ namespace {
 bool MatchesAt(const std::vector<std::string>& row, const Phrase& phrase, size_t at) {
   if (at + phrase.words.size() > row.size()) return false;
   for (size_t k = 0; k < phrase.words.size(); ++k) {
-    if (!WordsMatch(row[at + k], phrase.words[k])) return false;
+    if (!PhraseWordMatches(phrase, k, row[at + k])) return false;
   }
   return true;
 }
 
 }  // namespace
 
-bool PhraseAtStart(const std::vector<std::string>& row, const Phrase& phrase, bool skipTag) {
-  if (phrase.words.empty()) return false;
-  if (MatchesAt(row, phrase, 0)) return true;
-  if (!row.empty() && row[0].size() <= 2 && MatchesAt(row, phrase, 1)) return true;
-  if (!skipTag || row.empty() || row[0].size() > 6) return false;
+size_t PhraseStartEnd(const std::vector<std::string>& row, const Phrase& phrase, bool skipTag) {
+  const size_t n = phrase.words.size();
+  if (n == 0) return 0;
+  if (MatchesAt(row, phrase, 0)) return n;
+  if (!row.empty() && row[0].size() <= 2 && MatchesAt(row, phrase, 1)) return n + 1;
+  if (!skipTag || row.empty() || row[0].size() > 6) return 0;
   // The tag, maybe with its frame read as a stray letter or two after it. Something must
   // follow the name, as the player killed does in a killfeed: a row that ends with it after
   // a short word is someone else's kill, of the player, by someone without a tag.
   for (size_t at = 1; at <= 3 && at < row.size(); ++at) {
     if (at > 1 && row[at - 1].size() > 2) break;
-    if (at + phrase.words.size() < row.size() && MatchesAt(row, phrase, at)) return true;
+    if (at + n < row.size() && MatchesAt(row, phrase, at)) return at + n;
   }
-  return false;
+  return 0;
+}
+
+bool PhraseAtStart(const std::vector<std::string>& row, const Phrase& phrase, bool skipTag) {
+  return PhraseStartEnd(row, phrase, skipTag) > 0;
 }
 
 bool PhraseAtEnd(const std::vector<std::string>& row, const Phrase& phrase) {

@@ -278,6 +278,8 @@ EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCaptur
 
   sounds_ = std::make_unique<SoundWatch>(rules_, [](const std::string& warning) { log::Warn("{}", warning); });
   if (sounds_->Empty()) sounds_.reset();
+  // A sound is heard only once it has played out, so moments wait for it a little longer.
+  if (sounds_) fuser_.SetHoldMs(EventFuser::kSoundHoldMs);
 
   size_t read = 0;
   for (auto& region : regions_) {

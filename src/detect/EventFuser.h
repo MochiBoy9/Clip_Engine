@@ -32,8 +32,14 @@ class EventFuser {
 
   // How long a group waits for the other rules to see what one rule saw.
   static constexpr int64_t kHoldMs = 1000;
+  // With a rule that listens for a sound: a sound is only recognized once it has played out,
+  // up to a second after it began, so the group waits that much longer for it.
+  static constexpr int64_t kSoundHoldMs = 2000;
 
   explicit EventFuser(Sink sink, Note note = {}) : sink_(std::move(sink)), note_(std::move(note)) {}
+
+  // How long groups wait before they're settled (kHoldMs by default).
+  void SetHoldMs(int64_t ms) { holdMs_ = ms; }
 
   // The rule saw `count` new moments at `time` (100 ns units, any clock that only goes
   // forward). where has the box it read, as fractions of the frame; its rule and text are
@@ -71,6 +77,7 @@ class EventFuser {
 
   Sink sink_;
   Note note_;
+  int64_t holdMs_ = kHoldMs;
   std::vector<Group> groups_;
 };
 
