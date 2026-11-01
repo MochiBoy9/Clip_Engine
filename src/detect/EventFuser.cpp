@@ -13,14 +13,46 @@ constexpr int64_t kTicksPerMs = 10'000;
 
 }  // namespace
 
+void EventFuser::Pause(int64_t from, int64_t until) {
+  for (auto& [start, end] : pauses_) {
+    if (from <= end && until >= start) {
+      start = std::min(start, from);
+      end = std::max(end, until);
+      return;
+    }
+  }
+  pauses_.emplace_back(from, until);
+}
+
+bool EventFuser::Paused(int64_t time) const {
+  return std::ranges::any_of(pauses_, [&](const auto& p) { return time >= p.first && time <= p.second; });
+}
+
 void EventFuser::Add(const DetectionRule& rule, int count, int64_t time, const std::string& text, Witness where) {
   if (count <= 0) return;
+  // A new match ends any pause that was still holding.
+  if (rule.event == EventType::MatchStart) {
+    for (auto& p : pauses_) {
+      if (p.second > time) p.second = std::max(p.first, time);
+    }
+  }
+  // A rule that finds the player by name (a killfeed) sees only the player's own, whoever's
+  // view is on screen.
+  const bool pausable = usePauses_ && Pausable(rule.event) && rule.playerWords.empty();
+  if (pausable && Paused(time)) {
+    if (note_) note_(std::format("[{}] saw a {} during a pause (a killcam or spectating); not counted", rule.name,
+                                 EventName(rule.event)));
+    return;
+  }
   where.rule = rule.name;
   where.text = text;
   where.offset = 0;
   where.counted = true;
   if (rule.mergeMs <= 0 && !rule.confirmOnly) {
-    for (int i = 0; i < count; ++i) Emit(rule.event, time, text, {where});
+    for (int i = 0; i < count; ++i) {
+      if (pausable) waiting_.push_back({rule.event, time, text, where});
+      else Emit(rule.event, time, text, {where});
+    }
     return;
   }
 
@@ -45,7 +77,7 @@ void EventFuser::Add(const DetectionRule& rule, int count, int64_t time, const s
   }
   group->last = std::max(group->last, time);
   group->merge = std::max(group->merge, merge);
-  group->sightings.push_back({rule.name, rule.priority, rule.confirmOnly, count, time, where});
+  group->sightings.push_back({rule.name, rule.priority, rule.confirmOnly, pausable, count, time, where});
   if (!group->settled) return;
   // Only a backing-up rule had seen it: settle it again now that something can count it.
   if (group->emitted == 0) {
@@ -56,7 +88,10 @@ void EventFuser::Add(const DetectionRule& rule, int count, int64_t time, const s
   // Already counted: this counts only if it shows there were more.
   const int target = Count(*group);
   if (target > group->emitted) {
-    for (int i = group->emitted; i < target; ++i) Emit(rule.event, time, text, {where});
+    for (int i = group->emitted; i < target; ++i) {
+      if (pausable) waiting_.push_back({rule.event, time, text, where});
+      else Emit(rule.event, time, text, {where});
+    }
     group->emitted = target;
   } else if (note_) {
     note_(std::format("[{}] saw the same {} again {:.1f}s from when it was counted; not counted again", rule.name,
@@ -65,6 +100,23 @@ void EventFuser::Add(const DetectionRule& rule, int count, int64_t time, const s
 }
 
 void EventFuser::Flush(int64_t now) {
+  // Waiting sightings that weren't in a pause seen since count now.
+  std::vector<Waiting> due;
+  std::erase_if(waiting_, [&](Waiting& w) {
+    if (now - w.time < holdMs_ * kTicksPerMs) return false;
+    due.push_back(std::move(w));
+    return true;
+  });
+  for (auto& w : due) {
+    if (Paused(w.time)) {
+      if (note_) note_(std::format("[{}] saw a {} during a pause (a killcam or spectating); not counted", w.witness.rule,
+                                   EventName(w.event)));
+      continue;
+    }
+    Emit(w.event, w.time, w.text, {std::move(w.witness)});
+  }
+  std::erase_if(pauses_, [&](const auto& p) { return now - p.second > int64_t{60'000} * kTicksPerMs; });
+
   for (auto& group : groups_) {
     if (!group.settled && now - group.first >= holdMs_ * kTicksPerMs) Settle(group);
   }
@@ -72,6 +124,10 @@ void EventFuser::Flush(int64_t now) {
 }
 
 void EventFuser::FlushAll() {
+  for (auto& w : waiting_) {
+    if (!Paused(w.time)) Emit(w.event, w.time, w.text, {std::move(w.witness)});
+  }
+  waiting_.clear();
   for (auto& group : groups_) {
     if (!group.settled) Settle(group);
   }
@@ -100,6 +156,14 @@ int EventFuser::Count(const Group& group, std::string* rule) {
 
 void EventFuser::Settle(Group& group) {
   group.settled = true;
+  // Sightings in a pause seen since they came in aren't the player's.
+  if (usePauses_ && Pausable(group.event)) {
+    const auto paused = std::erase_if(group.sightings, [&](const Sighting& s) { return s.pausable && Paused(s.time); });
+    if (paused > 0 && group.sightings.empty()) {
+      if (note_) note_(std::format("a {} was seen during a pause (a killcam or spectating); not counted", EventName(group.event)));
+      return;
+    }
+  }
   std::string counting;
   group.emitted = Count(group, &counting);
   if (group.emitted == 0) {

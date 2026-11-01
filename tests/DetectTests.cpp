@@ -10,6 +10,7 @@
 #include "detect/SoundWatch.h"
 #include "detect/ImageMatch.h"
 #include "detect/OcrImage.h"
+#include "detect/ReadPacing.h"
 #include "detect/TextMatcher.h"
 #include "media/ClipMetadata.h"
 
@@ -193,6 +194,17 @@ void TestShippedRulesParse(const char* path) {
       death |= r.event == EventType::Death;
     }
     CHECK(kill && death);
+  }
+  // Every shipped pause rule is read with the game's death box, so it costs nothing extra.
+  CHECK(rules.pauses.size() >= 8);
+  for (const auto& pause : rules.pauses) {
+    const bool shared = std::ranges::any_of(rules.rules, [&](const DetectionRule& r) {
+      return r.game == pause.game && r.event == EventType::Death && r.threshold == pause.threshold &&
+             r.region.left == pause.region.left && r.region.top == pause.region.top &&
+             r.region.width == pause.region.width && r.region.height == pause.region.height;
+    });
+    if (!shared) std::printf("%s doesn't share a death box\n", pause.name.c_str());
+    CHECK(shared);
   }
 }
 
@@ -1295,6 +1307,215 @@ void TestPlaceRegion() {
   CHECK(rules.warnings.size() == 1);
 }
 
+// [<game>.pause] rules, the scoreboard's key, and the [detection] settings for pacing reads.
+void TestPauseAndPacingRules() {
+  auto rules = Parse(R"(
+[detection]
+change_check = any
+calm_ms = 0
+
+[call_of_duty.kill]
+words = ELIMINATED
+
+[call_of_duty.pause]
+words = KILLCAM | SPECTATING
+hold_ms = 3000
+
+[call_of_duty.death]
+words = KILLED BY
+change_check = any
+
+[call_of_duty.scoreboard]
+kills = KILLS
+key = Caps Lock
+)");
+  CHECK(rules.warnings.empty());
+  CHECK(rules.changeCheck == ChangeCheck::Any && rules.changeCheckSet);
+  CHECK(rules.calmMs == 0 && rules.calmMsSet);
+  CHECK(rules.rules.size() == 2);
+  CHECK(rules.pauses.size() == 1);
+  CHECK(rules.pauses.size() == 1 && rules.pauses[0].pauses && rules.pauses[0].holdMs == 3000);
+  CHECK(rules.pauses.size() == 1 && rules.pauses[0].sampleMs == 500);  // as often as a death screen
+  CHECK(rules.pauses.size() == 1 && rules.pauses[0].words.size() == 2);
+  CHECK(rules.rules.size() == 2 && rules.rules[1].changeCheck == ChangeCheck::Any);
+  CHECK(rules.rules.size() == 2 && rules.rules[0].changeCheck == ChangeCheck::Default);
+  const auto cod = rules.ForGame("call_of_duty");
+  CHECK(cod.size() == 3 && cod.back().pauses);
+  const auto boards = rules.ScoreboardsForGame("call_of_duty");
+  CHECK(boards.size() == 1 && boards[0].read == ScoreboardRead::WhileHeld && boards[0].key == 0x14);
+
+  // A file with only a pause rule for a game doesn't take the game's shipped rules away.
+  CHECK(Parse("[apex_legends.pause]\nwords = SPECTATING\n").editedGames.empty());
+  // Defaults.
+  const auto plain = Parse("[x.kill]\nwords = KO\n\n[x.scoreboard]\nkills = K\n");
+  CHECK(plain.changeCheck == ChangeCheck::Hud && !plain.changeCheckSet && plain.calmMs == 30000);
+  CHECK(plain.scoreboards.size() == 1 && plain.scoreboards[0].read == ScoreboardRead::WhileHeld &&
+        plain.scoreboards[0].key == 0x09);
+
+  // Keys, and the two that aren't keys.
+  auto keyOf = [](const char* key) {
+    const auto parsed = Parse(std::string("[x.scoreboard]\nkills = K\nkey = ") + key + "\n");
+    return parsed.warnings.empty() && parsed.scoreboards.size() == 1 ? parsed.scoreboards[0] : ScoreboardRule{};
+  };
+  CHECK(keyOf("F1").key == 0x70 && keyOf("f12").key == 0x7B);
+  CHECK(keyOf("m").key == 'M' && keyOf("Tab").key == 0x09 && keyOf("mouse 4").key == 0x05);
+  CHECK(keyOf("none").read == ScoreboardRead::AfterMatch);
+  CHECK(keyOf("always").read == ScoreboardRead::Always);
+  CHECK(!Parse("[x.scoreboard]\nkills = K\nkey = banana\n").warnings.empty());
+  CHECK(!Parse("[x.scoreboard]\nkills = K\nkey = F25\n").warnings.empty());
+
+  // What can't be used is said.
+  CHECK(!Parse("[detection]\ncalm_ms = -5\n").warnings.empty());
+  CHECK(!Parse("[detection]\nchange_check = some\n").warnings.empty());
+  CHECK(!Parse("[x.kill]\nwords = KO\nchange_check = some\n").warnings.empty());
+  CHECK(!Parse("[x.kill]\nwords = KO\nhold_ms = 100\n").warnings.empty());  // only for pause rules
+  const auto pictured = Parse("[x.pause]\nwords = KILLCAM\nimage = cam.png\n");
+  CHECK(!pictured.warnings.empty() && pictured.pauses.size() == 1 && !pictured.pauses[0].LooksForImage());
+  const auto empty = Parse("[x.pause]\nimage = cam.png\n");
+  CHECK(empty.pauses.empty());
+
+  // Merging: a game's pause rules come from the player's file when it has some for that game.
+  auto shipped = Parse("[a.pause]\nwords = KILLCAM\n\n[b.pause]\nwords = SPECTATING\n\n[a.kill]\nwords = KO\n");
+  auto user = Parse("[detection]\ncalm_ms = 5000\n\n[a.kill]\nwords = KILLED\n\n[b.pause]\nwords = WATCHING\n");
+  const auto merged = MergeDetectionRules(std::move(shipped), std::move(user));
+  CHECK(merged.calmMs == 5000 && merged.changeCheck == ChangeCheck::Hud);
+  const auto a = merged.ForGame("a");
+  CHECK(a.size() == 2 && a[0].words[0].words[0] == "KILLED" && a[1].pauses);  // the user's kill, the shipped pause
+  const auto b = merged.ForGame("b");
+  CHECK(b.size() == 1 && b[0].pauses && b[0].words[0].words[0] == "WATCHING");
+}
+
+// Kills seen during a killcam or while spectating don't count; deaths and the rest do.
+void TestFuserPauses() {
+  const DetectionRule plain = FusedRule("plain", 1, 0);
+  const DetectionRule fused = FusedRule("fused", 1);
+  DetectionRule death = FusedRule("death", 1, 0);
+  death.event = EventType::Death;
+  DetectionRule start = FusedRule("start", 1, 0);
+  start.event = EventType::MatchStart;
+  std::vector<GameEvent> events;
+  std::vector<std::string> notes;
+  EventFuser fuser([&](const GameEvent& e) { events.push_back(e); }, [&](const std::string& n) { notes.push_back(n); });
+  fuser.UsePauses();
+
+  // A kill now waits out the hold, so a pause seen a look later still stops it.
+  fuser.Add(plain, 1, 10'000 * kMs, "KO");
+  fuser.Flush(10'500 * kMs);
+  CHECK(events.empty());
+  fuser.Flush(11'000 * kMs);
+  CHECK(events.size() == 1 && events[0].time == 10'000 * kMs);
+
+  // A killcam seen half a second after a kill popup: not counted.
+  fuser.Add(plain, 1, 20'000 * kMs, "KO");
+  fuser.Pause(20'000 * kMs, 22'500 * kMs);
+  CHECK(fuser.Paused(21'000 * kMs) && !fuser.Paused(23'000 * kMs));
+  fuser.Flush(21'100 * kMs);
+  CHECK(events.size() == 1);
+  CHECK(!notes.empty());
+
+  // A fused kill in the pause, seen by two rules: the whole group is dropped.
+  fuser.Add(fused, 1, 21'500 * kMs, "KO");
+  CHECK(events.size() == 1);
+  // And one seen just before the pause was, settled after it.
+  fuser.Add(fused, 1, 30'000 * kMs, "KO");
+  fuser.Pause(29'900 * kMs, 32'400 * kMs);
+  fuser.Flush(31'100 * kMs);
+  CHECK(events.size() == 1);
+
+  // A kill found by the player's name in a killfeed is the player's, pause or not.
+  DetectionRule named = FusedRule("named", 2);
+  named.playerWords = {"{player}"};
+  fuser.Add(named, 1, 31'000 * kMs, "ME > YOU");
+  fuser.Add(fused, 1, 31'200 * kMs, "ELIMINATION 250");
+  fuser.Flush(32'300 * kMs);
+  CHECK(events.size() == 2 && events[1].text == "ME > YOU");
+  events.pop_back();
+
+  // A death in a pause still counts, at once.
+  fuser.Add(death, 1, 31'000 * kMs, "KILLED BY");
+  CHECK(events.size() == 2 && events[1].type == EventType::Death);
+
+  // A new match ends a pause still holding.
+  fuser.Pause(40'000 * kMs, 45'000 * kMs);
+  fuser.Add(start, 1, 41'000 * kMs, "ROUND 1");
+  CHECK(events.size() == 3);
+  fuser.Add(plain, 1, 42'000 * kMs, "KO");
+  fuser.FlushAll();
+  CHECK(events.size() == 4 && events[3].type == EventType::Kill);
+
+  // Without pause rules, kills count at once as before.
+  EventFuser plainFuser([&](const GameEvent& e) { events.push_back(e); });
+  plainFuser.Add(plain, 1, 50'000 * kMs, "KO");
+  CHECK(events.size() == 5);
+}
+
+// When the scoreboard is read, and the slower pace after a quiet spell.
+void TestReadPacing() {
+  ScoreboardRule held;
+  held.sampleMs = 3000;
+  ScoreboardRule after = held;
+  after.read = ScoreboardRead::AfterMatch;
+  ScoreboardRule always = held;
+  always.read = ScoreboardRead::Always;
+
+  ScoreboardGate gate;
+  CHECK(!gate.Wanted(held, false, 1000));
+  CHECK(gate.Wanted(held, true, 1000));
+  CHECK(!gate.Wanted(after, true, 1000));
+  CHECK(gate.Wanted(always, false, 1000));
+  CHECK(ScoreboardGate::IntervalMs(held, true) == ScoreboardGate::kHeldMs);
+  CHECK(ScoreboardGate::IntervalMs(held, false) == 3000);
+  CHECK(ScoreboardGate::IntervalMs(always, true) == 3000);
+  gate.MatchEnded(100'000);
+  CHECK(gate.Wanted(held, false, 100'000) && gate.Wanted(after, false, 129'999));
+  CHECK(!gate.Wanted(held, false, 130'000) && !gate.Wanted(after, false, 130'000));
+
+  CalmPacer calm(30'000);
+  calm.Saw(0);
+  CHECK(calm.IntervalMs(250, 29'999) == 250);
+  CHECK(calm.IntervalMs(250, 30'000) == 500);
+  CHECK(calm.IntervalMs(1000, 30'000) == 1000);  // banners keep their pace
+  calm.Saw(31'000);
+  CHECK(calm.IntervalMs(250, 31'000) == 250);
+  CalmPacer never(0);
+  CHECK(never.IntervalMs(250, 1'000'000) == 250);
+}
+
+// Text coming or going changes how a region looks; scenery moving behind it, mostly, doesn't.
+void TestRegionChanged() {
+  const uint32_t w = 64, h = 32;
+  auto image = [&](uint8_t level) { return std::vector<uint8_t>(static_cast<size_t>(w) * h * 4, level); };
+  auto paint = [&](std::vector<uint8_t>& px, uint32_t x0, uint32_t y0, uint32_t size, uint8_t level) {
+    for (uint32_t y = y0; y < y0 + size; ++y) {
+      for (uint32_t x = x0; x < x0 + size; ++x) std::fill_n(px.begin() + (static_cast<size_t>(y) * w + x) * 4, 3, level);
+    }
+  };
+  const auto dark = image(40);
+  const RegionLook before = LookAt(dark, w, h);
+
+  auto text = dark;
+  paint(text, 8, 8, 3, 255);  // 9 pixels of a letter, in one cell of the grid
+  CHECK(RegionChanged(before, LookAt(text, w, h), true));
+  CHECK(RegionChanged(before, LookAt(text, w, h), false));
+
+  auto speck = dark;
+  paint(speck, 8, 8, 2, 255);  // 4: not enough to be text
+  CHECK(!RegionChanged(before, LookAt(speck, w, h), true));
+
+  // The scene behind brightens a lot, but nothing in it is as bright as HUD text.
+  const auto scenery = image(150);
+  CHECK(!RegionChanged(before, LookAt(scenery, w, h), true));
+  CHECK(RegionChanged(before, LookAt(scenery, w, h), false));
+  // With the rule's own threshold below it, it counts.
+  CHECK(RegionChanged(LookAt(dark, w, h, 100), LookAt(scenery, w, h, 100), true));
+
+  // Text that stays put while the scene behind it changes.
+  auto textOnScenery = scenery;
+  paint(textOnScenery, 8, 8, 3, 255);
+  CHECK(!RegionChanged(LookAt(text, w, h), LookAt(textOnScenery, w, h), true));
+  CHECK(!RegionChanged(before, before, false));
+}
+
 int main(int argc, char** argv) {
   TestTokenize();
   TestWordsMatch();
@@ -1327,6 +1548,10 @@ int main(int argc, char** argv) {
   TestLateSound();
   TestKeywordsAndNames();
   TestSetPhrases();
+  TestPauseAndPacingRules();
+  TestFuserPauses();
+  TestReadPacing();
+  TestRegionChanged();
   if (argc > 1) TestShippedRulesParse(argv[1]);
   if (argc > 1) TestSounds(argv[1]);
   if (argc > 2) TestSoundCutRoundTrip(argv[2]);

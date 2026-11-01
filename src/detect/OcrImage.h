@@ -61,4 +61,31 @@ OcrImage PrepareForOcr(const uint8_t* bgra, uint32_t width, uint32_t height, int
 // bright are one side.
 int OtsuThreshold(const std::array<uint32_t, 256>& histogram);
 
+// How a region looked, on a coarse grid, to tell whether it changed since it was last read: in
+// each cell, the average brightness and how many pixels are bright enough to be HUD text.
+struct RegionLook {
+  static constexpr int kGridX = 16;
+  static constexpr int kGridY = 8;
+  std::array<float, kGridX * kGridY> level{};  // average of each pixel's brightest channel, 0-255
+  std::array<int, kGridX * kGridY> bright{};   // pixels at least as bright as HUD text
+};
+
+// HUD text is drawn bright, white or a strong color; most scenery isn't.
+inline constexpr int kHudBright = 200;
+// How many of a cell's pixels must turn bright or stop being so for text to have come or gone:
+// a tenth of one small letter. Raw captured frames don't flicker, so text that stays put doesn't
+// change them at all.
+inline constexpr int kHudChangePixels = 8;
+
+// bgra: width * height pixels. bright: how bright HUD text is at least (the rule's threshold,
+// or kHudBright).
+RegionLook LookAt(const std::vector<uint8_t>& bgra, uint32_t width, uint32_t height, int bright = kHudBright);
+
+// Whether the region changed enough to be worth reading again. hudOnly: only HUD-bright pixels
+// that came or went count, so scenery moving behind a killfeed doesn't make it read again when
+// no text came or went (a region checked this way is also read once a second whatever it looks
+// like, for text dimmer than that). Otherwise any change in brightness does, as before 0.10:
+// video noise and compression move a cell's level by a level or so, and new text far more.
+bool RegionChanged(const RegionLook& before, const RegionLook& now, bool hudOnly);
+
 }  // namespace clip

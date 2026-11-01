@@ -30,6 +30,14 @@ struct Scoreboard {
   Stats stats;
 };
 
+// When a scoreboard is read. It's big, so reading it is the most work detection does; it's
+// only read while it can be up.
+enum class ScoreboardRead {
+  WhileHeld,   // while its key is held, and for a while after a match ends (the default, Tab)
+  AfterMatch,  // only after a match ends (key = none), for a game that shows it then
+  Always,      // all the time, as before 0.10 (key = always)
+};
+
 // [<game>.scoreboard] in detection.ini: where the game's scoreboard (usually held on Tab, or
 // the end-of-match summary) shows the player's totals. Each stat is found under its column
 // header on the row with the player's name, so it works whatever order the columns come in and
@@ -38,6 +46,8 @@ struct Scoreboard {
 struct ScoreboardRule {
   std::string name;  // the section name, for the log
   std::string game;
+  ScoreboardRead read = ScoreboardRead::WhileHeld;
+  int key = 0x09;  // the Windows virtual-key code that shows it; Tab unless key says
   // The middle of the screen by default, where most games draw their scoreboard.
   ScreenRegion region{0.05, 0.05, 0.9, 0.9};
   int threshold = 0;

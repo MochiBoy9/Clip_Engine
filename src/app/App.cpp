@@ -201,7 +201,7 @@ void App::Poll() {
     }
     try {
       session_ = std::make_unique<RecordingSession>(config_, monitor, label, std::move(rules), std::move(scoreboards),
-                                                    std::move(playerNames), rules_.sampleMs, hudScale);
+                                                    std::move(playerNames), rules_.Settings(), hudScale);
       sessionGameId_ = gameId;
       sessionId_ = LocalTimestamp();
       sessionStart_ = NowHns();

@@ -50,6 +50,51 @@ bool IsId(std::string_view id) {
   return !id.empty() && std::ranges::all_of(id, [](unsigned char c) { return std::isalnum(c) || c == '_' || c == '-'; });
 }
 
+bool ParseChangeCheck(const std::string& value, ChangeCheck& out) {
+  const std::string v = Lower(value);
+  if (v == "hud") out = ChangeCheck::Hud;
+  else if (v == "any") out = ChangeCheck::Any;
+  else return false;
+  return true;
+}
+
+// "Tab", "Caps Lock", "F1", "M", "Mouse 4", or none or always, as Windows virtual-key codes.
+bool ParseBoardKey(const std::string& value, ScoreboardRule& board) {
+  std::string v;
+  for (char c : Lower(value)) {
+    if (c != ' ' && c != '_' && c != '-') v += c;
+  }
+  if (v == "none") {
+    board.read = ScoreboardRead::AfterMatch;
+    return true;
+  }
+  if (v == "always") {
+    board.read = ScoreboardRead::Always;
+    return true;
+  }
+  int code = 0;
+  if (v.size() == 1 && std::isalnum(static_cast<unsigned char>(v[0]))) {
+    code = std::toupper(static_cast<unsigned char>(v[0]));
+  } else if (v.size() >= 2 && v.size() <= 3 && v[0] == 'f' && std::isdigit(static_cast<unsigned char>(v[1]))) {
+    int n = 0;
+    if (ParseInt(v.substr(1), n) && n >= 1 && n <= 24) code = 0x6F + n;
+  } else {
+    static const std::pair<const char*, int> kNames[] = {
+        {"tab", 0x09},    {"capslock", 0x14}, {"caps", 0x14},   {"space", 0x20},  {"enter", 0x0D},
+        {"shift", 0x10},  {"ctrl", 0x11},     {"control", 0x11}, {"alt", 0x12},   {"backquote", 0xC0},
+        {"tilde", 0xC0},  {"grave", 0xC0},    {"mouse3", 0x04}, {"mouse4", 0x05}, {"mouse5", 0x06},
+        {"middlemouse", 0x04},
+    };
+    for (const auto& [name, vk] : kNames) {
+      if (v == name) code = vk;
+    }
+  }
+  if (code == 0) return false;
+  board.read = ScoreboardRead::WhileHeld;
+  board.key = code;
+  return true;
+}
+
 bool MentionsPlayer(const std::string& text) { return Lower(text).find(kPlayerPlaceholder) != std::string::npos; }
 
 // Phrases from "A | B | C". Those mentioning {player} go to withPlayer instead, as written.
@@ -117,6 +162,18 @@ std::vector<DetectionRule> DetectionRules::ForGame(const std::string& game, cons
     AddPlayerPhrases(rule.playerExclude, playerNames, filled.exclude);
     if (!filled.words.empty()) result.push_back(std::move(filled));
   }
+  for (const auto& pause : pauses) {
+    if (pause.game != game) continue;
+    if (!pause.NeedsPlayer()) {
+      result.push_back(pause);
+      continue;
+    }
+    if (playerNames.empty()) continue;
+    DetectionRule filled = pause;
+    AddPlayerPhrases(pause.playerWords, playerNames, filled.words);
+    AddPlayerPhrases(pause.playerExclude, playerNames, filled.exclude);
+    if (!filled.words.empty()) result.push_back(std::move(filled));
+  }
   return result;
 }
 
@@ -131,6 +188,7 @@ std::vector<ScoreboardRule> DetectionRules::ScoreboardsForGame(const std::string
 DetectionRules ParseDetectionRules(std::istream& in) {
   DetectionRules result;
   DetectionRule* rule = nullptr;
+  std::vector<DetectionRule>* ruleList = &result.rules;  // where rule is: rules, or pauses
   ScoreboardRule* board = nullptr;
   CustomGame* game = nullptr;
   bool inGlobal = false;
@@ -140,6 +198,11 @@ DetectionRules ParseDetectionRules(std::istream& in) {
 
   auto warn = [&](std::string message) { result.warnings.push_back(std::format("line {}: {}", lineNumber, message)); };
   auto finishRule = [&] {
+    if (rule && rule->pauses && (rule->LooksForImage() || rule->ListensForSound())) {
+      warn(std::format("[{}] can only pause for words on screen; its image or sound is ignored", rule->name));
+      rule->image.clear();
+      rule->sounds.clear();
+    }
     if (rule && rule->ReadsText() && rule->LooksForImage()) {
       // Both would count the same kill twice.
       warn(std::format("[{}] has both words and an image; it looks for the image only. Give the words their own "
@@ -158,7 +221,7 @@ DetectionRules ParseDetectionRules(std::istream& in) {
     }
     if (rule && !rule->ReadsText() && !rule->LooksForImage() && !rule->ListensForSound()) {
       warn(std::format("[{}] has no words, image or sound, so it can never match; ignoring it", rule->name));
-      result.rules.pop_back();
+      ruleList->pop_back();
     }
     if (game && (game->name.empty() || game->executables.empty())) {
       warn(std::format("[game.{}] needs a name and an exe; ignoring it", game->id));
@@ -210,6 +273,18 @@ DetectionRules ParseDetectionRules(std::istream& in) {
         skipping = true;
         continue;
       }
+      if (parts.size() >= 2 && parts[1] == "pause" && IsId(parts[0])) {
+        // Kept apart from the game's rules, and doesn't make the game's shipped rules give way.
+        DetectionRule& added = result.pauses.emplace_back();
+        added.name = name;
+        added.game = parts[0];
+        added.event = EventType::Highlight;
+        added.pauses = true;
+        added.cooldownMs = 0;
+        rule = &added;
+        ruleList = &result.pauses;
+        continue;
+      }
       if (parts.size() >= 2 && parts[1] == "scoreboard" && !parts[0].empty()) {
         board = &result.scoreboards.emplace_back();
         board->name = name;
@@ -219,7 +294,7 @@ DetectionRules ParseDetectionRules(std::istream& in) {
       const auto event = parts.size() >= 2 ? ParseEventType(parts[1]) : std::nullopt;
       if (parts.size() < 2 || parts[0].empty() || !event) {
         warn(std::format("[{}] should be [<game>.<event>], with event one of kill, assist, death, revive, "
-                         "match_start, match_end, highlight or scoreboard",
+                         "match_start, match_end, highlight, scoreboard or pause",
                          name));
         skipping = true;
         continue;
@@ -230,6 +305,7 @@ DetectionRules ParseDetectionRules(std::istream& in) {
       added.game = parts[0];
       added.event = *event;
       rule = &added;
+      ruleList = &result.rules;
       continue;
     }
 
@@ -247,8 +323,14 @@ DetectionRules ParseDetectionRules(std::istream& in) {
       if (key == "sample_ms" && ParseInt(value, ms)) {
         result.sampleMs = std::clamp(ms, 100, 2000);
         result.sampleMsSet = true;
+      } else if (key == "calm_ms" && ParseInt(value, ms) && ms >= 0 && ms <= 600000) {
+        result.calmMs = ms;
+        result.calmMsSet = true;
+      } else if (key == "change_check" && ParseChangeCheck(value, result.changeCheck)) {
+        result.changeCheckSet = true;
+      } else {
+        warn(std::format("unknown setting '{}' in [detection], or a value it can't use", key));
       }
-      else warn(std::format("unknown setting '{}' in [detection]", key));
       continue;
     }
     if (game) {
@@ -299,7 +381,13 @@ DetectionRules ParseDetectionRules(std::istream& in) {
       if (ParseInt(value, t) && t >= 0 && t <= 255) (rule ? rule->threshold : board->threshold) = t;
       else warn(std::format("[{}] threshold must be 0 to 255", section));
     } else if (board) {
-      if (key == "sample_ms") {
+      if (key == "key") {
+        if (!ParseBoardKey(value, *board)) {
+          warn(std::format("[{}] key must be the key that shows the scoreboard (like Tab, Caps Lock, F1, M or "
+                           "Mouse 4), none to read it only after a match, or always",
+                           board->name));
+        }
+      } else if (key == "sample_ms") {
         int ms = 0;
         if (ParseInt(value, ms)) board->sampleMs = std::clamp(ms, 250, 10000);
         else warn(std::format("[{}] sample_ms must be a whole number", board->name));
@@ -366,6 +454,12 @@ DetectionRules ParseDetectionRules(std::istream& in) {
       if (v == "true" || v == "yes" || v == "1") rule->confirmOnly = true;
       else if (v == "false" || v == "no" || v == "0") rule->confirmOnly = false;
       else warn(std::format("[{}] confirm_only must be true or false", rule->name));
+    } else if (key == "hold_ms" && rule->pauses) {
+      int ms = 0;
+      if (ParseInt(value, ms) && ms >= 0 && ms <= 600000) rule->holdMs = ms;
+      else warn(std::format("[{}] hold_ms must be 0 to 600000", rule->name));
+    } else if (key == "change_check") {
+      if (!ParseChangeCheck(value, rule->changeCheck)) warn(std::format("[{}] change_check must be hud or any", rule->name));
     } else if (key == "image") {
       rule->image = value;
     } else if (key == "image_match") {
@@ -381,8 +475,10 @@ DetectionRules ParseDetectionRules(std::istream& in) {
     }
   }
   finishRule();
-  for (auto& r : result.rules) {
-    if (r.sampleMs == 0) r.sampleMs = DefaultSampleMs(r.event, result.sampleMs);
+  for (auto* list : {&result.rules, &result.pauses}) {
+    for (auto& r : *list) {
+      if (r.sampleMs == 0) r.sampleMs = DefaultSampleMs(r, result.sampleMs);
+    }
   }
   return result;
 }
@@ -403,9 +499,24 @@ DetectionRules MergeDetectionRules(DetectionRules shipped, DetectionRules user) 
     if (!user.editedGames.contains(rule.game)) merged.rules.push_back(std::move(rule));
   }
   for (auto& rule : user.rules) merged.rules.push_back(std::move(rule));
+  merged.changeCheck = user.changeCheckSet ? user.changeCheck : shipped.changeCheck;
+  merged.changeCheckSet = user.changeCheckSet || shipped.changeCheckSet;
+  merged.calmMs = user.calmMsSet ? user.calmMs : shipped.calmMs;
+  merged.calmMsSet = user.calmMsSet || shipped.calmMsSet;
+
+  // A game's pause rules come from the player's file when it has any for that game.
+  std::set<std::string> userPauses;
+  for (const auto& pause : user.pauses) userPauses.insert(pause.game);
+  for (auto& pause : shipped.pauses) {
+    if (!userPauses.contains(pause.game)) merged.pauses.push_back(std::move(pause));
+  }
+  for (auto& pause : user.pauses) merged.pauses.push_back(std::move(pause));
+
   // Rules that look as often as [detection] says follow the sample_ms that won.
-  for (auto& rule : merged.rules) {
-    if (!rule.sampleMsSet) rule.sampleMs = DefaultSampleMs(rule.event, merged.sampleMs);
+  for (auto* list : {&merged.rules, &merged.pauses}) {
+    for (auto& rule : *list) {
+      if (!rule.sampleMsSet) rule.sampleMs = DefaultSampleMs(rule, merged.sampleMs);
+    }
   }
 
   std::set<std::string> userBoards;
@@ -418,6 +529,10 @@ DetectionRules MergeDetectionRules(DetectionRules shipped, DetectionRules user) 
   merged.warnings = std::move(shipped.warnings);
   merged.warnings.insert(merged.warnings.end(), user.warnings.begin(), user.warnings.end());
   return merged;
+}
+
+int DefaultSampleMs(const DetectionRule& rule, int sampleMs) {
+  return rule.pauses ? std::max(sampleMs, 500) : DefaultSampleMs(rule.event, sampleMs);
 }
 
 int DefaultSampleMs(EventType event, int sampleMs) {

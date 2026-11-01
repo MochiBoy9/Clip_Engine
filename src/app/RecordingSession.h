@@ -24,7 +24,7 @@ class RecordingSession {
   // scoreboards: where the game shows the player's totals, found by playerNames.
   RecordingSession(const Config& config, HMONITOR monitor, std::string label, std::vector<DetectionRule> rules,
                    std::vector<ScoreboardRule> scoreboards, std::vector<std::string> playerNames,
-                   int detectionSampleMs, double hudScale = 1);
+                   DetectionSettings detection, double hudScale = 1);
   ~RecordingSession();
 
   RecordingSession(const RecordingSession&) = delete;

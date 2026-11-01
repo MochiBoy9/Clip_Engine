@@ -22,6 +22,13 @@ enum class LinePosition {
   Middle,    // between two names on a row: in a killfeed that names them, an assister
 };
 
+// How a region is checked for a change before it's read again (see RegionChanged in OcrImage.h).
+enum class ChangeCheck {
+  Default,  // the [detection] change_check
+  Hud,      // only bright, HUD-like pixels count, so moving scenery behind the HUD doesn't
+  Any,      // any change in brightness, as before 0.10
+};
+
 // Stands for the player's own in-game names (player_names in clip_engine.ini) in words and exclude.
 inline constexpr std::string_view kPlayerPlaceholder = "{player}";
 
@@ -69,6 +76,14 @@ struct DetectionRule {
   // Its sightings never count a moment on their own, only back up another rule's.
   bool confirmOnly = false;
 
+  // A [<game>.pause] rule: while its words are on screen (a killcam, spectating a teammate)
+  // and for holdMs after, kills, assists and revives aren't counted, since what shows then is
+  // someone else's. It never counts anything itself.
+  bool pauses = false;
+  int holdMs = 2000;
+
+  ChangeCheck changeCheck = ChangeCheck::Default;
+
   // Phrases as written, kept when they mention {player} so the names can be filled in later.
   std::vector<std::string> playerWords;
   std::vector<std::string> playerExclude;
@@ -81,6 +96,8 @@ struct DetectionRule {
 // How often a rule for this event is checked by default, given the [detection] sample_ms.
 // Death screens and match banners stay up for seconds, so they needn't be read as often.
 int DefaultSampleMs(EventType event, int sampleMs);
+// The same for a rule, which a pause rule reads as often as a death screen.
+int DefaultSampleMs(const DetectionRule& rule, int sampleMs);
 
 // A game added in detection.ini as [game.<id>] with a name and its executables, so games
 // Clip Engine doesn't know yet can be recorded and given rules.
@@ -90,22 +107,41 @@ struct CustomGame {
   std::vector<std::string> executables;  // file names like "VALORANT-Win64-Shipping.exe"
 };
 
+// The [detection] settings a recording reads the screen by.
+struct DetectionSettings {
+  int sampleMs = 250;
+  ChangeCheck changeCheck = ChangeCheck::Hud;
+  int calmMs = 30000;
+};
+
 struct DetectionRules {
   int sampleMs = 250;  // how often the screen is read
   bool sampleMsSet = false;  // [detection] sample_ms was in the file
+  // [detection] change_check: hud (the default) or any.
+  ChangeCheck changeCheck = ChangeCheck::Hud;
+  bool changeCheckSet = false;
+  // [detection] calm_ms: after this long with nothing seen, quick popups are looked for half as
+  // often until something is; 0 never.
+  int calmMs = 30000;
+  bool calmMsSet = false;
   // Games this file gives its own rules for: those with a [<game>.<event>] section, or an
   // [<game>.edited] one, which Detection Studio writes so a game can have every rule removed.
   std::set<std::string> editedGames;
   std::vector<CustomGame> games;
   std::vector<DetectionRule> rules;
   std::vector<ScoreboardRule> scoreboards;
+  // [<game>.pause] rules, kept apart from the rest like scoreboards: Detection Studio doesn't edit
+  // them, and a game whose rules the player changed keeps the shipped ones unless the player's
+  // file has its own.
+  std::vector<DetectionRule> pauses;
   std::vector<std::string> warnings;
 
-  // The game's rules, with {player} filled in from playerNames. Rules that need a name are left
-  // out when there are none, and their names added to needingName.
+  // The game's rules, with {player} filled in from playerNames, its pause rules last. Rules that
+  // need a name are left out when there are none, and their names added to needingName.
   std::vector<DetectionRule> ForGame(const std::string& game, const std::vector<std::string>& playerNames = {},
                                      std::vector<std::string>* needingName = nullptr) const;
   std::vector<ScoreboardRule> ScoreboardsForGame(const std::string& game) const;
+  DetectionSettings Settings() const { return {sampleMs, changeCheck, calmMs}; }
 };
 
 // Reads detection.ini. Sections are named [<game id>.<event>] or [<game id>.<event>.<anything>],

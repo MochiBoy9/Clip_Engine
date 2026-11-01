@@ -268,11 +268,12 @@ internal sealed class DetectionIni
                   .ToList();
 
     // Replaces every rule of the game (and its [game.<id>] section, when game is given) with these.
-    // Its scoreboard sections aren't rules the Studio edits, so they stay.
+    // Its scoreboard and pause sections aren't rules the Studio edits, so they stay.
     public void SetGame(string gameId, StudioGame? game, IEnumerable<StudioRule> rules)
     {
         RemoveSections(name => (name.StartsWith(gameId + ".", StringComparison.Ordinal)
-                                && !name.StartsWith(gameId + ".scoreboard", StringComparison.Ordinal))
+                                && !name.StartsWith(gameId + ".scoreboard", StringComparison.Ordinal)
+                                && !name.StartsWith(gameId + ".pause", StringComparison.Ordinal))
                                || (game is not null && name == "game." + gameId));
 
         var block = new StringBuilder();
