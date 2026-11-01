@@ -1,19 +1,25 @@
-## Clip Engine 0.9.0
+## Clip Engine 0.10.0
 
-Detection Studio is easier to find your way around, and it now tells you exactly how each rule works.
+Detection counts more accurately, makes highlights in every game, and does less work while it's at it.
 
-- **See how every rule works.** Pick a rule and Studio says in plain words what it reads and how often, when it saves a moment, how it tells a repeat from a new one, and how it works with the game's other rules: which one decides the count, which back it up, and which can't run yet. The list shows each rule's part at a glance, and warns when two rules would save the same kill twice.
-- **Fine-tune any rule.** How often it reads its box, how long a message must be gone before it counts again, counting a moment once with the other rules for it, which rule decides, and squad tags before a name in a killfeed. Each shows the engine's default, so nothing is hidden.
-- **Testing a killfeed rule works.** Testing a rule that looks for your in-game name now fills your name in, as the engine does in game; before, it always said "No match". You can set your name right in the rule that needs it.
-- **Test your changes before saving.** Test all rules on marked clips runs your unsaved changes too, and lists every kill they missed or found extra. Click one to jump to that frame and see why.
-- **A roomier, quicker Studio:**
-  - The frame is bigger, with the clip picker and moments above it and testing in three tabs below: this frame, the whole clip and marked clips.
-  - Step through a clip a tenth of a second or a second at a time, and jump between its moments. Frames you've seen come back instantly.
-  - Copy or remove a rule from the toolbar, and give rules their own names.
-  - Changes to several games are kept until you save them all together, Discard throws them away, and leaving with changes unsaved asks first.
-  - Keys: Left/Right step, Shift for a second, Up/Down jump between moments, Ctrl+Enter tests, Ctrl+S saves, Ctrl+D copies, Delete removes.
+- **Counts kills more accurately.**
+  - The Finals' elimination chime backs up a kill even when it's heard after the killfeed already counted it, instead of being ignored.
+  - A killfeed row that's just your name (a fall, the zone, your own grenade) is a death, not a kill, in every game that reads the killfeed by name.
+  - Words run together by text recognition ("ELIMINATEDBOB") are split, and plurals like ELIMINATIONS on a scoreboard no longer count as a kill.
+  - Names must match more closely: a longer name that starts with yours isn't you, and accented names are read right.
+  - Halo Infinite tells suicides and betrayals from kills.
+- **Killcams and spectating don't count.** Kills shown while a killcam is up or you're watching a teammate after you're out are theirs, not yours. Kills found by your name in a killfeed always count. First-pass rules ship for Call of Duty, Fortnite, Apex Legends, PUBG, ARC Raiders, Overwatch, Battlefield 6 and The Finals.
+- **Assists from killfeeds** in Team Fortress 2, and from the assist popup in Rainbow Six Siege and Delta Force.
+- **Matches in every game.** Records, the Matches view and your Discord status now split matches from start and end banners, scoreboards that start again from zero, and long quiet spells, not only in games with their own API.
+- **Multi-kills and streaks in every game.** Double, triple, quad and penta kills and every fifth kill without dying become highlights, unless the game called the multi-kill out itself. Turn it off in Settings.
+- **Smarter clip lengths.** A match end keeps more of the fight that won it, a match start more of the start, and a death less after it. Choose whether a death on its own gets a clip.
+- **Your scoreboard, checked.** Records count kills and deaths as they happen; the scoreboard checks them. Each game on the Records page shows how many of the kills its scoreboard showed were caught, and opens Detection Studio when it keeps missing some.
+- **Less work while you play.**
+  - The scoreboard is read only while you hold Tab (or the key you set) and for 30 seconds after a match, not all the time.
+  - A box is read again only when HUD text in it came or went, not every time the scenery behind it moves.
+  - After 30 seconds with nothing happening, quick popups are looked for half as often, until anything shows.
 
-Everything from 0.8.0 is included.
+Everything from 0.9.0 is included.
 
 ## Install
 
