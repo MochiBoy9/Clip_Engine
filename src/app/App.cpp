@@ -75,7 +75,7 @@ App::App(Config config, DetectionRules rules)
       rules_(std::move(rules)),
       detector_(CustomProfiles(rules_)),
       planner_(int64_t{config_.clipBeforeSeconds} * kHnsPerSecond, int64_t{config_.clipAfterSeconds} * kHnsPerSecond,
-               int64_t{config_.bufferSeconds - 5} * kHnsPerSecond) {}
+               int64_t{config_.bufferSeconds - 5} * kHnsPerSecond - HoldBack()) {}
 
 int App::Run() {
   g_mainThread = GetCurrentThreadId();
@@ -147,6 +147,7 @@ int App::Run() {
     PumpIntegrationEvents();
     HandleEvents();
     PumpScoreboards();
+    if (session_ && makeHighlights_) AddMade(highlights_.Poll(NowHns()));
     SaveReadyAutoClips(false);
     if (NowHns() >= nextPoll) {
       CheckLongRecording();
@@ -205,6 +206,9 @@ void App::Poll() {
       sessionId_ = LocalTimestamp();
       sessionStart_ = NowHns();
       matchStarts_.clear();
+      matches_ = MatchTracker(MatchTracker::IdleGapFor(gameId));
+      highlights_ = HighlightMaker();
+      makeHighlights_ = config_.detection && config_.autoHighlights && !gameId.empty();
       presenceState_ = PresenceState{};
       presenceState_.game = label;
       presenceState_.startUnix = std::chrono::duration_cast<std::chrono::seconds>(
@@ -269,6 +273,10 @@ void App::PumpScoreboards() {
   }
   for (const auto& board : boards) {
     log::Info("Scoreboard in {}: {}", session_->Label(), DescribeStats(board.stats));
+    if (const auto opened = matches_.OnScores(board.stats, board.time)) {
+      log::Info("The scoreboard went back down, so a new match has begun");
+      StartMatch(*opened);
+    }
     if (timeline_) timeline_->Write(TimelineScores(SessionSeconds(board.time), MatchAt(board.time), board));
   }
 }
@@ -279,10 +287,29 @@ int App::MatchAt(int64_t time) const {
   return static_cast<int>(std::ranges::count_if(matchStarts_, [&](int64_t t) { return t <= time; }));
 }
 
+void App::StartMatch(int64_t time) {
+  matchStarts_.push_back(time);
+  presenceState_.kills = presenceState_.deaths = presenceState_.assists = 0;
+  if (makeHighlights_) AddMade(highlights_.Reset());
+}
+
+void App::AddMade(std::vector<GameEvent> made) {
+  if (!session_) return;
+  for (auto& event : made) {
+    log::Info("Made a highlight in {}: {}", session_->Label(), event.text);
+    session_->AddEvent(event);
+  }
+}
+
+int64_t App::HoldBack() const {
+  return config_.autoHighlights ? HighlightMaker::kChainGap + kHnsPerSecond : 0;
+}
+
 void App::StopSession() {
   if (!session_) return;
   // Keep the moments that happened just before the game closed.
   PumpIntegrationEvents();
+  if (makeHighlights_) AddMade(highlights_.Reset());
   HandleEvents();
   PumpScoreboards();
   SaveReadyAutoClips(true);
@@ -305,16 +332,24 @@ void App::HandleEvents() {
       }
       log::Info("Seen by {}", seen);
     }
-    if (event.type == EventType::MatchStart) {
-      matchStarts_.push_back(event.time);
-      presenceState_.kills = presenceState_.deaths = presenceState_.assists = 0;
+    if (const auto opened = matches_.OnEvent(event.type, event.time)) {
+      if (event.type != EventType::MatchStart) log::Info("A new match has begun in {}", session_->Label());
+      StartMatch(*opened);
     }
+    if (makeHighlights_ && !HighlightMaker::IsMade(event)) AddMade(highlights_.OnEvent(event));
     if (event.type == EventType::Kill) ++presenceState_.kills;
     if (event.type == EventType::Death) ++presenceState_.deaths;
     if (event.type == EventType::Assist) ++presenceState_.assists;
     if (timeline_) timeline_->Write(TimelineEvent(SessionSeconds(event.time), MatchAt(event.time), event));
     if (longRecording_ && event.time >= longRecording_->Start()) longEvents_.push_back(event);
-    if (config_.autoClip && config_.autoClipEvents.contains(event.type)) planner_.Add(event.time);
+    if (config_.autoClip && config_.autoClipEvents.contains(event.type)) {
+      const auto own = config_.momentLengths.find(event.type);
+      const MomentLength length = own != config_.momentLengths.end() ? own->second : MomentLength{};
+      const int before = length.before >= 0 ? length.before : config_.clipBeforeSeconds;
+      const int after = length.after >= 0 ? length.after : config_.clipAfterSeconds;
+      const bool alone = event.type != EventType::Death || config_.clipLoneDeaths;
+      planner_.Add(event.time, int64_t{before} * kHnsPerSecond, int64_t{after} * kHnsPerSecond, alone);
+    }
   }
 }
 
@@ -324,7 +359,7 @@ void App::SaveReadyAutoClips(bool all) {
     return;
   }
   // Wait a moment past the end so the encoder has delivered the last frames.
-  const auto windows = all ? planner_.TakeAll() : planner_.TakeReady(NowHns() - kHnsPerSecond / 2);
+  const auto windows = all ? planner_.TakeAll() : planner_.TakeReady(NowHns() - kHnsPerSecond / 2 - HoldBack());
   for (const auto& window : windows) SaveRange(window.start, window.end, "auto");
 }
 

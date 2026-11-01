@@ -22,6 +22,8 @@ public sealed class SettingsViewModel : ObservableObject
     private bool _detection;
     private string _readingQuality = "medium";
     private bool _autoClip;
+    private bool _clipLoneDeaths = true;
+    private bool _autoHighlights = true;
     private double _clipBeforeSeconds;
     private double _clipAfterSeconds;
     private string _sidePanelHotkey;
@@ -138,6 +140,8 @@ public sealed class SettingsViewModel : ObservableObject
         _ => "Reads small text bigger and sharper than Low, at little extra cost. Recommended.",
     };
     public bool AutoClip { get => _autoClip; set => Change(ref _autoClip, value); }
+    public bool ClipLoneDeaths { get => _clipLoneDeaths; set => Change(ref _clipLoneDeaths, value); }
+    public bool AutoHighlights { get => _autoHighlights; set => Change(ref _autoHighlights, value); }
     public IReadOnlyList<EventToggle> AutoClipEvents { get; }
 
     public double ClipBeforeSeconds
@@ -271,6 +275,8 @@ public sealed class SettingsViewModel : ObservableObject
         AutoClipEvents = AutoClipEvents.Where(e => e.IsOn).Select(e => e.Name).ToList(),
         ClipBeforeSeconds = (int)ClipBeforeSeconds,
         ClipAfterSeconds = (int)ClipAfterSeconds,
+        ClipLoneDeaths = ClipLoneDeaths,
+        AutoHighlights = AutoHighlights,
     };
 
     private async Task SaveAsync()
@@ -309,6 +315,8 @@ public sealed class SettingsViewModel : ObservableObject
         _autoClip = s.AutoClip;
         _clipBeforeSeconds = Math.Clamp(s.ClipBeforeSeconds, 0, 60);
         _clipAfterSeconds = Math.Clamp(s.ClipAfterSeconds, 0, 30);
+        _clipLoneDeaths = s.ClipLoneDeaths;
+        _autoHighlights = s.AutoHighlights;
         foreach (var toggle in AutoClipEvents) toggle.Load(s.AutoClipEvents.Contains(toggle.Name));
         Raise(string.Empty);
     }

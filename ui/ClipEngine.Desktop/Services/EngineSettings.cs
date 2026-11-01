@@ -25,6 +25,8 @@ internal sealed class EngineSettings
     public List<string> AutoClipEvents { get; set; } = [.. AllEvents];
     public int ClipBeforeSeconds { get; set; } = 10;
     public int ClipAfterSeconds { get; set; } = 5;
+    public bool ClipLoneDeaths { get; set; } = true;
+    public bool AutoHighlights { get; set; } = true;
 
     // How hard the engine works at reading the screen (ReadQuality in src/detect/OcrImage.h).
     public static readonly IReadOnlyList<string> ReadingQualities = ["low", "medium", "high", "ultra"];
@@ -67,6 +69,8 @@ internal sealed class EngineSettings
                     break;
                 case "clip_before_seconds": settings.ClipBeforeSeconds = ParseInt(value, settings.ClipBeforeSeconds); break;
                 case "clip_after_seconds": settings.ClipAfterSeconds = ParseInt(value, settings.ClipAfterSeconds); break;
+                case "clip_lone_deaths": settings.ClipLoneDeaths = ParseBool(value, settings.ClipLoneDeaths); break;
+                case "auto_highlights": settings.AutoHighlights = ParseBool(value, settings.AutoHighlights); break;
             }
         }
         return settings;
@@ -95,6 +99,8 @@ internal sealed class EngineSettings
             ["auto_clip_events"] = string.Join(", ", AllEvents.Where(AutoClipEvents.Contains)),
             ["clip_before_seconds"] = Format(ClipBeforeSeconds),
             ["clip_after_seconds"] = Format(ClipAfterSeconds),
+            ["clip_lone_deaths"] = Format(ClipLoneDeaths),
+            ["auto_highlights"] = Format(AutoHighlights),
         };
 
         var lines = File.Exists(file) ? File.ReadAllLines(file).ToList() : [];

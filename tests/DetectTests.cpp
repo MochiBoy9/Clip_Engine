@@ -2,6 +2,8 @@
 // parsing and turning successive screen reads into events.
 
 #include "app/AutoClipPlanner.h"
+#include "app/HighlightMaker.h"
+#include "app/MatchTracker.h"
 #include "detect/DetectionRules.h"
 #include "detect/EventFuser.h"
 #include "detect/SoundMatch.h"
@@ -856,6 +858,111 @@ void TestPlanner() {
   CHECK(planner.Empty());
 }
 
+// Moments that come in late or out of order, deaths that don't stand alone, and each kind of
+// moment's own lengths.
+void TestPlannerMoments() {
+  AutoClipPlanner planner(10, 5, 40);
+  planner.Add(100);            // 90..105
+  planner.Add(99, 10, 5);      // a second late, and earlier: 89..105
+  planner.Add(95, 15, 3);      // earlier still, with its own lengths: 80..105
+  planner.Add(130, 10, 3, false);  // a death on its own: no clip
+  planner.Add(104, 10, 3, false);  // a death in the fight: kept with it
+  auto all = planner.TakeAll();
+  CHECK(all.size() == 1 && all[0].start == 80 && all[0].end == 107);
+
+  planner.Add(200);           // 190..205
+  planner.Add(150);           // long before it, arriving late: its own clip, first
+  all = planner.TakeAll();
+  CHECK(all.size() == 2 && all[0].start == 140 && all[1].start == 190);
+
+  // Too long to reach all the way back: as far back as a clip can.
+  planner.Add(300);           // 290..305
+  planner.Add(314);           // 290..319
+  planner.Add(285, 10, 5);    // wants 275.., but 40 at most: 279..319
+  all = planner.TakeAll();
+  CHECK(all.size() == 1 && all[0].start == 279 && all[0].end == 319);
+
+  CHECK(ParseMomentLengths("match_end 15/8, death -/3") ==
+        (MomentLengths{{EventType::MatchEnd, {15, 8}}, {EventType::Death, {-1, 3}}}));
+  CHECK(ParseMomentLengths("") == MomentLengths{});
+  CHECK(ParseMomentLengths("Kill 4/2") == (MomentLengths{{EventType::Kill, {4, 2}}}));
+  CHECK(!ParseMomentLengths("victory 5/5"));
+  CHECK(!ParseMomentLengths("kill 5"));
+  CHECK(!ParseMomentLengths("kill five/5"));
+  CHECK(ParseMomentLengths("match_start 5/10, match_end 15/8, death -/3") == DefaultMomentLengths());
+}
+
+constexpr int64_t kSec = 10'000'000;
+
+void TestMatchTracker() {
+  // A game whose HUD shows when a match ends but not when the next starts.
+  MatchTracker matches(MatchTracker::IdleGapFor("valorant"));
+  CHECK(!matches.OnEvent(EventType::Kill, 10 * kSec));       // the first match opens by itself
+  CHECK(!matches.OnEvent(EventType::Death, 60 * kSec));
+  CHECK(!matches.OnEvent(EventType::MatchEnd, 600 * kSec));
+  CHECK(!matches.OnEvent(EventType::MatchEnd, 610 * kSec));  // the same end read again
+  CHECK(!matches.OnEvent(EventType::Kill, 605 * kSec));      // on the result screen: still that match
+  CHECK(matches.OnEvent(EventType::Kill, 900 * kSec) == 900 * kSec);  // the next match
+  CHECK(!matches.OnEvent(EventType::Kill, 950 * kSec));
+  // Its end was missed, and the player queued again: five minutes with nothing.
+  CHECK(matches.OnEvent(EventType::Death, 1300 * kSec) == 1300 * kSec);
+
+  // A banner at the start of every round, in Overwatch: one match, not one per round.
+  MatchTracker rounds(MatchTracker::IdleGapFor("overwatch"));
+  CHECK(rounds.OnEvent(EventType::MatchStart, 0) == 0);
+  CHECK(!rounds.OnEvent(EventType::MatchStart, 20 * kSec));  // shown twice before the fighting
+  CHECK(!rounds.OnEvent(EventType::Kill, 60 * kSec));
+  CHECK(!rounds.OnEvent(EventType::Kill, 300 * kSec));
+  CHECK(!rounds.OnEvent(EventType::MatchStart, 360 * kSec));  // round two
+  CHECK(!rounds.OnEvent(EventType::Kill, 420 * kSec));
+  CHECK(!rounds.OnEvent(EventType::MatchEnd, 700 * kSec));
+  CHECK(rounds.OnEvent(EventType::MatchStart, 800 * kSec) == 800 * kSec);  // the next match
+  // Its end missed, but a long while since anything happened.
+  CHECK(!rounds.OnEvent(EventType::Kill, 850 * kSec));
+  CHECK(rounds.OnEvent(EventType::MatchStart, 1100 * kSec) == 1100 * kSec);
+
+  // A scoreboard that went back down.
+  MatchTracker boards;
+  CHECK(!boards.OnScores({{"kills", 12}, {"deaths", 4}}, 100 * kSec));
+  CHECK(!boards.OnScores({{"kills", 13}, {"deaths", 4}}, 200 * kSec));
+  CHECK(!boards.OnScores({{"kills", 12}, {"deaths", 4}}, 210 * kSec));  // one misread digit
+  CHECK(boards.OnScores({{"kills", 1}, {"deaths", 0}}, 900 * kSec) == 900 * kSec);
+  // A battle royale: minutes of looting are no reason for a new match.
+  MatchTracker royale(MatchTracker::IdleGapFor("pubg"));
+  CHECK(!royale.OnEvent(EventType::Kill, 0));
+  CHECK(!royale.OnEvent(EventType::Kill, 900 * kSec));
+}
+
+void TestHighlightMaker() {
+  HighlightMaker maker;
+  auto kill = [](int64_t t) { return GameEvent{EventType::Kill, t, "kill", {}}; };
+  CHECK(maker.OnEvent(kill(10 * kSec)).empty());
+  CHECK(maker.OnEvent(kill(14 * kSec)).empty());
+  CHECK(maker.OnEvent(kill(19 * kSec)).empty());
+  CHECK(maker.Poll(22 * kSec).empty());  // could still become a quad
+  auto made = maker.Poll(26 * kSec);
+  CHECK(made.size() == 1 && made[0].text == "Triple kill" && made[0].time == 19 * kSec);
+  if (made.size() == 1) CHECK(HighlightMaker::IsMade(made[0]) && made[0].witnesses[0].text == "3 kills in 9.0 s");
+  // Two more make a five-kill streak, at once; the two together are a double kill.
+  CHECK(maker.OnEvent(kill(40 * kSec)).empty());
+  made = maker.OnEvent(kill(41 * kSec));
+  CHECK(made.size() == 1 && made[0].text == "5 kill streak" && made[0].time == 41 * kSec);
+  CHECK(maker.Poll(48 * kSec).size() == 1);
+  // A death ends the streak.
+  maker.OnEvent({EventType::Death, 50 * kSec, "", {}});
+  for (int i = 0; i < 4; ++i) CHECK(maker.OnEvent(kill((60 + i * 10) * kSec)).empty());
+  // The game called this double kill out itself.
+  maker.OnEvent(kill(200 * kSec));
+  maker.OnEvent(kill(202 * kSec));
+  maker.OnEvent({EventType::Highlight, 202 * kSec, "DOUBLE KILL", {}});
+  CHECK(maker.Poll(300 * kSec).empty());
+  // A new match hands back the multi-kill going on.
+  maker.OnEvent(kill(400 * kSec));
+  maker.OnEvent(kill(401 * kSec));
+  made = maker.Reset();
+  CHECK(made.size() == 1 && made[0].text == "Double kill");
+}
+
 void TestMetadata() {
   ClipMetadata m;
   m.game = "The \"Finals\"";
@@ -1202,6 +1309,9 @@ int main(int argc, char** argv) {
   TestImageRulesParse();
   TestImageMatch();
   TestPlanner();
+  TestPlannerMoments();
+  TestMatchTracker();
+  TestHighlightMaker();
   TestMetadata();
   TestMetadataRoundTrip();
   TestTrimmed();
