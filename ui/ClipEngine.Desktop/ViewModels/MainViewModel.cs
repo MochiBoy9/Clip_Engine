@@ -113,6 +113,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ShowClipsGridCommand = new RelayCommand(() => ShowMatches = false);
         ShowMatchesCommand = new RelayCommand(() => ShowMatches = true);
         ImportClipCommand = new RelayCommand(() => _ = ImportClipAsync(null));
+        ImportPackCommand = new RelayCommand(() => _ = ImportPackAsync(null));
         ToggleSidePanelCommand = new RelayCommand(() => SidePanelToggleRequested?.Invoke());
         ShowMainWindowCommand = new RelayCommand(() => ShowMainWindowRequested?.Invoke());
         OpenStudioCommand = new RelayCommand(p =>
@@ -204,6 +205,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public RelayCommand ShowClipsGridCommand { get; }
     public RelayCommand ShowMatchesCommand { get; }
     public RelayCommand ImportClipCommand { get; }
+    public RelayCommand ImportPackCommand { get; }
     public RelayCommand ToggleSidePanelCommand { get; }
     public RelayCommand ShowMainWindowCommand { get; }
     public RelayCommand GoToCommand { get; }
@@ -544,6 +546,38 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ShowToast($"Clip added to {Path.GetFileName(folder.TrimEnd('\\', '/'))}");
         AddActivity(ActivityKind.Clip, $"Imported {Path.GetFileName(imported)}");
         if (clip is not null) OpenPlayer(clip);
+    }
+
+    // Installs a detection pack someone shared (DetectionPacks): the game's rules, icons and sounds,
+    // and what the universal HUD reader learned about it, then restarts the engine to use them.
+    internal async Task ImportPackAsync(string? path)
+    {
+        if (Dialogs is null && path is null) return;
+        path ??= await Dialogs!.PickPackAsync();
+        if (path is null || !File.Exists(path)) return;
+        if (!IsLive)
+        {
+            ShowToast("Detection packs can't be installed in the preview.", isError: true);
+            return;
+        }
+        DetectionPack pack;
+        bool replaced;
+        try
+        {
+            pack = await Task.Run(() => DetectionPacks.Read(path));
+            replaced = await Task.Run(() => DetectionPacks.Install(pack, DetectionIni.LoadUser(), AppPaths.DataDir));
+        }
+        catch (Exception e) when (e is PackException or IOException or UnauthorizedAccessException)
+        {
+            ShowToast($"Couldn't install {Path.GetFileName(path)}: {e.Message}", isError: true);
+            return;
+        }
+        var by = pack.Manifest.Author.Length > 0 ? $" by {pack.Manifest.Author}" : "";
+        ShowToast($"Installed the detection pack for {pack.Manifest.Name}{by}: {pack.Summary}." +
+                  (replaced ? " Your own rules for it were saved in detection.before-pack.ini." : ""));
+        AddActivity(ActivityKind.Info, $"Installed the detection pack for {pack.Manifest.Name}");
+        foreach (var warning in pack.Warnings) AddActivity(ActivityKind.Warning, $"Detection pack: {warning}");
+        await RestartEngineAsync();
     }
 
     private void RememberImportFolder(string folder)

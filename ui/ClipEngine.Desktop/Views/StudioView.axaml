@@ -117,11 +117,17 @@
             <Border Classes="inset" Padding="10,8" Margin="0,0,0,12">
               <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Classes="caption" Text="{Binding RulesOrigin}" TextWrapping="Wrap" VerticalAlignment="Center" />
-                <Button Grid.Column="1" Classes="secondary" Command="{Binding UseBuiltInCommand}" Padding="10,4" Margin="8,0,0,0"
-                        IsVisible="{Binding HasBuiltInRules}" VerticalAlignment="Center"
-                        ToolTip.Tip="Put the game's built-in rules back in the editor; save to use them again">
-                  <TextBlock Text="Use built-in" FontSize="12" />
-                </Button>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" Margin="8,0,0,0" VerticalAlignment="Center">
+                  <Button Classes="secondary" Command="{Binding UseBuiltInCommand}" Padding="10,4"
+                          IsVisible="{Binding HasBuiltInRules}"
+                          ToolTip.Tip="Put the game's built-in rules back in the editor; save to use them again">
+                    <TextBlock Text="Use built-in" FontSize="12" />
+                  </Button>
+                  <Button Classes="secondary" Command="{Binding SharePackCommand}" Padding="10,4"
+                          ToolTip.Tip="Save this game's rules, icons, sounds and what the universal HUD reader learned about it as a detection pack (.cepack) anyone can install">
+                    <TextBlock Text="Share pack" FontSize="12" />
+                  </Button>
+                </StackPanel>
               </Grid>
             </Border>
 

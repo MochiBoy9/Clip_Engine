@@ -6,6 +6,7 @@
 #include "detect/ImageMatch.h"
 #include "detect/SoundWatch.h"
 #include "detect/Ocr.h"
+#include "detect/UniversalHud.h"
 
 #include <mferror.h>
 #include <mfapi.h>
@@ -628,6 +629,73 @@ int RunScanCommand(const std::filesystem::path& input, const std::vector<Detecti
     log::Error("Scan failed: {}", Describe(e));
   } catch (const std::exception& e) {
     log::Error("Scan failed: {}", e.what());
+  }
+  return 1;
+}
+
+int RunLearnCommand(const std::filesystem::path& input, const HudModel& model, const std::vector<HudMark>& marks,
+                    const std::string& game, ReadQuality quality, double hudScale, const std::filesystem::path& learnedFile) {
+  try {
+    const auto ocr = CreateOcrEngine();
+    if (!ocr) {
+      log::Error("Learn failed: Windows text recognition isn't installed. Add English under Settings > Time & language > Language.");
+      return 1;
+    }
+    double length = 0;
+    VideoReader video(input, &length);
+    struct Zone {
+      std::string name;
+      PixelBox box;
+      int intervalMs = 500;
+      int64_t dueMs = 0;
+    };
+    std::vector<Zone> zones;
+    for (const auto& zone : UniversalZones()) {
+      Zone z{std::string(zone.name), BoxOn(PlaceRegion(zone.region, video.width, video.height, hudScale), video.width, video.height),
+             ScaledSampleMs(zone.sampleMs, quality)};
+      // Lines often show only for a second or two, so every zone is read at least twice a second.
+      z.intervalMs = std::min(z.intervalMs, 500);
+      if (!z.box.TooSmall()) zones.push_back(std::move(z));
+    }
+    log::Info("Learning from {}x{} video with {} marks", video.width, video.height, marks.size());
+
+    std::vector<ZoneRead> reads;
+    int lastPercent = -1;
+    int64_t time = 0;
+    while (auto sample = video.Next(time)) {
+      const int64_t ms = time / kHnsPerMs;
+      if (std::ranges::none_of(zones, [&](const Zone& z) { return z.dueMs <= ms; })) continue;
+      const Picture frame = video.ToPicture(sample.get());
+      for (auto& zone : zones) {
+        if (zone.dueMs > ms) continue;
+        zone.dueMs = ms + zone.intervalMs;
+        const UINT width = zone.box.right - zone.box.left;
+        const UINT height = zone.box.bottom - zone.box.top;
+        const auto pixels = Crop(frame, zone.box.left, zone.box.top, width, height);
+        const auto words = ReadWords(ocr, pixels, width, height, 0, 1, quality);
+        if (words.empty() || words.front().empty()) continue;
+        reads.push_back({ms, zone.name, GroupIntoRows(words.front())});
+      }
+      if (length > 0) {
+        const int percent = std::clamp(static_cast<int>(ms / 10.0 / length), 0, 100);
+        if (percent / 5 != lastPercent / 5) {
+          lastPercent = percent;
+          log::Info("Learn progress {}%", percent);
+        }
+      }
+    }
+
+    const auto taught = TeachFromMarks(model, reads, marks, game);
+    for (const auto& example : taught) {
+      log::Info("Learn example {} in {}: {}", HudLabelName(example.label), example.zone, example.text);
+    }
+    const int added = AppendHudExamples(learnedFile, taught);
+    log::Info("Learn done: {} new examples", added);
+    return 0;
+  } catch (const winrt::hresult_error& e) {
+    log::Error("Learn failed: {}", Describe(e));
+  } catch (const std::exception& e) {
+    log::Error("Learn failed: {}", e.what());
   }
   return 1;
 }

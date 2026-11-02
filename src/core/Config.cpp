@@ -55,6 +55,11 @@ discord_presence = true
 # Read the screen for kills, deaths and other moments (rules are in detection.ini).
 detection = true
 
+# For a game with no detection rules, read the places most HUDs show kills, deaths and match
+# results, and let a small learned model decide what each line means. It learns from what you
+# mark in Check detection (hud_learned.txt next to this file).
+universal_hud = true
+
 # How hard to work at reading the screen: low, medium, high or ultra. Higher reads small text
 # bigger and smoother, and high and ultra read each part of the screen more than one way and
 # look more often, which misses and misreads fewer moments but uses more CPU. low is how
@@ -291,6 +296,8 @@ Config Config::Load(const std::filesystem::path& file) {
       config.discordAppId = value;
     } else if (key == "detection") {
       setBool(config.detection);
+    } else if (key == "universal_hud") {
+      setBool(config.universalHud);
     } else if (key == "detection_debug") {
       setBool(config.detectionDebug);
     } else if (key == "reading_quality") {

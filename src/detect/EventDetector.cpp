@@ -79,6 +79,11 @@ struct EventDetector::Region {
   UINT shrink = 1;      // see OcrScale
   int intervalMs = 250;
   bool banner = true;   // every rule here is for a banner that stays up, so it can be read smaller
+  // Every rule here is the universal HUD reader's. A zone that has shown nothing for a while
+  // is looked at less often, until it shows something: most games use only a few of them.
+  bool universal = true;
+  int baseIntervalMs = 250;
+  int64_t lastFoundMs = -1;
 
   std::vector<RuleTracker> textRules;
   struct Icon {
@@ -216,6 +221,7 @@ EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCaptur
     const bool banner = rule.position == LinePosition::Anywhere && rule.event != EventType::Kill &&
                         rule.event != EventType::Assist && rule.event != EventType::Revive;
     region->banner &= banner;
+    region->universal &= rule.classify && rule.name.find(".universal_") != std::string::npos;
     if (rule.ReadsText()) region->textRules.emplace_back(rule);
     if (matcher) region->icons.push_back({RuleTracker(rule), std::move(*matcher), rule.imageMatch});
   }
@@ -233,11 +239,13 @@ EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCaptur
       Region* region = addRegion(board.name, box, board.threshold);
       region->board = &board;
       region->banner = false;
+      region->universal = false;
       region->intervalMs = std::max(sampleMs_, board.sampleMs);
     }
   }
 
   for (auto& region : regions_) {
+    region->baseIntervalMs = region->intervalMs;
     // Banners on a screen taller than 2000 pixels read as well at half size.
     if (ShrinksBanners(quality_) && region->banner && screenH >= 2000 && region->height >= 480) region->shrink = 2;
   }
@@ -274,6 +282,8 @@ EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCaptur
     }
     inner->inside.clear();
     best->intervalMs = std::min(best->intervalMs, inner->intervalMs);
+    best->baseIntervalMs = best->intervalMs;
+    best->universal &= inner->universal;
   }
 
   sounds_ = std::make_unique<SoundWatch>(rules_, [](const std::string& warning) { log::Warn("{}", warning); });
@@ -455,6 +465,7 @@ void EventDetector::Process(Region& region, int64_t time, const OcrEngine& ocr) 
   };
   // Each region's own words: all of them for this one, those within its bounds for the
   // regions inside it. Each rule goes by whichever read of the region suits it (ChooseRead).
+  int found = 0;
   auto feed = [&](Region& target, const std::vector<std::vector<WordBox>>& reads) {
     const std::string text = textOf(reads);
     if (debug_ && text != target.lastText && !text.empty()) log::Info("Read [{}]: {}", target.name, Shorten(text, 160));
@@ -466,6 +477,7 @@ void EventDetector::Process(Region& region, int64_t time, const OcrEngine& ocr) 
     for (auto& tracker : target.textRules) {
       const size_t chosen = ChooseRead(tracker.Rule(), rows);
       const int fresh = tracker.Update(rows[chosen], ms);
+      found += fresh;
       if (debug_ && fresh > 0 && chosen > 0) log::Info("[{}] found in read {} of the region", tracker.Rule().name, chosen + 1);
       fuser_.Add(tracker.Rule(), fresh, time, Shorten(text, 120), Where(target));
     }
@@ -504,6 +516,21 @@ void EventDetector::Process(Region& region, int64_t time, const OcrEngine& ocr) 
         }
       }
       feed(*inner, reads);
+    }
+  }
+
+  if (region.universal && region.ReadsText()) {
+    // A zone that has shown nothing for two minutes is looked at a third as often, so the
+    // universal reader costs no more than a game's own rules once it knows where this HUD
+    // shows things.
+    constexpr int64_t kIdleMs = 120000;
+    if (found > 0 || region.lastFoundMs < 0) {
+      if (found > 0 && region.intervalMs != region.baseIntervalMs && debug_) log::Info("[{}] is in use; reading it as often as before", region.name);
+      region.lastFoundMs = ms;
+      region.intervalMs = region.baseIntervalMs;
+    } else if (ms - region.lastFoundMs > kIdleMs && region.intervalMs == region.baseIntervalMs) {
+      region.intervalMs = std::min(region.baseIntervalMs * 3, 2500);
+      if (debug_) log::Info("[{}] has shown nothing for a while; reading it every {} ms", region.name, region.intervalMs);
     }
   }
 

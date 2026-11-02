@@ -36,6 +36,7 @@ public sealed class AccuracyViewModel : ObservableObject
         StartFromDetectedCommand = new RelayCommand(StartFromDetected, () => _clip.Events.Count > 0);
         ClearCommand = new RelayCommand(() => SetMarks([]), () => Marks.Count > 0);
         RunCommand = new RelayCommand(() => _ = RunAsync(), () => !IsScanning && CanScan);
+        TeachCommand = new RelayCommand(() => _ = TeachAsync(), () => !IsScanning && CanScan && Marks.Count > 0);
         CancelCommand = new RelayCommand(() => _cancel?.Cancel(), () => IsScanning);
     }
 
@@ -49,6 +50,7 @@ public sealed class AccuracyViewModel : ObservableObject
     public RelayCommand StartFromDetectedCommand { get; }
     public RelayCommand ClearCommand { get; }
     public RelayCommand RunCommand { get; }
+    public RelayCommand TeachCommand { get; }
     public RelayCommand CancelCommand { get; }
 
     // What the next mark is: picked here, or with the number keys in the player.
@@ -71,6 +73,7 @@ public sealed class AccuracyViewModel : ObservableObject
         {
             if (!Set(ref _isScanning, value)) return;
             RunCommand.NotifyCanExecuteChanged();
+            TeachCommand.NotifyCanExecuteChanged();
             CancelCommand.NotifyCanExecuteChanged();
         }
     }
@@ -127,6 +130,7 @@ public sealed class AccuracyViewModel : ObservableObject
         Raise(nameof(HasMarks));
         Raise(nameof(MarksCaption));
         ClearCommand.NotifyCanExecuteChanged();
+        TeachCommand.NotifyCanExecuteChanged();
         // An old result no longer matches the marks.
         if (_result is not null) ShowResult(null);
     }
@@ -162,6 +166,50 @@ public sealed class AccuracyViewModel : ObservableObject
             _cancel.Dispose();
             _cancel = null;
         }
+    }
+
+    // Teaches the universal HUD reader from the marks (clip_engine.exe --learn), then checks the
+    // clip again so the difference shows.
+    private async Task TeachAsync()
+    {
+        if (!_main.IsLive || Marks.Count == 0) return;
+        IsScanning = true;
+        Progress = 0;
+        ShowStatus("Reading the clip to learn from your marks…");
+        _cancel = new CancellationTokenSource();
+        try
+        {
+            var quality = EngineSettings.Load(AppPaths.EngineSettingsFile).ReadingQuality;
+            var learned = await StudioTools.LearnAsync(_clip.Path, _clip.Game, Marks.Select(m => m.Event), quality,
+                p => Avalonia.Threading.Dispatcher.UIThread.Post(() => Progress = p), _cancel.Token);
+            ShowStatus(TeachSummary(learned, _clip.Game));
+        }
+        catch (OperationCanceledException)
+        {
+            ShowStatus(null);
+        }
+        catch (Exception e) when (e is StudioFailedException or IOException or System.ComponentModel.Win32Exception)
+        {
+            ShowStatus($"Couldn't learn from the clip: {e.Message}", error: true);
+        }
+        finally
+        {
+            IsScanning = false;
+            _cancel.Dispose();
+            _cancel = null;
+        }
+    }
+
+    internal static string TeachSummary(IReadOnlyList<LearnExample> learned, string game)
+    {
+        if (learned.Count == 0) return "Nothing new to learn: the universal HUD reader already reads this clip the way you marked it.";
+        var moments = learned.Count(e => e.Label != "none");
+        var wrong = learned.Count - moments;
+        var parts = new List<string>();
+        if (moments > 0) parts.Add(moments == 1 ? "1 line that shows a moment" : $"{moments} lines that show a moment");
+        if (wrong > 0) parts.Add(wrong == 1 ? "1 line that means nothing" : $"{wrong} lines that mean nothing");
+        return $"Learned {string.Join(" and ", parts)} for {game}. It reads {game} this way from the next time you play it, " +
+               "and you can share it with the game's detection pack.";
     }
 
     internal void ShowResult(AccuracyResult? result)

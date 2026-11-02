@@ -1080,6 +1080,8 @@ void TestPlaceRegion() {
   CHECK(rules.warnings.size() == 1);
 }
 
+int RunHudModelTests(const std::filesystem::path& scratch);
+
 int main(int argc, char** argv) {
   TestTokenize();
   TestWordsMatch();
@@ -1113,6 +1115,7 @@ int main(int argc, char** argv) {
   if (argc > 1) TestFinalsRules(argv[1]);
   if (argc > 1) TestFinalsKillfeed(argv[1]);
   if (argc > 2) TestMetadataBox(argv[2]);
+  g_failures += RunHudModelTests(argc > 2 ? std::filesystem::path(argv[2]) : std::filesystem::temp_directory_path());
   if (g_failures == 0) std::printf("All detection tests passed\n");
   return g_failures == 0 ? 0 : 1;
 }

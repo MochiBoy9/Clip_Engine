@@ -5,6 +5,7 @@
 #include "detect/DetectionRules.h"
 #include "detect/EventDetector.h"
 #include "detect/RuleTester.h"
+#include "detect/UniversalHud.h"
 #include "game/GameDetector.h"
 #include "media/Exporter.h"
 #include "media/Trimmer.h"
@@ -185,8 +186,17 @@ int RunStudioCommand(int argc, wchar_t** argv) {
     if (flag == L"--anchor") ParseAnchor(value, rule.region.anchorX, rule.region.anchorY);
     if (flag == L"--aspect") ParseAspect(value, rule.region.aspect);
     if (flag == L"--hud-scale") hudScale = std::clamp(_wtof(argv[i + 1]), 25.0, 400.0) / 100;
+    if (flag == L"--classify") rule.classify = value == "true";
+    if (flag == L"--zone") rule.hudZone = value;
+    if (flag == L"--game") rule.game = value;
   }
-  SetPhrases(rule, words, exclude, ReadPlayerNames(DataDir() / L"clip_engine.ini"));
+  const auto playerNames = ReadPlayerNames(DataDir() / L"clip_engine.ini");
+  SetPhrases(rule, words, exclude, playerNames);
+  if (rule.classify) {
+    std::vector<DetectionRule> one{rule};
+    AttachHudModel(one, LoadHudModel(DataDir() / std::string(kHudLearnedFile), rule.game, playerNames));
+    rule = one.front();
+  }
   winrt::init_apartment(winrt::apartment_type::multi_threaded);
   if (FAILED(MFStartup(MF_VERSION))) {
     log::Error("{} failed: Media Foundation is unavailable", command == L"--frame" ? "Frame" : "Read");
@@ -202,12 +212,18 @@ int RunStudioCommand(int argc, wchar_t** argv) {
 }
 
 // clip_engine.exe --scan <clip> --game <id or name> [--quality low|medium|high|ultra] [--hud-scale 100]
-//                 [--rules detection.ini]
+//                 [--rules detection.ini] [--universal true]
+// clip_engine.exe --learn <clip> --game <id or name> --marks "kill@12.3;death@40.1" [--quality ...] [--hud-scale 100]
 // Runs a game's rules (yours where you've changed them) over a whole clip, for checking
 // detection against what really happened in it. --rules reads your rules from that file instead
-// of your detection.ini, so Detection Studio can test changes before they're saved.
+// of your detection.ini, so Detection Studio can test changes before they're saved. A game with no
+// rules that read the screen is read by the universal HUD reader, as in game; --universal true
+// reads any game with it, to try it. --learn teaches the universal reader from the player's marks.
 int RunScanCommand(int argc, wchar_t** argv) {
   using namespace clip;
+  const bool learn = std::wstring_view(argv[1]) == L"--learn";
+  bool universal = false;
+  std::string marks;
   std::string game;
   ReadQuality quality = ReadQuality::Medium;
   std::optional<double> hudScale;
@@ -221,6 +237,8 @@ int RunScanCommand(int argc, wchar_t** argv) {
     }
     if (flag == L"--hud-scale") hudScale = std::clamp(_wtof(argv[i + 1]), 25.0, 400.0) / 100;
     if (flag == L"--rules") userRules = argv[i + 1];
+    if (flag == L"--universal") universal = value == "true";
+    if (flag == L"--marks") marks = value;
   }
   winrt::init_apartment(winrt::apartment_type::multi_threaded);
   const auto dataDir = DataDir();
@@ -232,12 +250,30 @@ int RunScanCommand(int argc, wchar_t** argv) {
     if (_stricmp(profile.name.c_str(), game.c_str()) == 0) game = profile.id;
   }
   const auto settings = dataDir / L"clip_engine.ini";
-  const auto forGame = rules.ForGame(game, ReadPlayerNames(settings));
+  const auto playerNames = ReadPlayerNames(settings);
+  const auto learnedFile = dataDir / std::string(kHudLearnedFile);
+  auto forGame = rules.ForGame(game, playerNames);
+  const auto model = LoadHudModel(learnedFile, game, playerNames);
+  AttachHudModel(forGame, model);
+  // The universal reader reads a game without rules, as it does in game (src/app/App.cpp).
+  const bool readsScreen = std::ranges::any_of(forGame, [](const DetectionRule& r) { return !r.ListensForSound(); });
+  const bool hasApi = std::ranges::any_of(GameDetector(custom).Games(), [&](const GameProfile& p) {
+    return p.id == game && p.api != GameApi::None;
+  });
+  if (universal || (!readsScreen && !hasApi && !rules.rulesRemoved.contains(game) &&
+                    Config::Load(settings).universalHud)) {
+    if (universal) forGame.clear();
+    const auto added = UniversalRules(game.empty() ? "game" : game, model);
+    forGame.insert(forGame.end(), added.begin(), added.end());
+    log::Info("Reading with the universal HUD reader ({} examples learned from)", model->ExampleCount());
+  }
   if (FAILED(MFStartup(MF_VERSION))) {
-    log::Error("Scan failed: Media Foundation is unavailable");
+    log::Error("{} failed: Media Foundation is unavailable", learn ? "Learn" : "Scan");
     return 1;
   }
-  const int result = RunScanCommand(argv[2], forGame, quality, hudScale.value_or(ReadHudScale(settings, game)));
+  const double scale = hudScale.value_or(ReadHudScale(settings, game));
+  const int result = learn ? RunLearnCommand(argv[2], *model, ParseHudMarks(marks), game, quality, scale, learnedFile)
+                           : RunScanCommand(argv[2], forGame, quality, scale);
   MFShutdown();
   return result;
 }
@@ -251,6 +287,7 @@ int wmain(int argc, wchar_t** argv) {
   if (argc >= 3 && std::wstring_view(argv[1]) == L"--track") return RunStudioCommand(argc, argv);
   if (argc >= 4 && std::wstring_view(argv[1]) == L"--cut-sound") return RunStudioCommand(argc, argv);
   if (argc >= 3 && std::wstring_view(argv[1]) == L"--scan") return RunScanCommand(argc, argv);
+  if (argc >= 3 && std::wstring_view(argv[1]) == L"--learn") return RunScanCommand(argc, argv);
 
   // One copy at a time; two would fight over the hotkey and the GPU encoder.
   HANDLE instance = CreateMutexW(nullptr, TRUE, L"Local\\ClipEngine.SingleInstance");
@@ -287,6 +324,7 @@ int wmain(int argc, wchar_t** argv) {
     log::Warn("Windows text recognition isn't installed, so the screen is only checked for icons. Add English under "
               "Settings > Time & language > Language to read kills and other moments off the screen too.");
     std::erase_if(rules.rules, [](const DetectionRule& rule) { return !rule.LooksForImage(); });
+    config.universalHud = false;
   } else if (!config.detection) {
     rules.rules.clear();
   }

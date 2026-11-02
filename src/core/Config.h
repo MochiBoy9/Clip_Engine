@@ -55,6 +55,7 @@ struct Config {
 
   bool detection = true;          // read the screen for kills, deaths and other moments
   bool detectionDebug = false;    // log everything read off the screen, for tuning detection.ini
+  bool universalHud = true;       // read games without rules with the universal HUD reader (detect/UniversalHud.h)
   ReadQuality readingQuality = ReadQuality::Medium;  // how hard to work at reading the screen
   bool autoClip = true;           // save a clip around each detected moment
   std::set<EventType> autoClipEvents{kAllEventTypes.begin(), kAllEventTypes.end()};

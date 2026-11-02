@@ -95,6 +95,12 @@ internal static class StudioTools
         if (rule.Setting("anchor") is { } anchor) args.AddRange(["--anchor", anchor]);
         if (rule.Setting("aspect") is { } aspect) args.AddRange(["--aspect", aspect]);
         if (rule.SkipTag) args.AddRange(["--skip-tag", "true"]);
+        // A rule the universal HUD reader's model reads, with what that game has taught it.
+        if (rule.Classify)
+        {
+            args.AddRange(["--classify", "true", "--game", rule.Game]);
+            if (rule.Setting("zone") is { } zone) args.AddRange(["--zone", zone]);
+        }
         // Icons are found next to detection.ini, like the engine looks for them.
         if (rule.Image is { Length: > 0 } image)
         {
@@ -141,6 +147,32 @@ internal static class StudioTools
         if (exitCode != 0 || !done) throw new StudioFailedException(Reason(failure, "Scan failed: ", exitCode));
         lock (found) return found.ToList();
     }
+
+    // Teaches the universal HUD reader from the player's marks of every moment in the clip
+    // (--learn): the lines it would have missed or counted wrongly go into hud_learned.txt.
+    // Returns what it learned.
+    public static async Task<IReadOnlyList<LearnExample>> LearnAsync(string clip, string game, IEnumerable<ClipEvent> marks,
+                                                                     string quality, Action<int> progress,
+                                                                     CancellationToken cancel = default, int? hudScale = null)
+    {
+        Require();
+        var learned = new List<LearnExample>();
+        var done = false;
+        List<string> args = ["--learn", clip, "--game", game, "--marks", MarksArg(marks), "--quality", quality];
+        if (hudScale is { } hud) args.AddRange(["--hud-scale", hud.ToString(CultureInfo.InvariantCulture)]);
+        var (exitCode, failure) = await EngineCommand.RunAsync(args, e =>
+        {
+            if (e is LearnExample x) lock (learned) learned.Add(x);
+            if (e is LearnProgress p) progress(p.Percent);
+            if (e is LearnDone) done = true;
+        }, cancel);
+        if (exitCode != 0 || !done) throw new StudioFailedException(Reason(failure, "Learn failed: ", exitCode));
+        lock (learned) return learned.ToList();
+    }
+
+    // "kill@12.3;death@40.15", as --learn takes the marks.
+    internal static string MarksArg(IEnumerable<ClipEvent> marks) =>
+        string.Join(';', marks.OrderBy(m => m.Time).Select(m => $"{m.Type}@{Number(m.Time)}"));
 
     private static void Require()
     {

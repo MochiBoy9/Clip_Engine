@@ -20,6 +20,7 @@ public sealed class SettingsViewModel : ObservableObject
     private bool _gameFocus = true;
     private bool _discordPresence = true;
     private bool _detection;
+    private bool _universalHud;
     private string _readingQuality = "medium";
     private bool _autoClip;
     private double _clipBeforeSeconds;
@@ -123,6 +124,9 @@ public sealed class SettingsViewModel : ObservableObject
 
     // Reading kills and other moments off the screen, and saving clips around them.
     public bool Detection { get => _detection; set => Change(ref _detection, value); }
+
+    // Reading games nobody wrote rules for with the universal HUD reader (src/detect/UniversalHud.h).
+    public bool UniversalHud { get => _universalHud; set => Change(ref _universalHud, value); }
 
     // How hard the screen is read: higher misses and misreads less, and uses more CPU.
     public bool QualityLow { get => _readingQuality == "low"; set { if (value) SetReadingQuality("low"); } }
@@ -266,6 +270,7 @@ public sealed class SettingsViewModel : ObservableObject
         GameFocus = GameFocus,
         DiscordPresence = DiscordPresence,
         Detection = Detection,
+        UniversalHud = UniversalHud,
         ReadingQuality = _readingQuality,
         AutoClip = AutoClip,
         AutoClipEvents = AutoClipEvents.Where(e => e.IsOn).Select(e => e.Name).ToList(),
@@ -305,6 +310,7 @@ public sealed class SettingsViewModel : ObservableObject
         _gameFocus = s.GameFocus;
         _discordPresence = s.DiscordPresence;
         _detection = s.Detection;
+        _universalHud = s.UniversalHud;
         _readingQuality = EngineSettings.ReadingQualities.Contains(s.ReadingQuality) ? s.ReadingQuality : "medium";
         _autoClip = s.AutoClip;
         _clipBeforeSeconds = Math.Clamp(s.ClipBeforeSeconds, 0, 60);

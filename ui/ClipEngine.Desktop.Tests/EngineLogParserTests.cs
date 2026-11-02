@@ -22,6 +22,16 @@ public class EngineLogParserTests
     }
 
     [Fact]
+    public void LearnLines()
+    {
+        var x = Assert.IsType<LearnExample>(Parse("Learn example kill in center: VAPORIZED BOB"));
+        Assert.Equal(("kill", "center", "VAPORIZED BOB"), (x.Label, x.Zone, x.Text));
+        Assert.Equal("{P} BOB", Assert.IsType<LearnExample>(Parse("Learn example none in feed_right: {P} BOB")).Text);
+        Assert.Equal(35, Assert.IsType<LearnProgress>(Parse("Learn progress 35%")).Percent);
+        Assert.Equal(4, Assert.IsType<LearnDone>(Parse("Learn done: 4 new examples")).Added);
+    }
+
+    [Fact]
     public void StudioTools()
     {
         var w = Assert.IsType<ScanWitness>(Parse("Scan witness the_finals.kill.score_line +0.49s agreed: ELIMINATION + 250"));

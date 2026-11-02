@@ -26,6 +26,8 @@ internal sealed class StudioRule
     public string? Image => Setting("image");
     public bool SkipTag => Flag("skip_tag");
     public bool ConfirmOnly => Flag("confirm_only");
+    // Read by the universal HUD reader's model instead of looking for words (classify in detection.ini).
+    public bool Classify => Flag("classify");
     public bool IsSound => Setting("sound") is not null;
     // Mentions the player's own name, which the engine fills in, and leaves the rule off without one.
     public bool NeedsPlayer => (Words + "|" + Exclude).Contains("{player}", StringComparison.OrdinalIgnoreCase);
@@ -289,10 +291,51 @@ internal sealed class DetectionIni
         _lines.AddRange(block.ToString().TrimEnd('\n').Split('\n'));
     }
 
+    // The game's sections as written ([game.<id>], its rules and scoreboard, not [<id>.edited]),
+    // for a detection pack. gameSectionOnly: just [game.<id>].
+    internal string GameSectionsText(string gameId, bool gameSectionOnly = false)
+    {
+        var text = new StringBuilder();
+        foreach (var (name, lines) in RawSections())
+        {
+            var mine = name == "game." + gameId
+                       || (!gameSectionOnly && name.StartsWith(gameId + ".", StringComparison.Ordinal) && name != gameId + ".edited");
+            if (!mine) continue;
+            if (text.Length > 0) text.Append('
+');
+            foreach (var line in lines) text.Append(line.TrimEnd()).Append('
+');
+        }
+        return text.ToString();
+    }
+
+    // Replaces everything about the game (its rules, scoreboard and [game.<id>]) with these
+    // sections, as installing a detection pack does, marked as changed so they're used.
+    internal void ReplaceGameText(string gameId, string gameName, string sections, string note)
+    {
+        RemoveSections(name => name.StartsWith(gameId + ".", StringComparison.Ordinal) || name == "game." + gameId);
+        var block = new StringBuilder();
+        block.Append('
+').Append($"# ---------------------------------------------------------------------- {gameName}").Append('
+');
+        block.Append("# ").Append(note).Append('
+');
+        block.Append($"
+[{gameId}.edited]
+");
+        block.Append(sections.Trim('
+')).Append('
+');
+        while (_lines.Count > 0 && _lines[^1].Trim().Length == 0) _lines.RemoveAt(_lines.Count - 1);
+        _lines.AddRange(block.ToString().TrimEnd('
+').Split('
+'));
+    }
+
     private static void WriteRule(StringBuilder block, StudioRule rule)
     {
         block.Append($"\n[{rule.Section}]\nregion = {rule.RegionText}\n");
-        if (rule.Words.Trim().Length > 0 || (rule.Image is null && rule.Setting("sound") is null))
+        if (rule.Words.Trim().Length > 0 || (rule.Image is null && rule.Setting("sound") is null && !rule.Classify))
             block.Append($"words = {rule.Words.Trim()}\n");
         if (rule.Exclude.Trim().Length > 0) block.Append($"exclude = {rule.Exclude.Trim()}\n");
         if (rule.CooldownMs != 1000) block.Append($"cooldown_ms = {rule.CooldownMs}\n");

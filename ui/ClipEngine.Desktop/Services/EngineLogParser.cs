@@ -39,6 +39,10 @@ internal sealed record LongRecordingSaved(string Path, double Seconds, double Me
 internal sealed record ScanFound(string Type, double Seconds, string Text) : EngineEvent;
 internal sealed record ScanProgress(int Percent) : EngineEvent;
 internal sealed record ScanDone(int Count) : EngineEvent;
+// --learn: a line the universal HUD reader was taught from the player's marks, and how it went.
+internal sealed record LearnExample(string Label, string Zone, string Text) : EngineEvent;
+internal sealed record LearnProgress(int Percent) : EngineEvent;
+internal sealed record LearnDone(int Added) : EngineEvent;
 // --scan: a rule that saw the moment found just before, and whether it was the one that counted it.
 internal sealed record ScanWitness(string Rule, double Offset, bool Counted, string Text) : EngineEvent;
 // --track: what the box read at a time (when it changed), how far it has got, and the end.
@@ -137,6 +141,15 @@ internal static partial class EngineLogParser
     [GeneratedRegex(@"^Scan witness (\S+) ([+-][\d.]+)s (counted|agreed): ?(.*)$")]
     private static partial Regex ScanWitnessRegex();
 
+    [GeneratedRegex(@"^Learn example (\S+) in (\S*): ?(.*)$")]
+    private static partial Regex LearnExampleRegex();
+
+    [GeneratedRegex(@"^Learn progress (\d+)%$")]
+    private static partial Regex LearnProgressRegex();
+
+    [GeneratedRegex(@"^Learn done: (\d+) new examples$")]
+    private static partial Regex LearnDoneRegex();
+
     [GeneratedRegex(@"^Track at ([\d.]+): (\d+) \| ?(.*)$")]
     private static partial Regex TrackReadRegex();
 
@@ -214,6 +227,9 @@ internal static partial class EngineLogParser
         if ((m = ScanDoneRegex().Match(text)).Success) return new ScanDone(Int(m.Groups[1]));
         if ((m = ScanWitnessRegex().Match(text)).Success)
             return new ScanWitness(m.Groups[1].Value, Double(m.Groups[2]), m.Groups[3].Value == "counted", m.Groups[4].Value);
+        if ((m = LearnExampleRegex().Match(text)).Success) return new LearnExample(m.Groups[1].Value, m.Groups[2].Value, m.Groups[3].Value);
+        if ((m = LearnProgressRegex().Match(text)).Success) return new LearnProgress(Int(m.Groups[1]));
+        if ((m = LearnDoneRegex().Match(text)).Success) return new LearnDone(Int(m.Groups[1]));
         if ((m = TrackReadRegex().Match(text)).Success) return new TrackRead(Double(m.Groups[1]), Int(m.Groups[2]), m.Groups[3].Value);
         if ((m = TrackProgressRegex().Match(text)).Success) return new TrackProgress(Int(m.Groups[1]));
         if ((m = TrackDoneRegex().Match(text)).Success) return new TrackDone(Int(m.Groups[1]));

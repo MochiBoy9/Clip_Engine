@@ -181,6 +181,19 @@
             <StackPanel Spacing="0" IsEnabled="{Binding Detection}">
             <Grid ColumnDefinitions="Auto,*,Auto">
               <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
+                <PathIcon Data="{StaticResource IconScan}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Universal HUD reader" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="Games without detection rules are read anyway: a small learned model reads the killfeed, popups and banners of any HUD, and learns from what you mark in Check detection." TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <ToggleSwitch IsChecked="{Binding UniversalHud}" OnContent="{x:Null}" OffContent="{x:Null}" />
+              </Panel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconSparkle}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">

@@ -51,7 +51,7 @@ public class PlayerNamesTests : IDisposable
     [InlineData("Valorant", "Reads the killfeed")]
     [InlineData("The Finals", "Reads the screen")]
     [InlineData("Halo Infinite", "Reads the killfeed")]
-    [InlineData("Roblox", "Records, clips on the hotkey")]
+    [InlineData("Roblox", "Universal HUD reader")]
     [InlineData("Some new game", "Reads the screen")]
     public void KnowsHowEachGameIsRead(string game, string method) => Assert.Equal(method, GameCatalog.Describe(game));
 }

@@ -143,6 +143,7 @@ public sealed class StudioViewModel : ObservableObject
         TestMarkedCommand = new RelayCommand(() => _ = TestMarkedAsync(), () => _game is not null && !IsBusy && !IsWorking);
         CutSoundCommand = new RelayCommand(() => _ = CutSoundAsync(), () => _game is not null && HasTimeline && !IsBusy && !IsWorking);
         CancelWorkCommand = new RelayCommand(() => _workCancel?.Cancel());
+        SharePackCommand = new RelayCommand(() => _ = SharePackAsync(), () => _game is not null && !IsBusy);
 
         LoadGames();
         // Start on the clip (and moment) the Studio was opened from; picking the game keeps it.
@@ -175,6 +176,7 @@ public sealed class StudioViewModel : ObservableObject
     public RelayCommand TestMarkedCommand { get; }
     public RelayCommand CutSoundCommand { get; }
     public RelayCommand CancelWorkCommand { get; }
+    public RelayCommand SharePackCommand { get; }
     public RelayCommand DuplicateRuleCommand { get; }
     public RelayCommand DiscardCommand { get; }
     public RelayCommand ToggleFineTuneCommand { get; }
@@ -273,7 +275,7 @@ public sealed class StudioViewModel : ObservableObject
         : _ownRules && HasBuiltInRules ? "Your own rules, used instead of the built-in ones."
         : _ownRules ? "Your own rules."
         : HasBuiltInRules ? (HasChanges ? "Built-in rules, changed. Save to use your version." : "Built-in rules. Change any of them and save to make them yours.")
-        : "No rules yet.";
+        : "No rules yet, so the universal HUD reader reads it: it finds kills, deaths and match results in any HUD, and learns from what you mark in Check detection.";
 
     // How big the game's HUD is set in the game, in percent. The boxes are drawn, tested and
     // used in game where a HUD that size puts them (ScreenPlacement), so one set of rules fits
@@ -622,6 +624,7 @@ public sealed class StudioViewModel : ObservableObject
         Raise(nameof(HasBuiltInRules));
         Raise(nameof(RulesOrigin));
         UseBuiltInCommand.NotifyCanExecuteChanged();
+        SharePackCommand.NotifyCanExecuteChanged();
     }
 
     // Puts the built-in rules back in the editor; saving then drops the user's own for this game.
@@ -1013,6 +1016,7 @@ public sealed class StudioViewModel : ObservableObject
     {
         TrackCommand.NotifyCanExecuteChanged();
         TestMarkedCommand.NotifyCanExecuteChanged();
+        SharePackCommand.NotifyCanExecuteChanged();
         CutSoundCommand.NotifyCanExecuteChanged();
     }
 
@@ -1213,6 +1217,33 @@ public sealed class StudioViewModel : ObservableObject
         finally
         {
             IsBusy = false;
+        }
+    }
+
+    // Saves the game's detection as a pack (.cepack) to share: its saved rules (or the built-in
+    // ones), their icons and sounds, and what the universal HUD reader learned about it.
+    private async Task SharePackAsync()
+    {
+        if (_game is null || _main.Dialogs is null) return;
+        var game = _game;
+        var fileName = string.Concat(game.Name.Split(Path.GetInvalidFileNameChars())).Trim();
+        if (await _main.Dialogs.SavePackAsync((fileName.Length > 0 ? fileName : game.Id) + DetectionPacks.Extension) is not { } path) return;
+        try
+        {
+            var learned = Path.Combine(AppPaths.DataDir, "hud_learned.txt");
+            var pack = await Task.Run(() =>
+            {
+                var built = DetectionPacks.Build(game.Id, game.Name, game.Executables, _user, _shipped, learned, StudioTools.FindFile);
+                DetectionPacks.Write(built, path);
+                return built;
+            });
+            var unsaved = HasUnsaved ? " Changes you haven't saved aren't in it." : "";
+            var missing = pack.Warnings.Count > 0 ? " " + string.Join("; ", pack.Warnings) + "." : "";
+            ShowStatus($"Saved {Path.GetFileName(path)} ({pack.Summary}). Anyone can install it from the Games page or by dropping it on Clip Engine.{unsaved}{missing}");
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            ShowStatus($"Couldn't save the pack: {e.Message}", error: true);
         }
     }
 

@@ -221,6 +221,10 @@
                   <ProgressBar Width="90" Minimum="0" Maximum="100" Value="{Binding Progress}" IsVisible="{Binding IsScanning}"
                                VerticalAlignment="Center" />
                   <Button Classes="secondary" Content="Stop" Command="{Binding CancelCommand}" IsVisible="{Binding IsScanning}" />
+                  <Button Classes="secondary" Command="{Binding TeachCommand}"
+                          ToolTip.Tip="Teach the universal HUD reader from your marks: what it missed and what it counted that wasn't there. Mark every moment in the clip first">
+                    <TextBlock Text="Teach" />
+                  </Button>
                   <Button Classes="accent" Command="{Binding RunCommand}"
                           ToolTip.Tip="Run this game's rules over the whole clip the way the engine reads the game, and compare with your marks">
                     <TextBlock Text="Run detection" />
