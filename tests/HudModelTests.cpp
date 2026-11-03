@@ -154,15 +154,19 @@ void TestExampleFile(const std::filesystem::path& scratch) {
   CHECK(out.str() == "*\tdeath\tbanner\tGAME OVER MAN\n");
 
   const auto file = scratch / "hud_learned_test.txt";
-  std::filesystem::remove(file);
+  std::error_code ignored;
+  std::filesystem::remove(file, ignored);
   CHECK(AppendHudExamples(file, examples) == 2);
   CHECK(AppendHudExamples(file, examples) == 0);  // already there
-  std::ifstream back(file);
-  CHECK(ReadHudExamples(back).size() == 2);
+  {
+    // Closed again before the file is removed, which Windows won't do to an open file.
+    std::ifstream back(file);
+    CHECK(ReadHudExamples(back).size() == 2);
+  }
   // And the model loads it.
   const auto model = LoadHudModel(file, "neon", {});
   CHECK(model->ExampleCount() == HudModel().ExampleCount() + 2);
-  std::filesystem::remove(file);
+  std::filesystem::remove(file, ignored);
 }
 
 void TestMarks() {
