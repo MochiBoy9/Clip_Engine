@@ -232,6 +232,15 @@ test("the worker routes creates, joins and squad requests", async () => {
   }), env);
   assert.equal(unknown.status, 404);
   assert.equal((await worker.fetch(request("/v1/squads/abc/squad"), env)).status, 404);
+  // The join page from a Discord status.
+  const page = await worker.fetch(request(`/s/${created.squad.invite}`), env);
+  assert.equal(page.status, 200);
+  const text = await page.text();
+  assert.match(text, /Join Enterro&#39;s squad/);
+  assert.match(text, /clipengine:\/\/squad\/join\//);
+  assert.match(text, /2 of 8 · Enterro, Kai/);
+  const wrongCode = created.squad.invite.slice(0, -1) + (created.squad.invite.endsWith("0") ? "1" : "0");
+  assert.equal((await worker.fetch(request(`/s/${wrongCode}`), env)).status, 404);
   // The squad's own create and join can't be reached around the Worker.
   const sneaky = await worker.fetch(request(`/v1/squads/${created.squad.id}/join`, { method: "POST", body: { secret: "x" } }), env);
   assert.equal(sneaky.status, 404);

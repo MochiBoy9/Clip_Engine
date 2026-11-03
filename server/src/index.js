@@ -20,13 +20,15 @@
 //   GET /c/<code>                   a shared clip's web player, with its moments on the timeline
 //   GET /c/<code>/video|thumb|.json the clip itself
 //   GET /u/<handle>                 a player's profile with their public clips
+//   GET /s/<invite>                 a squad's join page, for the "Join my squad" button on Discord
 //
 // See README.md for the messages on the squad socket.
 
 import { isSquadId, normalizeInvite, randomCode, sameSecret, SQUAD_ID_LENGTH } from "./codes.js";
 import { Handles, normalizeHandle } from "./handles.js";
 import { CLIP_CODE_LENGTH, Library } from "./library.js";
-import { clipPage, notFoundPage, profilePage } from "./pages.js";
+import { formatInvite } from "./codes.js";
+import { clipPage, invitePage, notFoundPage, profilePage } from "./pages.js";
 import { Squad } from "./squad.js";
 
 export { Handles, Library, Squad };
@@ -169,7 +171,16 @@ export default {
       }
       m = path.match(/^\/u\/([^/]+?)(\.json)?$/);
       if (m && normalizeHandle(decodeURIComponent(m[1]))) return profileRoute(request, env, normalizeHandle(decodeURIComponent(m[1])), Boolean(m[2]));
-      if (path.startsWith("/c/") || path.startsWith("/u/")) return html(notFoundPage(), 404);
+      m = path.match(/^\/s\/([^/]+)$/);
+      if (m) {
+        const invite = normalizeInvite(decodeURIComponent(m[1]));
+        if (!invite) return html(notFoundPage(), 404);
+        const answer = await stub(env.SQUADS, invite.squadId).fetch(
+          new Request(`${url.origin}/public/invite?secret=${invite.secret}`, { headers: { "x-squad-id": invite.squadId } }));
+        if (!answer.ok) return html(notFoundPage(), 404);
+        return html(invitePage(await answer.json(), formatInvite(invite.squadId, invite.secret)));
+      }
+      if (path.startsWith("/c/") || path.startsWith("/u/") || path.startsWith("/s/")) return html(notFoundPage(), 404);
     }
 
     return json({ error: "Not found." }, 404);

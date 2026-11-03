@@ -40,6 +40,8 @@ class App {
   // Commands from the desktop app: a squadmate's moment to save this player's view of.
   void HandleCommands();
   void SaveReadySquadClips(bool all);
+  // The squad's part of the Discord status, from the desktop app.
+  void ApplySquadPresence();
   // A new file name in the game's clip folder; suffix goes before the extension.
   std::filesystem::path ClipPath(std::string_view suffix = {});
   // Starts a long recording, or stops the one running.
@@ -89,6 +91,8 @@ class App {
 
   std::unique_ptr<DiscordPresence> presence_;
   PresenceState presenceState_;  // the game being recorded, counted since its match started
+  int64_t flashUntil_ = 0;       // when the highlight on the status comes off
+  SquadPresence squadPresence_;
 };
 
 }  // namespace clip

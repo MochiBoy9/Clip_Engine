@@ -1,5 +1,7 @@
 #pragma once
 
+#include "media/ClipMetadata.h"
+
 #include <algorithm>
 #include <cstdint>
 #include <optional>
@@ -39,6 +41,17 @@ struct SquadSaveRequest {
   std::string game;  // only saved while this game is being recorded; empty for any game
 };
 
+// "squad-presence <playing> <max> <party id> [<join url>]": the squad as the Discord status
+// shows it. "squad-presence 0" takes it off.
+struct SquadPresence {
+  int playing = 0;
+  int max = 0;
+  std::string partyId;
+  std::string joinUrl;  // https only
+};
+
+std::optional<SquadPresence> ParseSquadPresence(std::string_view line);
+
 // Moment ids come from the network, so they are held to a safe shape: 1 to 64 letters,
 // digits, '-' or '_'.
 bool IsSquadMomentId(std::string_view id);
@@ -70,5 +83,19 @@ class SquadSaveQueue {
   std::vector<Window> pending_;
   std::vector<std::string> seen_;  // the last few moment ids, so a repeat isn't saved twice
 };
+
+// One part of a squad highlight: seconds [from, to] of a clip. Given on the command line as
+// "<clip>|<from>|<to>" (Windows paths can't hold '|').
+struct MontagePart {
+  std::string path;  // UTF-8
+  double from = 0;
+  double to = 0;
+};
+
+std::optional<MontagePart> ParseMontagePart(std::string_view spec);
+
+// The highlight's metadata: each part's moments moved to where the part lands in the
+// highlight, and its length. parts and their metadata go in order; metadata may be missing.
+ClipMetadata MontageMetadata(const std::vector<MontagePart>& parts, const std::vector<std::optional<ClipMetadata>>& metadata);
 
 }  // namespace clip

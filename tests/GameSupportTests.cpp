@@ -476,6 +476,30 @@ void TestDiscordActivity() {
   CHECK(activity["assets"]["large_text"].Str() == "Clip Engine 0.7.0");
   CHECK(!J(PresenceActivityJson(state, "0.7.0", false)).Has("status_display_type"));
 
+  // What's going on in the match, and the squad.
+  state.away = false;
+  state.longRecording = false;
+  state.game = "Valorant";
+  state.streak = 4;
+  CHECK(PresenceLine(state) == "12 kills \xC2\xB7 1 death \xC2\xB7 2 assists \xC2\xB7 4-kill streak \xC2\xB7 3 clips");
+  state.flash = "Triple kill";
+  CHECK(PresenceLine(state) == "Triple kill \xC2\xB7 12 kills \xC2\xB7 1 death \xC2\xB7 2 assists \xC2\xB7 3 clips");
+  state.matchStartUnix = 1793000600;
+  state.squadPlaying = 3;
+  state.squadMax = 5;
+  state.partyId = "sABCD1234";
+  state.joinUrl = "https://x.example/s/ABCD";
+  const auto squad = J(PresenceActivityJson(state, "0.7.0", true));
+  CHECK(squad["timestamps"]["start"].Number() == 1793000600);
+  CHECK(squad["party"]["id"].Str() == "sABCD1234");
+  CHECK(squad["party"]["size"][size_t{0}].Int() == 3 && squad["party"]["size"][size_t{1}].Int() == 5);
+  CHECK(squad["buttons"][size_t{0}]["label"].Str() == "Join my squad");
+  CHECK(squad["buttons"][size_t{0}]["url"].Str() == "https://x.example/s/ABCD");
+  state.squadPlaying = 0;
+  state.joinUrl.clear();
+  CHECK(!J(PresenceActivityJson(state, "0.7.0", true)).Has("party"));
+  CHECK(!J(PresenceActivityJson(state, "0.7.0", true)).Has("buttons"));
+
   const auto command = J(SetActivityCommand(42, PresenceActivityJson(state, "0.7.0", true), "7"));
   CHECK(command["cmd"].Str() == "SET_ACTIVITY");
   CHECK(command["args"]["pid"].Int() == 42);

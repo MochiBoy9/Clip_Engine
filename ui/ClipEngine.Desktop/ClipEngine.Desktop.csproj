@@ -34,6 +34,11 @@
     <AssemblyMetadata Include="UpdateRepo" Value="$(UpdateRepo)" />
   </ItemGroup>
 
+  <!-- Clip Engine's online service for squads and the cloud library: dotnet publish -p:OnlineServer=https://... -->
+  <ItemGroup Condition="'$(OnlineServer)' != ''">
+    <AssemblyMetadata Include="OnlineServer" Value="$(OnlineServer)" />
+  </ItemGroup>
+
   <ItemGroup>
     <InternalsVisibleTo Include="ClipEngine.Desktop.Preview" />
     <InternalsVisibleTo Include="ClipEngine.Desktop.Tests" />

@@ -1,4 +1,4 @@
-using System.Reflection;
+using System.Text.Json.Serialization;
 
 namespace ClipEngine.Desktop.Services.Squad;
 
@@ -6,16 +6,10 @@ namespace ClipEngine.Desktop.Services.Squad;
 // encrypted for this Windows account, like the update token.
 internal sealed class SquadSettings
 {
-    // The squad service. Empty uses the one this build was made with (-p:SquadServer=...).
-    public string Server { get; set; } = "";
-
     public string SquadId { get; set; } = "";
     public string SquadName { get; set; } = "";
     public string MemberId { get; set; } = "";
     public string Token { get; set; } = "";
-
-    // This PC's id in every squad, so joining again from the same PC keeps your place.
-    public string DeviceId { get; set; } = "";
 
     // The name squadmates see.
     public string PlayerName { get; set; } = "";
@@ -27,33 +21,18 @@ internal sealed class SquadSettings
     // Which of your moments squadmates save their view of.
     public List<string> ShareMoments { get; set; } = [.. DefaultShareMoments];
 
+    // A "Join my squad" button on your Discord status, for friends who aren't in the squad yet.
+    // Anyone who can see your status can use it, so it's off until you turn it on.
+    public bool JoinOnDiscord { get; set; }
+
     // Uploads are share-size copies of at most this many MB.
     public int UploadLimitMb { get; set; } = 25;
 
     public static readonly IReadOnlyList<string> DefaultShareMoments = ["kill", "revive", "highlight", "match_end"];
     public static readonly IReadOnlyList<string> UploadChoices = ["highlights", "all", "off"];
 
+    [JsonIgnore]
     public bool InSquad => SquadId.Length > 0 && Token.Length > 0;
-
-    public string ServerUrl
-    {
-        get
-        {
-            var url = Server.Trim();
-            if (url.Length == 0) url = BuiltInServer;
-            return url.TrimEnd('/');
-        }
-    }
-
-    public static string BuiltInServer { get; } =
-        typeof(SquadSettings).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
-            .FirstOrDefault(a => a.Key == "SquadServer")?.Value ?? "";
-
-    public string EnsureDeviceId()
-    {
-        if (DeviceId.Length < 8) DeviceId = Guid.NewGuid().ToString("N");
-        return DeviceId;
-    }
 
     public void Leave()
     {

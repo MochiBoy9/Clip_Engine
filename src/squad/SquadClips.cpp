@@ -54,6 +54,24 @@ std::optional<SquadSaveRequest> ParseSquadSave(std::string_view line) {
   return request;
 }
 
+std::optional<SquadPresence> ParseSquadPresence(std::string_view line) {
+  std::string_view rest = Trim(line);
+  if (NextWord(rest) != "squad-presence") return std::nullopt;
+  const auto playing = ParseInt(NextWord(rest));
+  if (!playing || *playing < 0 || *playing > 64) return std::nullopt;
+  SquadPresence presence;
+  if (*playing == 0) return presence;
+  const auto max = ParseInt(NextWord(rest));
+  presence.partyId = std::string(NextWord(rest));
+  if (!max || *max < *playing || *max > 64 || !IsSquadMomentId(presence.partyId)) return std::nullopt;
+  presence.playing = static_cast<int>(*playing);
+  presence.max = static_cast<int>(*max);
+  const std::string_view url = NextWord(rest);
+  const bool safe = url.size() <= 256 && std::ranges::none_of(url, [](char c) { return c == '"' || c == '\\' || static_cast<unsigned char>(c) < 0x21; });
+  if (url.starts_with("https://") && safe) presence.joinUrl = std::string(url);
+  return presence;
+}
+
 bool SquadSaveQueue::Add(Window window) {
   if (std::ranges::find(seen_, window.moment) != seen_.end()) {
     // The same moment again (the app retrying after a reconnect): widen the waiting window to
@@ -86,6 +104,47 @@ std::vector<SquadSaveQueue::Window> SquadSaveQueue::TakeAll() {
   auto all = std::move(pending_);
   pending_.clear();
   return all;
+}
+
+std::optional<MontagePart> ParseMontagePart(std::string_view spec) {
+  const size_t second = spec.rfind('|');
+  if (second == std::string_view::npos || second == 0) return std::nullopt;
+  const size_t first = spec.rfind('|', second - 1);
+  if (first == std::string_view::npos || first == 0) return std::nullopt;
+  auto number = [](std::string_view s) -> std::optional<double> {
+    s = Trim(s);
+    if (s.empty()) return std::nullopt;
+    try {
+      size_t used = 0;
+      const double v = std::stod(std::string(s), &used);
+      return used == s.size() ? std::optional(v) : std::nullopt;
+    } catch (const std::exception&) {
+      return std::nullopt;
+    }
+  };
+  const auto from = number(spec.substr(first + 1, second - first - 1));
+  const auto to = number(spec.substr(second + 1));
+  if (!from || !to || *from < 0 || *to - *from < 0.1 || *to - *from > 600) return std::nullopt;
+  return MontagePart{std::string(spec.substr(0, first)), *from, *to};
+}
+
+ClipMetadata MontageMetadata(const std::vector<MontagePart>& parts, const std::vector<std::optional<ClipMetadata>>& metadata) {
+  ClipMetadata out;
+  out.trigger = "squad_highlight";
+  double at = 0;
+  for (size_t i = 0; i < parts.size(); ++i) {
+    const auto& part = parts[i];
+    const auto& m = i < metadata.size() ? metadata[i] : std::nullopt;
+    if (m) {
+      if (out.game.empty()) out.game = m->game;
+      for (const auto& marker : Trimmed(*m, part.from, part.to).markers) {
+        out.markers.push_back({marker.type, marker.seconds + at, marker.text, marker.witnesses});
+      }
+    }
+    at += part.to - part.from;
+  }
+  out.seconds = at;
+  return out;
 }
 
 }  // namespace clip

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <filesystem>
+#include <string>
+#include <vector>
 
 namespace clip {
 
@@ -16,5 +18,24 @@ struct ExportOptions {
 // mixes the game and mic tracks into one, and carries over the clip's event markers.
 // Logs "Export progress N%" lines while working. Returns the process exit code.
 int RunExport(const ExportOptions& options);
+
+// A squad highlight: parts of several clips (squadmates' views of one moment) one after another
+// in one H.264 MP4, re-encoded to one picture size, with every part's moments on its timeline.
+// Logs "Montage progress N%" and "Highlight saved (N MB) to <path>". Returns the exit code.
+struct MontageOptions {
+  struct Part {
+    std::filesystem::path input;
+    double from = 0;
+    double to = 0;
+  };
+  std::filesystem::path output;
+  std::vector<Part> parts;
+  unsigned maxHeight = 1080;
+  unsigned maxFps = 60;
+  double mbps = 16;
+  std::string squadMoment;
+};
+
+int RunMontage(const MontageOptions& options);
 
 }  // namespace clip

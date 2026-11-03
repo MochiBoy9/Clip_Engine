@@ -35,6 +35,7 @@ internal sealed class SquadSync : IDisposable
     private long _nextPing;
     private int _refs;
     private string? _game;
+    private string _discord = "";
     private long? _matchStart;  // server ms
 
     private sealed class OwnMoment(string type, string game, long localMs, long deadline)
@@ -68,6 +69,9 @@ internal sealed class SquadSync : IDisposable
     public IReadOnlyCollection<SquadMemberState> Members => _members.Values;
     public IReadOnlyList<SquadGroup> Groups { get; private set; } = [];
     public string? Game => _game;
+
+    // The online service's address, for the join page linked from the Discord status.
+    public string Server { get; set; } = "";
 
     // The clip window around a squadmate's moment, from the engine's automatic clip settings.
     public int BeforeSeconds { get; set; } = 10;
@@ -108,6 +112,7 @@ internal sealed class SquadSync : IDisposable
         _game = label == "Desktop" ? null : label;
         _matchStart = null;
         SendPresence();
+        UpdateDiscord();
     }
 
     public void OnRecordingStopped()
@@ -115,6 +120,7 @@ internal sealed class SquadSync : IDisposable
         _game = null;
         _matchStart = null;
         SendPresence();
+        UpdateDiscord();
     }
 
     public void OnMomentDetected(string type, string game, string text) => _lastDetected = (type, game, text);
@@ -199,7 +205,7 @@ internal sealed class SquadSync : IDisposable
                     SetPresence(p?["member"]?.GetValue<string>(), true, p?["game"]?.GetValue<string>() ?? "");
                 Groups = ReadGroups(m["groups"]);
                 if (Info.Name.Length > 0) _settings.SquadName = Info.Name;
-                Changed?.Invoke();
+                RaiseChanged();
                 break;
             case "pong":
                 if (m["c"]?.GetValue<long>() is { } sent && _pings.Remove(sent))
@@ -211,7 +217,7 @@ internal sealed class SquadSync : IDisposable
             case "presence":
                 SetPresence(m["member"]?.GetValue<string>(), m["online"]?.GetValue<bool>() ?? false, m["game"]?.GetValue<string>() ?? "");
                 Groups = ReadGroups(m["groups"]);
-                Changed?.Invoke();
+                RaiseChanged();
                 break;
             case "joined":
                 if (m["member"]?.GetValue<string>() is { } joined)
@@ -219,14 +225,14 @@ internal sealed class SquadSync : IDisposable
                     var name = m["name"]?.GetValue<string>() ?? "";
                     _members[joined] = new(joined, name, false, false, "");
                     Activity?.Invoke($"{name} joined your squad");
-                    Changed?.Invoke();
+                    RaiseChanged();
                 }
                 break;
             case "member":
                 if (m["member"]?.GetValue<string>() is { } renamed && _members.TryGetValue(renamed, out var was))
                 {
                     _members[renamed] = was with { Name = m["name"]?.GetValue<string>() ?? was.Name };
-                    Changed?.Invoke();
+                    RaiseChanged();
                 }
                 break;
             case "left":
@@ -235,7 +241,7 @@ internal sealed class SquadSync : IDisposable
                     if (m["owner"]?.GetValue<string>() is { } owner && _members.TryGetValue(owner, out var next))
                         _members[owner] = next with { Owner = true };
                     Activity?.Invoke($"{gone.Name} left your squad");
-                    Changed?.Invoke();
+                    RaiseChanged();
                 }
                 break;
             case "moment-ok":
@@ -324,7 +330,37 @@ internal sealed class SquadSync : IDisposable
             foreach (var id in _members.Keys.ToList()) _members[id] = _members[id] with { Online = false, Game = "" };
             Groups = [];
         }
+        RaiseChanged();
+    }
+
+    private void RaiseChanged()
+    {
+        UpdateDiscord();
         Changed?.Invoke();
+    }
+
+    // Tells the engine what the Discord status says about the squad: how many are playing
+    // together, of how many, and the join page when that's turned on.
+    public void UpdateDiscord()
+    {
+        var playing = _game is null ? 0 : PlayingWithMe().Count + 1;
+        string line;
+        if (playing == 0 && !_settings.JoinOnDiscord) line = "squad-presence 0";
+        else
+        {
+            var join = _settings.JoinOnDiscord && Server.StartsWith("https://", StringComparison.Ordinal) && Info?.Invite is { Length: > 0 } invite
+                ? $" {Server}/s/{invite}" : "";
+            line = $"squad-presence {Math.Max(playing, 1)} {Math.Max(_members.Count, 1)} s{_settings.SquadId}{join}";
+        }
+        if (line == _discord) return;
+        if (_sendEngineCommand(line)) _discord = line;
+    }
+
+    // The engine restarted, so it needs the squad's part of the status again.
+    public void EngineRestarted()
+    {
+        _discord = "";
+        UpdateDiscord();
     }
 
     private void SendPresence()
@@ -354,5 +390,9 @@ internal sealed class SquadSync : IDisposable
         _ => type,
     };
 
-    public void Dispose() => _channel.Dispose();
+    public void Dispose()
+    {
+        _sendEngineCommand("squad-presence 0");
+        _channel.Dispose();
+    }
 }

@@ -115,3 +115,18 @@ ${cards ? `<div class="grid">${cards}</div>` : `<p class="sub" style="margin-top
 export function notFoundPage() {
   return shell({ title: "Not found · Clip Engine", description: "", body: `<h1>That clip isn't here</h1><p class="sub">It may have been made private or removed.</p>` });
 }
+
+// The page for /s/<invite>: the "Join my squad" button on a Discord status leads here.
+export function invitePage(squad, invite) {
+  const app = `clipengine://squad/join/${invite}`;
+  const body = `<h1>Join ${escapeHtml(squad.name)}</h1>
+<div class="sub">${squad.members.length} of ${squad.max} · ${squad.members.map(escapeHtml).join(", ")}</div>
+<div style="margin-top:22px;padding:18px;background:var(--panel);border:1px solid var(--line);border-radius:10px;max-width:520px">
+<p style="margin:0 0 6px">Squadmates who run Clip Engine save their own view of each other's plays, and every view lands in a shared squad library.</p>
+<p class="sub" style="margin:0 0 14px">Invite code</p>
+<div style="font:600 22px/1.2 ui-monospace,Consolas,monospace;letter-spacing:.08em;color:var(--amber)">${escapeHtml(invite)}</div>
+<p style="margin:18px 0 0"><a href="${escapeHtml(app)}" style="display:inline-block;background:var(--amber);color:#14161a;padding:9px 16px;border-radius:6px;text-decoration:none;font-weight:700">Open in Clip Engine</a></p>
+<p class="sub" style="margin:12px 0 0">Or paste the code on the Squad page of the app.</p></div>`;
+  return shell({ title: `Join ${squad.name} · Clip Engine`, description: `Join ${squad.name} on Clip Engine`, body,
+    head: `<meta property="og:title" content="Join ${escapeHtml(squad.name)} on Clip Engine"><meta name="theme-color" content="#f2a516">` });
+}

@@ -219,6 +219,11 @@ export class Squad {
     if (path === "/create" && method === "POST") return this.create(request);
     if (path === "/join" && method === "POST") return this.join(request);
     if (!this.meta("id")) return fail(404, "There's no squad with that code.");
+    if (path === "/public/invite") {
+      // What the join page shows: only with the right code.
+      if (!sameSecret(url.searchParams.get("secret") ?? "", this.meta("secret"))) return fail(404, "That invite isn't valid any more.");
+      return json({ name: this.meta("name"), members: this.members().map((m) => m.name), max: this.number("MAX_MEMBERS", 8) });
+    }
 
     const me = await this.memberFor(request);
     if (!me) return fail(401, "You're not in this squad any more.");

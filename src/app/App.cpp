@@ -8,6 +8,7 @@
 #include "media/Mp4Writer.h"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <fstream>
 
@@ -30,6 +31,8 @@ constexpr DWORD kLoopWaitMs = 250;
 // Clip Engine's application on Discord, which the Discord status belongs to. discord_app_id in
 // the settings can name another one.
 constexpr char kDiscordAppId[] = "1565522043003338886";
+// How long a highlight or a match result stays on the Discord status.
+constexpr int64_t kFlashFor = 45 * kHnsPerSecond;
 
 DWORD g_mainThread = 0;
 
@@ -45,6 +48,21 @@ std::string LocalTimestamp() {
   SYSTEMTIME t;
   GetLocalTime(&t);
   return std::format("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}", t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond);
+}
+
+// "Triple kill" from a highlight read off the screen as "TRIPLE KILL!", and "Match over: Victory".
+std::string PresenceFlash(EventType type, std::string_view text) {
+  std::string words;
+  bool start = true;
+  for (char c : text) {
+    if (c == '!' || c == '\n') continue;
+    words += start ? static_cast<char>(std::toupper(static_cast<unsigned char>(c))) : static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    start = false;
+  }
+  while (!words.empty() && words.back() == ' ') words.pop_back();
+  if (words.size() > 40) words.resize(40);
+  if (type == EventType::MatchEnd) return words.empty() ? "Match over" : "Match over: " + words;
+  return words.empty() ? "Just made a highlight" : words;
 }
 
 // Folder and file names can't contain these characters.
@@ -213,6 +231,7 @@ void App::Poll() {
       matchStarts_.clear();
       presenceState_ = PresenceState{};
       presenceState_.game = label;
+      ApplySquadPresence();
       presenceState_.startUnix = std::chrono::duration_cast<std::chrono::seconds>(
                                      std::chrono::system_clock::now().time_since_epoch())
                                      .count();
@@ -256,6 +275,7 @@ void App::PumpIntegrationEvents() {
 
 void App::UpdatePresence() {
   if (!presence_) return;
+  if (!presenceState_.flash.empty() && NowHns() >= flashUntil_) presenceState_.flash.clear();
   // Only games go on the status, not a recording of the desktop.
   if (!session_ || sessionGameId_.empty()) {
     presence_->Set(std::nullopt);
@@ -316,11 +336,23 @@ void App::HandleEvents() {
     }
     if (event.type == EventType::MatchStart) {
       matchStarts_.push_back(event.time);
-      presenceState_.kills = presenceState_.deaths = presenceState_.assists = 0;
+      presenceState_.kills = presenceState_.deaths = presenceState_.assists = presenceState_.streak = 0;
+      presenceState_.matchStartUnix = UnixMsAtHns(NowClocks(), event.time) / 1000;
     }
-    if (event.type == EventType::Kill) ++presenceState_.kills;
-    if (event.type == EventType::Death) ++presenceState_.deaths;
+    if (event.type == EventType::Kill) {
+      ++presenceState_.kills;
+      ++presenceState_.streak;
+    }
+    if (event.type == EventType::Death) {
+      ++presenceState_.deaths;
+      presenceState_.streak = 0;
+    }
     if (event.type == EventType::Assist) ++presenceState_.assists;
+    // A highlight or the match's result shows on the Discord status for a while.
+    if (event.type == EventType::Highlight || event.type == EventType::MatchEnd) {
+      presenceState_.flash = PresenceFlash(event.type, event.text);
+      flashUntil_ = NowHns() + kFlashFor;
+    }
     if (timeline_) timeline_->Write(TimelineEvent(SessionSeconds(event.time), MatchAt(event.time), event));
     if (longRecording_ && event.time >= longRecording_->Start()) longEvents_.push_back(event);
     if (config_.autoClip && config_.autoClipEvents.contains(event.type)) planner_.Add(event.time);
@@ -340,6 +372,11 @@ void App::SaveReadyAutoClips(bool all) {
 void App::HandleCommands() {
   if (!commands_.Listening()) return;
   for (const auto& line : commands_.Take()) {
+    if (const auto squad = ParseSquadPresence(line)) {
+      squadPresence_ = *squad;
+      ApplySquadPresence();
+      continue;
+    }
     const auto request = ParseSquadSave(line);
     if (!request) {
       log::Warn("Unknown command from the app: {}", line.substr(0, 80));
@@ -359,6 +396,13 @@ void App::HandleCommands() {
     }
     if (squadSaves_.Add(std::move(window))) log::Info("Saving your view of squad moment {}", request->moment);
   }
+}
+
+void App::ApplySquadPresence() {
+  presenceState_.squadPlaying = squadPresence_.playing;
+  presenceState_.squadMax = squadPresence_.max;
+  presenceState_.partyId = squadPresence_.partyId;
+  presenceState_.joinUrl = squadPresence_.joinUrl;
 }
 
 void App::SaveReadySquadClips(bool all) {

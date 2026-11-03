@@ -111,6 +111,38 @@ int RunExportCommand(int argc, wchar_t** argv) {
   return result;
 }
 
+// clip_engine.exe --montage <out.mp4> --part "<clip>|<from>|<to>" [--part ...] [--height 1080] [--moment <id>]
+// Puts parts of several clips together into one, for squad highlights, and exits.
+int RunMontageCommand(int argc, wchar_t** argv) {
+  using namespace clip;
+  MontageOptions options;
+  options.output = argv[2];
+  for (int i = 3; i + 1 < argc; i += 2) {
+    const std::wstring_view flag = argv[i];
+    if (flag == L"--part") {
+      const auto part = ParseMontagePart(winrt::to_string(argv[i + 1]));
+      if (!part) {
+        log::Error("Highlight failed: can't read the part {}", winrt::to_string(argv[i + 1]));
+        return 1;
+      }
+      options.parts.push_back({std::filesystem::path(winrt::to_hstring(part->path).c_str()), part->from, part->to});
+    }
+    if (flag == L"--height") options.maxHeight = static_cast<unsigned>(std::clamp(_wtoi(argv[i + 1]), 360, 2160));
+    if (flag == L"--moment") {
+      const std::string moment = winrt::to_string(argv[i + 1]);
+      if (IsSquadMomentId(moment)) options.squadMoment = moment;
+    }
+  }
+  winrt::init_apartment(winrt::apartment_type::multi_threaded);
+  if (FAILED(MFStartup(MF_VERSION))) {
+    log::Error("Highlight failed: Media Foundation is unavailable");
+    return 1;
+  }
+  const int result = RunMontage(options);
+  MFShutdown();
+  return result;
+}
+
 // clip_engine.exe --trim <clip.mp4> <out.mp4> --start <seconds> --end <seconds>
 // Copies part of a clip without re-encoding and exits.
 int RunTrimCommand(int argc, wchar_t** argv) {
@@ -246,6 +278,7 @@ int wmain(int argc, wchar_t** argv) {
   using namespace clip;
   if (argc >= 4 && std::wstring_view(argv[1]) == L"--export") return RunExportCommand(argc, argv);
   if (argc >= 4 && std::wstring_view(argv[1]) == L"--trim") return RunTrimCommand(argc, argv);
+  if (argc >= 5 && std::wstring_view(argv[1]) == L"--montage") return RunMontageCommand(argc, argv);
   if (argc >= 4 && std::wstring_view(argv[1]) == L"--frame") return RunStudioCommand(argc, argv);
   if (argc >= 3 && std::wstring_view(argv[1]) == L"--read") return RunStudioCommand(argc, argv);
   if (argc >= 3 && std::wstring_view(argv[1]) == L"--track") return RunStudioCommand(argc, argv);

@@ -37,6 +37,7 @@ public class SquadSyncTests
         public long Now = 1_762_142_400_000;
         public FakeChannel Channel { get; } = new();
         public List<string> Commands { get; } = [];
+        public List<string> Discord { get; } = [];
         public Dictionary<string, LocalClip> Clips { get; } = [];
         public List<LocalView> Uploads { get; } = [];
         public SquadSettings Settings { get; } = new() { SquadId = "ABCD1234", MemberId = "pME00000000", Token = "t" };
@@ -44,7 +45,8 @@ public class SquadSyncTests
 
         public Rig(long serverAhead = 250)
         {
-            Sync = new SquadSync(Settings, Channel, new SquadViewIndex(null), c => { Commands.Add(c); return true; },
+            Sync = new SquadSync(Settings, Channel, new SquadViewIndex(null),
+                                 c => { (c.StartsWith("squad-presence") ? Discord : Commands).Add(c); return true; },
                                  p => Clips.GetValueOrDefault(p), () => Now);
             Sync.UploadWanted += Uploads.Add;
             Channel.Connect();
@@ -192,6 +194,28 @@ public class SquadSyncTests
         Assert.Empty(rig.Sync.PlayingWithMe());
         rig.Sync.Unlink("pREMY000000");
         Assert.Equal("pREMY000000", (string?)rig.Channel.Take("unlink").Single()["member"]);
+    }
+
+    [Fact]
+    public void TheDiscordStatusShowsTheSquad()
+    {
+        var rig = new Rig();
+        rig.Sync.Server = "https://clip-engine.example.workers.dev";
+        rig.Sync.OnRecordingStarted("Valorant");
+        rig.Channel.Receive("""
+            {"t":"presence","member":"pKAI0000000","online":true,"game":"Valorant","match":null,
+             "groups":[{"game":"Valorant","members":["pME00000000","pKAI0000000"]}]}
+            """);
+        Assert.Equal("squad-presence 2 2 sABCD1234", rig.Discord.Last());
+        rig.Settings.JoinOnDiscord = true;
+        rig.Sync.UpdateDiscord();
+        Assert.Equal("squad-presence 2 2 sABCD1234 https://clip-engine.example.workers.dev/s/ABCD-1234-0000-0000-0000", rig.Discord.Last());
+        var count = rig.Discord.Count;
+        rig.Sync.UpdateDiscord();
+        Assert.Equal(count, rig.Discord.Count);  // only changes go to the engine
+        rig.Settings.JoinOnDiscord = false;
+        rig.Sync.OnRecordingStopped();
+        Assert.Equal("squad-presence 0", rig.Discord.Last());
     }
 
     [Fact]

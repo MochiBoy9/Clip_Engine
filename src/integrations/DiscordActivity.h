@@ -17,6 +17,18 @@ struct PresenceState {
   bool longRecording = false;
   bool away = false;       // another window is in front of the game
 
+  // A little more of what's going on, so the status changes with the match.
+  int streak = 0;            // kills since the last death
+  std::string flash;         // something that just happened, like "Triple kill"; shown for a while
+  int64_t matchStartUnix = 0;  // the timer counts from the match start when one was seen
+
+  // Squad sync: how many squadmates are playing together (this player included) of the
+  // squad's size, the squad's party id, and a page anyone who sees the status can join from.
+  int squadPlaying = 0;
+  int squadMax = 0;
+  std::string partyId;
+  std::string joinUrl;
+
   bool operator==(const PresenceState&) const = default;
 };
 

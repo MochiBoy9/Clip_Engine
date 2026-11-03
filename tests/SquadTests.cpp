@@ -104,9 +104,48 @@ void TestSquadMetadata() {
   CHECK(t.squadMoment == "m-42");
 }
 
+void TestMontage() {
+  const auto part = ParseMontagePart(R"(C:\Videos\Clip_Engine\Valorant\a b.mp4|2.5|11)");
+  CHECK(part && part->path == R"(C:\Videos\Clip_Engine\Valorant\a b.mp4)" && part->from == 2.5 && part->to == 11);
+  CHECK(!ParseMontagePart("a.mp4|5|4"));
+  CHECK(!ParseMontagePart("a.mp4|x|4"));
+  CHECK(!ParseMontagePart("a.mp4|4"));
+  CHECK(!ParseMontagePart("|1|4"));
+  CHECK(!ParseMontagePart("a.mp4|-1|4"));
+
+  ClipMetadata a;
+  a.game = "Valorant";
+  a.markers = {{EventType::Kill, 8.5, "KAI > X"}, {EventType::Death, 14, "X > KAI"}};
+  ClipMetadata b;
+  b.game = "Valorant";
+  b.markers = {{EventType::Kill, 9.5, "KAI > X"}};
+  const auto m = MontageMetadata({{"a", 2.5, 11}, {"b", 7.5, 11.5}, {"c", 0, 3}}, {a, b, std::nullopt});
+  CHECK(m.trigger == "squad_highlight");
+  CHECK(m.game == "Valorant");
+  CHECK(m.seconds == 8.5 + 4 + 3);
+  CHECK(m.markers.size() == 2);
+  CHECK(m.markers.size() == 2 && m.markers[0].seconds == 6 && m.markers[1].seconds == 8.5 + 2);
+}
+
+void TestSquadPresence() {
+  const auto p = ParseSquadPresence("squad-presence 3 8 sABCD1234 https://clip-engine.example.workers.dev/s/ABCD-1234");
+  CHECK(p && p->playing == 3 && p->max == 8 && p->partyId == "sABCD1234");
+  CHECK(p && p->joinUrl == "https://clip-engine.example.workers.dev/s/ABCD-1234");
+  const auto noLink = ParseSquadPresence("squad-presence 2 4 sABCD1234 http://insecure.example");
+  CHECK(noLink && noLink->joinUrl.empty());
+  const auto off = ParseSquadPresence("squad-presence 0");
+  CHECK(off && off->playing == 0 && off->partyId.empty());
+  CHECK(!ParseSquadPresence("squad-presence 5 4 sABC"));  // more playing than in the squad
+  CHECK(!ParseSquadPresence("squad-presence 2 4 ../x"));
+  CHECK(!ParseSquadPresence("squad-presence x"));
+  CHECK(!ParseSquadPresence("squad-save a 1 2"));
+}
+
 }  // namespace
 
 int main() {
+  TestSquadPresence();
+  TestMontage();
   TestClockMath();
   TestParseSquadSave();
   TestSquadQueue();
