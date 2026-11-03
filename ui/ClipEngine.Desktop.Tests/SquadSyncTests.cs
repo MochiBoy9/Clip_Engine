@@ -219,6 +219,36 @@ public class SquadSyncTests
     }
 
     [Fact]
+    public void UnlinkingIsSentAgainAfterReconnecting()
+    {
+        var rig = new Rig();
+        rig.Sync.Unlink("pKAI0000000");
+        Assert.True(rig.Sync.IsUnlinked("pKAI0000000"));
+        Assert.Equal("pKAI0000000", (string?)rig.Channel.Take("unlink").Single()["member"]);
+        rig.Channel.Connect();
+        var again = rig.Channel.Take("unlink").Single();
+        Assert.Equal("pKAI0000000", (string?)again["member"]);
+        Assert.False((bool)again["undo"]!);
+
+        rig.Sync.Unlink("pKAI0000000", undo: true);
+        Assert.False(rig.Sync.IsUnlinked("pKAI0000000"));
+        Assert.True((bool)rig.Channel.Take("unlink").Single()["undo"]!);
+        rig.Channel.Connect();
+        Assert.Empty(rig.Channel.Take("unlink"));
+    }
+
+    [Fact]
+    public void ANewInviteCodeShowsUp()
+    {
+        var rig = new Rig();
+        var changed = 0;
+        rig.Sync.Changed += () => changed++;
+        rig.Sync.UpdateInfo(rig.Sync.Info! with { Invite = "ABCD-1234-1111-1111-1111" });
+        Assert.Equal("ABCD-1234-1111-1111-1111", rig.Sync.Info!.Invite);
+        Assert.Equal(1, changed);
+    }
+
+    [Fact]
     public void PingsFollowTheirSchedule()
     {
         var rig = new Rig();
@@ -318,6 +348,9 @@ public class SquadPlanTests
         Assert.Equal(new SquadViewSkipped("m1ABC", "not recording Valorant"), Parse("Squad moment m1ABC skipped: not recording Valorant"));
         // The moment line before it still reads as before.
         Assert.IsType<MomentDetected>(Parse("Detected kill in Valorant: ENTERRO > X"));
+        Assert.Equal(new MontageProgress(40), Parse("Montage progress 40%"));
+        Assert.Equal(new HighlightSaved(@"C:\Videos\Clip_Engine\Valorant\Valorant_2026-11-03_21-04-05_squad.mp4", 12.5),
+                     Parse(@"Highlight saved (12.5 MB) to C:\Videos\Clip_Engine\Valorant\Valorant_2026-11-03_21-04-05_squad.mp4"));
     }
 
     [Fact]

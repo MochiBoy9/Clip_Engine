@@ -56,8 +56,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         [
             new NavItem(Page.Home, "Home", Icon("IconHome")),
             new NavItem(Page.Clips, "Clips", Icon("IconClips")),
+            new NavItem(Page.Squad, "Squad", Icon("IconSquad")),
             new NavItem(Page.Records, "Records", Icon("IconTrophy")),
             new NavItem(Page.Games, "Games", Icon("IconGames")),
+            new NavItem(Page.Cloud, "Cloud", Icon("IconCloud")),
             new NavItem(Page.Settings, "Settings", Icon("IconSettings")),
         ];
         _selectedNav = Nav[0];
@@ -108,6 +110,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ShowClipCommand = new RelayCommand(p => { if (p is ClipItemViewModel c) Shell.ShowInFolder(c.Path); });
         DeleteClipCommand = new RelayCommand(p => { if (p is ClipItemViewModel c) DeleteClip(c); });
         ShareClipCommand = new RelayCommand(p => { if (p is ClipItemViewModel c) _ = ShareClipAsync(c); });
+        CopyLinkCommand = new RelayCommand(p => { if (p is ClipItemViewModel c) _ = Cloud!.CopyLinkAsync(c); });
         CopyClipCommand = new RelayCommand(p => { if (p is ClipItemViewModel c) CopyClip(c); });
         FavoriteClipCommand = new RelayCommand(p => { if (p is ClipItemViewModel c) ToggleFavorite(c); });
         ShowClipsGridCommand = new RelayCommand(() => ShowMatches = false);
@@ -147,8 +150,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _longRecordingTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _longRecordingTimer.Tick += (_, _) => RaiseLongRecording();
 
+        // After the timers: both save settings as they start.
+        Squad = new SquadViewModel(this, DesktopSettings);
+        Squad.SetClipWindow(engineSettings.ClipBeforeSeconds, engineSettings.ClipAfterSeconds);
+        Cloud = new CloudViewModel(this, DesktopSettings);
+
         if (!live) return;
         _cleanupTimer.Start();
+        if (OperatingSystem.IsWindows()) UrlProtocol.Register();
 
         _library = new ClipLibrary { ExtraFolders = DesktopSettings.ImportFolders };
         _library.Changed += () => _ = RefreshClipsAsync();
@@ -174,6 +183,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public ClipsPage ClipsPage { get; }
     public GamesPage GamesPage { get; }
     public RecordsViewModel Records { get; }
+    public SquadViewModel Squad { get; }
+    public CloudViewModel Cloud { get; }
     public SettingsViewModel Settings { get; }
     public SupporterViewModel Supporter { get; }
     public UpdatesViewModel Updates { get; }
@@ -199,6 +210,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public RelayCommand ShowClipCommand { get; }
     public RelayCommand DeleteClipCommand { get; }
     public RelayCommand ShareClipCommand { get; }
+    public RelayCommand CopyLinkCommand { get; }
     public RelayCommand CopyClipCommand { get; }
     public RelayCommand FavoriteClipCommand { get; }
     public RelayCommand ShowClipsGridCommand { get; }
@@ -232,7 +244,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private object PageFor(Page page) => page switch
     {
         Page.Clips => ClipsPage,
+        Page.Squad => Squad,
         Page.Records => Records,
+        Page.Cloud => Cloud,
         Page.Games => GamesPage,
         Page.Settings => Settings,
         _ => Home,
@@ -251,6 +265,27 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     internal void PausePlayback()
     {
         if (CurrentPage is PlayerViewModel player) player.Pause();
+        if (CurrentPage is SquadPlayerViewModel squad) squad.Pause();
+    }
+
+    // Opens a clip just made, like a squad highlight, once the library has it.
+    internal async Task OpenSavedClipAsync(string path, string toast)
+    {
+        await RefreshClipsAsync();
+        ShowToast(toast);
+        if (Clips.FirstOrDefault(c => string.Equals(c.Path, path, StringComparison.OrdinalIgnoreCase)) is { } clip) OpenPlayer(clip);
+    }
+
+    // clipengine:// links, like a squad invite opened from its web page.
+    internal void OpenLink(string link)
+    {
+        if (!Uri.TryCreate(link, UriKind.Absolute, out var uri) || uri.Scheme != "clipengine") return;
+        var parts = (uri.Host + uri.AbsolutePath).Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (parts is ["squad", "join", var code, ..])
+        {
+            ShowPage(Squad);
+            Squad.PrefillInvite(Uri.UnescapeDataString(code));
+        }
     }
 
     internal PlayerViewModel OpenPlayer(ClipItemViewModel clip)
@@ -271,6 +306,22 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     }
 
     public bool IsSharing { get => _isSharing; private set => Set(ref _isSharing, value); }
+
+    // Squad sync's commands to the engine (src/app/CommandChannel.h). False when it isn't running.
+    internal bool SendEngineCommand(string line) => _engine?.SendCommand(line) ?? false;
+
+    // What's being recorded ("Desktop" too), or null.
+    internal string? RecordingLabel => IsRecording ? _recording!.Label : null;
+
+    // "SQUAD · 3" in the title bar while playing with squadmates.
+    public string? SquadStatus => Squad.SidebarText;
+    public bool HasSquadStatus => SquadStatus is not null;
+
+    internal void RaiseSquadStatus()
+    {
+        Raise(nameof(SquadStatus));
+        Raise(nameof(HasSquadStatus));
+    }
     public string SidePanelHotkey => DesktopSettings.SidePanelHotkey;
 
     public string ClipsFolder => _library?.Folder ?? AppPaths.DefaultClipsDir;
@@ -417,6 +468,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         RecordHotkey = settings.RecordHotkey;
         ClipSeconds = settings.ClipSeconds;
         BufferSeconds = settings.BufferSeconds;
+        Squad.SetClipWindow(settings.ClipBeforeSeconds, settings.ClipAfterSeconds);
         _library?.Watch(settings.OutputDir);
         Raise(nameof(ClipsFolder));
         await _engine.RestartAsync();
@@ -562,6 +614,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _saveDesktopTimer.Start();
     }
 
+    internal void SaveDesktopSettingsNow()
+    {
+        _saveDesktopTimer.Stop();
+        SaveDesktopSettings();
+    }
+
     private void SaveDesktopSettings()
     {
         if (!IsLive) return;
@@ -598,6 +656,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             SetLongRecording(null);
             Records.StartLiveMatch(null);
             _notices.Reset();
+            Squad.OnEngineStopped();
             UpdateGames();
         }
         if (message is not null) AddActivity(ActivityKind.Error, message);
@@ -606,6 +665,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private void OnEngineEvent(EngineEvent e)
     {
+        Squad.OnEngineEvent(e);
         switch (e)
         {
             case EngineStarted:
@@ -671,6 +731,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             case ScoreboardRead b:
                 Records.SetLiveScoreboard(b.Game, b.Stats);
                 break;
+            case ClipSaved s when ClipMetadataFile.ReadSidecar(s.Path)?.Trigger == "squad":
+                // A view of a squadmate's moment: the squad page says so, not a toast over the game.
+                _ = RefreshClipsAsync();
+                break;
             case ClipSaved s:
                 AddActivity(ActivityKind.Clip, $"Saved a {s.Seconds:0} s clip ({s.Megabytes:0.0} MB)");
                 ShowToast($"Clip saved · {s.Seconds:0} s · {s.Megabytes:0.0} MB");
@@ -724,7 +788,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Raise(nameof(HasRecentMoments));
     }
 
-    private async Task RefreshClipsAsync()
+    internal async Task RefreshClipsAsync()
     {
         if (_library is null) return;
         var files = await Task.Run(_library.Scan);
@@ -855,6 +919,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         clip.File = clip.File with { Metadata = metadata };
         ShowToast(metadata.Favorite ? "Added to favorites. Favorites are never cleaned up." : "Removed from favorites");
         SetClips(_files.Select(f => string.Equals(f.Path, clip.Path, StringComparison.OrdinalIgnoreCase) ? clip.File : f).ToList());
+        Cloud.OnFavoriteChanged(clip);
     }
 
     // Keeps what's known about a clip after its .json was rewritten (its marks, say).
@@ -961,6 +1026,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        Squad.Dispose();
         _engine?.Dispose();
         _library?.Dispose();
     }

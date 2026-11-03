@@ -9,4 +9,6 @@ internal interface IAppDialogs
     Task<string?> PickFrameSourceAsync();
     Task<string?> PickZipAsync();
     Task<string?> PickFolderAsync(string title, string? startFolder);
+    // Puts text, like a share link or an invite, on the clipboard. False when that failed.
+    Task<bool> CopyTextAsync(string text);
 }

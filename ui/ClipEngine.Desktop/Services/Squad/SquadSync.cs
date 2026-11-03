@@ -29,6 +29,7 @@ internal sealed class SquadSync : IDisposable
     private readonly Dictionary<string, (string Type, string Game, long At, string By)> _theirs = [];
     private readonly List<LocalClip> _recentClips = [];
     private readonly Dictionary<long, long> _pings = [];
+    private readonly HashSet<string> _unlinked = [];
     private (string Type, string Game, string Text)? _lastDetected;
     private long _connectedAt;
     private int _pingsSent;
@@ -99,8 +100,25 @@ internal sealed class SquadSync : IDisposable
         return group.Members.Where(m => m != me && _members.ContainsKey(m)).Select(m => _members[m]).ToList();
     }
 
-    public void Unlink(string member, bool undo = false) =>
+    // Stops (or, with undo, starts again) counting a squadmate as playing with this player, for
+    // as long as the app runs. The squad only keeps it for this connection, so it's sent again
+    // after reconnecting.
+    public void Unlink(string member, bool undo = false)
+    {
+        if (undo) _unlinked.Remove(member);
+        else _unlinked.Add(member);
         _channel.Send(new JsonObject { ["t"] = "unlink", ["member"] = member, ["undo"] = undo });
+        RaiseChanged();
+    }
+
+    public bool IsUnlinked(string member) => _unlinked.Contains(member);
+
+    // The squad's details changed here, like a new invite code.
+    public void UpdateInfo(SquadInfo info)
+    {
+        Info = info;
+        RaiseChanged();
+    }
 
     public void Want(string moment, string member) =>
         _channel.Send(new JsonObject { ["t"] = "want", ["moment"] = moment, ["member"] = member });
@@ -322,6 +340,7 @@ internal sealed class SquadSync : IDisposable
             _pingsSent = 0;
             _nextPing = _connectedAt;
             _channel.Send(new JsonObject { ["t"] = "hello", ["app"] = typeof(SquadSync).Assembly.GetName().Version?.ToString(3) ?? "" });
+            foreach (var member in _unlinked) _channel.Send(new JsonObject { ["t"] = "unlink", ["member"] = member, ["undo"] = false });
             SendPresence();
             Tick();
         }

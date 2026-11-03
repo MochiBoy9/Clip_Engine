@@ -1,0 +1,219 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ClipEngine.Desktop.ViewModels"
+             xmlns:views="using:ClipEngine.Desktop.Views"
+             x:Class="ClipEngine.Desktop.Views.CloudView"
+             x:DataType="vm:CloudViewModel">
+  <UserControl.Styles>
+    <Style Selector="TextBlock.caption.error">
+      <Setter Property="Foreground" Value="{StaticResource RecordBrush}" />
+    </Style>
+  </UserControl.Styles>
+  <ScrollViewer>
+    <StackPanel Margin="0,0,40,40" Spacing="22">
+      <StackPanel Spacing="4">
+        <TextBlock Classes="h1" Text="Cloud" />
+        <TextBlock Classes="caption" TextWrapping="Wrap"
+                   Text="Short links to your clips that play in any browser, with every moment marked, and a profile page with the ones you're proudest of." />
+      </StackPanel>
+
+      <TextBlock Classes="caption" Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextWrapping="Wrap"
+                 Classes.error="{Binding MessageIsError}" />
+
+      <!-- Signing in -->
+      <StackPanel Spacing="22" IsVisible="{Binding NotSignedIn}">
+        <Grid ColumnDefinitions="*,22,*">
+          <views:Plate Classes="card lead" Padding="28,26">
+            <StackPanel Spacing="14">
+              <TextBlock Classes="eyebrow" Text="NEW HERE" />
+              <TextBlock Classes="body" TextWrapping="Wrap"
+                         Text="Make a cloud library. No email or password: this PC holds the key, and other PCs join it with a code." />
+              <StackPanel Spacing="6">
+                <TextBlock Text="Your name" FontWeight="SemiBold" FontSize="14" />
+                <TextBox Text="{Binding NameInput}" MaxLength="32" Watermark="Shown on your clips and profile" />
+              </StackPanel>
+              <Button Classes="accent" Content="Make my cloud library" Command="{Binding CreateCommand}" HorizontalAlignment="Left" />
+            </StackPanel>
+          </views:Plate>
+          <views:Plate Grid.Column="2" Classes="card" Padding="28,26">
+            <StackPanel Spacing="14">
+              <TextBlock Classes="eyebrow" Text="ALREADY HAVE ONE" />
+              <TextBlock Classes="body" TextWrapping="Wrap"
+                         Text="On a PC that's signed in, open the Cloud page and press Link another PC. Type the code it shows here." />
+              <StackPanel Spacing="6">
+                <TextBlock Text="Code" FontWeight="SemiBold" FontSize="14" />
+                <TextBox Text="{Binding CodeInput}" FontFamily="{StaticResource MonoFont}" Watermark="XXXX-XXXX-XXXX-XX" />
+              </StackPanel>
+              <Button Classes="accent" Content="Sign in" Command="{Binding SignInCommand}" HorizontalAlignment="Left" />
+            </StackPanel>
+          </views:Plate>
+        </Grid>
+        <views:Plate Classes="card" Padding="26,22">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
+              <PathIcon Data="{StaticResource IconCloud}" />
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+              <TextBlock Text="Online service" FontWeight="SemiBold" FontSize="14" />
+              <TextBlock Classes="caption" TextWrapping="Wrap"
+                         Text="Leave this empty to use the built-in one, or point it at your own." />
+            </StackPanel>
+            <TextBox Grid.Column="2" Width="320" VerticalAlignment="Center" Text="{Binding ServerAddress}" Watermark="{Binding ServerHint}" />
+          </Grid>
+        </views:Plate>
+      </StackPanel>
+
+      <!-- Signed in -->
+      <StackPanel Spacing="22" IsVisible="{Binding SignedIn}">
+        <Grid ColumnDefinitions="1.25*,22,*">
+          <views:Plate Classes="card lead" Padding="28,26">
+            <StackPanel Spacing="12">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="eyebrow" Text="YOUR CLOUD LIBRARY" />
+                <Border Grid.Column="1" Classes="pill accent" Padding="8,2" IsVisible="{Binding PlanLabel, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                  <TextBlock Text="{Binding PlanLabel}" FontSize="10" FontWeight="Bold" LetterSpacing="1" />
+                </Border>
+              </Grid>
+              <TextBlock Classes="h2" Text="{Binding AccountName}" />
+              <TextBlock Classes="caption" Text="{Binding ClipsText}" />
+              <ProgressBar Minimum="0" Maximum="100" Value="{Binding StorageFraction}" Height="6" />
+              <TextBlock Classes="caption" Text="{Binding StorageText}" />
+              <Border Height="1" Background="{StaticResource Divider}" Margin="0,4" />
+              <TextBlock Text="Profile page" FontWeight="SemiBold" FontSize="14" />
+              <TextBlock Classes="caption" TextWrapping="Wrap"
+                         Text="Pick a handle for a page with your public clips, pinned ones first. Leave it empty for no profile." />
+              <Grid ColumnDefinitions="Auto,*,Auto">
+                <TextBlock Text="@" FontFamily="{StaticResource MonoFont}" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,6,0" />
+                <TextBox Grid.Column="1" Text="{Binding HandleInput}" MaxLength="24" Watermark="handle" FontFamily="{StaticResource MonoFont}" />
+                <Button Grid.Column="2" Classes="secondary" Content="Save" Command="{Binding SaveProfileCommand}" Margin="10,0,0,0" />
+              </Grid>
+              <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding HasProfile}">
+                <SelectableTextBlock Text="{Binding ProfileLink}" FontFamily="{StaticResource MonoFont}" FontSize="12"
+                                     VerticalAlignment="Center" Foreground="{DynamicResource AccentBrush}" />
+                <Button Classes="icon" Width="32" Height="32" Command="{Binding CopyProfileCommand}" ToolTip.Tip="Copy">
+                  <PathIcon Data="{StaticResource IconCopy}" Width="13" Height="13" />
+                </Button>
+                <Button Classes="icon" Width="32" Height="32" Command="{Binding OpenProfileCommand}" ToolTip.Tip="Open in your browser">
+                  <PathIcon Data="{StaticResource IconExternal}" Width="13" Height="13" />
+                </Button>
+              </StackPanel>
+            </StackPanel>
+          </views:Plate>
+
+          <views:Plate Grid.Column="2" Classes="card" Padding="26,24">
+            <StackPanel>
+              <TextBlock Classes="eyebrow" Margin="0,0,0,18" Text="SHARING" />
+              <TextBlock Text="New links are" FontWeight="SemiBold" FontSize="14" />
+              <TextBlock Classes="caption" Text="{Binding DefaultCaption}" TextWrapping="Wrap" Margin="0,2,0,10" />
+              <Border Classes="segments" HorizontalAlignment="Left">
+                <StackPanel Orientation="Horizontal">
+                  <RadioButton Classes="segment" GroupName="visibility" Content="Unlisted" IsChecked="{Binding DefaultUnlisted}" />
+                  <RadioButton Classes="segment" GroupName="visibility" Content="Public" IsChecked="{Binding DefaultPublic}" />
+                  <RadioButton Classes="segment" GroupName="visibility" Content="Private" IsChecked="{Binding DefaultPrivate}" />
+                </StackPanel>
+              </Border>
+              <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Spacing="2" Margin="0,0,16,0">
+                  <TextBlock Text="Back up starred clips" FontWeight="SemiBold" FontSize="14" />
+                  <TextBlock Classes="caption" TextWrapping="Wrap" Text="Clips you star go up to the cloud by themselves, as smaller copies." />
+                </StackPanel>
+                <ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding SyncStarred}" OnContent="{x:Null}" OffContent="{x:Null}" />
+              </Grid>
+              <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+              <TextBlock Text="Your other PCs" FontWeight="SemiBold" FontSize="14" />
+              <TextBlock Classes="caption" TextWrapping="Wrap" Margin="0,2,0,10"
+                         Text="Make a code, then type it on the other PC's Cloud page. It works once, for 10 minutes." />
+              <StackPanel Orientation="Horizontal" Spacing="12">
+                <Button Classes="secondary" Content="Link another PC" Command="{Binding MakeLinkCodeCommand}" />
+                <Border Classes="inset" Padding="12,6" CornerRadius="2" IsVisible="{Binding HasLinkCode}">
+                  <SelectableTextBlock Text="{Binding LinkCode}" FontFamily="{StaticResource MonoFont}" FontWeight="Bold" FontSize="14"
+                                       LetterSpacing="1.5" />
+                </Border>
+              </StackPanel>
+              <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+              <Button Classes="secondary" Content="Sign out of this PC" Command="{Binding SignOutCommand}" HorizontalAlignment="Left"
+                      IsVisible="{Binding NotConfirmingSignOut}" />
+              <StackPanel Spacing="10" IsVisible="{Binding ConfirmSignOut}">
+                <TextBlock Classes="caption" TextWrapping="Wrap"
+                           Text="Your clips stay in the cloud. To sign in again you'll need a code from another PC that's signed in, so make one first if this is your only one." />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Button Classes="record" Content="Sign out" Command="{Binding ConfirmSignOutCommand}" />
+                  <Button Classes="secondary" Content="Cancel" Command="{Binding CancelSignOutCommand}" />
+                </StackPanel>
+              </StackPanel>
+            </StackPanel>
+          </views:Plate>
+        </Grid>
+
+        <StackPanel Spacing="14">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <TextBlock Classes="eyebrow" Text="IN THE CLOUD" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Classes="caption" Text="{Binding UploadStatus}" IsVisible="{Binding IsUploading}"
+                       Margin="14,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            <Button Grid.Column="2" Classes="icon" Width="34" Height="34" Command="{Binding RefreshCommand}" ToolTip.Tip="Refresh">
+              <PathIcon Data="{StaticResource IconRefresh}" Width="14" Height="14" />
+            </Button>
+          </Grid>
+          <views:Plate Classes="card" Padding="28" IsVisible="{Binding HasNoClips}">
+            <StackPanel Spacing="8" HorizontalAlignment="Center">
+              <PathIcon Data="{StaticResource IconLink}" Width="34" Height="34" Foreground="{StaticResource TextTertiary}" />
+              <TextBlock Classes="h2" Text="Nothing in the cloud yet" HorizontalAlignment="Center" />
+              <TextBlock Classes="caption" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="460"
+                         Text="Press the link button on any clip. It goes up as a smaller copy and its link is copied, ready to paste anywhere." />
+            </StackPanel>
+          </views:Plate>
+          <ItemsControl ItemsSource="{Binding Clips}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:CloudClipRow">
+                <views:Plate Classes="card" Padding="22,16" Margin="0,0,0,12">
+                  <Grid ColumnDefinitions="*,Auto,Auto">
+                    <StackPanel VerticalAlignment="Center" Spacing="3" Margin="0,0,16,0">
+                      <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="14" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Classes="caption" Text="{Binding Caption}" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <Border Grid.Column="1" Classes="segments" VerticalAlignment="Center" Margin="0,0,14,0">
+                      <StackPanel Orientation="Horizontal">
+                        <RadioButton Classes="segment" Content="Unlisted" IsChecked="{Binding IsUnlisted}" />
+                        <RadioButton Classes="segment" Content="Public" IsChecked="{Binding IsPublic}" />
+                        <RadioButton Classes="segment" Content="Private" IsChecked="{Binding IsPrivate}" />
+                      </StackPanel>
+                    </Border>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                      <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding NotConfirmingDelete}">
+                        <Button Classes="icon" Width="34" Height="34" Command="{Binding FeatureCommand}" ToolTip.Tip="{Binding FeatureTip}">
+                          <Panel>
+                            <PathIcon Data="{StaticResource IconStarOutline}" Width="14" Height="14" IsVisible="{Binding !IsFeatured}" />
+                            <PathIcon Data="{StaticResource IconStar}" Width="14" Height="14" Foreground="{DynamicResource AccentBrush}"
+                                      IsVisible="{Binding IsFeatured}" />
+                          </Panel>
+                        </Button>
+                        <Button Classes="icon" Width="34" Height="34" Command="{Binding OpenCommand}" ToolTip.Tip="Open in your browser">
+                          <PathIcon Data="{StaticResource IconExternal}" Width="14" Height="14" />
+                        </Button>
+                        <Button Classes="secondary" Command="{Binding CopyLinkCommand}">
+                          <StackPanel Orientation="Horizontal" Spacing="8">
+                            <PathIcon Data="{StaticResource IconLink}" Width="13" Height="13" />
+                            <TextBlock Text="Copy link" />
+                          </StackPanel>
+                        </Button>
+                        <Button Classes="icon danger" Width="34" Height="34" Command="{Binding DeleteCommand}" ToolTip.Tip="Remove from the cloud">
+                          <PathIcon Data="{StaticResource IconTrash}" Width="14" Height="14" />
+                        </Button>
+                      </StackPanel>
+                      <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding ConfirmDelete}">
+                        <TextBlock Classes="caption" Text="Its link stops working." VerticalAlignment="Center" />
+                        <Button Classes="record" Content="Remove" Command="{Binding ConfirmDeleteCommand}" />
+                        <Button Classes="secondary" Content="Keep" Command="{Binding CancelDeleteCommand}" />
+                      </StackPanel>
+                    </StackPanel>
+                  </Grid>
+                </views:Plate>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </StackPanel>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

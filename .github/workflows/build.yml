@@ -10,6 +10,24 @@ on:
         value: ${{ jobs.windows.outputs.version }}
 
 jobs:
+  # The online service for squads and the cloud library (server/), run in Cloudflare's local runtime.
+  server:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+
+      - name: Test online service
+        run: npm test
+
   windows:
     runs-on: windows-latest
     outputs:
@@ -42,7 +60,8 @@ jobs:
         run: >
           dotnet publish ui/ClipEngine.Desktop -c Release -r win-x64 --self-contained
           -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
-          -p:Version=${{ steps.version.outputs.version }} -p:UpdateRepo=${{ vars.DOWNLOADS_REPO }} -o dist
+          -p:Version=${{ steps.version.outputs.version }} -p:UpdateRepo=${{ vars.DOWNLOADS_REPO }}
+          -p:OnlineServer=${{ vars.ONLINE_SERVER }} -o dist
 
       - name: Assemble package
         shell: pwsh

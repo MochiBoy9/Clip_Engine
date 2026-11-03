@@ -472,7 +472,8 @@ bool App::SaveRange(int64_t start, int64_t end, const char* trigger, std::string
   }
 
   const auto path = ClipPath();
-  ++presenceState_.clips;
+  // A view saved for a squadmate's moment isn't one of this player's clips on Discord.
+  if (squadMoment.empty()) ++presenceState_.clips;
   const bool beep = std::string_view(trigger) == "hotkey";
   saves_.push_back(std::async(std::launch::async, [clip = std::move(*clip), metadata = std::move(metadata), path, beep] {
     winrt::init_apartment(winrt::apartment_type::multi_threaded);

@@ -6,6 +6,9 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ClipEngine.Desktop;
 using ClipEngine.Desktop.Services;
+using ClipEngine.Desktop.Services.Cloud;
+using ClipEngine.Desktop.Services.Squad;
+using SquadView = ClipEngine.Desktop.Services.Squad.SquadView;
 using ClipEngine.Desktop.ViewModels;
 using ClipEngine.Desktop.Views;
 
@@ -55,6 +58,17 @@ Capture(Page.Clips, "2-clips.png");
 Capture(Page.Games, "3-games.png");
 Capture(Page.Settings, "4-settings.png");
 Capture(Page.Records, "11-records.png");
+
+// A squad of four, two playing with you, and the moments in its shared library.
+SampleSquad.Fill(vm);
+window.Height = 1500;
+Capture(Page.Squad, "17-squad.png");
+window.Height = 900;
+var together = SampleSquad.WatchTogether(vm);
+vm.ShowPage(together);
+Save(window, "18-watch-together.png");
+SampleSquad.FillCloud(vm);
+Capture(Page.Cloud, "19-cloud.png");
 
 // The player, opened on the newest clip partway through.
 vm.SelectedNav = vm.Nav.First(n => n.Page == Page.Clips);
@@ -291,5 +305,89 @@ internal static class Sample
         metadata.Title = string.Join(", ", metadata.Events.GroupBy(e => e.Type)
             .Select(g => EventKinds.Count(g.Key, g.Count()).ToLowerInvariant()));
         return metadata;
+    }
+}
+
+internal sealed class PreviewChannel : ISquadChannel
+{
+    public bool Connected { get; private set; }
+    public event Action<System.Text.Json.Nodes.JsonObject>? Received;
+    public event Action<bool>? ConnectedChanged;
+    public event Action? Rejected { add { } remove { } }
+    public void Start()
+    {
+        Connected = true;
+        ConnectedChanged?.Invoke(true);
+    }
+    public void Send(System.Text.Json.Nodes.JsonObject message) { }
+    public void Receive(string json) => Received?.Invoke((System.Text.Json.Nodes.JsonObject)System.Text.Json.Nodes.JsonNode.Parse(json)!);
+    public void Dispose() { }
+}
+
+internal static class SampleSquad
+{
+    private const string Server = "https://clip-engine.example.workers.dev";
+    private static readonly long Now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+    public static void Fill(MainViewModel vm)
+    {
+        vm.DesktopSettings.OnlineServer = Server;
+        var settings = vm.DesktopSettings.Squad;
+        settings.SquadId = "N1GHT5HF";
+        settings.SquadName = "Night shift";
+        settings.MemberId = "pENTERRO000";
+        settings.PlayerName = "Enterro";
+        settings.Token = "preview";
+        settings.JoinOnDiscord = true;
+        vm.Squad.PlayerName = "Enterro";
+
+        SquadView View(string member, string name, double seconds, bool uploaded, bool mine = false) =>
+            new(member, name, 0, seconds, uploaded, mine);
+        var moments = new[]
+        {
+            new SquadMoment("m1", "The Finals", "kill", Now - 4 * 60_000, "pENTERRO000", "Enterro", "ENTERRO ELIMINATED VORTEX", true,
+                            [View("pENTERRO000", "Enterro", 30, true, true), View("pKAI0000000", "Kai", 15, true), View("pMIRA000000", "Mira", 15, false)]),
+            new SquadMoment("m2", "The Finals", "revive", Now - 9 * 60_000, "pMIRA000000", "Mira", "MIRA REVIVED ENTERRO", false,
+                            [View("pMIRA000000", "Mira", 15, true), View("pENTERRO000", "Enterro", 15, true, true)]),
+            new SquadMoment("m3", "The Finals", "highlight", Now - 14 * 60_000, "pKAI0000000", "Kai", "Triple kill", false,
+                            [View("pKAI0000000", "Kai", 30, true), View("pENTERRO000", "Enterro", 15, true, true), View("pMIRA000000", "Mira", 15, true)]),
+            new SquadMoment("m4", "Overwatch", "match_end", Now - 26 * 60 * 60_000, "pROOK000000", "Rook", "VICTORY", false,
+                            [View("pROOK000000", "Rook", 20, false), View("pENTERRO000", "Enterro", 20, false, true)]),
+        };
+        var channel = new PreviewChannel();
+        vm.Squad.ConnectForPreview(channel, moments);
+        channel.Receive("""
+            {"t":"welcome","squad":{"id":"N1GHT5HF","name":"Night shift","invite":"N1GHT5HF-7Q4K2M9XW3BD","you":"pENTERRO000",
+             "storage":{"used":1288490188,"limit":5368709120},
+             "members":[{"id":"pENTERRO000","name":"Enterro","owner":true,"online":true},{"id":"pKAI0000000","name":"Kai","owner":false,"online":true},
+                        {"id":"pMIRA000000","name":"Mira","owner":false,"online":true},{"id":"pROOK000000","name":"Rook","owner":false,"online":false}]},
+             "presences":[{"member":"pENTERRO000","game":"The Finals"},{"member":"pKAI0000000","game":"The Finals"},{"member":"pMIRA000000","game":"The Finals"}],
+             "groups":[{"game":"The Finals","members":["pENTERRO000","pKAI0000000","pMIRA000000"]}]}
+            """);
+        vm.Squad.Sync!.OnRecordingStarted("The Finals");
+    }
+
+    public static SquadPlayerViewModel WatchTogether(MainViewModel vm)
+    {
+        var row = vm.Squad.Moments[0];
+        var dir = Path.Combine(AppContext.BaseDirectory, "SampleThumbnails");
+        var views = row.Moment.Views.Select((v, i) => (v with { UtcStartMs = row.Moment.At - 10_000 - i * 1500 }, $"view{i}.mp4")).ToList();
+        var player = new SquadPlayerViewModel(vm, vm.Squad, row, views, vm.Squad);
+        string[] stills = ["finals_1", "finals_2", "finals_1"];
+        for (var i = 0; i < player.Tiles.Count; i++)
+            player.Tiles[i].Still = new Avalonia.Media.Imaging.Bitmap(Path.Combine(dir, stills[i % stills.Length] + ".png"));
+        return player;
+    }
+
+    public static void FillCloud(MainViewModel vm)
+    {
+        var hour = 3_600_000L;
+        vm.Cloud.ShowSample(Server, new CloudAccount("A1B2C3D4", "Enterro", "enterro", "free", "Free", 671_088_640, 2_147_483_648, 4),
+        [
+            new CloudClip("q7k2mx", "A1B2C3D4q7k2mx", null, "3 kills, 1 revive", "The Finals", Now - hour / 10, 30, 41_943_040, true, true, "public", true, 128),
+            new CloudClip("b4nt9w", "A1B2C3D4b4nt9w", null, "Squad highlight: Kai's triple kill", "The Finals", Now - hour / 2, 18, 22_020_096, true, true, "public", false, 46),
+            new CloudClip("x2p8rd", "A1B2C3D4x2p8rd", null, "2 kills", "Overwatch", Now - 26 * hour, 30, 38_797_312, true, true, "unlisted", false, 9),
+            new CloudClip("h6w3zc", "A1B2C3D4h6w3zc", null, "Victory", "Battlefield 6", Now - 50 * hour, 45, 60_817_408, true, true, "private", false, 0),
+        ]);
     }
 }

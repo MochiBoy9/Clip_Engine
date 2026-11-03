@@ -23,6 +23,6 @@ internal static class Online
     }
 
     // Tokens are kept encrypted for this Windows account, like the update token.
-    public static string Protect(string token) => UpdateToken.Protect(token);
+    public static string Protect(string token) => OperatingSystem.IsWindows() ? UpdateToken.Protect(token) : token;
     public static string? Unprotect(string stored) => OperatingSystem.IsWindows() ? UpdateToken.Unprotect(stored) : stored;
 }

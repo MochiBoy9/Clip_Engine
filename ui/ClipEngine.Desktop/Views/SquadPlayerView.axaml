@@ -1,0 +1,90 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ClipEngine.Desktop.ViewModels"
+             xmlns:views="using:ClipEngine.Desktop.Views"
+             x:Class="ClipEngine.Desktop.Views.SquadPlayerView"
+             x:DataType="vm:SquadPlayerViewModel"
+             Focusable="True">
+  <DockPanel Margin="0,0,40,32">
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,22">
+      <Button Classes="secondary" Command="{Binding BackCommand}" VerticalAlignment="Center">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <PathIcon Data="{StaticResource IconBack}" Width="14" Height="14" />
+          <TextBlock Text="Back" VerticalAlignment="Center" />
+        </StackPanel>
+      </Button>
+      <StackPanel Grid.Column="1" Margin="20,0" VerticalAlignment="Center" Spacing="4">
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <TextBlock Classes="h1" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+          <Border Classes="pill accent" VerticalAlignment="Center" Padding="8,2">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <PathIcon Data="{StaticResource IconSquad}" Width="11" Height="11" />
+              <TextBlock Text="WATCH TOGETHER" FontSize="10" FontWeight="Bold" LetterSpacing="1" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+        <TextBlock Classes="caption" Text="{Binding Caption}" TextTrimming="CharacterEllipsis" />
+      </StackPanel>
+      <Button Grid.Column="2" Classes="accent" Command="{Binding HighlightCommand}" IsVisible="{Binding CanHighlight}"
+              VerticalAlignment="Center" ToolTip.Tip="Cut the play and a replay from each view into one clip">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <PathIcon Data="{StaticResource IconSparkle}" Width="14" Height="14" />
+          <TextBlock Text="Make squad highlight" />
+        </StackPanel>
+      </Button>
+    </Grid>
+
+    <!-- One timeline for every view -->
+    <StackPanel DockPanel.Dock="Bottom" Spacing="10" Margin="0,16,0,0">
+      <Slider Minimum="0" Maximum="{Binding Duration}" Value="{Binding Position}" />
+      <Grid ColumnDefinitions="*,Auto,*">
+        <TextBlock VerticalAlignment="Center" FontFeatures="tnum" FontSize="13" FontWeight="SemiBold" Text="{Binding PositionText}" />
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+          <Button Classes="icon" Command="{Binding SkipBackCommand}" ToolTip.Tip="Back 5 seconds (Left)">
+            <PathIcon Data="{StaticResource IconSkipBack}" />
+          </Button>
+          <Button Classes="accent" Width="48" Height="48" CornerRadius="24" Padding="0"
+                  HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                  Command="{Binding PlayPauseCommand}" ToolTip.Tip="Play or pause (Space)">
+            <Panel>
+              <PathIcon Data="{StaticResource IconPlay}" Width="18" Height="18" Margin="3,0,0,0" IsVisible="{Binding IsPaused}" />
+              <PathIcon Data="{StaticResource IconPause}" Width="18" Height="18" IsVisible="{Binding IsPlaying}" />
+            </Panel>
+          </Button>
+          <Button Classes="icon" Command="{Binding SkipForwardCommand}" ToolTip.Tip="Forward 5 seconds (Right)">
+            <PathIcon Data="{StaticResource IconSkipForward}" />
+          </Button>
+        </StackPanel>
+        <Button Grid.Column="2" Classes="secondary" Content="Replay the moment" Command="{Binding ReplayCommand}"
+                HorizontalAlignment="Right" ToolTip.Tip="Back to just before the moment (R)" />
+      </Grid>
+    </StackPanel>
+
+    <ItemsControl ItemsSource="{Binding Tiles}">
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate>
+          <UniformGrid Columns="{Binding $parent[ItemsControl].((vm:SquadPlayerViewModel)DataContext).Columns}" />
+        </ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="vm:SquadTile">
+          <DockPanel Margin="0,0,10,10">
+            <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Margin="0,8,0,0">
+              <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center" />
+              <Button Grid.Column="1" Classes="secondary" Classes.active="{Binding IsListening}" Content="{Binding ListenText}"
+                      Command="{Binding ListenCommand}" ToolTip.Tip="Hear this view (or click the video)" />
+            </Grid>
+            <Border Background="Black" ClipToBounds="True">
+              <views:SquadVideoHost>
+                <Image Source="{Binding Still}" Stretch="Uniform" IsVisible="{Binding IsPreview}" />
+                <StackPanel IsVisible="{Binding HasError}" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="320">
+                  <TextBlock Classes="body" Text="{Binding Error}" TextWrapping="Wrap" TextAlignment="Center" />
+                </StackPanel>
+              </views:SquadVideoHost>
+            </Border>
+          </DockPanel>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+  </DockPanel>
+</UserControl>
