@@ -1,5 +1,5 @@
-# Clip Engine's squad sync service. Deploy with `npx wrangler deploy` from this folder; see README.md.
-name = "clip-engine-squads"
+# Clip Engine's online service: squad sync and the cloud library. Deploy with `npx wrangler deploy` from this folder; see README.md.
+name = "clip-engine"
 main = "src/index.js"
 compatibility_date = "2025-09-01"
 
@@ -8,14 +8,24 @@ compatibility_date = "2025-09-01"
 name = "SQUADS"
 class_name = "Squad"
 
+# One per cloud library account: its clips, profile and plan.
+[[durable_objects.bindings]]
+name = "LIBRARIES"
+class_name = "Library"
+
+# Which account each public profile name (@handle) belongs to.
+[[durable_objects.bindings]]
+name = "HANDLES"
+class_name = "Handles"
+
 [[migrations]]
 tag = "v1"
-new_sqlite_classes = ["Squad"]
+new_sqlite_classes = ["Squad", "Library", "Handles"]
 
-# Squad clips uploaded to the shared library.
+# Every uploaded clip: squad views under <squad>/ and cloud library clips under library/<account>/.
 [[r2_buckets]]
 binding = "CLIPS"
-bucket_name = "clip-engine-squad-clips"
+bucket_name = "clip-engine-clips"
 
 [vars]
 MAX_MEMBERS = "8"
@@ -23,3 +33,7 @@ MAX_MEMBERS = "8"
 SQUAD_STORAGE_MB = "5120"
 # Uploaded clips are removed after this many days unless starred.
 KEEP_DAYS = "30"
+# Cloud library storage for each plan, in MB.
+FREE_STORAGE_MB = "2048"
+PLUS_STORAGE_MB = "102400"
+# ADMIN_TOKEN (for setting plans) is a secret: npx wrangler secret put ADMIN_TOKEN

@@ -2,6 +2,8 @@
 // (on Node's built-in SQLite), R2, hibernatable WebSockets and the Durable Object namespace.
 
 import { DatabaseSync } from "node:sqlite";
+import { Handles } from "../src/handles.js";
+import { Library } from "../src/library.js";
 import { Squad } from "../src/squad.js";
 
 class FakeSql {
@@ -124,36 +126,41 @@ export function makeSquad(env = {}) {
   return { squad, ctx, bucket };
 }
 
-// A Durable Object namespace with one Squad per name, as env.SQUADS.
-export function fakeNamespace(env = {}) {
-  const squads = new Map();
-  const bucket = new FakeBucket();
+// A Durable Object namespace with one instance of Class per name, as env.SQUADS and the rest.
+// All of them share one bucket and one env, like the deployed Worker.
+export function fakeNamespace(Class = Squad, shared = {}) {
+  const instances = new Map();
+  shared.CLIPS ??= new FakeBucket();
   return {
-    bucket,
-    squads,
+    bucket: shared.CLIPS,
+    instances,
     idFromName: (name) => name,
     get(name) {
-      if (!squads.has(name)) {
-        const { squad } = makeSquadWith(bucket, env);
-        squads.set(name, squad);
+      if (!instances.has(name)) {
+        const ctx = fakeState();
+        const instance = new Class(ctx, shared);
+        instance.openSocket = (member) => {
+          const ws = new FakeSocket([member]);
+          ctx.acceptWebSocket(ws, [member]);
+          ws.serializeAttachment({ member, game: "", match: null, unlinked: [] });
+          instance.lastSocket = ws;
+          return new Response(null, { status: 200 });
+        };
+        instances.set(name, instance);
       }
-      const squad = squads.get(name);
-      return { fetch: (request) => squad.fetch(request) };
+      const instance = instances.get(name);
+      return { fetch: (request) => instance.fetch(request) };
     },
   };
 }
 
-function makeSquadWith(bucket, env) {
-  const ctx = fakeState();
-  const squad = new Squad(ctx, { CLIPS: bucket, ...env });
-  squad.openSocket = (member) => {
-    const ws = new FakeSocket([member]);
-    ctx.acceptWebSocket(ws, [member]);
-    ws.serializeAttachment({ member, game: "", match: null, unlinked: [] });
-    squad.lastSocket = ws;
-    return new Response(null, { status: 200 });
-  };
-  return { squad, ctx };
+// The whole service's env, for calling the Worker in tests.
+export function fakeEnv(vars = {}) {
+  const env = { ...vars, CLIPS: new FakeBucket() };
+  env.SQUADS = fakeNamespace(Squad, env);
+  env.LIBRARIES = fakeNamespace(Library, env);
+  env.HANDLES = fakeNamespace(Handles, env);
+  return env;
 }
 
 export function request(path, { method = "GET", token, body, headers = {} } = {}) {

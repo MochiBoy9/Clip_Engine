@@ -1,8 +1,8 @@
 {
-  "name": "clip-engine-squads",
+  "name": "clip-engine-service",
   "private": true,
   "type": "module",
-  "description": "Squad sync service for Clip Engine: links squadmates, relays their moments and keeps the shared squad library.",
+  "description": "Clip Engine's online service: squad sync, the cloud library, share links and profiles.",
   "scripts": {
     "test": "node --test --no-warnings \"test/*.test.js\"",
     "dev": "wrangler dev",

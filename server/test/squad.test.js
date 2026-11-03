@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import worker from "../src/index.js";
-import { fakeNamespace, makeSquad, request } from "./fakes.js";
+import { fakeEnv, makeSquad, request } from "./fakes.js";
 
 async function body(response) {
   return response.json();
@@ -211,8 +211,7 @@ test("leaving takes your clips with you, and the last one out deletes the squad"
 });
 
 test("the worker routes creates, joins and squad requests", async () => {
-  const SQUADS = fakeNamespace();
-  const env = { SQUADS };
+  const env = fakeEnv();
   const health = await worker.fetch(request("/v1/health"), env);
   assert.equal((await health.json()).ok, true);
 
@@ -233,6 +232,9 @@ test("the worker routes creates, joins and squad requests", async () => {
   }), env);
   assert.equal(unknown.status, 404);
   assert.equal((await worker.fetch(request("/v1/squads/abc/squad"), env)).status, 404);
+  // The squad's own create and join can't be reached around the Worker.
+  const sneaky = await worker.fetch(request(`/v1/squads/${created.squad.id}/join`, { method: "POST", body: { secret: "x" } }), env);
+  assert.equal(sneaky.status, 404);
 });
 
 test("socket messages from someone who isn't set up are ignored, and clocks answer pings", async () => {

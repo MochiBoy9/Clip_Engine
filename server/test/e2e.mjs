@@ -107,4 +107,26 @@ wb.close();
 assert.equal((await call(`/v1/squads/${squadId}/members/me`, { method: "DELETE", token: b.token })).status, 200);
 assert.equal((await call(`/v1/squads/${squadId}/members/me`, { method: "DELETE", token: a.token })).status, 200);
 assert.equal((await call(`/v1/squads/${squadId}/squad`, { token: a.token })).status, 404);
+console.log("squads: all good");
+
+// The cloud library: an account, a clip with a short link, the web player and a profile.
+const me = await (await call("/v1/accounts", { method: "POST", body: { name: "Enterro", device: "e2e-device-a" } })).json();
+const lib = `/v1/accounts/${me.account.id}`;
+const clip = await (await call(`${lib}/clips`, {
+  method: "POST", token: me.token,
+  body: { title: "Ace on Haven", game: "Valorant", seconds: 20, visibility: "public", markers: [{ type: "kill", time: 12, text: "ENTERRO > X" }] },
+})).json();
+const put = await call(`${lib}/clips/${clip.id}/video`, { method: "PUT", token: me.token, body: video });
+assert.equal(put.status, 200, await put.clone().text());
+const page = await call(`/c/${clip.code}`);
+assert.equal(page.status, 200);
+assert.match(await page.text(), /og:video/);
+const played = await call(`/c/${clip.code}/video`, { headers: { range: "bytes=0-9" } });
+assert.equal(played.status, 206);
+const named = await call(`${lib}/account`, { method: "PATCH", token: me.token, body: { handle: `e2e_${me.account.id.toLowerCase()}` } });
+assert.equal(named.status, 200, await named.clone().text());
+const profile = await (await call(`/u/e2e_${me.account.id.toLowerCase()}.json`)).json();
+assert.equal(profile.clips[0].title, "Ace on Haven");
+console.log("cloud library: share link", `${base}/c/${clip.code}`);
+await call(`${lib}/clips/${clip.id}`, { method: "DELETE", token: me.token });
 console.log("end to end: all good");
