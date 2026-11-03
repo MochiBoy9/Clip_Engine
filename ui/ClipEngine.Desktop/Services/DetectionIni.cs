@@ -301,10 +301,8 @@ internal sealed class DetectionIni
             var mine = name == "game." + gameId
                        || (!gameSectionOnly && name.StartsWith(gameId + ".", StringComparison.Ordinal) && name != gameId + ".edited");
             if (!mine) continue;
-            if (text.Length > 0) text.Append('
-');
-            foreach (var line in lines) text.Append(line.TrimEnd()).Append('
-');
+            if (text.Length > 0) text.Append('\n');
+            foreach (var line in lines) text.Append(line.TrimEnd()).Append('\n');
         }
         return text.ToString();
     }
@@ -315,21 +313,12 @@ internal sealed class DetectionIni
     {
         RemoveSections(name => name.StartsWith(gameId + ".", StringComparison.Ordinal) || name == "game." + gameId);
         var block = new StringBuilder();
-        block.Append('
-').Append($"# ---------------------------------------------------------------------- {gameName}").Append('
-');
-        block.Append("# ").Append(note).Append('
-');
-        block.Append($"
-[{gameId}.edited]
-");
-        block.Append(sections.Trim('
-')).Append('
-');
+        block.Append('\n').Append($"# ---------------------------------------------------------------------- {gameName}").Append('\n');
+        block.Append("# ").Append(note).Append('\n');
+        block.Append($"\n[{gameId}.edited]\n");
+        block.Append(sections.Trim('\n')).Append('\n');
         while (_lines.Count > 0 && _lines[^1].Trim().Length == 0) _lines.RemoveAt(_lines.Count - 1);
-        _lines.AddRange(block.ToString().TrimEnd('
-').Split('
-'));
+        _lines.AddRange(block.ToString().TrimEnd('\n').Split('\n'));
     }
 
     private static void WriteRule(StringBuilder block, StudioRule rule)
