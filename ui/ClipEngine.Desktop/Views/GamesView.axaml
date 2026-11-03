@@ -75,9 +75,13 @@
           <StackPanel Grid.Column="1" Spacing="6" Margin="0,0,18,0">
             <TextBlock Classes="h2" Text="Detection Studio" />
             <TextBlock Classes="body" TextWrapping="Wrap"
-                       Text="Add any game, or fix how one is read. Pick a frame from a clip, draw a box over the kill feed, type the words it shows, and test it before saving." />
+                       Text="Add any game, or fix how one is read. Pick a frame from a clip, draw a box over the kill feed, type the words it shows, and test it before saving. Games without rules are read by the universal HUD reader, and a game set up by anyone can be shared as a detection pack." />
           </StackPanel>
           <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <Button Classes="secondary" Command="{Binding Main.ImportPackCommand}"
+                    ToolTip.Tip="Install a detection pack (.cepack) someone shared: a game's rules, icons, sounds and what the universal HUD reader learned about it. You can also drop one on the window">
+              <TextBlock Text="Install pack" />
+            </Button>
             <Button Classes="secondary" Command="{Binding Main.OpenStudioCommand}" CommandParameter="add"
                     ToolTip.Tip="Record and detect moments in a game Clip Engine doesn't know yet">
               <TextBlock Text="Add a game" />

@@ -24,6 +24,7 @@ add_executable(clip_engine
   src/detect/DetectionRules.cpp
   src/detect/EventDetector.cpp
   src/detect/EventFuser.cpp
+  src/detect/HudModel.cpp
   src/detect/ImageMatch.cpp
   src/detect/Ocr.cpp
   src/detect/OcrImage.cpp
@@ -33,6 +34,7 @@ add_executable(clip_engine
   src/detect/SoundMatch.cpp
   src/detect/SoundWatch.cpp
   src/detect/TextMatcher.cpp
+  src/detect/UniversalHud.cpp
   src/game/GameDetector.cpp
   src/integrations/DiscordActivity.cpp
   src/integrations/DiscordPresence.cpp
@@ -78,8 +80,10 @@ add_custom_command(TARGET clip_engine POST_BUILD
 enable_testing()
 add_executable(clip_engine_tests
   tests/DetectTests.cpp
+  tests/HudModelTests.cpp
   src/detect/DetectionRules.cpp
   src/detect/EventFuser.cpp
+  src/detect/HudModel.cpp
   src/detect/SoundMatch.cpp
   src/detect/SoundWatch.cpp
   src/detect/ImageMatch.cpp
@@ -87,6 +91,7 @@ add_executable(clip_engine_tests
   src/detect/Scoreboard.cpp
   src/detect/ScreenRegion.cpp
   src/detect/TextMatcher.cpp
+  src/detect/UniversalHud.cpp
   src/media/ClipMetadata.cpp
 )
 target_include_directories(clip_engine_tests PRIVATE src)
@@ -101,6 +106,7 @@ add_executable(clip_engine_game_tests
   src/app/Timeline.cpp
   src/core/Json.cpp
   src/detect/DetectionRules.cpp
+  src/detect/HudModel.cpp
   src/detect/Scoreboard.cpp
   src/detect/ScreenRegion.cpp
   src/detect/TextMatcher.cpp

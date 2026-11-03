@@ -20,6 +20,7 @@ internal sealed class EngineSettings
     public bool GameFocus { get; set; } = true;
     public bool DiscordPresence { get; set; } = true;
     public bool Detection { get; set; } = true;
+    public bool UniversalHud { get; set; } = true;
     public string ReadingQuality { get; set; } = "medium";
     public bool AutoClip { get; set; } = true;
     public List<string> AutoClipEvents { get; set; } = [.. AllEvents];
@@ -57,6 +58,7 @@ internal sealed class EngineSettings
                 case "game_focus": settings.GameFocus = ParseBool(value, settings.GameFocus); break;
                 case "discord_presence": settings.DiscordPresence = ParseBool(value, settings.DiscordPresence); break;
                 case "detection": settings.Detection = ParseBool(value, settings.Detection); break;
+                case "universal_hud": settings.UniversalHud = ParseBool(value, settings.UniversalHud); break;
                 case "reading_quality":
                     if (ReadingQualities.Contains(value.ToLowerInvariant())) settings.ReadingQuality = value.ToLowerInvariant();
                     break;
@@ -90,6 +92,7 @@ internal sealed class EngineSettings
             ["game_focus"] = Format(GameFocus),
             ["discord_presence"] = Format(DiscordPresence),
             ["detection"] = Format(Detection),
+            ["universal_hud"] = Format(UniversalHud),
             ["reading_quality"] = ReadingQuality,
             ["auto_clip"] = Format(AutoClip),
             ["auto_clip_events"] = string.Join(", ", AllEvents.Where(AutoClipEvents.Contains)),

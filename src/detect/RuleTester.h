@@ -1,6 +1,7 @@
 #pragma once
 
 #include "detect/DetectionRules.h"
+#include "detect/HudModel.h"
 #include "detect/OcrImage.h"
 
 #include <cstdint>
@@ -56,5 +57,14 @@ int RunCutSoundCommand(const std::filesystem::path& input, const std::filesystem
 // marks of what really happened with it.
 int RunScanCommand(const std::filesystem::path& input, const std::vector<DetectionRule>& rules, ReadQuality quality,
                    double hudScale = 1);
+
+// clip_engine.exe --learn <clip> --game <id or name> --marks "kill@12.3;death@40.1" [--quality medium] [--hud-scale 100]
+// Teaches the universal HUD reader from the player's marks of every moment in the clip, as
+// Check detection has them: reads the universal zones all through the clip, and adds the lines
+// it would have missed or counted wrongly to hud_learned.txt (see TeachFromMarks). Logs
+// "Learn example <label> in <zone>: <text>" for each, "Learn progress <n>%" and
+// "Learn done: <count> new examples".
+int RunLearnCommand(const std::filesystem::path& input, const HudModel& model, const std::vector<HudMark>& marks,
+                    const std::string& game, ReadQuality quality, double hudScale, const std::filesystem::path& learnedFile);
 
 }  // namespace clip

@@ -10,6 +10,7 @@ namespace ClipEngine.Desktop.Views;
 public partial class MainWindow : Window, IAppDialogs
 {
     private static readonly FilePickerFileType VideoFiles = new("Video clips") { Patterns = ["*.mp4"] };
+    private static readonly FilePickerFileType PackFiles = new("Clip Engine detection pack") { Patterns = ["*.cepack"] };
     private static readonly FilePickerFileType ZipFiles = new("Clip Engine release") { Patterns = ["*.zip"] };
     private static readonly FilePickerFileType FrameFiles = new("Videos and screenshots")
     {
@@ -69,6 +70,29 @@ public partial class MainWindow : Window, IAppDialogs
         return files.Count > 0 ? files[0].TryGetLocalPath() : null;
     }
 
+    async Task<string?> IAppDialogs.PickPackAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Install a detection pack",
+            FileTypeFilter = [PackFiles],
+        });
+        return files.Count > 0 ? files[0].TryGetLocalPath() : null;
+    }
+
+    async Task<string?> IAppDialogs.SavePackAsync(string suggestedName)
+    {
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Share this game's detection",
+            SuggestedFileName = suggestedName,
+            DefaultExtension = "cepack",
+            FileTypeChoices = [PackFiles],
+            ShowOverwritePrompt = true,
+        });
+        return file?.TryGetLocalPath();
+    }
+
     async Task<string?> IAppDialogs.PickFolderAsync(string title, string? startFolder)
     {
         IStorageFolder? start = null;
@@ -91,19 +115,21 @@ public partial class MainWindow : Window, IAppDialogs
         return folders.Count > 0 ? folders[0].TryGetLocalPath() : null;
     }
 
-    // Dropping a clip someone sent onto the window imports it.
-    private static string? DroppedClip(DragEventArgs e) =>
+    // Dropping a clip someone sent onto the window imports it, and a detection pack installs.
+    private static string? DroppedFile(DragEventArgs e) =>
 #pragma warning disable CS0618 // IDataObject is what Avalonia 11 hands drop handlers
         e.Data.GetFiles()?.Select(f => f.TryGetLocalPath())
-         .FirstOrDefault(p => p is not null && p.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase));
+         .FirstOrDefault(p => p is not null && (p.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) || DetectionPacks.IsPackFile(p)));
 #pragma warning restore CS0618
 
     private void OnDragOver(object? sender, DragEventArgs e) =>
-        e.DragEffects = DroppedClip(e) is not null ? DragDropEffects.Copy : DragDropEffects.None;
+        e.DragEffects = DroppedFile(e) is not null ? DragDropEffects.Copy : DragDropEffects.None;
 
     private void OnDrop(object? sender, DragEventArgs e)
     {
-        if (DroppedClip(e) is { } path && DataContext is MainViewModel vm) _ = vm.ImportClipAsync(path);
+        if (DroppedFile(e) is not { } path || DataContext is not MainViewModel vm) return;
+        if (DetectionPacks.IsPackFile(path)) _ = vm.ImportPackAsync(path);
+        else _ = vm.ImportClipAsync(path);
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)

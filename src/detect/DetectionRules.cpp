@@ -144,6 +144,7 @@ DetectionRules ParseDetectionRules(std::istream& in) {
                        rule->name, rule->name));
       rule->words.clear();
       rule->playerWords.clear();
+      rule->classify = false;
     }
     if (rule && rule->ListensForSound() && (rule->ReadsText() || rule->LooksForImage())) {
       warn(std::format("[{}] has a sound and something to look for on screen; it listens only. Give the rest its "
@@ -151,6 +152,7 @@ DetectionRules ParseDetectionRules(std::istream& in) {
                        rule->name, rule->name));
       rule->words.clear();
       rule->playerWords.clear();
+      rule->classify = false;
       rule->image.clear();
     }
     if (rule && !rule->ReadsText() && !rule->LooksForImage() && !rule->ListensForSound()) {
@@ -362,6 +364,13 @@ DetectionRules ParseDetectionRules(std::istream& in) {
       if (v == "true" || v == "yes" || v == "1") rule->confirmOnly = true;
       else if (v == "false" || v == "no" || v == "0") rule->confirmOnly = false;
       else warn(std::format("[{}] confirm_only must be true or false", rule->name));
+    } else if (key == "classify") {
+      const std::string v = Lower(value);
+      if (v == "true" || v == "yes" || v == "1") rule->classify = true;
+      else if (v == "false" || v == "no" || v == "0") rule->classify = false;
+      else warn(std::format("[{}] classify must be true or false", rule->name));
+    } else if (key == "zone") {
+      rule->hudZone = Lower(value);
     } else if (key == "image") {
       rule->image = value;
     } else if (key == "image_match") {
@@ -397,6 +406,8 @@ DetectionRules MergeDetectionRules(DetectionRules shipped, DetectionRules user) 
 
   for (auto& rule : shipped.rules) {
     if (!user.editedGames.contains(rule.game)) merged.rules.push_back(std::move(rule));
+    else if (std::ranges::none_of(user.rules, [&](const DetectionRule& r) { return r.game == rule.game; }))
+      merged.rulesRemoved.insert(rule.game);
   }
   for (auto& rule : user.rules) merged.rules.push_back(std::move(rule));
   // Rules that look as often as [detection] says follow the sample_ms that won.
@@ -510,6 +521,20 @@ std::vector<Span> FindSpans(const std::vector<Phrase>& phrases, const std::vecto
 
 std::vector<std::string> FindMatches(const DetectionRule& rule, const std::vector<std::vector<std::string>>& rows) {
   std::vector<std::string> matches;
+
+  if (rule.classify) {
+    // The model says what each row means; a row of this rule's kind is a match, told apart
+    // from the next by its names, like a killfeed line.
+    if (!rule.hudModel) return matches;
+    const auto guesses = rule.hudModel->ClassifyRows(rows, rule.hudZone);
+    const HudLabel want = HudLabelFor(rule.event);
+    for (size_t r = 0; r < rows.size() && r < guesses.size(); ++r) {
+      if (guesses[r].label != want) continue;
+      if (std::ranges::any_of(rule.exclude, [&](const Phrase& p) { return CountPhrase(rows[r], p) > 0; })) continue;
+      matches.push_back(MatchKey(rule, rows[r]));
+    }
+    return matches;
+  }
 
   if (rule.position == LinePosition::Anywhere) {
     // The whole region as one run of text, since a phrase may wrap onto the next row, with

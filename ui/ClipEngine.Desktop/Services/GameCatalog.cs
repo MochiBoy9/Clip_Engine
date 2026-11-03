@@ -4,6 +4,7 @@ namespace ClipEngine.Desktop.Services;
 // assets/detection.ini). Games not listed here are read off the screen.
 internal static class GameCatalog
 {
+    // Hotkey: no rules of its own, so the universal HUD reader reads it (src/detect/UniversalHud.h).
     public enum Method { Screen, Killfeed, GameApi, Hotkey }
 
     private static readonly Dictionary<string, Method> Methods = new(StringComparer.OrdinalIgnoreCase)
@@ -30,7 +31,7 @@ internal static class GameCatalog
     {
         Method.GameApi => "Official game events",
         Method.Killfeed => "Reads the killfeed",
-        Method.Hotkey => "Records, clips on the hotkey",
+        Method.Hotkey => "Universal HUD reader",
         _ => "Reads the screen",
     };
 }

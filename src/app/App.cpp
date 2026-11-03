@@ -3,6 +3,7 @@
 #include "core/Clock.h"
 #include "core/Log.h"
 #include "core/Power.h"
+#include "detect/UniversalHud.h"
 #include "integrations/IntegrationSetup.h"
 #include "media/ClipMetadata.h"
 #include "media/Mp4Writer.h"
@@ -196,6 +197,21 @@ void App::Poll() {
       scoreboards = rules_.ScoreboardsForGame(gameId);
       hudScale = ReadHudScale(config_.file, gameId);
       if (!needingName.empty()) log::Warn("Add your {} name on the Games page to catch your kills in its killfeed", label);
+      const auto learned = config_.file.parent_path() / std::string(kHudLearnedFile);
+      const bool readsScreen = std::ranges::any_of(rules, [](const DetectionRule& r) { return !r.ListensForSound(); });
+      if (!readsScreen && game->profile->api == GameApi::None && config_.universalHud &&
+          !rules_.rulesRemoved.contains(gameId)) {
+        // Nobody wrote rules for this game: read the places HUDs usually show what happened.
+        auto model = LoadHudModel(learned, gameId, playerNames);
+        auto universal = UniversalRules(gameId, model);
+        rules.insert(rules.end(), universal.begin(), universal.end());
+        if (scoreboards.empty() && !playerNames.empty()) scoreboards.push_back(UniversalScoreboard(gameId));
+        log::Info("No detection rules for {}, so the universal HUD reader is watching it ({} examples learned from)", label,
+                  model->ExampleCount());
+        if (playerNames.empty()) log::Info("Add your in-game name on the Games page so it can tell your kills from others'");
+      } else if (std::ranges::any_of(rules, [](const DetectionRule& r) { return r.classify; })) {
+        AttachHudModel(rules, LoadHudModel(learned, gameId, playerNames));
+      }
       if (rules.empty() && game->profile->api == GameApi::None) log::Info("No detection rules for {}, so only the hotkey saves clips", label);
     }
     try {

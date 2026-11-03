@@ -1,12 +1,14 @@
 #pragma once
 
 #include "detect/GameEvent.h"
+#include "detect/HudModel.h"
 #include "detect/Scoreboard.h"
 #include "detect/ScreenRegion.h"
 #include "detect/TextMatcher.h"
 
 #include <cstdint>
 #include <istream>
+#include <memory>
 #include <set>
 #include <string>
 #include <string_view>
@@ -68,11 +70,19 @@ struct DetectionRule {
   // Its sightings never count a moment on their own, only back up another rule's.
   bool confirmOnly = false;
 
+  // Let the universal HUD reader's model decide what each row of text means, rather than
+  // looking for words (see HudModel): a row counts when the model is sure it's this rule's kind
+  // of moment. exclude still cancels the rows it's on. hudZone tells the model what part of
+  // the HUD this is (see UniversalZones); hudModel is attached by the engine.
+  bool classify = false;
+  std::string hudZone;
+  std::shared_ptr<const HudModel> hudModel;
+
   // Phrases as written, kept when they mention {player} so the names can be filled in later.
   std::vector<std::string> playerWords;
   std::vector<std::string> playerExclude;
   bool NeedsPlayer() const { return !playerWords.empty() || !playerExclude.empty(); }
-  bool ReadsText() const { return !words.empty() || !playerWords.empty(); }
+  bool ReadsText() const { return !words.empty() || !playerWords.empty() || classify; }
   bool LooksForImage() const { return !image.empty(); }
   bool ListensForSound() const { return !sounds.empty(); }
 };
@@ -95,6 +105,10 @@ struct DetectionRules {
   // Games this file gives its own rules for: those with a [<game>.<event>] section, or an
   // [<game>.edited] one, which Detection Studio writes so a game can have every rule removed.
   std::set<std::string> editedGames;
+  // Games whose built-in rules the user's file took away without giving any of its own, as
+  // Detection Studio does when every rule is removed: they aren't read at all, not even by the
+  // universal HUD reader. Set by MergeDetectionRules.
+  std::set<std::string> rulesRemoved;
   std::vector<CustomGame> games;
   std::vector<DetectionRule> rules;
   std::vector<ScoreboardRule> scoreboards;

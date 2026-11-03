@@ -66,6 +66,17 @@ public class EngineSettingsTests : IDisposable
     }
 
     [Fact]
+    public void UniversalHudRoundTrip()
+    {
+        Assert.True(EngineSettings.Load(_file).UniversalHud);
+        var settings = EngineSettings.Load(_file);
+        settings.UniversalHud = false;
+        settings.Save(_file);
+        Assert.Contains("universal_hud = false", File.ReadAllLines(_file));
+        Assert.False(EngineSettings.Load(_file).UniversalHud);
+    }
+
+    [Fact]
     public void AutomaticClipSettingsRoundTrip()
     {
         var settings = EngineSettings.Load(_file);

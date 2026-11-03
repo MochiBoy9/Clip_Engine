@@ -86,6 +86,13 @@ internal static class RuleExplainer
             lines.Add($"Looks in the box every {every} for the picture {Path.GetFileName(image)}, "
                       + $"and sees a {moment} when part of the box is at least {rule.Setting("image_match") ?? "0.85"} alike (0 to 1).");
         }
+        else if (rule.Classify)
+        {
+            var unless = Phrases(rule.Exclude) is { Count: > 0 } ex ? $", unless {Or(ex)} is on the same row" : "";
+            lines.Add($"Reads the box every {every} and lets the universal HUD reader's learned model decide what each row means. "
+                      + $"It sees a {moment} when the model is sure a row shows one{unless}. "
+                      + "Teach it with your marks in Check detection.");
+        }
         else if (Phrases(rule.Words).Count == 0)
         {
             lines.Add("Has no words to look for yet, so it never saves anything. Type the words the game shows.");
@@ -176,14 +183,14 @@ internal static class RuleExplainer
 
     private static bool Runs(StudioRule rule, bool hasPlayerNames) =>
         !(rule.NeedsPlayer && !hasPlayerNames && Phrases(rule.Words).All(p => p.Contains("{player}", StringComparison.OrdinalIgnoreCase)))
-        && (rule.IsSound || rule.Image is { Length: > 0 } || Phrases(rule.Words).Count > 0);
+        && (rule.IsSound || rule.Classify || rule.Image is { Length: > 0 } || Phrases(rule.Words).Count > 0);
 
     public static int Merge(StudioRule rule) => rule.IntSetting("merge_ms") ?? 0;
     public static int Priority(StudioRule rule) => rule.IntSetting("priority") ?? 1;
 
     // A message with names in it (a killfeed row) is remembered by them; a lone popup isn't.
     private static bool Named(StudioRule rule) =>
-        rule.Position != "anywhere" || Phrases(rule.Words).Any(p => p.Contains("{player}", StringComparison.OrdinalIgnoreCase));
+        rule.Classify || rule.Position != "anywhere" || Phrases(rule.Words).Any(p => p.Contains("{player}", StringComparison.OrdinalIgnoreCase));
 
     private static List<string> Phrases(string text) =>
         text.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
