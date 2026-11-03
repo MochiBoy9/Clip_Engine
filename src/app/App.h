@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app/AutoClipPlanner.h"
+#include "app/CommandChannel.h"
 #include "app/RecordingSession.h"
 #include "app/Timeline.h"
 #include "core/Config.h"
@@ -9,6 +10,7 @@
 #include "integrations/DiscordPresence.h"
 #include "integrations/GameIntegration.h"
 #include "media/LongRecorder.h"
+#include "squad/SquadClips.h"
 
 #include <filesystem>
 #include <future>
@@ -33,7 +35,11 @@ class App {
   void SaveReadyAutoClips(bool all);
   void SaveHotkeyClip();
   // Saves [start, end] of the replay buffer. Returns false when there's nothing to save yet.
-  bool SaveRange(int64_t start, int64_t end, const char* trigger);
+  // squadMoment names the squad moment it shows, for clips saved for squad sync.
+  bool SaveRange(int64_t start, int64_t end, const char* trigger, std::string_view squadMoment = {});
+  // Commands from the desktop app: a squadmate's moment to save this player's view of.
+  void HandleCommands();
+  void SaveReadySquadClips(bool all);
   // A new file name in the game's clip folder; suffix goes before the extension.
   std::filesystem::path ClipPath(std::string_view suffix = {});
   // Starts a long recording, or stops the one running.
@@ -77,6 +83,9 @@ class App {
   std::unique_ptr<LongRecorder> longRecording_;
   std::vector<GameEvent> longEvents_;  // the moments it caught, for its markers
   std::unique_ptr<TimelineWriter> timeline_;
+
+  CommandChannel commands_;
+  SquadSaveQueue squadSaves_;
 
   std::unique_ptr<DiscordPresence> presence_;
   PresenceState presenceState_;  // the game being recorded, counted since its match started

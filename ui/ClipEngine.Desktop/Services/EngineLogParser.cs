@@ -47,6 +47,11 @@ internal sealed record TrackProgress(int Percent) : EngineEvent;
 internal sealed record TrackDone(int Reads) : EngineEvent;
 // --cut-sound: where the sound was saved.
 internal sealed record SoundSaved(string Path) : EngineEvent;
+// Squad sync: when the moment just detected happened by the wall clock (Unix ms), a squadmate's
+// moment this player's view of was saved, or why it wasn't.
+internal sealed record MomentTime(string Type, long UnixMs) : EngineEvent;
+internal sealed record SquadViewSaved(string Moment, string Path) : EngineEvent;
+internal sealed record SquadViewSkipped(string Moment, string Reason) : EngineEvent;
 // The player's totals in the match, from the game's API or its scoreboard.
 internal sealed record ScoreboardRead(string Game, IReadOnlyDictionary<string, int> Stats) : EngineEvent;
 
@@ -149,6 +154,15 @@ internal static partial class EngineLogParser
     [GeneratedRegex(@"^Sound saved to (.+)$")]
     private static partial Regex SoundSavedRegex();
 
+    [GeneratedRegex(@"^Moment (\S+) at (\d+)$")]
+    private static partial Regex MomentTimeRegex();
+
+    [GeneratedRegex(@"^Squad view (\S+) saved to (.+)$")]
+    private static partial Regex SquadViewSavedRegex();
+
+    [GeneratedRegex(@"^Squad moment (\S+) skipped: (.+)$")]
+    private static partial Regex SquadViewSkippedRegex();
+
     [GeneratedRegex(@"^(.+) (detected|closed)$")]
     private static partial Regex GameRegex();
 
@@ -218,6 +232,10 @@ internal static partial class EngineLogParser
         if ((m = TrackProgressRegex().Match(text)).Success) return new TrackProgress(Int(m.Groups[1]));
         if ((m = TrackDoneRegex().Match(text)).Success) return new TrackDone(Int(m.Groups[1]));
         if ((m = SoundSavedRegex().Match(text)).Success) return new SoundSaved(m.Groups[1].Value);
+        if ((m = MomentTimeRegex().Match(text)).Success)
+            return new MomentTime(m.Groups[1].Value, long.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture));
+        if ((m = SquadViewSavedRegex().Match(text)).Success) return new SquadViewSaved(m.Groups[1].Value, m.Groups[2].Value);
+        if ((m = SquadViewSkippedRegex().Match(text)).Success) return new SquadViewSkipped(m.Groups[1].Value, m.Groups[2].Value);
         if ((m = GameRegex().Match(text)).Success)
             return m.Groups[2].Value == "detected" ? new GameDetected(m.Groups[1].Value) : new GameClosed(m.Groups[1].Value);
         return null;

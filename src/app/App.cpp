@@ -114,6 +114,10 @@ int App::Run() {
                            CreateEventW(nullptr, FALSE, FALSE, kRecordEventName)};
   const bool haveEvents = events[0] && events[1] && events[2];
   if (!haveEvents) log::Warn("Couldn't create the events the desktop app uses; only the hotkey will save clips");
+  // The desktop app's commands come in on a fourth handle, waited on with the others.
+  std::vector<HANDLE> waitOn;
+  if (haveEvents) waitOn.assign(std::begin(events), std::end(events));
+  if (commands_.Listening()) waitOn.push_back(commands_.Event());
 
   auto shutDown = [&] {
     log::Info("Shutting down");
@@ -130,8 +134,8 @@ int App::Run() {
 
   int64_t nextPoll = 0;
   while (true) {
-    const DWORD wait = MsgWaitForMultipleObjects(haveEvents ? 3 : 0, haveEvents ? events : nullptr, FALSE,
-                                                 kLoopWaitMs, QS_ALLINPUT);
+    const DWORD wait = MsgWaitForMultipleObjects(static_cast<DWORD>(waitOn.size()), waitOn.empty() ? nullptr : waitOn.data(),
+                                                 FALSE, kLoopWaitMs, QS_ALLINPUT);
     if (haveEvents && wait == WAIT_OBJECT_0) SaveHotkeyClip();
     if (haveEvents && wait == WAIT_OBJECT_0 + 1) return shutDown();
     if (haveEvents && wait == WAIT_OBJECT_0 + 2) ToggleLongRecording();
@@ -146,8 +150,10 @@ int App::Run() {
 
     PumpIntegrationEvents();
     HandleEvents();
+    HandleCommands();
     PumpScoreboards();
     SaveReadyAutoClips(false);
+    SaveReadySquadClips(false);
     if (NowHns() >= nextPoll) {
       CheckLongRecording();
       Poll();
@@ -286,6 +292,7 @@ void App::StopSession() {
   HandleEvents();
   PumpScoreboards();
   SaveReadyAutoClips(true);
+  SaveReadySquadClips(true);
   // The long recording reads from this session's buffer, so it ends with it.
   if (longRecording_) FinishLongRecording("the recording it was part of ended");
   log::Info("Stopped recording {}", session_->Label());
@@ -298,6 +305,8 @@ void App::HandleEvents() {
   if (!session_) return;
   for (const auto& event : session_->TakeNewEvents()) {
     log::Info("Detected {} in {}: {}", EventName(event.type), session_->Label(), event.text);
+    // When it happened by the wall clock, for squad sync to line squadmates' views up with.
+    log::Info("Moment {} at {}", EventName(event.type), UnixMsAtHns(NowClocks(), event.time));
     if (event.witnesses.size() > 1) {
       std::string seen;
       for (const auto& w : event.witnesses) {
@@ -326,6 +335,43 @@ void App::SaveReadyAutoClips(bool all) {
   // Wait a moment past the end so the encoder has delivered the last frames.
   const auto windows = all ? planner_.TakeAll() : planner_.TakeReady(NowHns() - kHnsPerSecond / 2);
   for (const auto& window : windows) SaveRange(window.start, window.end, "auto");
+}
+
+void App::HandleCommands() {
+  if (!commands_.Listening()) return;
+  for (const auto& line : commands_.Take()) {
+    const auto request = ParseSquadSave(line);
+    if (!request) {
+      log::Warn("Unknown command from the app: {}", line.substr(0, 80));
+      continue;
+    }
+    // Only a view of the same game is worth saving; a squadmate in another game isn't playing
+    // with this player.
+    if (!session_ || sessionGameId_.empty() || (!request->game.empty() && request->game != session_->Label())) {
+      log::Info("Squad moment {} skipped: not recording {}", request->moment, request->game.empty() ? "a game" : request->game);
+      continue;
+    }
+    const ClockPair now = NowClocks();
+    SquadSaveQueue::Window window{request->moment, HnsAtUnixMs(now, request->startUnixMs), HnsAtUnixMs(now, request->endUnixMs)};
+    if (window.end < sessionStart_) {
+      log::Info("Squad moment {} skipped: it was before this recording started", request->moment);
+      continue;
+    }
+    if (squadSaves_.Add(std::move(window))) log::Info("Saving your view of squad moment {}", request->moment);
+  }
+}
+
+void App::SaveReadySquadClips(bool all) {
+  if (!session_) {
+    squadSaves_.TakeAll();
+    return;
+  }
+  const auto windows = all ? squadSaves_.TakeAll() : squadSaves_.TakeReady(NowHns() - kHnsPerSecond / 2);
+  for (const auto& window : windows) {
+    if (!SaveRange(window.start, window.end, "squad", window.moment)) {
+      log::Info("Squad moment {} skipped: it's no longer in the replay buffer", window.moment);
+    }
+  }
 }
 
 void App::SaveHotkeyClip() {
@@ -361,7 +407,7 @@ std::filesystem::path App::ClipPath(std::string_view suffix) {
   }
 }
 
-bool App::SaveRange(int64_t start, int64_t end, const char* trigger) {
+bool App::SaveRange(int64_t start, int64_t end, const char* trigger, std::string_view squadMoment) {
   auto clip = session_->Buffer().Extract(start, end);
   if (!clip || clip->packets.empty()) return false;
 
@@ -374,6 +420,8 @@ bool App::SaveRange(int64_t start, int64_t end, const char* trigger) {
   // A clip belongs to the last match that had started by its end, so a clip of the match
   // start itself counts toward the new match.
   metadata.match = MatchAt(end);
+  metadata.utcStartMs = UnixMsAtHns(NowClocks(), clip->start);
+  metadata.squadMoment = std::string(squadMoment);
   for (const auto& event : session_->EventsBetween(clip->start, end)) {
     metadata.markers.push_back(
         {event.type, static_cast<double>(event.time - clip->start) / kHnsPerSecond, event.text, event.witnesses});
@@ -404,6 +452,9 @@ bool App::SaveRange(int64_t start, int64_t end, const char* trigger) {
       const std::string summary = Summarize(metadata.markers);
       log::Info("Saved {:.0f}s clip ({:.1f} MB) to {}", metadata.seconds, mb, winrt::to_string(path.wstring()));
       if (!summary.empty()) log::Info("Clip has {}", summary);
+      if (!metadata.squadMoment.empty()) {
+        log::Info("Squad view {} saved to {}", metadata.squadMoment, winrt::to_string(path.wstring()));
+      }
       if (beep) MessageBeep(MB_OK);
     } catch (const winrt::hresult_error& e) {
       log::Error("Couldn't save the clip: {}", Describe(e));
@@ -469,6 +520,7 @@ void App::FinishLongRecording(std::string_view why) {
   metadata.session = sessionId_;
   metadata.sessionSeconds = SessionSeconds(recorder->Start());
   metadata.match = MatchAt(recorder->Start());
+  metadata.utcStartMs = UnixMsAtHns(NowClocks(), recorder->Start());
   for (const auto& event : longEvents_) {
     metadata.markers.push_back(
         {event.type, static_cast<double>(event.time - recorder->Start()) / kHnsPerSecond, event.text, event.witnesses});

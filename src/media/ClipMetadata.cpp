@@ -206,6 +206,8 @@ std::string ToJson(const ClipMetadata& metadata) {
     json += std::format("  \"session\": \"{}\",\n  \"session_seconds\": {:.2f},\n  \"match\": {},\n",
                         Escape(metadata.session), metadata.sessionSeconds, metadata.match);
   }
+  if (metadata.utcStartMs > 0) json += std::format("  \"utc_start\": {},\n", metadata.utcStartMs);
+  if (!metadata.squadMoment.empty()) json += std::format("  \"squad_moment\": \"{}\",\n", Escape(metadata.squadMoment));
   json += std::format("  \"title\": \"{}\",\n  \"events\": [", Escape(Summarize(metadata.markers)));
   for (size_t i = 0; i < metadata.markers.size(); ++i) {
     const auto& m = metadata.markers[i];
@@ -250,6 +252,12 @@ std::optional<ClipMetadata> ParseMetadataJson(std::string_view json) {
     if (field == "session") return r.String(m.session);
     if (field == "seconds") return r.Number(m.seconds);
     if (field == "session_seconds") return r.Number(m.sessionSeconds);
+    if (field == "squad_moment") return r.String(m.squadMoment);
+    if (field == "utc_start") {
+      if (!r.Number(number)) return false;
+      m.utcStartMs = number > 0 ? static_cast<int64_t>(number) : 0;
+      return true;
+    }
     if (field == "match") {
       if (!r.Number(number)) return false;
       m.match = static_cast<int>(number);
@@ -303,6 +311,7 @@ ClipMetadata Trimmed(const ClipMetadata& metadata, double from, double to) {
   ClipMetadata out = metadata;
   out.seconds = std::max(0.0, to - from);
   if (out.sessionSeconds >= 0) out.sessionSeconds += from;
+  if (out.utcStartMs > 0) out.utcStartMs += static_cast<int64_t>(from * 1000 + 0.5);
   out.markers.clear();
   for (const auto& m : metadata.markers) {
     if (m.seconds >= from && m.seconds <= to) out.markers.push_back({m.type, m.seconds - from, m.text, m.witnesses});

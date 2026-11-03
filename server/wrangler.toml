@@ -1,0 +1,25 @@
+# Clip Engine's squad sync service. Deploy with `npx wrangler deploy` from this folder; see README.md.
+name = "clip-engine-squads"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+
+# One Durable Object per squad: its members, who's online and playing what, moments and the library.
+[[durable_objects.bindings]]
+name = "SQUADS"
+class_name = "Squad"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Squad"]
+
+# Squad clips uploaded to the shared library.
+[[r2_buckets]]
+binding = "CLIPS"
+bucket_name = "clip-engine-squad-clips"
+
+[vars]
+MAX_MEMBERS = "8"
+# Uploaded clips each squad can keep, in MB; the oldest unstarred ones go first when it's full.
+SQUAD_STORAGE_MB = "5120"
+# Uploaded clips are removed after this many days unless starred.
+KEEP_DAYS = "30"

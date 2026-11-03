@@ -11,3 +11,6 @@ obj/
 *.binlog
 dist/
 screenshots/
+node_modules/
+.wrangler/
+.dev.vars
