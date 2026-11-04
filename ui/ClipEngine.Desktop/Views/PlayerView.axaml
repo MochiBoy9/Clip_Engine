@@ -49,6 +49,12 @@
             <TextBlock Text="Check detection" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
+        <Button Classes="secondary" Command="{Binding Clip.LinkCommand}" ToolTip.Tip="Upload a small copy and copy a link that plays in any browser">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <PathIcon Data="{StaticResource IconLink}" Width="14" Height="14" />
+            <TextBlock Text="Link" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
         <Button Classes="secondary" Command="{Binding CopyCommand}" ToolTip.Tip="Copy the full-quality clip to paste anywhere">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <PathIcon Data="{StaticResource IconCopy}" Width="14" Height="14" />

@@ -56,6 +56,11 @@ public partial class App : Application
     {
         ShowWindow();
         var path = message.Trim().Trim('"');
+        if (path.StartsWith("clipengine://", StringComparison.OrdinalIgnoreCase))
+        {
+            _viewModel?.OpenLink(path);
+            return;
+        }
         if (path.Length > 0 && File.Exists(path)) _ = _viewModel?.ImportClipAsync(path);
     }
 

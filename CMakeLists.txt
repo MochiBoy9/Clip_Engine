@@ -12,6 +12,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_executable(clip_engine
   src/main.cpp
   src/app/App.cpp
+  src/app/CommandChannel.cpp
   src/app/RecordingSession.cpp
   src/app/Timeline.cpp
   src/audio/AacEncoder.cpp
@@ -47,6 +48,7 @@ add_executable(clip_engine
   src/media/Mp4Writer.cpp
   src/media/ReplayBuffer.cpp
   src/media/Trimmer.cpp
+  src/squad/SquadClips.cpp
   src/video/GameNotFoundFrame.cpp
   src/video/Nv12Converter.cpp
   src/video/VideoEncoder.cpp
@@ -111,3 +113,14 @@ add_executable(clip_engine_game_tests
 target_include_directories(clip_engine_game_tests PRIVATE src)
 target_compile_options(clip_engine_game_tests PRIVATE /W4 /permissive- /utf-8 /EHsc)
 add_test(NAME games COMMAND clip_engine_game_tests ${CMAKE_SOURCE_DIR}/assets/detection.ini)
+
+# Tests for squad sync's engine side: lining clips up by wall-clock time, the app's save
+# command and the squad fields in clip metadata.
+add_executable(clip_engine_squad_tests
+  tests/SquadTests.cpp
+  src/media/ClipMetadata.cpp
+  src/squad/SquadClips.cpp
+)
+target_include_directories(clip_engine_squad_tests PRIVATE src)
+target_compile_options(clip_engine_squad_tests PRIVATE /W4 /permissive- /utf-8 /EHsc)
+add_test(NAME squad COMMAND clip_engine_squad_tests)

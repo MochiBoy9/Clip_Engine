@@ -69,6 +69,20 @@ public partial class MainWindow : Window, IAppDialogs
         return files.Count > 0 ? files[0].TryGetLocalPath() : null;
     }
 
+    async Task<bool> IAppDialogs.CopyTextAsync(string text)
+    {
+        if (Clipboard is not { } clipboard) return false;
+        try
+        {
+            await clipboard.SetTextAsync(text);
+            return true;
+        }
+        catch (Exception e) when (e is System.Runtime.InteropServices.COMException or InvalidOperationException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     async Task<string?> IAppDialogs.PickFolderAsync(string title, string? startFolder)
     {
         IStorageFolder? start = null;

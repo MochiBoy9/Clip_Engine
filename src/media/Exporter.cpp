@@ -4,6 +4,7 @@
 #include "core/Log.h"
 #include "media/ClipMetadata.h"
 #include "media/MediaUtil.h"
+#include "squad/SquadClips.h"
 
 #include <mferror.h>
 #include <mfreadwrite.h>
@@ -12,6 +13,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <fstream>
 #include <vector>
 
 namespace clip {
@@ -154,20 +156,9 @@ void SetCodecValue(ICodecAPI* codec, const GUID& property, UINT32 value) {
   codec->SetValue(&property, &v);
 }
 
-void Encode(const std::filesystem::path& input, const std::filesystem::path& output, const SourceInfo& source,
-            const Plan& plan, const std::vector<int16_t>& audio) {
-  auto reader = OpenReader(input);
-  winrt::check_hresult(reader->SetStreamSelection(static_cast<DWORD>(MF_SOURCE_READER_ALL_STREAMS), FALSE));
-  winrt::check_hresult(reader->SetStreamSelection(source.videoStream, TRUE));
-  {
-    winrt::com_ptr<IMFMediaType> type;
-    winrt::check_hresult(MFCreateMediaType(type.put()));
-    winrt::check_hresult(type->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video));
-    winrt::check_hresult(type->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_NV12));
-    winrt::check_hresult(MFSetAttributeSize(type.get(), MF_MT_FRAME_SIZE, plan.width, plan.height));
-    winrt::check_hresult(reader->SetCurrentMediaType(source.videoStream, nullptr, type.get()));
-  }
-
+// An H.264/AAC MP4 writer for the plan, ready for NV12 frames and PCM audio once it begins writing.
+winrt::com_ptr<IMFSinkWriter> OpenOutput(const std::filesystem::path& output, const Plan& plan, bool hasAudio, DWORD& videoOut,
+                                         DWORD& audioOut) {
   winrt::com_ptr<IMFAttributes> attributes;
   winrt::check_hresult(MFCreateAttributes(attributes.put(), 2));
   winrt::check_hresult(attributes->SetGUID(MF_TRANSCODE_CONTAINERTYPE, MFTranscodeContainerType_MPEG4));
@@ -175,7 +166,6 @@ void Encode(const std::filesystem::path& input, const std::filesystem::path& out
   winrt::com_ptr<IMFSinkWriter> writer;
   winrt::check_hresult(MFCreateSinkWriterFromURL(output.c_str(), nullptr, attributes.get(), writer.put()));
 
-  DWORD videoOut = 0;
   {
     winrt::com_ptr<IMFMediaType> out;
     winrt::check_hresult(MFCreateMediaType(out.put()));
@@ -206,8 +196,6 @@ void Encode(const std::filesystem::path& input, const std::filesystem::path& out
     }
   }
 
-  const bool hasAudio = !audio.empty();
-  DWORD audioOut = 0;
   if (hasAudio) {
     winrt::com_ptr<IMFMediaType> out;
     winrt::check_hresult(MFCreateMediaType(out.put()));
@@ -231,6 +219,27 @@ void Encode(const std::filesystem::path& input, const std::filesystem::path& out
     winrt::check_hresult(writer->SetInputMediaType(audioOut, in.get(), nullptr));
   }
 
+  return writer;
+}
+
+void Encode(const std::filesystem::path& input, const std::filesystem::path& output, const SourceInfo& source,
+            const Plan& plan, const std::vector<int16_t>& audio) {
+  auto reader = OpenReader(input);
+  winrt::check_hresult(reader->SetStreamSelection(static_cast<DWORD>(MF_SOURCE_READER_ALL_STREAMS), FALSE));
+  winrt::check_hresult(reader->SetStreamSelection(source.videoStream, TRUE));
+  {
+    winrt::com_ptr<IMFMediaType> type;
+    winrt::check_hresult(MFCreateMediaType(type.put()));
+    winrt::check_hresult(type->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video));
+    winrt::check_hresult(type->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_NV12));
+    winrt::check_hresult(MFSetAttributeSize(type.get(), MF_MT_FRAME_SIZE, plan.width, plan.height));
+    winrt::check_hresult(reader->SetCurrentMediaType(source.videoStream, nullptr, type.get()));
+  }
+
+  const bool hasAudio = !audio.empty();
+  DWORD videoOut = 0;
+  DWORD audioOut = 0;
+  auto writer = OpenOutput(output, plan, hasAudio, videoOut, audioOut);
   winrt::check_hresult(writer->BeginWriting());
 
   const size_t totalFrames = audio.size() / kChannels;
@@ -285,6 +294,206 @@ void Encode(const std::filesystem::path& input, const std::filesystem::path& out
   winrt::check_hresult(writer->Finalize());
 }
 
+
+void SeekTo(IMFSourceReader* reader, int64_t time) {
+  PROPVARIANT position;
+  PropVariantInit(&position);
+  position.vt = VT_I8;
+  position.hVal.QuadPart = time;
+  winrt::check_hresult(reader->SetCurrentPosition(GUID_NULL, position));
+}
+
+// Seconds [from, to] of a clip's audio, every track mixed into one, exactly (to - from) long
+// (silence where the clip has none).
+std::vector<int16_t> MixAudioRange(IMFSourceReader* reader, const SourceInfo& source, int64_t from, int64_t to) {
+  const size_t frames = static_cast<size_t>((to - from) * kRate / kHnsPerSecond);
+  std::vector<int32_t> mix(frames * kChannels, 0);
+  if (!source.audioStreams.empty()) {
+    winrt::check_hresult(reader->SetStreamSelection(static_cast<DWORD>(MF_SOURCE_READER_ALL_STREAMS), FALSE));
+    for (DWORD stream : source.audioStreams) {
+      SetPcmType(reader, stream);
+      winrt::check_hresult(reader->SetStreamSelection(stream, TRUE));
+    }
+    SeekTo(reader, from);
+
+    size_t ended = 0;
+    while (ended < source.audioStreams.size()) {
+      DWORD stream = 0, flags = 0;
+      LONGLONG time = 0;
+      winrt::com_ptr<IMFSample> sample;
+      winrt::check_hresult(reader->ReadSample(static_cast<DWORD>(MF_SOURCE_READER_ANY_STREAM), 0, &stream, &flags, &time,
+                                              sample.put()));
+      if (flags & MF_SOURCE_READERF_ENDOFSTREAM) ++ended;
+      if (!sample) continue;
+      if (time > to) {
+        // Past the end on this track; the reader keeps the others going until they get there too.
+        winrt::check_hresult(reader->SetStreamSelection(stream, FALSE));
+        ++ended;
+        continue;
+      }
+      winrt::com_ptr<IMFMediaBuffer> buffer;
+      winrt::check_hresult(sample->ConvertToContiguousBuffer(buffer.put()));
+      BYTE* data = nullptr;
+      DWORD length = 0;
+      winrt::check_hresult(buffer->Lock(&data, nullptr, &length));
+      const auto* pcm = reinterpret_cast<const int16_t*>(data);
+      const size_t count = length / sizeof(int16_t) / kChannels;
+      const int64_t first = (static_cast<int64_t>(time) - from) * kRate / kHnsPerSecond;  // may be before the start
+      for (size_t i = 0; i < count; ++i) {
+        const int64_t at = first + static_cast<int64_t>(i);
+        if (at < 0 || at >= static_cast<int64_t>(frames)) continue;
+        for (UINT32 c = 0; c < kChannels; ++c) mix[static_cast<size_t>(at) * kChannels + c] += pcm[i * kChannels + c];
+      }
+      buffer->Unlock();
+    }
+  }
+  std::vector<int16_t> out(mix.size());
+  for (size_t i = 0; i < mix.size(); ++i) out[i] = static_cast<int16_t>(std::clamp(mix[i], -32768, 32767));
+  return out;
+}
+
+}  // namespace
+
+int RunMontage(const MontageOptions& options) {
+  try {
+    if (options.parts.empty()) throw std::runtime_error("no parts to put together");
+    std::vector<SourceInfo> sources;
+    std::vector<int16_t> audio;
+    double total = 0;
+    for (const auto& part : options.parts) {
+      auto reader = OpenReader(part.input);
+      sources.push_back(Inspect(reader.get()));
+      const int64_t from = static_cast<int64_t>(part.from * kHnsPerSecond);
+      const int64_t to = std::min<int64_t>(static_cast<int64_t>(part.to * kHnsPerSecond), sources.back().duration);
+      if (to - from < kHnsPerSecond / 10) throw std::runtime_error("a part is outside its clip");
+      const auto mixed = MixAudioRange(reader.get(), sources.back(), from, to);
+      audio.insert(audio.end(), mixed.begin(), mixed.end());
+      total += static_cast<double>(to - from) / kHnsPerSecond;
+    }
+
+    // The first view sets the picture's shape; the rest are scaled to it.
+    const SourceInfo& first = sources.front();
+    Plan plan;
+    plan.height = std::min<UINT32>(options.maxHeight, first.height) & ~1u;
+    plan.width = static_cast<UINT32>(static_cast<double>(first.width) * plan.height / first.height + 0.5) & ~1u;
+    plan.fps = static_cast<UINT32>(std::clamp(first.fps + 0.5, 1.0, static_cast<double>(options.maxFps)));
+    plan.videoBitrate = static_cast<UINT32>(std::clamp(options.mbps, 2.0, 80.0) * 1e6);
+    log::Info("Making a {:.0f}s highlight from {} views, {}x{} at {} fps", total, options.parts.size(), plan.width, plan.height, plan.fps);
+
+    std::error_code ec;
+    auto partial = options.output;
+    partial += L".part";
+    std::filesystem::remove(partial, ec);
+    DWORD videoOut = 0, audioOut = 0;
+    auto writer = OpenOutput(partial, plan, !audio.empty(), videoOut, audioOut);
+    winrt::check_hresult(writer->BeginWriting());
+
+    const size_t totalFrames = audio.size() / kChannels;
+    size_t audioWritten = 0;
+    auto writeAudioUntil = [&](int64_t until) {
+      const size_t target = std::min(totalFrames, static_cast<size_t>(std::max<int64_t>(0, until) * kRate / kHnsPerSecond));
+      while (audioWritten < target) {
+        const size_t frames = std::min<size_t>(target - audioWritten, kRate / 10);
+        const DWORD bytes = static_cast<DWORD>(frames * kChannels * sizeof(int16_t));
+        auto sample = CreateMemorySample(bytes);
+        winrt::com_ptr<IMFMediaBuffer> buffer;
+        winrt::check_hresult(sample->GetBufferByIndex(0, buffer.put()));
+        BYTE* data = nullptr;
+        winrt::check_hresult(buffer->Lock(&data, nullptr, nullptr));
+        std::memcpy(data, audio.data() + audioWritten * kChannels, bytes);
+        buffer->Unlock();
+        winrt::check_hresult(buffer->SetCurrentLength(bytes));
+        winrt::check_hresult(sample->SetSampleTime(static_cast<LONGLONG>(audioWritten * kHnsPerSecond / kRate)));
+        winrt::check_hresult(sample->SetSampleDuration(static_cast<LONGLONG>(frames * kHnsPerSecond / kRate)));
+        winrt::check_hresult(writer->WriteSample(audioOut, sample.get()));
+        audioWritten += frames;
+      }
+    };
+
+    const int64_t frameDuration = kHnsPerSecond / plan.fps;
+    int64_t base = 0;  // where this part starts in the highlight
+    int lastPercent = -1;
+    for (size_t p = 0; p < options.parts.size(); ++p) {
+      const auto& part = options.parts[p];
+      const SourceInfo& source = sources[p];
+      const int64_t from = static_cast<int64_t>(part.from * kHnsPerSecond);
+      const int64_t to = std::min<int64_t>(static_cast<int64_t>(part.to * kHnsPerSecond), source.duration);
+      auto reader = OpenReader(part.input);
+      winrt::check_hresult(reader->SetStreamSelection(static_cast<DWORD>(MF_SOURCE_READER_ALL_STREAMS), FALSE));
+      winrt::check_hresult(reader->SetStreamSelection(source.videoStream, TRUE));
+      {
+        winrt::com_ptr<IMFMediaType> type;
+        winrt::check_hresult(MFCreateMediaType(type.put()));
+        winrt::check_hresult(type->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video));
+        winrt::check_hresult(type->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_NV12));
+        winrt::check_hresult(MFSetAttributeSize(type.get(), MF_MT_FRAME_SIZE, plan.width, plan.height));
+        winrt::check_hresult(reader->SetCurrentMediaType(source.videoStream, nullptr, type.get()));
+      }
+      SeekTo(reader.get(), from);
+
+      int64_t nextFrame = base;
+      while (true) {
+        DWORD stream = 0, flags = 0;
+        LONGLONG time = 0;
+        winrt::com_ptr<IMFSample> sample;
+        winrt::check_hresult(reader->ReadSample(source.videoStream, 0, &stream, &flags, &time, sample.put()));
+        if (flags & MF_SOURCE_READERF_ENDOFSTREAM) break;
+        if (!sample) continue;
+        // Seeking lands on the keyframe before the start; decode through to it.
+        if (time < from) continue;
+        if (time >= to) break;
+        const int64_t out = base + (time - from);
+        if (out + frameDuration / 2 < nextFrame) continue;
+        nextFrame = std::max(nextFrame + frameDuration, out + frameDuration / 2);
+        writeAudioUntil(out + kHnsPerSecond / 2);
+        winrt::check_hresult(sample->SetSampleTime(out));
+        winrt::check_hresult(sample->SetSampleDuration(frameDuration));
+        winrt::check_hresult(writer->WriteSample(videoOut, sample.get()));
+        const int percent = static_cast<int>(std::clamp(static_cast<double>(out) / kHnsPerSecond / total * 100, 0.0, 99.0));
+        if (percent / 5 != lastPercent / 5) {
+          log::Info("Montage progress {}%", percent);
+          lastPercent = percent;
+        }
+      }
+      base += to - from;
+    }
+    writeAudioUntil(INT64_MAX / 2);
+    winrt::check_hresult(writer->Finalize());
+    writer = nullptr;
+
+    // Every view's moments, moved to where they land in the highlight.
+    std::vector<MontagePart> specs;
+    std::vector<std::optional<ClipMetadata>> metadata;
+    for (const auto& part : options.parts) {
+      specs.push_back({winrt::to_string(part.input.wstring()), part.from, part.to});
+      const auto json = ReadClipMetadataJson(part.input);
+      metadata.push_back(json ? ParseMetadataJson(*json) : std::nullopt);
+    }
+    ClipMetadata merged = MontageMetadata(specs, metadata);
+    merged.squadMoment = options.squadMoment;
+    const std::string json = ToJson(merged);
+    AppendMetadataBox(partial, json);
+    auto sidecar = options.output;
+    sidecar.replace_extension(L".json");
+    std::ofstream(sidecar, std::ios::binary) << json;
+    std::filesystem::rename(partial, options.output);
+    const double mb = static_cast<double>(std::filesystem::file_size(options.output)) / (1024.0 * 1024.0);
+    log::Info("Montage progress 100%");
+    log::Info("Highlight saved ({:.1f} MB) to {}", mb, winrt::to_string(options.output.wstring()));
+    return 0;
+  } catch (const winrt::hresult_error& e) {
+    log::Error("Highlight failed: {}", Describe(e));
+  } catch (const std::exception& e) {
+    log::Error("Highlight failed: {}", e.what());
+  }
+  std::error_code ec;
+  auto partial = options.output;
+  partial += L".part";
+  std::filesystem::remove(partial, ec);
+  return 1;
+}
+
+namespace {
 }  // namespace
 
 int RunExport(const ExportOptions& options) {

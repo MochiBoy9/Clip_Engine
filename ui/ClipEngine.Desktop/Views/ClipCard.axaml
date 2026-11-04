@@ -56,6 +56,10 @@
                       ToolTip.Tip="Share to Discord">
                 <PathIcon Data="{StaticResource IconShare}" Width="13" Height="13" />
               </Button>
+              <Button Classes="icon onMedia" Width="28" Height="28" CornerRadius="7" Command="{Binding LinkCommand}"
+                      ToolTip.Tip="Copy a link to watch it in a browser">
+                <PathIcon Data="{StaticResource IconLink}" Width="13" Height="13" />
+              </Button>
               <Button Classes="icon onMedia" Width="28" Height="28" CornerRadius="7" Command="{Binding ShowCommand}"
                       ToolTip.Tip="Show in folder">
                 <PathIcon Data="{StaticResource IconFolder}" Width="13" Height="13" />

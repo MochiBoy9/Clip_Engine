@@ -6,7 +6,7 @@ using ClipEngine.Desktop.Services;
 
 namespace ClipEngine.Desktop.ViewModels;
 
-public enum Page { Home, Clips, Records, Games, Settings }
+public enum Page { Home, Clips, Squad, Records, Games, Cloud, Settings }
 
 public sealed record NavItem(Page Page, string Title, StreamGeometry Icon);
 
@@ -37,6 +37,7 @@ public sealed class ClipItemViewModel : ObservableObject
         ShowCommand = new RelayCommand(() => owner?.ShowClipCommand.Execute(this));
         DeleteCommand = new RelayCommand(() => owner?.DeleteClipCommand.Execute(this));
         ShareCommand = new RelayCommand(() => owner?.ShareClipCommand.Execute(this));
+        LinkCommand = new RelayCommand(() => owner?.CopyLinkCommand.Execute(this));
         FavoriteCommand = new RelayCommand(() => owner?.FavoriteClipCommand.Execute(this));
     }
 
@@ -44,6 +45,7 @@ public sealed class ClipItemViewModel : ObservableObject
     public RelayCommand ShowCommand { get; }
     public RelayCommand DeleteCommand { get; }
     public RelayCommand ShareCommand { get; }
+    public RelayCommand LinkCommand { get; }
     public RelayCommand FavoriteCommand { get; }
 
     internal ClipFile File

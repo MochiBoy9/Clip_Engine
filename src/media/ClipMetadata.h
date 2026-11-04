@@ -2,6 +2,7 @@
 
 #include "detect/GameEvent.h"
 
+#include <cstdint>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -32,6 +33,12 @@ struct ClipMetadata {
   std::string session;
   double sessionSeconds = -1;
   int match = 0;
+
+  // When the clip's first frame was recorded, in Unix milliseconds (0 when unknown), so clips
+  // of one moment from squadmates' PCs line up. squadMoment names the squad moment the clip
+  // shows, for the squad library; empty for a clip that isn't part of one.
+  int64_t utcStartMs = 0;
+  std::string squadMoment;
 };
 
 std::string ToJson(const ClipMetadata& metadata);

@@ -44,6 +44,16 @@ internal sealed class DesktopSettings
     // Folders clips shared with you were imported into, shown in the library too.
     public List<string> ImportFolders { get; set; } = [];
 
+    // Clip Engine's online service (server/), for squads and the cloud library. Empty uses the
+    // one this build was made with (dotnet publish -p:OnlineServer=https://...).
+    public string OnlineServer { get; set; } = "";
+
+    // This PC's id with the online service, so joining a squad again from it keeps your place.
+    public string DeviceId { get; set; } = "";
+
+    public Squad.SquadSettings Squad { get; set; } = new();
+    public Cloud.CloudSettings Cloud { get; set; } = new();
+
     public static DesktopSettings Load()
     {
         try

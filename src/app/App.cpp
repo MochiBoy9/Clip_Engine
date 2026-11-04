@@ -8,6 +8,7 @@
 #include "media/Mp4Writer.h"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <fstream>
 
@@ -30,6 +31,8 @@ constexpr DWORD kLoopWaitMs = 250;
 // Clip Engine's application on Discord, which the Discord status belongs to. discord_app_id in
 // the settings can name another one.
 constexpr char kDiscordAppId[] = "1565522043003338886";
+// How long a highlight or a match result stays on the Discord status.
+constexpr int64_t kFlashFor = 45 * kHnsPerSecond;
 
 DWORD g_mainThread = 0;
 
@@ -45,6 +48,21 @@ std::string LocalTimestamp() {
   SYSTEMTIME t;
   GetLocalTime(&t);
   return std::format("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}", t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond);
+}
+
+// "Triple kill" from a highlight read off the screen as "TRIPLE KILL!", and "Match over: Victory".
+std::string PresenceFlash(EventType type, std::string_view text) {
+  std::string words;
+  bool start = true;
+  for (char c : text) {
+    if (c == '!' || c == '\n') continue;
+    words += start ? static_cast<char>(std::toupper(static_cast<unsigned char>(c))) : static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    start = false;
+  }
+  while (!words.empty() && words.back() == ' ') words.pop_back();
+  if (words.size() > 40) words.resize(40);
+  if (type == EventType::MatchEnd) return words.empty() ? "Match over" : "Match over: " + words;
+  return words.empty() ? "Just made a highlight" : words;
 }
 
 // Folder and file names can't contain these characters.
@@ -114,6 +132,10 @@ int App::Run() {
                            CreateEventW(nullptr, FALSE, FALSE, kRecordEventName)};
   const bool haveEvents = events[0] && events[1] && events[2];
   if (!haveEvents) log::Warn("Couldn't create the events the desktop app uses; only the hotkey will save clips");
+  // The desktop app's commands come in on a fourth handle, waited on with the others.
+  std::vector<HANDLE> waitOn;
+  if (haveEvents) waitOn.assign(std::begin(events), std::end(events));
+  if (commands_.Listening()) waitOn.push_back(commands_.Event());
 
   auto shutDown = [&] {
     log::Info("Shutting down");
@@ -130,8 +152,8 @@ int App::Run() {
 
   int64_t nextPoll = 0;
   while (true) {
-    const DWORD wait = MsgWaitForMultipleObjects(haveEvents ? 3 : 0, haveEvents ? events : nullptr, FALSE,
-                                                 kLoopWaitMs, QS_ALLINPUT);
+    const DWORD wait = MsgWaitForMultipleObjects(static_cast<DWORD>(waitOn.size()), waitOn.empty() ? nullptr : waitOn.data(),
+                                                 FALSE, kLoopWaitMs, QS_ALLINPUT);
     if (haveEvents && wait == WAIT_OBJECT_0) SaveHotkeyClip();
     if (haveEvents && wait == WAIT_OBJECT_0 + 1) return shutDown();
     if (haveEvents && wait == WAIT_OBJECT_0 + 2) ToggleLongRecording();
@@ -146,8 +168,10 @@ int App::Run() {
 
     PumpIntegrationEvents();
     HandleEvents();
+    HandleCommands();
     PumpScoreboards();
     SaveReadyAutoClips(false);
+    SaveReadySquadClips(false);
     if (NowHns() >= nextPoll) {
       CheckLongRecording();
       Poll();
@@ -207,6 +231,7 @@ void App::Poll() {
       matchStarts_.clear();
       presenceState_ = PresenceState{};
       presenceState_.game = label;
+      ApplySquadPresence();
       presenceState_.startUnix = std::chrono::duration_cast<std::chrono::seconds>(
                                      std::chrono::system_clock::now().time_since_epoch())
                                      .count();
@@ -250,6 +275,7 @@ void App::PumpIntegrationEvents() {
 
 void App::UpdatePresence() {
   if (!presence_) return;
+  if (!presenceState_.flash.empty() && NowHns() >= flashUntil_) presenceState_.flash.clear();
   // Only games go on the status, not a recording of the desktop.
   if (!session_ || sessionGameId_.empty()) {
     presence_->Set(std::nullopt);
@@ -286,6 +312,7 @@ void App::StopSession() {
   HandleEvents();
   PumpScoreboards();
   SaveReadyAutoClips(true);
+  SaveReadySquadClips(true);
   // The long recording reads from this session's buffer, so it ends with it.
   if (longRecording_) FinishLongRecording("the recording it was part of ended");
   log::Info("Stopped recording {}", session_->Label());
@@ -298,6 +325,8 @@ void App::HandleEvents() {
   if (!session_) return;
   for (const auto& event : session_->TakeNewEvents()) {
     log::Info("Detected {} in {}: {}", EventName(event.type), session_->Label(), event.text);
+    // When it happened by the wall clock, for squad sync to line squadmates' views up with.
+    log::Info("Moment {} at {}", EventName(event.type), UnixMsAtHns(NowClocks(), event.time));
     if (event.witnesses.size() > 1) {
       std::string seen;
       for (const auto& w : event.witnesses) {
@@ -307,11 +336,23 @@ void App::HandleEvents() {
     }
     if (event.type == EventType::MatchStart) {
       matchStarts_.push_back(event.time);
-      presenceState_.kills = presenceState_.deaths = presenceState_.assists = 0;
+      presenceState_.kills = presenceState_.deaths = presenceState_.assists = presenceState_.streak = 0;
+      presenceState_.matchStartUnix = UnixMsAtHns(NowClocks(), event.time) / 1000;
     }
-    if (event.type == EventType::Kill) ++presenceState_.kills;
-    if (event.type == EventType::Death) ++presenceState_.deaths;
+    if (event.type == EventType::Kill) {
+      ++presenceState_.kills;
+      ++presenceState_.streak;
+    }
+    if (event.type == EventType::Death) {
+      ++presenceState_.deaths;
+      presenceState_.streak = 0;
+    }
     if (event.type == EventType::Assist) ++presenceState_.assists;
+    // A highlight or the match's result shows on the Discord status for a while.
+    if (event.type == EventType::Highlight || event.type == EventType::MatchEnd) {
+      presenceState_.flash = PresenceFlash(event.type, event.text);
+      flashUntil_ = NowHns() + kFlashFor;
+    }
     if (timeline_) timeline_->Write(TimelineEvent(SessionSeconds(event.time), MatchAt(event.time), event));
     if (longRecording_ && event.time >= longRecording_->Start()) longEvents_.push_back(event);
     if (config_.autoClip && config_.autoClipEvents.contains(event.type)) planner_.Add(event.time);
@@ -326,6 +367,55 @@ void App::SaveReadyAutoClips(bool all) {
   // Wait a moment past the end so the encoder has delivered the last frames.
   const auto windows = all ? planner_.TakeAll() : planner_.TakeReady(NowHns() - kHnsPerSecond / 2);
   for (const auto& window : windows) SaveRange(window.start, window.end, "auto");
+}
+
+void App::HandleCommands() {
+  if (!commands_.Listening()) return;
+  for (const auto& line : commands_.Take()) {
+    if (const auto squad = ParseSquadPresence(line)) {
+      squadPresence_ = *squad;
+      ApplySquadPresence();
+      continue;
+    }
+    const auto request = ParseSquadSave(line);
+    if (!request) {
+      log::Warn("Unknown command from the app: {}", line.substr(0, 80));
+      continue;
+    }
+    // Only a view of the same game is worth saving; a squadmate in another game isn't playing
+    // with this player.
+    if (!session_ || sessionGameId_.empty() || (!request->game.empty() && request->game != session_->Label())) {
+      log::Info("Squad moment {} skipped: not recording {}", request->moment, request->game.empty() ? "a game" : request->game);
+      continue;
+    }
+    const ClockPair now = NowClocks();
+    SquadSaveQueue::Window window{request->moment, HnsAtUnixMs(now, request->startUnixMs), HnsAtUnixMs(now, request->endUnixMs)};
+    if (window.end < sessionStart_) {
+      log::Info("Squad moment {} skipped: it was before this recording started", request->moment);
+      continue;
+    }
+    if (squadSaves_.Add(std::move(window))) log::Info("Saving your view of squad moment {}", request->moment);
+  }
+}
+
+void App::ApplySquadPresence() {
+  presenceState_.squadPlaying = squadPresence_.playing;
+  presenceState_.squadMax = squadPresence_.max;
+  presenceState_.partyId = squadPresence_.partyId;
+  presenceState_.joinUrl = squadPresence_.joinUrl;
+}
+
+void App::SaveReadySquadClips(bool all) {
+  if (!session_) {
+    squadSaves_.TakeAll();
+    return;
+  }
+  const auto windows = all ? squadSaves_.TakeAll() : squadSaves_.TakeReady(NowHns() - kHnsPerSecond / 2);
+  for (const auto& window : windows) {
+    if (!SaveRange(window.start, window.end, "squad", window.moment)) {
+      log::Info("Squad moment {} skipped: it's no longer in the replay buffer", window.moment);
+    }
+  }
 }
 
 void App::SaveHotkeyClip() {
@@ -361,7 +451,7 @@ std::filesystem::path App::ClipPath(std::string_view suffix) {
   }
 }
 
-bool App::SaveRange(int64_t start, int64_t end, const char* trigger) {
+bool App::SaveRange(int64_t start, int64_t end, const char* trigger, std::string_view squadMoment) {
   auto clip = session_->Buffer().Extract(start, end);
   if (!clip || clip->packets.empty()) return false;
 
@@ -374,13 +464,16 @@ bool App::SaveRange(int64_t start, int64_t end, const char* trigger) {
   // A clip belongs to the last match that had started by its end, so a clip of the match
   // start itself counts toward the new match.
   metadata.match = MatchAt(end);
+  metadata.utcStartMs = UnixMsAtHns(NowClocks(), clip->start);
+  metadata.squadMoment = std::string(squadMoment);
   for (const auto& event : session_->EventsBetween(clip->start, end)) {
     metadata.markers.push_back(
         {event.type, static_cast<double>(event.time - clip->start) / kHnsPerSecond, event.text, event.witnesses});
   }
 
   const auto path = ClipPath();
-  ++presenceState_.clips;
+  // A view saved for a squadmate's moment isn't one of this player's clips on Discord.
+  if (squadMoment.empty()) ++presenceState_.clips;
   const bool beep = std::string_view(trigger) == "hotkey";
   saves_.push_back(std::async(std::launch::async, [clip = std::move(*clip), metadata = std::move(metadata), path, beep] {
     winrt::init_apartment(winrt::apartment_type::multi_threaded);
@@ -404,6 +497,9 @@ bool App::SaveRange(int64_t start, int64_t end, const char* trigger) {
       const std::string summary = Summarize(metadata.markers);
       log::Info("Saved {:.0f}s clip ({:.1f} MB) to {}", metadata.seconds, mb, winrt::to_string(path.wstring()));
       if (!summary.empty()) log::Info("Clip has {}", summary);
+      if (!metadata.squadMoment.empty()) {
+        log::Info("Squad view {} saved to {}", metadata.squadMoment, winrt::to_string(path.wstring()));
+      }
       if (beep) MessageBeep(MB_OK);
     } catch (const winrt::hresult_error& e) {
       log::Error("Couldn't save the clip: {}", Describe(e));
@@ -469,6 +565,7 @@ void App::FinishLongRecording(std::string_view why) {
   metadata.session = sessionId_;
   metadata.sessionSeconds = SessionSeconds(recorder->Start());
   metadata.match = MatchAt(recorder->Start());
+  metadata.utcStartMs = UnixMsAtHns(NowClocks(), recorder->Start());
   for (const auto& event : longEvents_) {
     metadata.markers.push_back(
         {event.type, static_cast<double>(event.time - recorder->Start()) / kHnsPerSecond, event.text, event.witnesses});
