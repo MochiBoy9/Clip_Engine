@@ -1,25 +1,11 @@
-## Clip Engine 0.9.0
+## Clip Engine 0.10.0
 
-Detection Studio is easier to find your way around, and it now tells you exactly how each rule works.
+Play with friends and share clips anywhere. Clip Engine now has an online service for squads and a cloud library.
 
-- **See how every rule works.** Pick a rule and Studio says in plain words what it reads and how often, when it saves a moment, how it tells a repeat from a new one, and how it works with the game's other rules: which one decides the count, which back it up, and which can't run yet. The list shows each rule's part at a glance, and warns when two rules would save the same kill twice.
-- **Fine-tune any rule.** How often it reads its box, how long a message must be gone before it counts again, counting a moment once with the other rules for it, which rule decides, and squad tags before a name in a killfeed. Each shows the engine's default, so nothing is hidden.
-- **Testing a killfeed rule works.** Testing a rule that looks for your in-game name now fills your name in, as the engine does in game; before, it always said "No match". You can set your name right in the rule that needs it.
-- **Test your changes before saving.** Test all rules on marked clips runs your unsaved changes too, and lists every kill they missed or found extra. Click one to jump to that frame and see why.
-- **A roomier, quicker Studio:**
-  - The frame is bigger, with the clip picker and moments above it and testing in three tabs below: this frame, the whole clip and marked clips.
-  - Step through a clip a tenth of a second or a second at a time, and jump between its moments. Frames you've seen come back instantly.
-  - Copy or remove a rule from the toolbar, and give rules their own names.
-  - Changes to several games are kept until you save them all together, Discard throws them away, and leaving with changes unsaved asks first.
-  - Keys: Left/Right step, Shift for a second, Up/Down jump between moments, Ctrl+Enter tests, Ctrl+S saves, Ctrl+D copies, Delete removes.
-
-Everything from 0.8.0 is included.
-
-## Install
-
-1. Download `Clip_Engine-…-windows-x64.zip` below and unzip it anywhere.
-2. Run `ClipEngine.exe`. It starts `clip_engine.exe` (the recorder) in the background, with no console window.
-
-Needs Windows 10 version 1903 or newer (Windows 11 recommended) and a GPU with a hardware video encoder. Windows may warn that the app is from an unknown publisher because it isn't code-signed yet; choose **More info → Run anyway**.
-
-Proprietary software. All rights reserved; see LICENSE.txt.
+- **Squads.** Make a squad and send friends an invite link. When you play the same match, Clip Engine links you up by itself. When one of you gets a kill, revive, highlight or win, every linked teammate saves that moment from their own view too, lined up to the same second. All the views go into a library your squad shares.
+- **Watch together.** Play up to four views of the same moment side by side on one timeline.
+- **Make highlight.** Cut the play from the view of the player who made it, then a replay from each teammate's view, into one clip.
+- **You choose what's shared.** Upload highlights, everything or nothing, pick which moments you share, and unlink from someone for a session.
+- **Share links.** The link button on any clip uploads it and copies a short link. It plays in any browser with the clip's moments on the timeline, and shows a preview in Discord.
+- **Your cloud library.** Clips can be unlisted, public or private. Public ones show on your profile page, pinned clips first. Starred clips can back up by themselves, and you sign in on another PC with a one-time code, with no password.
+- **A livelier Discord status.** It shows your kill streak as it builds and your K/D/A. Highlights and the match result flash up, the timer counts from the start of the match, and in a squad it shows how many of you are playing together. An optional Join my squad button lets friends jump in.
