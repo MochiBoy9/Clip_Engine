@@ -38,6 +38,8 @@ public sealed class SettingsViewModel : ObservableObject
         AutoClipEvents = EngineSettings.AllEvents
             .Select(e => new EventToggle(e, EventKinds.Plural(e), () => { HasChanges = true; SavedMessage = null; }))
             .ToList();
+        MoreClipKeys = new ClipKeybindsViewModel(() => [SaveHotkey, RecordHotkey], () => { HasChanges = true; SavedMessage = null; },
+                                                 _bufferSeconds);
         Load(engine);
         _closeToTray = desktop.CloseToTray;
         _sidePanelHotkey = desktop.SidePanelHotkey;
@@ -81,6 +83,7 @@ public sealed class SettingsViewModel : ObservableObject
             if (!Change(ref _bufferSeconds, Math.Round(value))) return;
             Raise(nameof(BufferText));
             if (ClipSeconds > _bufferSeconds) ClipSeconds = _bufferSeconds;
+            MoreClipKeys.MaxSeconds = _bufferSeconds;
         }
     }
 
@@ -115,8 +118,11 @@ public sealed class SettingsViewModel : ObservableObject
 
     public bool GameAudio { get => _gameAudio; set => Change(ref _gameAudio, value); }
     public bool MicAudio { get => _micAudio; set => Change(ref _micAudio, value); }
-    public string SaveHotkey { get => _saveHotkey; set => Change(ref _saveHotkey, value); }
-    public string RecordHotkey { get => _recordHotkey; set => Change(ref _recordHotkey, value); }
+    public string SaveHotkey { get => _saveHotkey; set { if (Change(ref _saveHotkey, value)) MoreClipKeys.Recheck(); } }
+    public string RecordHotkey { get => _recordHotkey; set { if (Change(ref _recordHotkey, value)) MoreClipKeys.Recheck(); } }
+
+    // Keys besides the save hotkey that each save a clip of their own length.
+    public ClipKeybindsViewModel MoreClipKeys { get; }
     public bool RecordWithoutGame { get => _recordWithoutGame; set => Change(ref _recordWithoutGame, value); }
     public bool GameFocus { get => _gameFocus; set => Change(ref _gameFocus, value); }
     public bool DiscordPresence { get => _discordPresence; set => Change(ref _discordPresence, value); }
@@ -273,6 +279,7 @@ public sealed class SettingsViewModel : ObservableObject
         GameAudio = GameAudio,
         MicAudio = MicAudio,
         SaveHotkey = string.IsNullOrWhiteSpace(SaveHotkey) ? "F8" : SaveHotkey.Trim(),
+        MoreClipHotkeys = MoreClipKeys.ToKeybinds(),
         RecordHotkey = string.IsNullOrWhiteSpace(RecordHotkey) ? "F9" : RecordHotkey.Trim(),
         RecordWithoutGame = RecordWithoutGame,
         GameFocus = GameFocus,
@@ -287,6 +294,11 @@ public sealed class SettingsViewModel : ObservableObject
 
     private async Task SaveAsync()
     {
+        if (MoreClipKeys.FirstProblem is { } problem)
+        {
+            SavedMessage = $"Fix the clip keys first. {problem}";
+            return;
+        }
         try
         {
             ToEngineSettings().Save(AppPaths.EngineSettingsFile);
@@ -313,6 +325,8 @@ public sealed class SettingsViewModel : ObservableObject
         _micAudio = s.MicAudio;
         _saveHotkey = s.SaveHotkey;
         _recordHotkey = s.RecordHotkey;
+        MoreClipKeys.MaxSeconds = _bufferSeconds;
+        MoreClipKeys.Load(s.MoreClipHotkeys);
         _recordWithoutGame = s.RecordWithoutGame;
         _gameFocus = s.GameFocus;
         _discordPresence = s.DiscordPresence;
@@ -404,7 +418,7 @@ public sealed class SettingsViewModel : ObservableObject
         }
     }
 
-    private static string FormatSeconds(double seconds) =>
+    internal static string FormatSeconds(double seconds) =>
         seconds >= 60 && seconds % 60 == 0 ? $"{seconds / 60:0} min" : seconds >= 60 ? $"{(int)seconds / 60}m {(int)seconds % 60}s" : $"{seconds:0} s";
 }
 

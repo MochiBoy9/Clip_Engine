@@ -15,6 +15,8 @@ internal sealed class EngineSettings
     public bool GameAudio { get; set; } = true;
     public bool MicAudio { get; set; } = true;
     public string SaveHotkey { get; set; } = "F8";
+    // Keys besides the save hotkey that each save a clip of their own length.
+    public List<ClipKeybind> MoreClipHotkeys { get; set; } = [];
     public string RecordHotkey { get; set; } = "F9";
     public bool RecordWithoutGame { get; set; }
     public bool GameFocus { get; set; } = true;
@@ -52,6 +54,7 @@ internal sealed class EngineSettings
                 case "game_audio": settings.GameAudio = ParseBool(value, settings.GameAudio); break;
                 case "mic_audio": settings.MicAudio = ParseBool(value, settings.MicAudio); break;
                 case "save_hotkey": settings.SaveHotkey = value; break;
+                case ClipKeybinds.MoreKey: settings.MoreClipHotkeys = ClipKeybinds.Parse(value); break;
                 case "record_hotkey": settings.RecordHotkey = value; break;
                 case "record_without_game": settings.RecordWithoutGame = ParseBool(value, settings.RecordWithoutGame); break;
                 case "game_focus": settings.GameFocus = ParseBool(value, settings.GameFocus); break;
@@ -85,6 +88,7 @@ internal sealed class EngineSettings
             ["game_audio"] = Format(GameAudio),
             ["mic_audio"] = Format(MicAudio),
             ["save_hotkey"] = SaveHotkey,
+            [ClipKeybinds.MoreKey] = ClipKeybinds.Format(MoreClipHotkeys),
             ["record_hotkey"] = RecordHotkey,
             ["record_without_game"] = Format(RecordWithoutGame),
             ["game_focus"] = Format(GameFocus),

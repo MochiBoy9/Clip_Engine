@@ -398,6 +398,20 @@
               </Panel>
             </Grid>
             <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+            <Grid ColumnDefinitions="Auto,*">
+              <Border Classes="tile" VerticalAlignment="Top" Margin="0,0,16,0">
+                <PathIcon Data="{StaticResource IconClock}" />
+              </Border>
+              <StackPanel Grid.Column="1" Spacing="12">
+                <StackPanel Spacing="2">
+                  <TextBlock Text="More clip keys" FontWeight="SemiBold" FontSize="14" />
+                  <TextBlock Classes="caption" TextWrapping="Wrap"
+                             Text="Each key saves a clip of its own length, up to the replay buffer. The save hotkey keeps the clip length above. A game can have its own keys, set in Detection Studio." />
+                </StackPanel>
+                <views:ClipKeybindsEditor DataContext="{Binding MoreClipKeys}" />
+              </StackPanel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <Grid ColumnDefinitions="Auto,*,Auto">
               <Border Classes="tile record" VerticalAlignment="Center" Margin="0,0,14,0">
                 <PathIcon Data="{StaticResource IconRecord}" />

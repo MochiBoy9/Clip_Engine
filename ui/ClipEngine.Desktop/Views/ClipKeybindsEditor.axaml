@@ -1,0 +1,38 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ClipEngine.Desktop.ViewModels"
+             x:Class="ClipEngine.Desktop.Views.ClipKeybindsEditor"
+             x:DataType="vm:ClipKeybindsViewModel">
+  <!-- Keys that each save a clip of their own length, in Settings and in Detection Studio. -->
+  <StackPanel Spacing="10">
+    <ItemsControl ItemsSource="{Binding Rows}" IsVisible="{Binding HasRows}">
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate>
+          <StackPanel Spacing="10" />
+        </ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="vm:ClipKeybindViewModel">
+          <StackPanel Spacing="4">
+            <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto,Auto">
+              <TextBox Text="{Binding Hotkey}" FontWeight="SemiBold" Watermark="Alt+F8" ToolTip.Tip="The key that saves this clip" />
+              <Border Grid.Column="1" Classes="inset" Width="78" Padding="0,6" CornerRadius="10" Margin="10,0,0,0" VerticalAlignment="Center">
+                <TextBlock Text="{Binding SecondsText}" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" />
+              </Border>
+              <Button Grid.Column="2" Classes="icon" Width="32" Height="32" Margin="8,0,0,0" VerticalAlignment="Center"
+                      Command="{Binding RemoveCommand}" ToolTip.Tip="Remove this clip key">
+                <PathIcon Data="{StaticResource IconTrash}" Width="13" Height="13" />
+              </Button>
+              <Slider Grid.Row="1" Grid.ColumnSpan="3" Minimum="5" Maximum="{Binding MaxSeconds}" Value="{Binding Seconds}"
+                      SmallChange="5" LargeChange="5" TickFrequency="5" IsSnapToTickEnabled="True"
+                      ToolTip.Tip="How many seconds before the key press this clip keeps" />
+            </Grid>
+            <TextBlock Classes="caption" Foreground="{StaticResource WarnBrush}" Text="{Binding Problem}"
+                       IsVisible="{Binding HasProblem}" TextWrapping="Wrap" />
+          </StackPanel>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+    <Button Classes="secondary" HorizontalAlignment="Left" Content="Add a clip key" Command="{Binding AddCommand}" />
+  </StackPanel>
+</UserControl>

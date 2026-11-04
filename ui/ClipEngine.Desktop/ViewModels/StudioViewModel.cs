@@ -110,6 +110,7 @@ public sealed class StudioViewModel : ObservableObject
         _user = main.IsLive ? DetectionIni.LoadUser() : DetectionIni.NewChanges();
         _sampleMs = _user.SampleMs ?? _shipped.SampleMs ?? 250;
         PlayerNames = new PlayerNamesViewModel(AppPaths.EngineSettingsFile);
+        ClipKeys = new GameClipKeysViewModel(main.IsLive, main.IsLive ? main.SendEngineCommand : null);
         PlayerNames.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(PlayerNamesViewModel.HasSavedNames)) RefreshRules();
@@ -296,6 +297,9 @@ public sealed class StudioViewModel : ObservableObject
     }
 
     public string HudScaleText => $"{_hudScale}%";
+
+    // The game's own clip keys, saved on their own with their own button.
+    public GameClipKeysViewModel ClipKeys { get; }
 
     internal double HudFactor => _hudScale / 100.0;
 
@@ -580,6 +584,7 @@ public sealed class StudioViewModel : ObservableObject
     {
         if (_game is null) return;
         _ownRules = _user.EditedGames.Contains(_game.Id);
+        ClipKeys.Load(_game.Id, _game.Name);
         _savedHudScale = _hudScale = _main.IsLive ? LoadHudScale(_game.Id) : 100;
         if (_drafts.Remove(_game.Id, out var draft))
         {

@@ -20,6 +20,7 @@ add_executable(clip_engine
   src/capture/GpuDevice.cpp
   src/capture/MonitorCapture.cpp
   src/core/Config.cpp
+  src/core/Hotkeys.cpp
   src/core/Json.cpp
   src/core/Log.cpp
   src/detect/DetectionRules.cpp
@@ -124,3 +125,14 @@ add_executable(clip_engine_squad_tests
 target_include_directories(clip_engine_squad_tests PRIVATE src)
 target_compile_options(clip_engine_squad_tests PRIVATE /W4 /permissive- /utf-8 /EHsc)
 add_test(NAME squad COMMAND clip_engine_squad_tests)
+
+# Tests for the clip keys: several keys that each save a clip of their own length, and a
+# game's own set of them from the settings file.
+add_executable(clip_engine_hotkey_tests
+  tests/HotkeyTests.cpp
+  src/core/Hotkeys.cpp
+)
+target_include_directories(clip_engine_hotkey_tests PRIVATE src)
+target_compile_definitions(clip_engine_hotkey_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+target_compile_options(clip_engine_hotkey_tests PRIVATE /W4 /permissive- /utf-8 /EHsc)
+add_test(NAME hotkeys COMMAND clip_engine_hotkey_tests ${CMAKE_CURRENT_BINARY_DIR})
