@@ -296,6 +296,21 @@ public sealed class SquadViewModel : ObservableObject, IDisposable
         MessageIsError = false;
     }
 
+    // From a friend's right-click menu or Join button: straight in, no invite to paste.
+    internal async Task JoinFromFriendAsync(string invite, string name, string friend)
+    {
+        if (InSquad)
+        {
+            Message = "You're already in a squad. Leave it first to join another.";
+            MessageIsError = true;
+            return;
+        }
+        if (PlayerName.Trim().Length == 0) PlayerName = name.Trim().Length > 32 ? name.Trim()[..32] : name.Trim();
+        InviteInput = invite;
+        await JoinAsync();
+        if (InSquad) _main.ShowToast($"Joined {friend}'s squad");
+    }
+
     // ---- making, joining and leaving ----
 
     private async Task CreateAsync()

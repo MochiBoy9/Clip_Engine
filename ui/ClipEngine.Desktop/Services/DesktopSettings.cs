@@ -39,6 +39,9 @@ internal sealed class DesktopSettings
     // And one for each moment as it happens: kills, multi-kills, revives, a new personal best.
     public bool MomentNotices { get; set; } = true;
 
+    // And one when a friend comes online or starts playing something.
+    public bool FriendNotices { get; set; } = true;
+
     // Clips page: show matches instead of single clips.
     public bool ShowMatches { get; set; }
 

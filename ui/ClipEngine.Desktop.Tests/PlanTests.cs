@@ -86,6 +86,8 @@ public class PlanTests : IDisposable
 
         // Pro from a special key with the plan's themes: the plan decides, with the key's resolution.
         vm.Accept("CEK-PRO", new LicenseCheck(LicenseOutcome.Valid, "", Plan.Pro, "", null, true, 2160, null, 0));
+        Assert.False(vm.CanBeCredited, "only paying supporters are offered the credits");
+        Assert.False(vm.SaveCreditCommand.CanExecute(null));
         Assert.Equal(2160, vm.MaxLines);
         Assert.True(vm.IsUnlocked(AccentThemes.Find("mint")));
         Assert.False(vm.IsUnlocked(AccentThemes.Find("chrome")));
@@ -94,6 +96,7 @@ public class PlanTests : IDisposable
         // A subscription key never carries a special key's features over.
         vm.Accept("POLAR", new LicenseCheck(LicenseOutcome.Valid, "", Plan.Pro));
         Assert.False(vm.IsSpecial);
+        Assert.True(vm.CanBeCredited);
         Assert.Equal(1440, vm.MaxLines);
 
         vm.Remove();

@@ -146,7 +146,7 @@ export class Library {
       planKey: this.meta("plan_display") ?? null,
       lines: plan.lines,
       friendCode: formatFriendCode(this.meta("id")),
-      handleChangeAt: this.meta("handle") ? this.nextHandleChange() : null,
+      handleChangeAt: this.nextHandleChange(),
       storage: { used: this.used(), limit: plan.storage },
       clips: this.sql.exec("SELECT COUNT(*) AS n FROM clips WHERE uploaded = 1").toArray()[0].n,
     };
@@ -309,8 +309,11 @@ export class Library {
     }
     if (body?.handle !== undefined) {
       if (body.handle === null || body.handle === "") {
-        await this.handles("/release", { account: this.meta("id") });
-        this.sql.exec("DELETE FROM meta WHERE key = 'handle'");
+        if (this.meta("handle")) {
+          await this.handles("/release", { account: this.meta("id") });
+          this.sql.exec("DELETE FROM meta WHERE key = 'handle'");
+          renamed = true;
+        }
       } else {
         const handle = normalizeHandle(body.handle);
         if (!handle) return fail(400, "Usernames are 3 to 24 letters, numbers, _ or .");
@@ -318,7 +321,9 @@ export class Library {
         if (handle !== current) {
           // Picking the first one is free; after that, changes are limited.
           const next = this.nextHandleChange();
-          if (current && next && Date.now() < next) {
+          // Turning the profile off and on again with a new name is still a change.
+          const hadOne = Boolean(current || this.meta("handle_ever"));
+          if (hadOne && next && Date.now() < next) {
             const when = new Date(next).toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" });
             const how = this.plan().name === "free" ? "once a month, or once a week with Pro or Ultra" : "once a week";
             return fail(429, `You can change your username ${how}. Next change: ${when}.`);
@@ -326,7 +331,8 @@ export class Library {
           const claimed = await this.handles("/claim", { handle, account: this.meta("id") });
           if (!claimed.ok) return fail(claimed.status, (await claimed.json()).error);
           this.setMeta("handle", handle);
-          if (current) this.setMeta("handle_changed", String(Date.now()));
+          if (hadOne) this.setMeta("handle_changed", String(Date.now()));
+          this.setMeta("handle_ever", "1");
           renamed = true;
         }
       }

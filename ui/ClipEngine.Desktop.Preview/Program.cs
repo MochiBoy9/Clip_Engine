@@ -74,10 +74,10 @@ Capture(Page.Cloud, "19-cloud.png");
 var friends = vm.Friends;
 friends.ShowSample("A1B2-C3D4",
 [
-    friends.SampleFriend("K1A1K1A1", "Kai", "kai", true, "The Finals", "N1GHT5HF7Q4K2M9XW3BD"),
-    friends.SampleFriend("M1RA0000", "Mira", "mira", true, "Overwatch", null),
+    friends.SampleFriend("K1A1K1A1", "Kai", "kai", true, "The Finals", "N1GHT5HF7Q4K2M9XW3BD", TimeSpan.FromMinutes(95), TimeSpan.FromMinutes(42)),
+    friends.SampleFriend("M1RA0000", "Mira", "mira", true, "Overwatch", null, TimeSpan.FromMinutes(20), TimeSpan.FromMinutes(12)),
     friends.SampleFriend("R00K0000", "Rook", null, false, "", null),
-    friends.SampleFriend("VEX00000", "Vex", "vexed", true, "", null),
+    friends.SampleFriend("VEX00000", "Vex", "vexed", true, "", null, TimeSpan.FromMinutes(7)),
 ],
 [friends.SampleRequest("N0VA0000", "Nova", "nova")]);
 Capture(Page.Friends, "20-friends.png");

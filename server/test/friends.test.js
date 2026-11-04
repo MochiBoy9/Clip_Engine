@@ -93,12 +93,15 @@ test("a username can be changed once a month on Free, and friends see the new on
   assert.equal(again.status, 429);
   assert.match((await again.json()).error, /once a month/);
   assert.equal((await rename("Enterro_TV")).status, 200, "the same name, typed differently, isn't a change");
+  assert.equal((await rename("")).status, 200, "the profile can still be turned off");
+  assert.equal((await rename("enterro3")).status, 429, "and turning it back on with a new name waits too");
 
   // A month on, it can change again.
   const realNow = Date.now;
   try {
     Date.now = () => realNow() + 31 * 24 * 3600_000;
     assert.equal((await rename("enterro2")).status, 200);
+    assert.deepEqual((await list(env, kai)).friends.map((f) => f.handle), ["enterro2"]);
   } finally {
     Date.now = realNow;
   }
