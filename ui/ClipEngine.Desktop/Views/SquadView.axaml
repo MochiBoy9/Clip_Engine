@@ -26,6 +26,7 @@
   <ScrollViewer>
     <StackPanel Margin="0,0,40,40" Spacing="22">
       <StackPanel Spacing="4">
+        <views:SectionMark Index="03" Label="Squad link" />
         <TextBlock Classes="h1" Text="Squad" />
         <TextBlock Classes="caption" TextWrapping="Wrap"
                    Text="Play with friends who run Clip Engine. When you play together, every moment is saved from each teammate's view, and lands in a library you all share." />

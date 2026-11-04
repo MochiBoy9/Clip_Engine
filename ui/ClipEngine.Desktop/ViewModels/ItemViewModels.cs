@@ -8,7 +8,11 @@ namespace ClipEngine.Desktop.ViewModels;
 
 public enum Page { Home, Clips, Squad, Records, Games, Cloud, Settings }
 
-public sealed record NavItem(Page Page, string Title, StreamGeometry Icon);
+public sealed record NavItem(Page Page, string Title, StreamGeometry Icon)
+{
+    // Its place in the rail, printed beside it: 01 for the first.
+    public string Index => ((int)Page + 1).ToString("00", CultureInfo.InvariantCulture);
+}
 
 public enum ActivityKind { Info, Recording, Clip, Moment, Warning, Error }
 
@@ -247,6 +251,8 @@ public sealed class GameItemViewModel(string name, int paletteIndex) : Observabl
 {
     private bool _isRunning;
     private bool _isRecording;
+    private bool _isInstalled = true;
+    private string? _store;
     private int _clipCount;
 
     public string Name { get; } = name;
@@ -282,8 +288,36 @@ public sealed class GameItemViewModel(string name, int paletteIndex) : Observabl
         }
     }
 
+    // Off Windows nothing can be looked up, so every game counts as installed.
+    public bool IsInstalled
+    {
+        get => _isInstalled;
+        set
+        {
+            if (!Set(ref _isInstalled, value)) return;
+            Raise(nameof(Status));
+            Raise(nameof(StoreText));
+            Raise(nameof(StoreTag));
+        }
+    }
+
+    // The store it was found through, like Steam or Battle.net.
+    public string? Store
+    {
+        get => _store;
+        set
+        {
+            if (!Set(ref _store, value)) return;
+            Raise(nameof(StoreText));
+            Raise(nameof(StoreTag));
+        }
+    }
+
+    public string StoreText => Store ?? (IsInstalled ? "Supported" : "Not installed");
+    public string StoreTag => StoreText.ToUpperInvariant();
+
     public string ClipCountText => ClipCount == 1 ? "1 clip" : $"{ClipCount} clips";
-    public string Status => IsRecording ? "Recording now" : IsRunning ? "Running" : "Ready to detect";
+    public string Status => IsRecording ? "Recording now" : IsRunning ? "Running" : IsInstalled ? "Ready to detect" : "Not installed";
 }
 
 public sealed record FpsOption(int Value, string Label)
@@ -312,6 +346,13 @@ internal static class Palettes
             EndPoint = new Avalonia.RelativePoint(1, 1, Avalonia.RelativeUnit.Relative),
             GradientStops = { new GradientStop(a, 0), new GradientStop(b, 1) },
         };
+    }
+
+    // A dark plate in the game's first colour, behind its icon.
+    public static IBrush Plate(int index)
+    {
+        var (a, _) = Pairs[Math.Abs(index) % Pairs.Length];
+        return new ImmutableSolidColorBrush(Color.FromRgb((byte)(a.R * 0.22 + 14), (byte)(a.G * 0.22 + 14), (byte)(a.B * 0.22 + 16)));
     }
 
     public static int IndexFor(string name)

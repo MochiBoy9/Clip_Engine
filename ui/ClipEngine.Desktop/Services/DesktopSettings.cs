@@ -35,6 +35,12 @@ internal sealed class DesktopSettings
     // Clips page: show matches instead of single clips.
     public bool ShowMatches { get; set; }
 
+    // Games page: list every supported game, not just the installed ones.
+    public bool ShowAllGames { get; set; }
+
+    // Game pictures missing from this PC are fetched from the Steam store.
+    public bool GameArtOnline { get; set; } = true;
+
     // Updates: looked for when the app starts, on GitHub Releases of UpdateRepo (empty for the one the app was built
     // from). UpdateToken is a GitHub token for a private repository, encrypted for this Windows account.
     public bool CheckForUpdates { get; set; } = true;

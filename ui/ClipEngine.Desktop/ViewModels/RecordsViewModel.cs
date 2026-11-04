@@ -168,6 +168,8 @@ public sealed class RecordCard
     }
 
     public string Title { get; }
+    // As printed over the card, in small capitals.
+    public string Label => Title.ToUpper(CultureInfo.CurrentCulture);
     public string Value { get; }
     public string ValueText { get; }
     public string Detail { get; }

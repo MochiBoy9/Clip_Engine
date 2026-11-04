@@ -159,6 +159,58 @@ static Bitmap SampleFrame()
 
 internal static class Sample
 {
+    // Some of the games installed from different stores, with art: the sample frames stand in for store banners, and
+    // a few made-up shapes for program icons.
+    private static void SampleGameArt(MainViewModel vm)
+    {
+        var installed = new (string Game, string Store)[]
+        {
+            ("The Finals", "Steam"), ("Overwatch", "Battle.net"), ("Battlefield 6", "EA app"), ("Counter-Strike 2", "Steam"),
+            ("Valorant", "Riot"), ("Fortnite", "Epic Games"), ("Marvel Rivals", "Steam"), ("Roblox", "Roblox"),
+        };
+        vm.ApplyGameScan(new GameScan(installed.ToDictionary(g => g.Game, g => new GameInstall(g.Game, g.Store, null, null, null)),
+                                      null, true));
+        var dir = Path.Combine(AppContext.BaseDirectory, "SampleThumbnails");
+        Bitmap Banner(string file)
+        {
+            using var stream = File.OpenRead(Path.Combine(dir, file + ".png"));
+            return Bitmap.DecodeToWidth(stream, 460);
+        }
+        GameArt.Set("The Finals", new GameArtwork(Banner("finals_2"), null));
+        GameArt.Set("Overwatch", new GameArtwork(Banner("overwatch_1"), null));
+        GameArt.Set("Battlefield 6", new GameArtwork(Banner("bf6_1"), null));
+        GameArt.Set("Counter-Strike 2", new GameArtwork(Banner("bf6_2"), null));
+        GameArt.Set("Marvel Rivals", new GameArtwork(Banner("overwatch_2"), null));
+        GameArt.Set("Valorant", new GameArtwork(null, Icon("#FF4655", 0)));
+        GameArt.Set("Fortnite", new GameArtwork(null, Icon("#9D4DFF", 1)));
+        GameArt.Set("Roblox", new GameArtwork(null, Icon("#E8E8E8", 2)));
+    }
+
+    private static Bitmap Icon(string color, int shape)
+    {
+        var icon = new RenderTargetBitmap(new PixelSize(128, 128));
+        using (var context = icon.CreateDrawingContext())
+        {
+            var fill = new SolidColorBrush(Color.Parse(color));
+            var g = new StreamGeometry();
+            using (var c = g.Open())
+            {
+                Point[] points = shape switch
+                {
+                    0 => [new(16, 24), new(64, 104), new(112, 24), new(84, 24), new(64, 62), new(44, 24)],
+                    1 => [new(36, 12), new(100, 12), new(92, 40), new(64, 40), new(60, 56), new(84, 56), new(76, 84), new(54, 84), new(46, 116), new(18, 116)],
+                    _ => [new(30, 8), new(120, 30), new(98, 120), new(8, 98)],
+                };
+                c.BeginFigure(points[0], true);
+                foreach (var pt in points.Skip(1)) c.LineTo(pt);
+                c.EndFigure(true);
+            }
+            context.DrawGeometry(fill, null, g);
+            if (shape == 2) context.DrawRectangle(new SolidColorBrush(Color.Parse("#16181C")), null, new Rect(52, 52, 24, 24));
+        }
+        return icon;
+    }
+
     public static void Fill(MainViewModel vm)
     {
         var now = DateTime.Now;
@@ -167,6 +219,7 @@ internal static class Sample
                               "Rocket League", "Valorant", "Fortnite", "Apex Legends", "PUBG", "Marvel Rivals",
                               "Rainbow Six Siege", "Call of Duty", "ARC Raiders", "Delta Force", "Deadlock",
                               "Halo Infinite", "Destiny 2", "Team Fortress 2", "Escape from Tarkov", "Roblox", "Minecraft"]);
+        SampleGameArt(vm);
 
         var clips = new (string Game, string Thumb, double MinutesAgo, int Seconds, long Mb)[]
         {

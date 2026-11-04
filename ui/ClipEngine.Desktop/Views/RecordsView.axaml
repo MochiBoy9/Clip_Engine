@@ -7,6 +7,7 @@
   <ScrollViewer>
     <StackPanel Margin="0,0,40,40" Spacing="22">
       <StackPanel Spacing="4">
+        <views:SectionMark Index="04" Label="Service record" />
         <TextBlock Classes="h1" Text="Records" />
         <TextBlock Classes="caption" Text="{Binding Summary}" TextWrapping="Wrap" />
       </StackPanel>
@@ -90,7 +91,7 @@
                   <!-- The game's colour, as a bar down the card's edge -->
                   <Border Width="4" Background="{Binding Gradient}" />
                   <StackPanel Grid.Column="1" Margin="22,20" Spacing="5">
-                    <TextBlock Classes="eyebrow" Text="{Binding Title}" />
+                    <TextBlock Classes="eyebrow" Text="{Binding Label}" />
                     <TextBlock Classes="stat" Text="{Binding Value}" FontSize="34" />
                     <TextBlock Classes="body" Text="{Binding ValueText}" />
                     <TextBlock Classes="caption" Text="{Binding Detail}" />
@@ -111,10 +112,7 @@
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:GameTotalsRow">
                   <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,16">
-                    <Border Width="38" Height="38" CornerRadius="2" Background="{Binding Gradient}" Margin="0,0,12,0">
-                      <TextBlock Text="{Binding Initials}" FontWeight="Black" Foreground="White"
-                                 HorizontalAlignment="Center" VerticalAlignment="Center" />
-                    </Border>
+                    <views:GameBadge Width="38" Height="38" Game="{Binding Game}" InitialsSize="14" Margin="0,0,12,0" />
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
                       <TextBlock Text="{Binding Game}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                       <TextBlock Classes="caption" Text="{Binding Caption}" />
@@ -148,10 +146,7 @@
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:MatchRow">
                   <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,16" ToolTip.Tip="{Binding Source}">
-                    <Border Width="38" Height="38" CornerRadius="2" Background="{Binding Gradient}" Margin="0,0,12,0">
-                      <TextBlock Text="{Binding Initials}" FontWeight="Black" Foreground="White"
-                                 HorizontalAlignment="Center" VerticalAlignment="Center" />
-                    </Border>
+                    <views:GameBadge Width="38" Height="38" Game="{Binding Game}" InitialsSize="14" Margin="0,0,12,0" />
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
                       <StackPanel Orientation="Horizontal" Spacing="8">
                         <TextBlock Text="{Binding Game}" FontWeight="SemiBold" />

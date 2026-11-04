@@ -34,6 +34,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private int _clipSeconds = 30;
     private int _bufferSeconds = 60;
     private string _filter = AllGames;
+    private bool _showAllGames;
+    private GameScan _gameScan = GameScan.Unknown;
     private string _search = "";
     private string? _toast;
     private bool _toastIsError;
@@ -90,6 +92,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Settings.StorageRulesChanged += OnStorageRulesChanged;
         Settings.CleanUpNowRequested += () => _ = CleanUpAsync();
         _showMatches = DesktopSettings.ShowMatches;
+        _showAllGames = DesktopSettings.ShowAllGames;
         _hotkey = engineSettings.SaveHotkey;
         _recordHotkey = engineSettings.RecordHotkey;
         _clipSeconds = engineSettings.ClipSeconds;
@@ -402,6 +405,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public string LibrarySize => Format.Bytes(_libraryBytes);
     public int ClipCount => Clips.Count;
     public string GamesSupported => Games.Count.ToString();
+    public string GamesStat => _gameScan.Known ? GamesInstalled.ToString() : GamesSupported;
     public bool HasClips => Clips.Count > 0;
     public bool HasNoClips => Clips.Count == 0;
     public bool HasFilteredClips => FilteredClips.Count > 0;
@@ -761,20 +765,102 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     internal void SetSupportedGames(IEnumerable<string> names)
     {
+        var list = names.ToList();
+        if (list.SequenceEqual(Games.Select(g => g.Name))) return;
         Games.Clear();
-        foreach (var name in names) Games.Add(new GameItemViewModel(name, Palettes.IndexFor(name)));
+        foreach (var name in list) Games.Add(new GameItemViewModel(name, Palettes.IndexFor(name)));
         UpdateGames();
         Raise(nameof(GamesSupported));
+        if (IsLive) _ = ScanGamesAsync();
+        else ApplyGameScan(_gameScan);
+    }
+
+    // Which games are installed, and their pictures: looked up once the engine says which games it knows, in the
+    // background, since it reads the registry and a few store folders.
+    private async Task ScanGamesAsync()
+    {
+        var user = DetectionIni.LoadUser().Games.ToDictionary(g => g.Name, g => g.Executables, StringComparer.OrdinalIgnoreCase);
+        var targets = Games.Select(g => new GameTarget(g.Name,
+            GameLibrary.Executables.GetValueOrDefault(g.Name) ?? user.GetValueOrDefault(g.Name) ?? [])).ToList();
+        try
+        {
+            var scan = await Task.Run(() => GameLibrary.Scan(targets));
+            ApplyGameScan(scan);
+            var names = Games.Select(g => g.Name).Concat(Clips.Select(c => c.Game)).Where(n => n.Length > 0);
+            await GameArt.LoadAsync(names, scan, DesktopSettings.GameArtOnline);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            // Without the scan every game stays listed, with its initials.
+        }
+    }
+
+    internal void ApplyGameScan(GameScan scan)
+    {
+        _gameScan = scan;
+        foreach (var game in Games)
+        {
+            var install = scan.Find(game.Name);
+            game.IsInstalled = scan.IsInstalled(game.Name);
+            game.Store = install?.Store;
+        }
+        UpdateShownGames();
+    }
+
+    public bool ShowAllGames
+    {
+        get => _showAllGames;
+        set
+        {
+            if (!Set(ref _showAllGames, value)) return;
+            DesktopSettings.ShowAllGames = value;
+            SaveDesktopSettingsSoon();
+            UpdateShownGames();
+        }
+    }
+
+    // The Games page lists installed games, and any that's running, unless all are asked for.
+    private void UpdateShownGames()
+    {
+        var shown = Games.Where(g => ShowAllGames || g.IsInstalled || g.IsRunning).ToList();
+        if (!shown.SequenceEqual(ShownGames))
+        {
+            ShownGames.Clear();
+            foreach (var g in shown) ShownGames.Add(g);
+        }
+        Raise(nameof(GamesInstalled));
+        Raise(nameof(GamesInstalledText));
+        Raise(nameof(HiddenGamesText));
+        Raise(nameof(HasHiddenGames));
+        Raise(nameof(GamesStat));
+    }
+
+    public ObservableCollection<GameItemViewModel> ShownGames { get; } = [];
+    public int GamesInstalled => Games.Count(g => g.IsInstalled);
+    public string GamesInstalledText => !_gameScan.Known
+        ? "Games detected automatically"
+        : $"Installed, of {Games.Count} supported";
+    public bool HasHiddenGames => _gameScan.Known && Games.Any(g => !g.IsInstalled);
+    public string HiddenGamesText
+    {
+        get
+        {
+            var hidden = Games.Count(g => !g.IsInstalled);
+            return hidden == 1 ? "Show the 1 supported game that isn't installed" : $"Show the {hidden} supported games that aren't installed";
+        }
     }
 
     private void UpdateGames()
     {
+        var running = false;
         foreach (var game in Games)
         {
+            running |= game.IsRunning != (game.Name == _detectedGame);
             game.IsRunning = game.Name == _detectedGame;
             game.IsRecording = IsRecording && _recording!.Label == game.Name;
             game.ClipCount = Clips.Count(c => string.Equals(c.Game, game.Name, StringComparison.OrdinalIgnoreCase));
         }
+        if (running) UpdateShownGames();
     }
 
     internal void AddActivity(ActivityKind kind, string text, DateTime? time = null)

@@ -6,6 +6,7 @@
              x:DataType="vm:HomePage">
   <ScrollViewer>
     <StackPanel Margin="0,0,40,40" Spacing="22">
+      <views:SectionMark Index="01" Label="Engine status" Margin="0,0,0,-8" />
 
       <!-- What the engine is doing right now, and saving a clip -->
       <views:Plate Classes="card lead" Padding="32,28,30,28">
@@ -91,8 +92,8 @@
           <Grid ColumnDefinitions="Auto,*">
             <Border Classes="tile" VerticalAlignment="Center"><PathIcon Data="{StaticResource IconGames}" /></Border>
             <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
-              <TextBlock Classes="stat" FontSize="22" Text="{Binding Main.GamesSupported}" />
-              <TextBlock Classes="caption" Text="Games detected automatically" TextTrimming="CharacterEllipsis" />
+              <TextBlock Classes="stat" FontSize="22" Text="{Binding Main.GamesStat}" />
+              <TextBlock Classes="caption" Text="{Binding Main.GamesInstalledText}" TextTrimming="CharacterEllipsis" />
             </StackPanel>
           </Grid>
         </views:Plate>

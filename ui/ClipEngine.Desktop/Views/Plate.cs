@@ -24,6 +24,10 @@ internal sealed class Plate : Decorator, ICustomHitTest
     public static readonly StyledProperty<IBrush?> MarkerProperty =
         AvaloniaProperty.Register<Plate, IBrush?>(nameof(Marker));
 
+    // Brackets drawn brighter over the two corners that aren't cut, like crop marks on a print.
+    public static readonly StyledProperty<IBrush?> BracketsProperty =
+        AvaloniaProperty.Register<Plate, IBrush?>(nameof(Brackets));
+
     private StreamGeometry? _shape;
     private Size _shapeSize;
     private double _shapeCut = -1;
@@ -31,7 +35,7 @@ internal sealed class Plate : Decorator, ICustomHitTest
 
     static Plate()
     {
-        AffectsRender<Plate>(BackgroundProperty, BorderBrushProperty, BorderThicknessProperty, CutProperty, MarkerProperty);
+        AffectsRender<Plate>(BackgroundProperty, BorderBrushProperty, BorderThicknessProperty, CutProperty, MarkerProperty, BracketsProperty);
     }
 
     public IBrush? Background { get => GetValue(BackgroundProperty); set => SetValue(BackgroundProperty, value); }
@@ -39,6 +43,37 @@ internal sealed class Plate : Decorator, ICustomHitTest
     public double BorderThickness { get => GetValue(BorderThicknessProperty); set => SetValue(BorderThicknessProperty, value); }
     public double Cut { get => GetValue(CutProperty); set => SetValue(CutProperty, value); }
     public IBrush? Marker { get => GetValue(MarkerProperty); set => SetValue(MarkerProperty, value); }
+    public IBrush? Brackets { get => GetValue(BracketsProperty); set => SetValue(BracketsProperty, value); }
+
+    // Cuts the content to the plate's shape too, for a picture that runs to its edges.
+    public static readonly StyledProperty<bool> ClipContentProperty =
+        AvaloniaProperty.Register<Plate, bool>(nameof(ClipContent));
+
+    public bool ClipContent { get => GetValue(ClipContentProperty); set => SetValue(ClipContentProperty, value); }
+
+    protected override Size ArrangeOverride(Size finalSize)
+    {
+        var size = base.ArrangeOverride(finalSize);
+        if (ClipContent && Child is { } child)
+        {
+            var cut = Math.Min(Cut, Math.Min(size.Width, size.Height) / 2);
+            var origin = new Vector(child.Bounds.X, child.Bounds.Y);
+            var clip = new StreamGeometry();
+            using (var g = clip.Open())
+            {
+                var (w, h) = (size.Width, size.Height);
+                g.BeginFigure(new Point(cut, 0) - origin, true);
+                g.LineTo(new Point(w, 0) - origin);
+                g.LineTo(new Point(w, h - cut) - origin);
+                g.LineTo(new Point(w - cut, h) - origin);
+                g.LineTo(new Point(0, h) - origin);
+                g.LineTo(new Point(0, cut) - origin);
+                g.EndFigure(true);
+            }
+            child.Clip = clip;
+        }
+        return size;
+    }
 
     public bool HitTest(Point point) => Background is not null && new Rect(Bounds.Size).Contains(point);
 
@@ -63,6 +98,16 @@ internal sealed class Plate : Decorator, ICustomHitTest
                 g.EndFigure(true);
             }
             context.DrawGeometry(marker, null, corner);
+        }
+
+        if (Brackets is { } brackets && size.Width > 40 && size.Height > 40)
+        {
+            const double arm = 9;
+            var (w, h) = (size.Width, size.Height);
+            context.FillRectangle(brackets, new Rect(w - arm, 0, arm, 1));
+            context.FillRectangle(brackets, new Rect(w - 1, 0, 1, arm));
+            context.FillRectangle(brackets, new Rect(0, h - 1, arm, 1));
+            context.FillRectangle(brackets, new Rect(0, h - arm, 1, arm));
         }
     }
 
