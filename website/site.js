@@ -10,8 +10,10 @@ const LINKS = {
   support: "mailto:support@clipengine.app",
 };
 
-// Releases carry the zip under this fixed name (from 0.11.0 on), so this link always gets the newest version.
+// Releases carry the installer and the zip under these fixed names (the zip from 0.11.0 on, the installer from 0.13.1),
+// so these links always get the newest version.
 const STABLE_ZIP = "Clip_Engine-windows-x64.zip";
+const STABLE_SETUP = "Clip_Engine-Setup.exe";
 const releases = `https://github.com/${LINKS.repo}/releases`;
 
 function setLink(name, url) {
@@ -52,33 +54,94 @@ if (LINKS.service) {
 }
 setLink("releases", releases);
 setLink("download", `${releases}/latest`);
+setLink("setup", `${releases}/latest`);
 
-// The newest release: its zip, version, size and checksum.
+// The newest release: its installer and zip, version, size and checksum.
 fetch(`https://api.github.com/repos/${LINKS.repo}/releases/latest`, { headers: { Accept: "application/vnd.github+json" } })
   .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
   .then((release) => {
-    const zips = (release.assets || []).filter((a) => /windows-x64\.zip$/i.test(a.name));
+    const assets = release.assets || [];
+    const zips = assets.filter((a) => /windows-x64\.zip$/i.test(a.name));
     const zip = zips.find((a) => a.name === STABLE_ZIP) || zips[0];
-    if (!zip) return;
-    const version = (release.tag_name || "").replace(/^v/, "");
-    const mb = Math.round(zip.size / (1024 * 1024));
+    const setup = assets.find((a) => a.name === STABLE_SETUP);
+    const mb = (asset) => `${Math.round(asset.size / (1024 * 1024))} MB`;
     // The fixed name when the release has it, so a copied link keeps working for later versions too.
-    const url = zip.name === STABLE_ZIP ? `${releases}/latest/download/${STABLE_ZIP}` : zip.browser_download_url;
-    setLink("download", url);
+    const zipUrl = zip && (zip.name === STABLE_ZIP ? `${releases}/latest/download/${STABLE_ZIP}` : zip.browser_download_url);
+    if (zip) {
+      setLink("download", zipUrl);
+      setText("size", mb(zip));
+    }
+    const main = setup || zip;
+    if (main) {
+      // Before a release has the installer, the main button gets the zip and says so.
+      setLink("setup", setup ? `${releases}/latest/download/${STABLE_SETUP}` : zipUrl);
+      setText("setup-size", mb(main));
+      if (!setup) setText("setup-label", "Download for Windows (.zip)");
+      if (main.digest && main.digest.startsWith("sha256:")) setText("sha", main.digest.slice(7));
+    }
+    const version = (release.tag_name || "").replace(/^v/, "");
     if (version) {
       setText("version", `Version ${version}`);
       setText("version-short", `v${version}`);
       for (const el of document.querySelectorAll("dd[data-version]")) el.textContent = version;
     }
-    setText("size", `${mb} MB`);
     if (release.published_at) {
       setText("date", new Date(release.published_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }));
     }
-    if (zip.digest && zip.digest.startsWith("sha256:")) setText("sha", zip.digest.slice(7));
   })
   .catch(() => {
     // Offline or rate-limited: the links still go to the latest release page.
   });
+
+// The live download counter: every download of every Clip Engine installer and zip on GitHub Releases, added up.
+// GitHub lets a visitor ask 60 times an hour, so it's asked on load and then every five minutes while the page is
+// open and showing.
+let shownDownloads = 0;
+
+async function countDownloads() {
+  let total = 0;
+  for (let page = 1; page <= 5; page++) {
+    const r = await fetch(`https://api.github.com/repos/${LINKS.repo}/releases?per_page=100&page=${page}`, {
+      headers: { Accept: "application/vnd.github+json" },
+    });
+    if (!r.ok) throw new Error(String(r.status));
+    const list = await r.json();
+    for (const release of list) {
+      for (const asset of release.assets || []) {
+        if (/^Clip_Engine-.*\.(zip|exe)$/i.test(asset.name)) total += asset.download_count || 0;
+      }
+    }
+    if (list.length < 100) break;
+  }
+  return total;
+}
+
+function showDownloads(total) {
+  if (!(total > 0)) return;
+  for (const el of document.querySelectorAll("[data-downloads-box]")) el.hidden = false;
+  const from = shownDownloads;
+  shownDownloads = total;
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const start = performance.now();
+  const step = (now) => {
+    const t = reduce ? 1 : Math.min(1, (now - start) / 900);
+    const value = Math.round(from + (total - from) * (1 - Math.pow(1 - t, 3)));
+    setText("downloads", value.toLocaleString());
+    if (t < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+function refreshDownloads() {
+  countDownloads().then(showDownloads).catch(() => {
+    // Rate-limited or offline: keep whatever is shown, or nothing.
+  });
+}
+
+refreshDownloads();
+setInterval(() => {
+  if (!document.hidden) refreshDownloads();
+}, 5 * 60 * 1000);
 
 // Copy buttons: copy the field they name, and say so.
 for (const button of document.querySelectorAll("[data-copy]")) {
@@ -99,16 +162,5 @@ for (const button of document.querySelectorAll("[data-copy]")) {
       button.textContent = "Copy";
       if (state) state.textContent = "";
     }, 2400);
-  });
-}
-
-// "Copy download link" in the hero copies straight away and takes you to the download box.
-for (const link of document.querySelectorAll('a[href="#download"].ghost')) {
-  link.addEventListener("click", () => {
-    const field = document.getElementById("download-link");
-    if (field && navigator.clipboard) navigator.clipboard.writeText(field.value).then(() => {
-      const state = document.querySelector(".link-box .copy-state");
-      if (state) state.textContent = "Link copied";
-    }).catch(() => {});
   });
 }

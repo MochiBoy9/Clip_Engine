@@ -160,7 +160,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         if (!live) return;
         _cleanupTimer.Start();
-        if (OperatingSystem.IsWindows()) UrlProtocol.Register();
+        if (OperatingSystem.IsWindows())
+        {
+            UrlProtocol.Register();
+            InstallInfo.Refresh();
+        }
 
         _library = new ClipLibrary { ExtraFolders = DesktopSettings.ImportFolders };
         _library.Changed += () => _ = RefreshClipsAsync();

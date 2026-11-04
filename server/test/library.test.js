@@ -188,3 +188,40 @@ test("a cloud clip carries a quiet Clip Engine mark that leads to the download",
   assert.match(page, /<meta property="og:site_name" content="Clip Engine">/);
   assert.match(page, /Download Clip Engine/);
 });
+
+test("a shared clip's Discord preview says it was made with Clip Engine and where to get it", async () => {
+  const env = fakeEnv();
+  const me = await account(env);
+  const clip = await uploadClip(env, me, { title: "Ace" });
+
+  const page = await (await call(env, `/c/${clip.code}`)).text();
+  const description = page.match(/<meta property="og:description" content="([^"]*)"/)[1];
+  assert.match(description, /^Valorant · 1 kill · 0:15\. Clipped automatically with Clip Engine\. Free for Windows: mochiboy9\.github\.io\/Clip_Engine$/);
+  assert.match(page, new RegExp(`<link rel="alternate" type="application/json\\+oembed" href="https://squads\\.test/c/${clip.code}/oembed"`));
+  assert.match(page, /class="get-btn" href="[^"]+#download">Download free</, "a download button under the video");
+
+  const oembed = await call(env, `/c/${clip.code}/oembed`);
+  assert.equal(oembed.status, 200);
+  const body = await oembed.json();
+  assert.equal(body.provider_name, "Clip Engine");
+  assert.equal(body.provider_url, SITE_URL);
+  assert.equal(body.author_url, SITE_URL);
+  assert.match(body.author_name, /^Enterro · Clipped with Clip Engine, free for Windows$/);
+  assert.equal(body.title, "Ace");
+  assert.equal(body.width, 1920);
+
+  assert.equal((await call(env, "/c/ABCDEFGH123456/oembed")).status, 404);
+});
+
+test("a link-preview fetch isn't counted as a view, and bad addresses are 404s, not errors", async () => {
+  const env = fakeEnv();
+  const me = await account(env);
+  const clip = await uploadClip(env, me);
+  await call(env, `/c/${clip.code}`, { headers: { "user-agent": "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)" } });
+  assert.equal((await (await call(env, `/c/${clip.code}.json`)).json()).views, 0);
+  await call(env, `/c/${clip.code}`, { headers: { "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" } });
+  assert.equal((await (await call(env, `/c/${clip.code}.json`)).json()).views, 1);
+
+  assert.equal((await call(env, "/u/%E0%A4%A")).status, 404);
+  assert.equal((await call(env, "/s/%E0%A4%A")).status, 404);
+});

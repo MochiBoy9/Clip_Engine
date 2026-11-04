@@ -72,6 +72,20 @@ jobs:
           Copy-Item LICENSE dist/LICENSE.txt
           Get-ChildItem dist -Filter *.pdb | Remove-Item
 
+      # The installer (installer/ClipEngine.iss) wraps the same files: a Start menu entry, an uninstaller and
+      # clipengine:// links, for the current Windows account only. Inno Setup is on GitHub's Windows images; it's
+      # installed with Chocolatey if not.
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          & $iscc "/DAppVersion=${{ steps.version.outputs.version }}" /DSourceDir=..\dist installer\ClipEngine.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Render screenshots
         run: dotnet run --project ui/ClipEngine.Desktop.Preview -c Release -- screenshots
 
@@ -79,6 +93,12 @@ jobs:
         with:
           name: Clip_Engine-${{ steps.version.outputs.version }}-windows-x64
           path: dist/
+          retention-days: 14
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Clip_Engine-${{ steps.version.outputs.version }}-setup
+          path: installer-out/Clip_Engine-Setup.exe
           retention-days: 14
 
       - uses: actions/upload-artifact@v4

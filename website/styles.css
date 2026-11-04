@@ -181,6 +181,12 @@ h3 { font-size: 18px; margin-bottom: 6px; }
   font: 500 12px var(--mono); color: var(--dim);
 }
 .readouts b { display: block; font: 700 20px var(--mono); color: var(--text); }
+.readouts .live b { color: var(--accent); font-variant-numeric: tabular-nums; }
+.readouts .live b::after {
+  content: ""; display: inline-block; width: 6px; height: 6px; margin: 0 0 4px 8px; border-radius: 50%;
+  background: var(--ok); box-shadow: 0 0 0 3px rgba(52, 209, 125, 0.18); vertical-align: middle;
+}
+.readouts [hidden], .specs [hidden] { display: none; }
 
 /* A screenshot in a frame, with a caption like a figure in a manual */
 .figure { margin: 0; }
