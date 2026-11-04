@@ -78,6 +78,9 @@ public sealed class SettingsViewModel : ObservableObject
 
     private Services.Plan CurrentPlan => _plan?.Plan ?? Services.Plan.Free;
 
+    // The highest resolution allowed: the plan's, or a special key's.
+    private int MaxLines => _plan?.MaxLines ?? Plans.Free.Lines;
+
     public IReadOnlyList<ResolutionOption> ResolutionOptions { get; }
 
     public ResolutionOption Resolution
@@ -94,8 +97,10 @@ public sealed class SettingsViewModel : ObservableObject
     {
         get
         {
-            var effective = Resolutions.Effective(_resolution.Value, CurrentPlan);
-            var plan = CurrentPlan switch
+            var effective = Resolutions.Effective(_resolution.Value, MaxLines);
+            var plan = _plan?.IsSpecial == true && MaxLines != Plans.For(CurrentPlan).Lines
+                ? $"Your special key records up to {Resolutions.Name(MaxLines)}."
+                : CurrentPlan switch
             {
                 Services.Plan.Ultra => "Ultra records up to 4K.",
                 Services.Plan.Pro => "Pro records up to 1440p, and Ultra up to 4K.",
@@ -112,7 +117,7 @@ public sealed class SettingsViewModel : ObservableObject
         try
         {
             var engine = EngineSettings.Load(AppPaths.EngineSettingsFile);
-            var effective = Resolutions.Effective(_desktop.Resolution, CurrentPlan);
+            var effective = Resolutions.Effective(_desktop.Resolution, MaxLines);
             if (engine.Resolution == effective) return false;
             engine.Resolution = effective;
             engine.Save(AppPaths.EngineSettingsFile);
@@ -133,7 +138,7 @@ public sealed class SettingsViewModel : ObservableObject
 
     private void RefreshResolutions()
     {
-        foreach (var option in ResolutionOptions) option.Refresh(CurrentPlan);
+        foreach (var option in ResolutionOptions) option.Refresh(MaxLines);
         if (!HasChanges) _resolution = ResolutionOptions.FirstOrDefault(o => o.Value == _desktop.Resolution && o.IsAvailable) ?? _resolution;
         if (!_resolution.IsAvailable) _resolution = ResolutionOptions[0];
         Raise(nameof(Resolution));
@@ -346,7 +351,7 @@ public sealed class SettingsViewModel : ObservableObject
         ClipSeconds = (int)ClipSeconds,
         Fps = Fps.Value,
         BitrateMbps = (int)Bitrate,
-        Resolution = Resolutions.Effective(_resolution.Value, CurrentPlan),
+        Resolution = Resolutions.Effective(_resolution.Value, MaxLines),
         Codec = _codec,
         GameAudio = GameAudio,
         MicAudio = MicAudio,

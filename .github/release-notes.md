@@ -1,10 +1,9 @@
-## Clip Engine 0.12.0
+## Clip Engine 0.12.1
 
-Plans, friends, and a resolution you choose.
+Special keys, and Ultra costs less.
 
-- **Free, Pro and Ultra.** Free records every game up to 1080p, with a 2 GB cloud library. Pro ($2.99 a month) goes to 1440p with 100 GB, all seven colour themes, a Pro badge and your name in the credits. Ultra ($9.99 a month) goes to 4K with 250 GB, three Ultra-only themes and top billing in the credits. Subscribing emails a license key: paste it in Settings > Plan. Supporter keys from Patreon are gone.
-- **Pick your resolution.** Settings > Resolution records smaller, from 480p up to the most your plan allows, which is lighter on the game and on your disk. Clip Engine never records bigger than your monitor.
-- **Friends.** The new Friends page adds friends by profile name or friend code, shows who's online and what they're playing, and has a Join squad button when a friend shares their squad. Friends come with your cloud account, so they follow you to every PC.
-- **Easier to read.** Picked chips and squadmate tiles show black text on yellow.
+- **Special keys.** Settings > Plan now also takes special keys (they start with `CEK-`). One can give Pro or Ultra for a set time, extra cloud storage, a higher recording resolution or extra colour themes. It goes in the same box as a subscription key, and putting it on your cloud account gives the account its storage too.
+- **Ultra is $4.99 a month**, down from $9.99, with the same 4K recording, 250 GB cloud library and themes.
+- **Clearer plan card.** The plan card says what your key gives and, for a special key, when it ends.
 
 Download `Clip_Engine-windows-x64.zip`, unzip it anywhere and run `ClipEngine.exe`. If you already have Clip Engine, update from Settings.

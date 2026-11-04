@@ -1,7 +1,10 @@
 // The service's one directory, a single Durable Object: which account each public profile name
 // (@handle) belongs to, so two accounts can't take the same one; who's online and what they're
-// playing, which friends see; which cloud account each subscription is on; and the names
-// subscribers asked to have in the credits. Only the Worker and the libraries talk to it.
+// playing, which friends see; which cloud account each subscription is on; the names subscribers
+// asked to have in the credits; and the special keys made in the key maker. Only the Worker and
+// the libraries talk to it.
+
+import { cleanGrant, formatGrant, newGrantCode, PLANS } from "./plans.js";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS handles (handle TEXT PRIMARY KEY, account TEXT NOT NULL UNIQUE, claimed INTEGER NOT NULL);
@@ -10,6 +13,11 @@ CREATE TABLE IF NOT EXISTS presence (account TEXT PRIMARY KEY, name TEXT NOT NUL
 CREATE TABLE IF NOT EXISTS licenses (license TEXT PRIMARY KEY, account TEXT NOT NULL, claimed INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS credits (license TEXT PRIMARY KEY, name TEXT NOT NULL, plan TEXT NOT NULL, since INTEGER NOT NULL,
   seen INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS grants (code TEXT PRIMARY KEY, plan TEXT NOT NULL, days INTEGER, extra_mb INTEGER NOT NULL DEFAULT 0,
+  themes TEXT, lines INTEGER, max_devices INTEGER NOT NULL DEFAULT 3, note TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL,
+  first_used INTEGER, last_used INTEGER, revoked INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS grant_devices (code TEXT NOT NULL, device TEXT NOT NULL, first INTEGER NOT NULL,
+  PRIMARY KEY (code, device));
 `;
 
 // A credit stays listed this long after the subscriber's app last checked their key.
@@ -69,7 +77,7 @@ export class Handles {
 
   async directory(request, url) {
     const path = url.pathname;
-    if (!/^\/(presence|license|credits)(\/|$)/.test(path)) return null;
+    if (!/^\/(presence|license|credits|grant)(\/|$)/.test(path)) return null;
     const body = request.method === "POST" ? await request.json().catch(() => null) : null;
     const now = Date.now();
 
@@ -128,11 +136,106 @@ export class Handles {
       this.sql.exec("DELETE FROM credits WHERE license = ?", body.license);
       return json({ ok: true });
     }
+    // ---- special keys ----
+    if (path === "/grant/check" && typeof body?.code === "string") return this.checkGrant(body.code, String(body.device ?? ""), now);
+    if (path === "/grant/list") {
+      return json({ grants: this.sql.exec("SELECT * FROM grants ORDER BY created DESC").toArray().map((r) => this.grantJson(r, now)) });
+    }
+    if (path === "/grant/create" && body) {
+      const { grant, error } = cleanGrant(body, { plan: "pro", days: 30, extraMb: 0, themes: null, lines: null, maxDevices: 3, note: "" });
+      if (error) return json({ error }, 400);
+      const count = Number.isInteger(body.count) && body.count >= 1 && body.count <= 100 ? body.count : 1;
+      const made = [];
+      for (let i = 0; i < count; i++) {
+        let code;
+        do code = newGrantCode();
+        while (this.grantRow(code));
+        this.sql.exec(
+          `INSERT INTO grants (code, plan, days, extra_mb, themes, lines, max_devices, note, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          code, grant.plan, grant.days, grant.extraMb, grant.themes ? JSON.stringify(grant.themes) : null, grant.lines,
+          grant.maxDevices, grant.note, now + i);
+        made.push(this.grantJson(this.grantRow(code), now));
+      }
+      return json({ grants: made });
+    }
+    if (path === "/grant/update" && typeof body?.code === "string") {
+      const row = this.grantRow(body.code);
+      if (!row) return json({ error: "There's no such key." }, 404);
+      const { grant, error } = cleanGrant(body, this.grantFields(row));
+      if (error) return json({ error }, 400);
+      this.sql.exec(
+        `UPDATE grants SET plan = ?, days = ?, extra_mb = ?, themes = ?, lines = ?, max_devices = ?, note = ?, revoked = ? WHERE code = ?`,
+        grant.plan, grant.days, grant.extraMb, grant.themes ? JSON.stringify(grant.themes) : null, grant.lines, grant.maxDevices,
+        grant.note, grant.revoked ? 1 : 0, row.code);
+      if (body.resetDevices) this.sql.exec("DELETE FROM grant_devices WHERE code = ?", row.code);
+      if (body.restart) this.sql.exec("UPDATE grants SET first_used = NULL WHERE code = ?", row.code);
+      return json(this.grantJson(this.grantRow(row.code), now));
+    }
+
     if (path === "/credits" && request.method === "GET") {
       this.sql.exec("DELETE FROM credits WHERE seen < ?", now - CREDIT_KEEP_MS);
       const rows = this.sql.exec("SELECT name, plan FROM credits ORDER BY since").toArray();
       return json({ ultra: rows.filter((r) => r.plan === "ultra").map((r) => r.name), pro: rows.filter((r) => r.plan === "pro").map((r) => r.name) });
     }
     return json({ error: "Not found." }, 404);
+  }
+
+  grantRow(code) {
+    return this.sql.exec("SELECT * FROM grants WHERE code = ?", code).toArray()[0] ?? null;
+  }
+
+  grantFields(row) {
+    return {
+      plan: row.plan, days: row.days, extraMb: row.extra_mb, themes: row.themes ? JSON.parse(row.themes) : null,
+      lines: row.lines, maxDevices: row.max_devices, note: row.note, revoked: row.revoked === 1,
+    };
+  }
+
+  // A key's end: its days counted from the first time it was used; null for no end or not used yet.
+  grantExpires(row) {
+    return row.days && row.first_used ? row.first_used + row.days * 24 * 3600_000 : null;
+  }
+
+  grantJson(row, now) {
+    const expires = this.grantExpires(row);
+    const devices = this.sql.exec("SELECT COUNT(*) AS n FROM grant_devices WHERE code = ?", row.code).toArray()[0].n;
+    const status = row.revoked ? "revoked" : !row.first_used ? "unused" : expires && expires <= now ? "expired" : "active";
+    const f = this.grantFields(row);
+    return {
+      code: formatGrant(row.code), plan: f.plan, days: f.days, extraStorageGb: Math.round((f.extraMb / 1024) * 100) / 100,
+      themes: f.themes, lines: f.lines, maxDevices: f.maxDevices, note: f.note, created: row.created,
+      firstUsed: row.first_used, lastUsed: row.last_used, expires, devices, status,
+    };
+  }
+
+  checkGrant(code, device, now) {
+    const row = this.grantRow(code);
+    if (!row) return json({ ok: false, rejected: true, error: "That key wasn't found. Check every letter." });
+    if (row.revoked) return json({ ok: false, rejected: true, error: "This key was turned off." });
+    const expires = this.grantExpires(row);
+    if (expires && expires <= now) return json({ ok: false, rejected: true, error: "This key has run out." });
+    if (device) {
+      const known = this.sql.exec("SELECT 1 FROM grant_devices WHERE code = ? AND device = ?", code, device).toArray().length > 0;
+      if (!known) {
+        const used = this.sql.exec("SELECT COUNT(*) AS n FROM grant_devices WHERE code = ?", code).toArray()[0].n;
+        if (used >= row.max_devices) {
+          return json({ ok: false, rejected: true, error: `This key is already used on ${row.max_devices} ${row.max_devices === 1 ? "PC" : "PCs"}.` });
+        }
+        this.sql.exec("INSERT INTO grant_devices (code, device, first) VALUES (?, ?, ?)", code, device, now);
+      }
+    }
+    if (!row.first_used) this.sql.exec("UPDATE grants SET first_used = ? WHERE code = ?", now, code);
+    this.sql.exec("UPDATE grants SET last_used = ? WHERE code = ?", now, code);
+    const fresh = this.grantRow(code);
+    const f = this.grantFields(fresh);
+    return json({
+      ok: true,
+      plan: PLANS[f.plan] ? f.plan : "free",
+      license: `grant:${code}`,
+      display: `${formatGrant(code).slice(0, 8)}…${code.slice(-4)}`,
+      expires: this.grantExpires(fresh),
+      grant: true,
+      features: { extraMb: f.extraMb, themes: f.themes, lines: f.lines },
+    });
   }
 }

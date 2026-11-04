@@ -325,25 +325,27 @@ public sealed record FpsOption(int Value, string Label)
     public override string ToString() => Label;
 }
 
-// One choice in Settings' resolution list. Ones above the plan's are shown with the plan that has them.
+// One choice in Settings' resolution list. Ones above the plan's (or a special key's) are shown with the plan that
+// has them.
 public sealed class ResolutionOption(int value) : ObservableObject
 {
-    private Plan _plan;
+    private int _cap = Plans.Free.Lines;
 
     public int Value { get; } = value;
-    public bool IsAvailable => Value <= 0 || Resolutions.Needs(Value) <= _plan;
+    public bool IsAvailable => Value <= 0 || Value <= _cap;
 
     public string Label => Value switch
     {
-        <= 0 => $"Best for plan ({Resolutions.Name(Plans.For(_plan).Lines)})",
+        <= 0 => $"Best for plan ({Resolutions.Name(_cap)})",
         2160 => IsAvailable ? "4K (2160p)" : "4K (2160p) · Ultra",
         _ when !IsAvailable => $"{Resolutions.Name(Value)} · {Resolutions.Needs(Value)}",
         _ => Resolutions.Name(Value),
     };
 
-    internal void Refresh(Plan plan)
+    // cap: the highest resolution the plan or a special key allows.
+    internal void Refresh(int cap)
     {
-        _plan = plan;
+        _cap = cap;
         Raise(string.Empty);
     }
 

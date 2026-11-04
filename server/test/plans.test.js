@@ -61,7 +61,7 @@ test("a license key says which plan it pays for", async () => {
   assert.equal(info.storage, 102_400 * 1024 * 1024);
   assert.equal((await call(env, "/v1/license", { method: "POST", body: { key: "OLD-KEY-0001" } })).status, 403);
   const plans = await (await call(env, "/v1/plans")).json();
-  assert.deepEqual(plans.plans.map((p) => [p.plan, p.price, p.lines]), [["free", 0, 1080], ["pro", 2.99, 1440], ["ultra", 9.99, 2160]]);
+  assert.deepEqual(plans.plans.map((p) => [p.plan, p.price, p.lines]), [["free", 0, 1080], ["pro", 2.99, 1440], ["ultra", 4.99, 2160]]);
   assert.equal(plans.open, true);
 });
 

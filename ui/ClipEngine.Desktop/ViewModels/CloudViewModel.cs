@@ -278,11 +278,14 @@ public sealed class CloudViewModel : ObservableObject
         }
     }
 
-    // A subscription on this PC that the cloud account doesn't have yet goes on it, for its storage.
+    // A subscription or special key on this PC that the cloud account doesn't have yet goes on it, for its storage.
     private async Task SyncPlanAsync()
     {
         if (_api is not { } api || _account is not { } account || _main.Plan.LicenseKey is not { } key) return;
-        if (!_main.Plan.IsPaid || Plans.FromId(account.Plan) >= _main.Plan.Plan) return;
+        var better = _main.Plan.IsSpecial
+            ? account.PlanKey is null && (_main.Plan.ExtraStorage > 0 || Plans.FromId(account.Plan) < _main.Plan.Plan)
+            : _main.Plan.IsPaid && Plans.FromId(account.Plan) < _main.Plan.Plan;
+        if (!better) return;
         try
         {
             _account = await api.SetPlanAsync(Settings.AccountId, _token, key);

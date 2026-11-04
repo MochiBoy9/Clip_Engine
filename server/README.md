@@ -26,7 +26,7 @@ You need [Node.js](https://nodejs.org) 20 or newer and a Cloudflare account.
    ```
 
    `wrangler login` opens your browser to allow access. `wrangler deploy` ends by printing the service's address, `https://clip-engine.<your-subdomain>.workers.dev`.
-4. Optional: set an admin token, so you can move accounts to the Plus plan:
+4. Set an admin token. The key maker needs it, and it lets you move accounts between plans. Pick a long random one, such as the output of `openssl rand -hex 32`, and keep it to yourself:
 
    ```sh
    npx wrangler secret put ADMIN_TOKEN
@@ -49,14 +49,14 @@ These live in `wrangler.toml` under `[vars]`:
 | `KEEP_DAYS` | 30 | Days before unstarred squad views are removed |
 | `FREE_STORAGE_MB` | 2048 | Cloud library space on the Free plan |
 | `PRO_STORAGE_MB` | 102400 | Cloud library space on Pro ($2.99 a month) |
-| `ULTRA_STORAGE_MB` | 256000 | Cloud library space on Ultra ($9.99 a month) |
+| `ULTRA_STORAGE_MB` | 256000 | Cloud library space on Ultra ($4.99 a month) |
 | `POLAR_ORGANIZATION_ID` | empty | Your Polar organization (Settings > General). Until it's set, license keys are refused with "Subscriptions aren't open yet." |
 | `POLAR_PRO_BENEFIT_ID` | empty | The License Keys benefit on the Pro product |
 | `POLAR_ULTRA_BENEFIT_ID` | empty | The License Keys benefit on the Ultra product |
 
 ## Pro and Ultra on Polar
 
-1. In Polar, make two monthly products: Pro at $2.99 and Ultra at $9.99.
+1. In Polar, make two monthly products: Pro at $2.99 and Ultra at $4.99.
 2. Give each one a **License Keys** benefit. No activation limit is needed.
 3. Copy the organization id and both benefit ids into `[vars]` above, and `npx wrangler deploy`.
 4. Make a checkout link for each product and put them in `PlanConfig` (`ui/ClipEngine.Desktop/Services/Plans.cs`) and `LINKS` (`website/site.js`). The customer portal link goes in `PlanConfig.ManageUrl`.
@@ -73,24 +73,6 @@ curl -X POST https://clip-engine.<your-subdomain>.workers.dev/v1/admin/plan \
 
 The account id is the first 8 characters of any of the account's share codes.
 
-## Working on it
+### Special keys
 
-```sh
-npm install
-npm test            # unit tests, no network
-npx wrangler dev    # the service on http://localhost:8787, with local storage
-node test/e2e.mjs   # while wrangler dev runs: squads, uploads, share pages and profiles
-```
-
-The desktop app's online tests run against `wrangler dev` too:
-
-```sh
-CLIPENGINE_TEST_SERVER=http://localhost:8787 dotnet test ui/ClipEngine.Desktop.Tests --filter OnlineServiceTests
-```
-
-## What's stored
-
-- **Squads:** each member's name and device id, a hash of each member's token, and the moments shared (type, game, time, killfeed text). It also keeps which views exist and the view files squadmates uploaded.
-- **Cloud library:** the account name, its handle, a hash of each PC's token, and each clip's title, game, length, moments and file.
-
-Tokens never leave the PC that holds them except to sign requests, and the app keeps them encrypted for the Windows account. When a player leaves a squad, the views they uploaded are deleted with them. When an account removes a clip, its file is deleted too.
+Special keys (`CEK-XXXX-XXXX-XXXX`) give a plan, extra cloud storage, a resolution and colour themes for a set time, and go in the same box as a subscription key (Settings, Plan). They're made and managed with the operator's own key maker, which isn't part of this repository, through `/v1/admin/grants` with the `ADMIN_TOKEN`. A special key on a cloud account gives that account its storage, one account per key.

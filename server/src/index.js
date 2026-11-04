@@ -19,9 +19,14 @@
 //   POST|DELETE /presence           online for friends, with the game and a squad invite { game, invite? }
 //   POST /v1/admin/plan             set an account's plan     { account, plan } (Authorization: Bearer ADMIN_TOKEN)
 //
+// Special keys (for the operator's key maker; every route needs Authorization: Bearer ADMIN_TOKEN):
+//   GET  /v1/admin/grants           every key with its status, PCs and end date
+//   POST /v1/admin/grants           make keys  { count, plan, days, extraStorageGb, themes, lines, maxDevices, note }
+//   PATCH /v1/admin/grants/<key>    change one { any of those, revoked, resetDevices, restart }
+//
 // Plans (src/plans.js):
 //   GET  /v1/plans                  Free, Pro and Ultra: price, storage and resolution
-//   POST /v1/license                check a Polar license key { key, credit? } and list or unlist its name in the credits
+//   POST /v1/license                check a Polar or special key { key, device, credit? } and list or unlist its name in the credits
 //   GET  /v1/credits                the names subscribers asked to have in the credits
 //
 // Public pages:
@@ -37,7 +42,7 @@ import { Handles, normalizeHandle } from "./handles.js";
 import { CLIP_CODE_LENGTH, Library } from "./library.js";
 import { formatInvite } from "./codes.js";
 import { clipPage, invitePage, notFoundPage, profilePage } from "./pages.js";
-import { checkLicense, PLANS, planJson } from "./plans.js";
+import { checkLicense, normalizeGrant, PLANS, planJson } from "./plans.js";
 import { Squad } from "./squad.js";
 
 export { Handles, Library, Squad };
@@ -96,6 +101,40 @@ function normalizeSignIn(text) {
   const code = text.trim().split(/[/#?=]/).pop().toUpperCase().replace(/[\s-]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
   if (code.length !== SQUAD_ID_LENGTH + 6 || !ALPHABET.test(code)) return null;
   return { account: code.slice(0, SQUAD_ID_LENGTH), secret: code.slice(SQUAD_ID_LENGTH) };
+}
+
+// The operator's routes and the key maker: Authorization: Bearer ADMIN_TOKEN (a Worker secret).
+function admin(request, env) {
+  const token = (request.headers.get("authorization") ?? "").replace(/^Bearer /, "");
+  return Boolean(env.ADMIN_TOKEN) && token.length > 0 && sameSecret(token, env.ADMIN_TOKEN);
+}
+
+// The operator's special keys. The key maker that calls these is a file on the operator's own PC, so these answer
+// any origin; without the token they do nothing.
+async function grantRoute(request, env, url, path, method) {
+  if (method === "OPTIONS") return new Response(null, { status: 204 });
+  if (!admin(request, env)) return json({ error: "Not allowed." }, 403);
+  if (path === "/v1/admin/grants" && method === "GET") {
+    return stub(env.HANDLES, "handles").fetch(new Request(`${url.origin}/grant/list`, { method: "POST", body: "{}" }));
+  }
+  if (path === "/v1/admin/grants" && method === "POST") return directory(env, url, "/grant/create", (await readBody(request)) ?? {});
+  const m = path.match(/^\/v1\/admin\/grants\/([^/]+)$/);
+  if (m && method === "PATCH") {
+    const code = normalizeGrant(decodeURIComponent(m[1]));
+    if (!code) return json({ error: "That isn't a special key." }, 400);
+    return directory(env, url, "/grant/update", { ...((await readBody(request)) ?? {}), code });
+  }
+  return json({ error: "Not found." }, 404);
+}
+
+function withCors(response) {
+  const out = new Response(response.body, response);
+  out.headers.set("access-control-allow-origin", "*");
+  out.headers.set("access-control-allow-methods", "GET, POST, PATCH, OPTIONS");
+  out.headers.set("access-control-allow-headers", "authorization, content-type");
+  out.headers.set("access-control-max-age", "600");
+  out.headers.set("cache-control", "no-store");
+  return out;
 }
 
 function directory(env, url, path, body) {
@@ -168,9 +207,9 @@ export default {
     }
     m = path.match(/^\/v1\/accounts\/([0-9A-Za-z]+)(\/.*)$/);
     if (m && isSquadId(m[1].toUpperCase()) && !internal(m[2])) return forward(stub(env.LIBRARIES, m[1].toUpperCase()), request, m[2]);
+    if (path.startsWith("/v1/admin/grants")) return withCors(await grantRoute(request, env, url, path, method));
+    if (path.startsWith("/v1/admin/") && !admin(request, env)) return json({ error: "Not allowed." }, 403);
     if (path === "/v1/admin/plan" && method === "POST") {
-      const token = (request.headers.get("authorization") ?? "").replace(/^Bearer /, "");
-      if (!env.ADMIN_TOKEN || !sameSecret(token, env.ADMIN_TOKEN)) return json({ error: "Not allowed." }, 403);
       const body = await readBody(request);
       if (!isSquadId(body?.account)) return json({ error: "Which account?" }, 400);
       return forward(stub(env.LIBRARIES, body.account), request, "/admin/plan", { body: JSON.stringify({ plan: body.plan }) });
@@ -182,12 +221,12 @@ export default {
     }
     if (path === "/v1/license" && method === "POST") {
       const body = await readBody(request);
-      const check = await checkLicense(env, body?.key);
+      const check = await checkLicense(env, body?.key, typeof body?.device === "string" ? body.device : "");
       if (!check.ok) return json({ error: check.error, rejected: check.rejected }, check.rejected ? 403 : 503);
-      if (body?.credit !== undefined) {
+      if (body?.credit !== undefined && check.plan !== "free") {
         await directory(env, url, "/credits/set", { license: check.license, name: typeof body.credit === "string" ? body.credit : "", plan: check.plan });
       }
-      return json({ ...planJson(env, check.plan), display: check.display, expires: check.expires });
+      return json({ ...planJson(env, check.plan, check.features), display: check.display, expires: check.expires, grant: Boolean(check.grant) });
     }
     if (path === "/v1/credits" && method === "GET") {
       const answer = await stub(env.HANDLES, "handles").fetch(new Request(`${url.origin}/credits`));

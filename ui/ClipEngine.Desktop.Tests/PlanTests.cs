@@ -38,19 +38,83 @@ public class PlanTests : IDisposable
         Assert.Equal(Plan.Pro, Resolutions.Needs(1440));
         Assert.Equal(Plan.Free, Resolutions.Needs(720));
         Assert.Equal("$2.99/mo", Plans.Pro.PriceText);
-        Assert.Equal("$9.99/mo", Plans.Ultra.PriceText);
+        Assert.Equal("$4.99/mo", Plans.Ultra.PriceText);
         Assert.Equal(Plan.Pro, Plans.FromId("plus"));
 
         var option = new ResolutionOption(1440);
-        option.Refresh(Plan.Free);
+        option.Refresh(Plans.Free.Lines);
         Assert.False(option.IsAvailable);
         Assert.Equal("1440p · Pro", option.Label);
-        option.Refresh(Plan.Pro);
+        option.Refresh(Plans.Pro.Lines);
         Assert.True(option.IsAvailable);
         Assert.Equal("1440p", option.Label);
         var best = new ResolutionOption(0);
-        best.Refresh(Plan.Ultra);
+        best.Refresh(Plans.Ultra.Lines);
         Assert.Equal("Best for plan (4K)", best.Label);
+    }
+
+    [Fact]
+    public async Task SpecialKeysBringTheirOwnFeatures()
+    {
+        var server = new FakeServer((_, body) => body.Contains("CEK-FREE")
+            ? (HttpStatusCode.OK, """{"plan":"free","lines":1440,"themes":["ember","chrome"],"extraStorage":10737418240,"grant":true,"display":"CEK-FREE…AAAA","expires":4102444800000}""")
+            : (HttpStatusCode.OK, """{"plan":"free","lines":1080,"themes":null,"extraStorage":0}"""));
+        var client = new LicenseClient("https://service.test/", new HttpClient(server));
+
+        var check = await client.CheckAsync("CEK-FREE-AAAA-AAAA", null, "pc-1");
+        Assert.Equal(LicenseOutcome.Valid, check.Outcome);
+        Assert.True(check.IsSpecial);
+        Assert.Equal(Plan.Free, check.Plan);
+        Assert.Equal(1440, check.Lines);
+        Assert.Equal(["ember", "chrome"], check.Themes);
+        Assert.Equal(10L << 30, check.ExtraStorage);
+        Assert.Equal("pc-1", System.Text.Json.Nodes.JsonNode.Parse(server.Bodies[^1])!["device"]!.GetValue<string>());
+        Assert.Equal(LicenseOutcome.Rejected, (await client.CheckAsync("PLAIN-FREE-KEY", null)).Outcome);
+
+        var vm = new PlanViewModel(null, null, () => "", []);
+        vm.Accept("CEK-FREE-AAAA-AAAA", check);
+        Assert.Equal(Plan.Free, vm.Plan);
+        Assert.True(vm.IsSpecial);
+        Assert.False(vm.ShowKeyBox);
+        Assert.Equal(1440, vm.MaxLines);
+        Assert.Equal(10L << 30, vm.ExtraStorage);
+        Assert.True(vm.IsUnlocked(AccentThemes.Find("chrome")), "a special key can give an Ultra theme");
+        Assert.True(vm.IsUnlocked(AccentThemes.Default));
+        Assert.False(vm.IsUnlocked(AccentThemes.Find("mint")));
+        Assert.Contains("1440p recording, 10 GB more cloud storage and extra colour themes", vm.Detail);
+        Assert.Contains("until", vm.Detail);
+
+        // Pro from a special key with the plan's themes: the plan decides, with the key's resolution.
+        vm.Accept("CEK-PRO", new LicenseCheck(LicenseOutcome.Valid, "", Plan.Pro, "", null, true, 2160, null, 0));
+        Assert.Equal(2160, vm.MaxLines);
+        Assert.True(vm.IsUnlocked(AccentThemes.Find("mint")));
+        Assert.False(vm.IsUnlocked(AccentThemes.Find("chrome")));
+        Assert.Equal(1440, Resolutions.Effective(1440, vm.MaxLines));
+
+        // A subscription key never carries a special key's features over.
+        vm.Accept("POLAR", new LicenseCheck(LicenseOutcome.Valid, "", Plan.Pro));
+        Assert.False(vm.IsSpecial);
+        Assert.Equal(1440, vm.MaxLines);
+
+        vm.Remove();
+        Assert.Equal(1080, vm.MaxLines);
+        Assert.True(vm.ShowKeyBox);
+    }
+
+    [Fact]
+    public void ASpecialKeysFeaturesAreKept()
+    {
+        var file = Path.Combine(_dir, "license.json");
+        new LicenseState { Key = "CEK-1", IsSpecial = true, Lines = 1440, Themes = ["arc"], ExtraStorage = 5, LastOk = DateTimeOffset.UtcNow }.Save(file);
+        var loaded = LicenseState.Load(file);
+        Assert.True(loaded.IsSpecial);
+        Assert.Equal(1440, loaded.Lines);
+        Assert.Equal(["arc"], loaded.Themes);
+        Assert.Equal(5, loaded.ExtraStorage);
+        Assert.True(LicenseRules.IsActive(loaded, DateTimeOffset.UtcNow));
+        loaded.Clear();
+        Assert.False(loaded.IsSpecial);
+        Assert.Null(loaded.Themes);
     }
 
     [Fact]

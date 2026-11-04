@@ -24,7 +24,7 @@ internal static class Plans
     public static readonly PlanInfo Pro = new(Plan.Pro, "pro", "Pro", 2.99m, 100, 1440,
         ["Records up to 1440p", "100 GB cloud library", "All seven colour themes", "Pro badge and your name in the credits"]);
 
-    public static readonly PlanInfo Ultra = new(Plan.Ultra, "ultra", "Ultra", 9.99m, 250, 2160,
+    public static readonly PlanInfo Ultra = new(Plan.Ultra, "ultra", "Ultra", 4.99m, 250, 2160,
         ["Everything in Pro", "Records up to 4K", "250 GB cloud library", "Three Ultra-only colour themes",
          "Ultra badge and top billing in the credits"]);
 
@@ -56,11 +56,10 @@ internal static class Resolutions
 {
     public static readonly IReadOnlyList<int> Choices = [0, 2160, 1440, 1080, 720, 480];
 
-    public static int Effective(int choice, Plan plan)
-    {
-        var cap = Plans.For(plan).Lines;
-        return choice <= 0 ? cap : Math.Min(choice, cap);
-    }
+    public static int Effective(int choice, Plan plan) => Effective(choice, Plans.For(plan).Lines);
+
+    // cap: the most the plan allows, or what a special key sets.
+    public static int Effective(int choice, int cap) => choice <= 0 ? cap : Math.Min(choice, cap);
 
     public static Plan Needs(int lines) => lines > Plans.Pro.Lines ? Plan.Ultra : lines > Plans.Free.Lines ? Plan.Pro : Plan.Free;
 
@@ -85,6 +84,13 @@ internal sealed class LicenseState
     // The name to show in the credits, and whether to.
     public string CreditName { get; set; } = "";
     public bool InCredits { get; set; } = true;
+
+    // What a special key from the key maker changes: the highest resolution, the colour themes (null = the
+    // plan's) and extra cloud storage in bytes.
+    public bool IsSpecial { get; set; }
+    public int? Lines { get; set; }
+    public List<string>? Themes { get; set; }
+    public long ExtraStorage { get; set; }
 
     [JsonIgnore] public bool HasKey => Key.Length > 0;
 
@@ -117,6 +123,10 @@ internal sealed class LicenseState
             LastOk = LastOk,
             CreditName = CreditName,
             InCredits = InCredits,
+            IsSpecial = IsSpecial,
+            Lines = Lines,
+            Themes = Themes,
+            ExtraStorage = ExtraStorage,
         };
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
         File.WriteAllText(file, JsonSerializer.Serialize(stored, PlanJson.Default.LicenseState));
@@ -127,6 +137,10 @@ internal sealed class LicenseState
         Key = Display = "";
         Plan = Plan.Free;
         Expires = LastChecked = LastOk = null;
+        IsSpecial = false;
+        Lines = null;
+        Themes = null;
+        ExtraStorage = 0;
     }
 }
 
@@ -138,12 +152,14 @@ internal static class LicenseRules
     // How often the key is checked again while the app runs, so a cancelled subscription ends.
     public static readonly TimeSpan RecheckEvery = TimeSpan.FromHours(12);
 
-    public static Plan Effective(LicenseState state, DateTimeOffset now)
+    public static Plan Effective(LicenseState state, DateTimeOffset now) => IsActive(state, now) ? state.Plan : Plan.Free;
+
+    // Whether the key gives anything now: checked, not run out, and not offline for too long.
+    public static bool IsActive(LicenseState state, DateTimeOffset now)
     {
-        if (!state.HasKey || state.LastOk is not { } ok) return Plan.Free;
-        if (state.Expires is { } expires && expires <= now) return Plan.Free;
-        if (now - ok > OfflineGrace) return Plan.Free;
-        return state.Plan;
+        if (!state.HasKey || state.LastOk is not { } ok) return false;
+        if (state.Expires is { } expires && expires <= now) return false;
+        return now - ok <= OfflineGrace;
     }
 
     public static bool NeedsCheck(LicenseState state, DateTimeOffset now) =>
@@ -153,22 +169,25 @@ internal static class LicenseRules
 internal enum LicenseOutcome { Valid, Rejected, Offline }
 
 internal sealed record LicenseCheck(LicenseOutcome Outcome, string Message, Plan Plan = Plan.Free, string Display = "",
-                                    DateTimeOffset? Expires = null);
+                                    DateTimeOffset? Expires = null, bool IsSpecial = false, int? Lines = null,
+                                    IReadOnlyList<string>? Themes = null, long ExtraStorage = 0);
 
 internal sealed record Credits(IReadOnlyList<string> Ultra, IReadOnlyList<string> Pro);
 
-// Checks keys with Clip Engine's online service, which asks Polar (server/src/index.js, POST /v1/license).
+// Checks keys with Clip Engine's online service, which asks Polar or, for a special key ("CEK-..."), its own list
+// (server/src/index.js, POST /v1/license).
 internal sealed class LicenseClient(string server, HttpClient? http = null)
 {
     private static readonly HttpClient Shared = new() { Timeout = TimeSpan.FromSeconds(20) };
     private readonly HttpClient _http = http ?? Shared;
     private readonly string _server = server.TrimEnd('/');
 
-    // credit: a name to list in the credits, "" to take it off, null to leave it as it is.
-    public async Task<LicenseCheck> CheckAsync(string key, string? credit, CancellationToken cancel = default)
+    // credit: a name to list in the credits, "" to take it off, null to leave it as it is. device: this PC's id,
+    // which special keys count against how many PCs they allow.
+    public async Task<LicenseCheck> CheckAsync(string key, string? credit, string device = "", CancellationToken cancel = default)
     {
         if (_server.Length == 0) return new(LicenseOutcome.Offline, "No online service is set. Add its address in Settings > Online.");
-        var body = new JsonObject { ["key"] = key.Trim() };
+        var body = new JsonObject { ["key"] = key.Trim(), ["device"] = device };
         if (credit is not null) body["credit"] = credit;
         try
         {
@@ -183,11 +202,18 @@ internal sealed class LicenseClient(string server, HttpClient? http = null)
                 return new(rejected ? LicenseOutcome.Rejected : LicenseOutcome.Offline, message);
             }
             var plan = Plans.FromId(reply?["plan"]?.GetValue<string>());
-            if (plan == Plan.Free) return new(LicenseOutcome.Rejected, "This key isn't for a Clip Engine plan.");
+            var special = reply?["grant"] is JsonValue g && g.TryGetValue<bool>(out var isGrant) && isGrant;
+            if (plan == Plan.Free && !special) return new(LicenseOutcome.Rejected, "This key isn't for a Clip Engine plan.");
             DateTimeOffset? expires = reply?["expires"] is JsonValue e && e.TryGetValue<long>(out var ms)
                 ? DateTimeOffset.FromUnixTimeMilliseconds(ms)
                 : null;
-            return new(LicenseOutcome.Valid, "", plan, reply?["display"]?.GetValue<string>() ?? "", expires);
+            if (!special) return new(LicenseOutcome.Valid, "", plan, reply?["display"]?.GetValue<string>() ?? "", expires);
+            int? lines = reply?["lines"] is JsonValue l && l.TryGetValue<int>(out var n) && n != Plans.For(plan).Lines ? n : null;
+            var themes = reply?["themes"] is JsonArray t
+                ? t.Select(x => x?.GetValue<string>() ?? "").Where(x => x.Length > 0).ToList()
+                : null;
+            var extra = reply?["extraStorage"] is JsonValue x && x.TryGetValue<long>(out var bytes) ? bytes : 0;
+            return new(LicenseOutcome.Valid, "", plan, reply?["display"]?.GetValue<string>() ?? "", expires, true, lines, themes, extra);
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException)
         {

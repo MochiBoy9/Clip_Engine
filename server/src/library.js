@@ -94,9 +94,28 @@ export class Library {
     this.sql.exec("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", key, value);
   }
 
+  // The plan, with what a special key adds: extra storage and a different highest resolution.
   plan() {
     const name = planName(this.meta("plan"));
-    return { name, label: PLANS[name].label, lines: PLANS[name].lines, storage: storageBytes(this.env, name) };
+    const features = this.features();
+    return {
+      name,
+      label: PLANS[name].label,
+      lines: features.lines ?? PLANS[name].lines,
+      storage: storageBytes(this.env, name) + (features.extraMb ?? 0) * 1024 * 1024,
+    };
+  }
+
+  features() {
+    try {
+      return JSON.parse(this.meta("plan_features") ?? "{}") ?? {};
+    } catch {
+      return {};
+    }
+  }
+
+  setFeatures(features) {
+    this.setMeta("plan_features", JSON.stringify({ extraMb: features?.extraMb ?? 0, lines: features?.lines ?? null }));
   }
 
   used() {
@@ -292,8 +311,8 @@ export class Library {
 
   // ---- plan ----
 
-  // A Polar license key put on this account: its plan sets the storage. One subscription is on
-  // one account at a time.
+  // A Polar license key or a special key put on this account: its plan sets the storage. One
+  // subscription or special key is on one account at a time.
   async claimPlan(request) {
     const body = await readJson(request);
     const key = cleanKey(body?.key);
@@ -305,6 +324,7 @@ export class Library {
     const previous = this.meta("plan_license");
     if (previous && previous !== check.license) await this.handles("/license/release", { license: previous, account: this.meta("id") });
     this.setMeta("plan", check.plan);
+    this.setFeatures(check.features);
     this.setMeta("plan_key", key);
     this.setMeta("plan_license", check.license);
     this.setMeta("plan_display", check.display || `${key.slice(0, 4)}…${key.slice(-4)}`);
@@ -316,7 +336,7 @@ export class Library {
   async forgetLicense() {
     const license = this.meta("plan_license");
     if (license) await this.handles("/license/release", { license, account: this.meta("id") });
-    this.sql.exec("DELETE FROM meta WHERE key IN ('plan_key', 'plan_license', 'plan_display', 'plan_checked', 'plan_ok')");
+    this.sql.exec("DELETE FROM meta WHERE key IN ('plan_key', 'plan_license', 'plan_display', 'plan_checked', 'plan_ok', 'plan_features')");
   }
 
   // Checks the key with Polar again twice a day, so a cancelled subscription goes back to Free.
@@ -328,6 +348,7 @@ export class Library {
     const check = await checkLicense(this.env, key);
     if (check.ok) {
       this.setMeta("plan", check.plan);
+      this.setFeatures(check.features);
       this.setMeta("plan_ok", String(Date.now()));
     } else if (check.rejected) {
       await this.forgetLicense();
