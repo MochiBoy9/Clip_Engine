@@ -49,14 +49,14 @@ These live in `wrangler.toml` under `[vars]`:
 | `KEEP_DAYS` | 30 | Days before unstarred squad views are removed |
 | `FREE_STORAGE_MB` | 2048 | Cloud library space on the Free plan |
 | `PRO_STORAGE_MB` | 102400 | Cloud library space on Pro ($2.99 a month) |
-| `ULTRA_STORAGE_MB` | 256000 | Cloud library space on Ultra ($9.99 a month) |
+| `ULTRA_STORAGE_MB` | 256000 | Cloud library space on Ultra ($4.99 a month) |
 | `POLAR_ORGANIZATION_ID` | empty | Your Polar organization (Settings > General). Until it's set, license keys are refused with "Subscriptions aren't open yet." |
 | `POLAR_PRO_BENEFIT_ID` | empty | The License Keys benefit on the Pro product |
 | `POLAR_ULTRA_BENEFIT_ID` | empty | The License Keys benefit on the Ultra product |
 
 ## Pro and Ultra on Polar
 
-1. In Polar, make two monthly products: Pro at $2.99 and Ultra at $9.99.
+1. In Polar, make two monthly products: Pro at $2.99 and Ultra at $4.99.
 2. Give each one a **License Keys** benefit. No activation limit is needed.
 3. Copy the organization id and both benefit ids into `[vars]` above, and `npx wrangler deploy`.
 4. Make a checkout link for each product and put them in `PlanConfig` (`ui/ClipEngine.Desktop/Services/Plans.cs`) and `LINKS` (`website/site.js`). The customer portal link goes in `PlanConfig.ManageUrl`.

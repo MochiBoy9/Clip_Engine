@@ -38,7 +38,7 @@ public class PlanTests : IDisposable
         Assert.Equal(Plan.Pro, Resolutions.Needs(1440));
         Assert.Equal(Plan.Free, Resolutions.Needs(720));
         Assert.Equal("$2.99/mo", Plans.Pro.PriceText);
-        Assert.Equal("$9.99/mo", Plans.Ultra.PriceText);
+        Assert.Equal("$4.99/mo", Plans.Ultra.PriceText);
         Assert.Equal(Plan.Pro, Plans.FromId("plus"));
 
         var option = new ResolutionOption(1440);

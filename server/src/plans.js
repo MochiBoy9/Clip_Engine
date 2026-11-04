@@ -16,7 +16,7 @@ import { randomCode } from "./codes.js";
 export const PLANS = {
   free: { label: "Free", price: 0, storageMb: 2048, lines: 1080 },
   pro: { label: "Pro", price: 2.99, storageMb: 102_400, lines: 1440 },
-  ultra: { label: "Ultra", price: 9.99, storageMb: 256_000, lines: 2160 },
+  ultra: { label: "Ultra", price: 4.99, storageMb: 256_000, lines: 2160 },
 };
 
 // Accounts made before Pro and Ultra had "plus", which was Pro's storage.

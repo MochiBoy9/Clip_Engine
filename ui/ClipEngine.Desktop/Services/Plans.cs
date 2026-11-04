@@ -24,7 +24,7 @@ internal static class Plans
     public static readonly PlanInfo Pro = new(Plan.Pro, "pro", "Pro", 2.99m, 100, 1440,
         ["Records up to 1440p", "100 GB cloud library", "All seven colour themes", "Pro badge and your name in the credits"]);
 
-    public static readonly PlanInfo Ultra = new(Plan.Ultra, "ultra", "Ultra", 9.99m, 250, 2160,
+    public static readonly PlanInfo Ultra = new(Plan.Ultra, "ultra", "Ultra", 4.99m, 250, 2160,
         ["Everything in Pro", "Records up to 4K", "250 GB cloud library", "Three Ultra-only colour themes",
          "Ultra badge and top billing in the credits"]);
 
