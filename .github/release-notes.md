@@ -1,11 +1,10 @@
-## Clip Engine 0.10.0
+## Clip Engine 0.11.0
 
-Play with friends and share clips anywhere. Clip Engine now has an online service for squads and a cloud library.
+A new look, and your own games front and centre.
 
-- **Squads.** Make a squad and send friends an invite link. When you play the same match, Clip Engine links you up by itself. When one of you gets a kill, revive, highlight or win, every linked teammate saves that moment from their own view too, lined up to the same second. All the views go into a library your squad shares.
-- **Watch together.** Play up to four views of the same moment side by side on one timeline.
-- **Make highlight.** Cut the play from the view of the player who made it, then a replay from each teammate's view, into one clip.
-- **You choose what's shared.** Upload highlights, everything or nothing, pick which moments you share, and unlink from someone for a session.
-- **Share links.** The link button on any clip uploads it and copies a short link. It plays in any browser with the clip's moments on the timeline, and shows a preview in Discord.
-- **Your cloud library.** Clips can be unlisted, public or private. Public ones show on your profile page, pinned clips first. Starred clips can back up by themselves, and you sign in on another PC with a one-time code, with no password.
-- **A livelier Discord status.** It shows your kill streak as it builds and your K/D/A. Highlights and the match result flash up, the timer counts from the start of the match, and in a squad it shows how many of you are playing together. An optional Join my squad button lets friends jump in.
+- **Game art.** Games show their own pictures in place of initials, on the Games page, your clips, matches and records. They come from your PC first (Steam's library art and the game's icon), and otherwise from the Steam store, once. You can turn the download off in Settings.
+- **Only your games.** The Games page lists the games installed on your PC, found through Steam, Epic, Battle.net, the EA app, Ubisoft Connect, Riot, the Xbox app and Roblox, with the store each came from. A switch shows every supported game. Home counts the games you have installed.
+- **A retro-futuristic look.** Numbered sections with ruled lines, crop-mark corners on panels, barcodes, a dotted grid behind the pages, and the page you're on shown as a solid block of your colour.
+- **One download.** Each release now carries one zip, `Clip_Engine-windows-x64.zip`, with no extra files, so the download link never changes.
+
+Download `Clip_Engine-windows-x64.zip`, unzip it anywhere and run `ClipEngine.exe`. If you already have Clip Engine, update from Settings.
