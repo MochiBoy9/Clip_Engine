@@ -1,8 +1,8 @@
 // Links the page points at. Anything left empty keeps its in-page link.
 const LINKS = {
   // Polar checkout links for Pro and Ultra (Products > Checkout links). Empty: the buttons say "Coming soon".
-  pro: "",
-  ultra: "",
+  pro: "https://buy.polar.sh/polar_cl_1Od5CaTH339XapxgyZW8RjFstHRfWZbdkvncB4J3E2h",
+  ultra: "https://buy.polar.sh/polar_cl_Bjr9r9ZyxK5Hca0xqYuvaTtzfJynMI1NepwwG4CrrUp",
   // Clip Engine's online service, for the names in the credits.
   service: "https://clip-engine.clip-engine.workers.dev",
   // Where releases are published: this repository's GitHub Releases.
