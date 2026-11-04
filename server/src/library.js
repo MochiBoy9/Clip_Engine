@@ -5,12 +5,15 @@
 
 import { isSquadId, normalizeInvite, randomCode, randomToken, sameSecret, sha256Hex, SQUAD_ID_LENGTH } from "./codes.js";
 import { normalizeHandle } from "./handles.js";
+import { mediaPointer } from "./media.js";
 import { checkLicense, cleanKey, OFFLINE_GRACE_MS, PLANS, planName, RECHECK_MS, storageBytes } from "./plans.js";
 import { cleanGame, cleanName, MOMENT_TYPES } from "./protocol.js";
 
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 const MAX_THUMB_BYTES = 512 * 1024;
 const LINK_CODE_MS = 10 * 60_000;
+// Wrong tries before a sign-in code stops working.
+const SIGN_IN_TRIES = 5;
 export const CLIP_CODE_LENGTH = 6;
 const VISIBILITY = ["private", "unlisted", "public"];
 
@@ -30,6 +33,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS clips_local ON clips(local_id);
 CREATE TABLE IF NOT EXISTS friends (account TEXT PRIMARY KEY, name TEXT NOT NULL, handle TEXT, state TEXT NOT NULL,
   since INTEGER NOT NULL);
 `;
+
+// Columns added after the first release. video_v and thumb_v name each upload (its ETag), so a
+// browser or Cloudflare's cache that already has it doesn't read R2 again.
+const COLUMNS = ["clips ADD COLUMN video_v INTEGER NOT NULL DEFAULT 0", "clips ADD COLUMN thumb_v INTEGER NOT NULL DEFAULT 0"];
+
+export function addColumns(sql, columns) {
+  for (const column of columns) {
+    try {
+      sql.exec(`ALTER TABLE ${column}`);
+    } catch {
+      // Already there.
+    }
+  }
+}
 
 // "K7QM-2X9D", an account's id as people pass it on to be added as a friend.
 export function formatFriendCode(id) {
@@ -84,6 +101,7 @@ export class Library {
     this.env = env;
     this.sql = ctx.storage.sql;
     this.sql.exec(SCHEMA);
+    addColumns(this.sql, COLUMNS);
   }
 
   meta(key) {
@@ -271,6 +289,12 @@ export class Library {
     const device = typeof body?.device === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(body.device) ? body.device : null;
     const link = JSON.parse(this.meta("link") ?? "null");
     if (!device || !link || Date.now() > link.until || !sameSecret(String(body?.secret ?? ""), link.secret)) {
+      // A few wrong guesses and the code is gone, so it can't be guessed by trying them all.
+      if (link && device) {
+        link.fails = (link.fails ?? 0) + 1;
+        if (link.fails >= SIGN_IN_TRIES) this.sql.exec("DELETE FROM meta WHERE key = 'link'");
+        else this.setMeta("link", JSON.stringify(link));
+      }
       return fail(403, "That sign-in code isn't right or has run out. Make a new one on the PC that's signed in.");
     }
     this.sql.exec("DELETE FROM meta WHERE key = 'link'");
@@ -533,7 +557,7 @@ export class Library {
       if (length > MAX_THUMB_BYTES) return fail(413, "Thumbnails are at most 512 KB.");
       const type = request.headers.get("content-type") === "image/png" ? "image/png" : "image/jpeg";
       await this.env.CLIPS.put(this.key(row.id, "thumb"), withLength(request.body, length), { httpMetadata: { contentType: type } });
-      this.sql.exec("UPDATE clips SET thumb = 1 WHERE id = ?", row.id);
+      this.sql.exec("UPDATE clips SET thumb = 1, thumb_v = ? WHERE id = ?", Math.max(Date.now(), row.thumb_v + 1), row.id);
       return json({ ok: true });
     }
     if (length > MAX_UPLOAD_BYTES) return fail(413, "That clip is over 100 MB. Upload a smaller copy.");
@@ -544,30 +568,21 @@ export class Library {
     const object = await this.env.CLIPS.put(this.key(row.id, "video"), withLength(request.body, length), {
       httpMetadata: { contentType: "video/mp4" },
     });
-    this.sql.exec("UPDATE clips SET uploaded = 1, size = ? WHERE id = ?", object?.size ?? length, row.id);
+    this.sql.exec("UPDATE clips SET uploaded = 1, size = ?, video_v = ? WHERE id = ?", object?.size ?? length, Math.max(Date.now(), row.video_v + 1), row.id);
     return json(this.clipJson(this.clipRow(row.id)));
   }
 
-  async stream(request, row, kind) {
+  // Says the Worker may serve this clip's video or thumbnail (src/media.js), without reading R2 here.
+  stream(request, row, kind) {
     if (kind === "video" && !row.uploaded) return fail(404, "That clip is still uploading.");
     if (kind === "thumb" && !row.thumb) return fail(404, "No thumbnail.");
-    const object = await this.env.CLIPS.get(this.key(row.id, kind), { range: request.headers });
-    if (!object) return fail(404, "Not found.");
-    const headers = new Headers();
-    headers.set("content-type", object.httpMetadata?.contentType ?? (kind === "thumb" ? "image/jpeg" : "video/mp4"));
-    headers.set("accept-ranges", "bytes");
-    headers.set("cache-control", row.visibility === "private" ? "private, max-age=3600" : "public, max-age=3600");
-    let status = 200;
-    if (object.range && request.headers.has("range")) {
-      const offset = object.range.offset ?? (object.range.suffix !== undefined ? object.size - object.range.suffix : 0);
-      const length = object.range.length ?? object.size - offset;
-      headers.set("content-range", `bytes ${offset}-${offset + length - 1}/${object.size}`);
-      headers.set("content-length", String(length));
-      status = 206;
-    } else {
-      headers.set("content-length", String(object.size));
-    }
-    return new Response(object.body, { status, headers });
+    const version = kind === "video" ? row.video_v : row.thumb_v;
+    return mediaPointer(this.key(row.id, kind), {
+      type: kind === "thumb" ? "image/jpeg" : "video/mp4",
+      cacheControl: row.visibility === "private" ? "private, max-age=3600" : "public, max-age=3600",
+      version: version ? `${row.id}-${kind}-${version}` : null,
+      size: kind === "video" ? row.size : null,
+    });
   }
 
   // What anyone can see: an unlisted or public clip by its code, and the public profile.

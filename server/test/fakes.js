@@ -53,13 +53,17 @@ export class FakeSocket {
 export class FakeBucket {
   constructor() {
     this.objects = new Map();
+    this.reads = 0;
+    this.writes = 0;
   }
   async put(key, body, options) {
+    this.writes++;
     const bytes = new Uint8Array(await new Response(body).arrayBuffer());
     this.objects.set(key, { bytes, options });
     return { key, size: bytes.length };
   }
   async get(key, { range } = {}) {
+    this.reads++;
     const object = this.objects.get(key);
     if (!object) return null;
     let offset = 0;
