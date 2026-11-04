@@ -6,6 +6,7 @@
 
 #include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace clip {
@@ -86,6 +87,30 @@ class RocketLeagueTracker {
  private:
   std::string me_;
   int myTeam_ = -1;
+  Stats board_;
+};
+
+// Team Fortress 2's console log (con_logfile, or -condebug's console.log), one line at a time.
+// The game prints every killfeed line to its console as "<killer> killed <victim> with
+// <weapon>." with " (crit)" after a critical hit, and "<player> suicided." for a suicide, so
+// kills and deaths are exact, whatever the HUD looks like.
+class Tf2ConsoleTracker {
+ public:
+  // names: the player's in-game names (player_names in the settings). The name the game itself
+  // prints when the log starts ("name" = "...") is added to them.
+  explicit Tf2ConsoleTracker(std::vector<std::string> names = {});
+
+  std::vector<ApiEvent> Update(std::string_view line);
+
+  const Stats& Board() const { return board_; }
+  // Whether a name to look for is known, from the settings or the game.
+  bool KnowsName() const { return !names_.empty(); }
+
+ private:
+  bool IsMe(std::string_view name) const;
+
+  std::vector<std::string> names_;  // lower case
+  int kills_ = 0, deaths_ = 0;
   Stats board_;
 };
 

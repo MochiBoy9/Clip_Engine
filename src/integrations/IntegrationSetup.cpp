@@ -195,6 +195,59 @@ SetupResult EnableRocketLeagueStats(const fs::path& gameExe, unsigned short& por
   return result;
 }
 
+namespace {
+
+// tf_win64.exe lives in the install folder, next to tf.
+fs::path Tf2Dir(const fs::path& gameExe) { return gameExe.parent_path() / L"tf"; }
+
+// The lines Clip Engine adds to autoexec.cfg. The log file must end in .log, which is all the
+// game allows; "name" prints the player's name into it, so the log says which kills are yours.
+constexpr char kTf2AutoexecMarker[] = "clip_engine_console.log";
+constexpr char kTf2AutoexecLines[] =
+    "\r\n// Clip Engine: writes the console to a log too, so your kills and deaths are clipped exactly.\r\n"
+    "con_logfile \"clip_engine_console.log\"\r\n"
+    "name\r\n";
+
+// Logs past this are emptied when Clip Engine starts, so the file can't grow without end.
+constexpr uintmax_t kTf2LogLimit = 64ull << 20;
+
+}  // namespace
+
+SetupResult EnableTf2ConsoleLog(const fs::path& gameExe) {
+  const fs::path tf = Tf2Dir(gameExe);
+  const fs::path cfg = tf / L"cfg";
+  std::error_code ec;
+  if (!fs::is_directory(cfg, ec)) return SetupResult::NotInstalled;
+
+  for (const auto& log : Tf2ConsoleLogs(gameExe)) {
+    if (fs::file_size(log, ec) > kTf2LogLimit && !ec) fs::resize_file(log, 0, ec);
+  }
+
+  // A HUD or config in tf\custom with its own autoexec.cfg is run instead of tf\cfg's.
+  for (const auto& entry : fs::directory_iterator(tf / L"custom", ec)) {
+    if (fs::exists(entry.path() / L"cfg" / L"autoexec.cfg", ec)) {
+      log::Warn("{} has its own autoexec.cfg, which Team Fortress 2 runs instead of the one Clip Engine adds its "
+                "console log to. Add -condebug to Team Fortress 2's launch options in Steam so kills and deaths "
+                "still come from the console.",
+                Narrow(entry.path()));
+      break;
+    }
+  }
+
+  const fs::path autoexec = cfg / L"autoexec.cfg";
+  std::string text = ReadFile(autoexec);
+  if (text.find(kTf2AutoexecMarker) != std::string::npos) return SetupResult::AlreadyOn;
+  text += kTf2AutoexecLines;
+  const auto result = WriteIfChanged(autoexec, text);
+  Report(result, "Team Fortress 2", cfg);
+  return result;
+}
+
+std::vector<fs::path> Tf2ConsoleLogs(const fs::path& gameExe) {
+  const fs::path tf = Tf2Dir(gameExe);
+  return {tf / kTf2ConsoleLog, tf / L"console.log"};
+}
+
 void PrepareGameIntegrations() {
   unsigned short port = 0;
   for (const auto& library : SteamLibraries()) {
@@ -202,6 +255,7 @@ void PrepareGameIntegrations() {
     InstallCs2Config(common / L"Counter-Strike Global Offensive" / L"game" / L"bin" / L"win64" / L"cs2.exe");
     InstallDota2Config(common / L"dota 2 beta" / L"game" / L"bin" / L"win64" / L"dota2.exe");
     EnableRocketLeagueStats(common / L"rocketleague" / L"Binaries" / L"Win64" / L"RocketLeague.exe", port);
+    EnableTf2ConsoleLog(common / L"Team Fortress 2" / L"tf_win64.exe");
   }
   for (const auto& install : EpicInstalls("Rocket League")) {
     EnableRocketLeagueStats(install / L"Binaries" / L"Win64" / L"RocketLeague.exe", port);

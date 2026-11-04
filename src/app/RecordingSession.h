@@ -52,6 +52,13 @@ class RecordingSession {
 
   // Adds a moment found some other way than reading the screen (the game's own API).
   void AddEvent(const GameEvent& event) { OnEvent(event); }
+  // The game's own API now reports these kinds of moment, so the screen's sightings of them
+  // are dropped instead of counted twice. The screen rules stay as a fallback until then.
+  void PreferApiFor(const std::vector<EventType>& types) {
+    unsigned mask = 0;
+    for (EventType type : types) mask |= 1u << static_cast<unsigned>(type);
+    apiTypes_ |= mask;
+  }
 
   // Events detected since the last call.
   std::vector<GameEvent> TakeNewEvents();
@@ -83,6 +90,7 @@ class RecordingSession {
   std::unique_ptr<AudioCapture> micAudio_;
   std::unique_ptr<EventDetector> detector_;
   std::atomic<EventDetector*> listener_{nullptr};  // detector_ while it listens to the game's audio
+  std::atomic<unsigned> apiTypes_{0};  // PreferApiFor, one bit per EventType
 
   int64_t bufferDuration_;
   mutable std::mutex eventsMutex_;

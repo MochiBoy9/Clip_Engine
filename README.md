@@ -53,13 +53,17 @@ Every clip made with Clip Engine says so in its file details, with a link back h
 | Dota 2 | Official Game State Integration: kills, deaths, assists, multi-kills, the horn and the match result |
 | League of Legends | Official Live Client Data API: kills, deaths, assists, multi-kills, aces, first blood, dragons, Baron and steals, game start and result |
 | Rocket League | Official Stats API: goals, assists, demolitions, saves, kickoff and the match result |
-| Valorant, Marvel Rivals, Rainbow Six Siege, Delta Force, Deadlock, Halo Infinite, Destiny 2, Team Fortress 2 | The killfeed, by your in-game name (set it on the Games page), plus round and match banners and medals |
+| Team Fortress 2 | Its console log, which names every kill: your kills (with the weapon and crits) and deaths, exactly; the killfeed is read until the log starts |
+| Valorant, Marvel Rivals, Rainbow Six Siege, Delta Force, Deadlock, Halo Infinite, Paladins, Splitgate | The killfeed, by your in-game name (set it on the Games page), plus round and match banners and medals |
 | The Finals | Kills and deaths from the killfeed by your in-game name, backed up by the score line and the elimination chime, so each counts once; assists, revives and match messages from the HUD |
-| Overwatch, Battlefield 6, Fortnite, Apex Legends, PUBG, Call of Duty, ARC Raiders | The HUD's kill, death, revive and match messages |
-| Escape from Tarkov | Deaths and the end of each raid (Tarkov shows no kills on screen) |
+| Battlefield 6, 2042, V, 1 and 4 | The KILL line under the crosshair and the killfeed by your name, counted once between them; assists, revives, deaths and match results from the HUD |
+| Halo: The Master Chief Collection | "You killed ..." and "... killed you" in the corner, medals and the end of the game; no in-game name needed |
+| Overwatch, Fortnite, Apex Legends, PUBG, Call of Duty | The HUD's kill, death, revive and match messages |
 | Roblox, Minecraft | Recorded, with clips on the hotkey; add rules for the experiences you play in Detection Studio |
 
-The official events are exact and work whatever the HUD looks like. Clip Engine turns them on by itself: it writes a `gamestate_integration_clipengine.cfg` into CS2's and Dota 2's `cfg` folders and sets `PacketSendRate` in Rocket League's `TAGame\Config\DefaultStatsAPI.ini`, for installs it finds through Steam and the Epic Games launcher and for any game it sees running. A game that was already open needs one restart to pick that up. Dota 2 may also need `-gamestateintegration` in its Steam launch options. League's API is always on during a game.
+Only games that say plainly on screen when you get a kill or die are listed, since that's what makes clips dependable. Games that keep kills off the screen, like Escape from Tarkov, ARC Raiders and most of Destiny 2, were taken off the list; Detection Studio can still add any of them with your own rules.
+
+The official events are exact and work whatever the HUD looks like. Clip Engine turns them on by itself: it writes a `gamestate_integration_clipengine.cfg` into CS2's and Dota 2's `cfg` folders, sets `PacketSendRate` in Rocket League's `TAGame\Config\DefaultStatsAPI.ini` and adds a `con_logfile` line to Team Fortress 2's `tf\cfg\autoexec.cfg`, for installs it finds through Steam and the Epic Games launcher and for any game it sees running. If a HUD or config in `tf\custom` has its own `autoexec.cfg`, add `-condebug` to Team Fortress 2's launch options instead. A game that was already open needs one restart to pick that up. Dota 2 may also need `-gamestateintegration` in its Steam launch options. League's API is always on during a game.
 
 Screen rules for the rest are a first pass and get tuned against real gameplay; see `detection.ini` below. For a HUD that shows a kill as an icon rather than words, a rule can look for a picture of the icon cut from a screenshot instead. Screen reading stays light: a box inside another is read with it when that is cheaper, a box that has not changed is not read again, and death screens and match banners are checked less often than kill popups. Valorant has no local events API, so it is read off the screen like the others.
 
