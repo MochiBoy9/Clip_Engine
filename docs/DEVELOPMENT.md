@@ -132,6 +132,7 @@ The app sends the key to `POST /v1/license`, which checks it with Polar's public
 2. Merge to `main`, then run the **Release** workflow from the Actions tab. It builds on Windows and publishes `Clip_Engine-windows-x64.zip` under a fixed name, so `releases/latest/download/Clip_Engine-windows-x64.zip` is always the newest.
 3. The **Website** workflow publishes `website/` to GitHub Pages on every push to `main` that changes it.
 4. **Prune old releases** (Actions tab) deletes releases below a version; tags are kept.
+5. **Deploy online service** (Actions tab) tests and deploys `server/` with the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repository secrets, or run `npx wrangler deploy` in `server/`.
 
 ## Writing READMEs
 

@@ -1,0 +1,43 @@
+name: Deploy online service
+
+# Run from the Actions tab to test and deploy server/ to Cloudflare, with no PC needed. Needs two repository secrets
+# (Settings > Secrets and variables > Actions): CLOUDFLARE_API_TOKEN, a Cloudflare API token made from the
+# "Edit Cloudflare Workers" template, and CLOUDFLARE_ACCOUNT_ID, from the Workers & Pages overview. Worker secrets
+# such as ADMIN_TOKEN stay in Cloudflare and aren't touched.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-server
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci || npm install
+
+      - run: npm test
+
+      - name: Deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "Add the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID repository secrets first." >&2
+            exit 1
+          fi
+          npx wrangler deploy
