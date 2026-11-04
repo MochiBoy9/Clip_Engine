@@ -25,11 +25,11 @@ test("only the operator's token reaches the key maker", async () => {
     assert.equal((await call(env, "/v1/admin/grants", { method: "POST", token, body: { plan: "ultra" } })).status, 403);
   }
   assert.equal((await call(fakeEnv(), "/v1/admin/grants", { token: "" })).status, 403, "no token set means no one");
-  const page = await call(env, "/admin");
-  assert.equal(page.status, 200);
-  assert.match(page.headers.get("x-robots-tag"), /noindex/);
-  assert.match(page.headers.get("content-security-policy"), /frame-ancestors 'none'/);
-  assert.match(await page.text(), /Key maker/);
+  assert.equal((await call(env, "/admin")).status, 404, "the key maker isn't on the service");
+  const preflight = await call(env, "/v1/admin/grants", { method: "OPTIONS" });
+  assert.equal(preflight.status, 204);
+  assert.match(preflight.headers.get("access-control-allow-headers"), /authorization/);
+  assert.equal((await call(env, "/v1/admin/grants", { token: ADMIN })).headers.get("access-control-allow-origin"), "*");
   // The directory's own routes can't be reached from outside.
   assert.equal((await call(env, "/grant/list", { method: "POST", body: {} })).status, 404);
 });

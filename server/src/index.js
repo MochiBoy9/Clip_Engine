@@ -19,7 +19,7 @@
 //   POST|DELETE /presence           online for friends, with the game and a squad invite { game, invite? }
 //   POST /v1/admin/plan             set an account's plan     { account, plan } (Authorization: Bearer ADMIN_TOKEN)
 //
-// Special keys (the key maker, GET /admin; every route needs Authorization: Bearer ADMIN_TOKEN):
+// Special keys (for the operator's key maker; every route needs Authorization: Bearer ADMIN_TOKEN):
 //   GET  /v1/admin/grants           every key with its status, PCs and end date
 //   POST /v1/admin/grants           make keys  { count, plan, days, extraStorageGb, themes, lines, maxDevices, note }
 //   PATCH /v1/admin/grants/<key>    change one { any of those, revoked, resetDevices, restart }
@@ -42,7 +42,6 @@ import { Handles, normalizeHandle } from "./handles.js";
 import { CLIP_CODE_LENGTH, Library } from "./library.js";
 import { formatInvite } from "./codes.js";
 import { clipPage, invitePage, notFoundPage, profilePage } from "./pages.js";
-import { adminPage } from "./admin.js";
 import { checkLicense, normalizeGrant, PLANS, planJson } from "./plans.js";
 import { Squad } from "./squad.js";
 
@@ -108,6 +107,34 @@ function normalizeSignIn(text) {
 function admin(request, env) {
   const token = (request.headers.get("authorization") ?? "").replace(/^Bearer /, "");
   return Boolean(env.ADMIN_TOKEN) && token.length > 0 && sameSecret(token, env.ADMIN_TOKEN);
+}
+
+// The operator's special keys. The key maker that calls these is a file on the operator's own PC, so these answer
+// any origin; without the token they do nothing.
+async function grantRoute(request, env, url, path, method) {
+  if (method === "OPTIONS") return new Response(null, { status: 204 });
+  if (!admin(request, env)) return json({ error: "Not allowed." }, 403);
+  if (path === "/v1/admin/grants" && method === "GET") {
+    return stub(env.HANDLES, "handles").fetch(new Request(`${url.origin}/grant/list`, { method: "POST", body: "{}" }));
+  }
+  if (path === "/v1/admin/grants" && method === "POST") return directory(env, url, "/grant/create", (await readBody(request)) ?? {});
+  const m = path.match(/^\/v1\/admin\/grants\/([^/]+)$/);
+  if (m && method === "PATCH") {
+    const code = normalizeGrant(decodeURIComponent(m[1]));
+    if (!code) return json({ error: "That isn't a special key." }, 400);
+    return directory(env, url, "/grant/update", { ...((await readBody(request)) ?? {}), code });
+  }
+  return json({ error: "Not found." }, 404);
+}
+
+function withCors(response) {
+  const out = new Response(response.body, response);
+  out.headers.set("access-control-allow-origin", "*");
+  out.headers.set("access-control-allow-methods", "GET, POST, PATCH, OPTIONS");
+  out.headers.set("access-control-allow-headers", "authorization, content-type");
+  out.headers.set("access-control-max-age", "600");
+  out.headers.set("cache-control", "no-store");
+  return out;
 }
 
 function directory(env, url, path, body) {
@@ -180,18 +207,8 @@ export default {
     }
     m = path.match(/^\/v1\/accounts\/([0-9A-Za-z]+)(\/.*)$/);
     if (m && isSquadId(m[1].toUpperCase()) && !internal(m[2])) return forward(stub(env.LIBRARIES, m[1].toUpperCase()), request, m[2]);
-    if (path === "/admin" && method === "GET") return adminPage();
+    if (path.startsWith("/v1/admin/grants")) return withCors(await grantRoute(request, env, url, path, method));
     if (path.startsWith("/v1/admin/") && !admin(request, env)) return json({ error: "Not allowed." }, 403);
-    if (path === "/v1/admin/grants" && method === "GET") {
-      return stub(env.HANDLES, "handles").fetch(new Request(`${url.origin}/grant/list`, { method: "POST", body: "{}" }));
-    }
-    if (path === "/v1/admin/grants" && method === "POST") return directory(env, url, "/grant/create", (await readBody(request)) ?? {});
-    m = path.match(/^\/v1\/admin\/grants\/([^/]+)$/);
-    if (m && method === "PATCH") {
-      const code = normalizeGrant(decodeURIComponent(m[1]));
-      if (!code) return json({ error: "That isn't a special key." }, 400);
-      return directory(env, url, "/grant/update", { ...((await readBody(request)) ?? {}), code });
-    }
     if (path === "/v1/admin/plan" && method === "POST") {
       const body = await readBody(request);
       if (!isSquadId(body?.account)) return json({ error: "Which account?" }, 400);
