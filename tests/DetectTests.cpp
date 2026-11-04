@@ -10,6 +10,7 @@
 #include "detect/OcrImage.h"
 #include "detect/TextMatcher.h"
 #include "media/ClipMetadata.h"
+#include "video/OutputSize.h"
 
 #include <algorithm>
 #include <cmath>
@@ -1080,7 +1081,23 @@ void TestPlaceRegion() {
   CHECK(rules.warnings.size() == 1);
 }
 
+// The resolution setting: smaller recordings keep the monitor's shape and never grow past it.
+void TestOutputSize() {
+  using clip::FrameSize;
+  using clip::OutputSize;
+  CHECK((OutputSize(2560, 1440, 0) == FrameSize{2560, 1440}));
+  CHECK((OutputSize(2560, 1440, 1080) == FrameSize{1920, 1080}));
+  CHECK((OutputSize(3440, 1440, 1080) == FrameSize{2580, 1080}));
+  CHECK((OutputSize(3840, 2160, 1440) == FrameSize{2560, 1440}));
+  CHECK((OutputSize(1920, 1080, 2160) == FrameSize{1920, 1080}));
+  CHECK((OutputSize(1920, 1080, 720) == FrameSize{1280, 720}));
+  CHECK((OutputSize(1080, 1920, 720) == FrameSize{720, 1280}));
+  CHECK((OutputSize(1366, 768, 720) == FrameSize{1282, 720}));
+  CHECK((OutputSize(1921, 1081, 0) == FrameSize{1920, 1080}));
+}
+
 int main(int argc, char** argv) {
+  TestOutputSize();
   TestTokenize();
   TestWordsMatch();
   TestCountPhrase();

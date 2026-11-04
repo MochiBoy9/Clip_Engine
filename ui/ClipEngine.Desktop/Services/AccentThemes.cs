@@ -3,15 +3,16 @@ using Avalonia.Media;
 
 namespace ClipEngine.Desktop.Services;
 
-// Accent colours. Hazard amber is everyone's; the rest are a thank-you for supporters.
-internal sealed record AccentTheme(string Id, string Name, Color Accent)
+// Accent colours. Hazard amber is everyone's; Pro unlocks the rest of the first seven, and Ultra three more.
+internal sealed record AccentTheme(string Id, string Name, Color Accent, Plan Needs = Plan.Pro)
 {
     public bool IsDefault => Id == AccentThemes.Default.Id;
+    public bool IsUnlocked(Plan plan) => IsDefault || plan >= Needs;
 }
 
 internal static class AccentThemes
 {
-    public static readonly AccentTheme Default = new("hazard", "Hazard", Color.Parse("#FFC21A"));
+    public static readonly AccentTheme Default = new("hazard", "Hazard", Color.Parse("#FFC21A"), Plan.Free);
 
     public static IReadOnlyList<AccentTheme> All { get; } =
     [
@@ -22,6 +23,9 @@ internal static class AccentThemes
         new("sakura", "Sakura", Color.Parse("#FF6FAE")),
         new("ocean", "Ocean", Color.Parse("#3AA8FF")),
         new("volt", "Volt", Color.Parse("#C5F135")),
+        new("chrome", "Chrome", Color.Parse("#D3DAE3"), Plan.Ultra),
+        new("arc", "Arc", Color.Parse("#22E1F0"), Plan.Ultra),
+        new("redline", "Redline", Color.Parse("#FF3D5A"), Plan.Ultra),
     ];
 
     public static AccentTheme Find(string? id) => All.FirstOrDefault(t => t.Id == id) ?? Default;

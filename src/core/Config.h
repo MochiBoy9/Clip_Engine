@@ -29,6 +29,7 @@ struct Config {
   int clipSeconds = 30;             // length of a clip saved with the hotkey
   int fps = 0;                      // 0 = match the monitor's refresh rate
   int bitrateMbps = 0;              // 0 = pick from resolution and frame rate
+  int resolution = 0;               // the most lines to record, like 1440 for 1440p; 0 = the monitor's own
   std::string codec = "auto";       // auto | h264 | hevc
   bool gameAudio = true;
   bool micAudio = true;

@@ -70,6 +70,25 @@ Save(window, "18-watch-together.png");
 SampleSquad.FillCloud(vm);
 Capture(Page.Cloud, "19-cloud.png");
 
+// Friends, two of them playing, one with a squad to join, and a request.
+var friends = vm.Friends;
+friends.ShowSample("A1B2-C3D4",
+[
+    friends.SampleFriend("K1A1K1A1", "Kai", "kai", true, "The Finals", "N1GHT5HF7Q4K2M9XW3BD"),
+    friends.SampleFriend("M1RA0000", "Mira", "mira", true, "Overwatch", null),
+    friends.SampleFriend("R00K0000", "Rook", null, false, "", null),
+    friends.SampleFriend("VEX00000", "Vex", "vexed", true, "", null),
+],
+[friends.SampleRequest("N0VA0000", "Nova", "nova")]);
+Capture(Page.Friends, "20-friends.png");
+
+// Ultra: its badge, themes, 4K and the credits.
+vm.Plan.ShowSample(Plan.Ultra, new Credits(["Mira", "Enterro"], ["Kai the Clipper", "Rook", "Vex"]));
+window.Height = 1300;
+Capture(Page.Settings, "21-plans.png");
+window.Height = 900;
+vm.Plan.ShowSample(Plan.Free, new Credits([], []));
+
 // The player, opened on the newest clip partway through.
 vm.SelectedNav = vm.Nav.First(n => n.Page == Page.Clips);
 Settle();

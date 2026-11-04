@@ -11,6 +11,7 @@ internal sealed class EngineSettings
     public int ClipSeconds { get; set; } = 30;
     public int Fps { get; set; }
     public int BitrateMbps { get; set; }
+    public int Resolution { get; set; }  // the most lines to record, like 1440; 0 = the monitor's own
     public string Codec { get; set; } = "auto";
     public bool GameAudio { get; set; } = true;
     public bool MicAudio { get; set; } = true;
@@ -50,6 +51,10 @@ internal sealed class EngineSettings
                 case "clip_seconds": settings.ClipSeconds = ParseInt(value, settings.ClipSeconds); break;
                 case "fps": settings.Fps = ParseInt(value, settings.Fps); break;
                 case "bitrate_mbps": settings.BitrateMbps = ParseInt(value, settings.BitrateMbps); break;
+                case "resolution":
+                    var lines = value.ToLowerInvariant().TrimEnd('p');
+                    settings.Resolution = lines is "native" or "auto" or "" ? 0 : ParseInt(lines, settings.Resolution);
+                    break;
                 case "codec": settings.Codec = value.ToLowerInvariant(); break;
                 case "game_audio": settings.GameAudio = ParseBool(value, settings.GameAudio); break;
                 case "mic_audio": settings.MicAudio = ParseBool(value, settings.MicAudio); break;
@@ -84,6 +89,7 @@ internal sealed class EngineSettings
             ["clip_seconds"] = Format(ClipSeconds),
             ["fps"] = Format(Fps),
             ["bitrate_mbps"] = Format(BitrateMbps),
+            ["resolution"] = Resolution > 0 ? Format(Resolution) : "native",
             ["codec"] = Codec,
             ["game_audio"] = Format(GameAudio),
             ["mic_audio"] = Format(MicAudio),

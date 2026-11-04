@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import worker from "../src/index.js";
+import { isMediaPointer, serveMedia } from "../src/media.js";
 import { fakeEnv, makeSquad, request } from "./fakes.js";
+
+// What the Worker sends for a squad view's video or thumbnail: the bytes the Durable Object points at.
+async function media(squad, bucket, req) {
+  const answer = await squad.fetch(req.clone());
+  return isMediaPointer(answer) ? serveMedia(req, { CLIPS: bucket }, answer) : answer;
+}
 
 async function body(response) {
   return response.json();
@@ -117,13 +124,21 @@ test("views, the library, uploads with ranges and asking for an upload", async (
   assert.ok(bucket.objects.has(`ABCD1234/${id}/${kai.id}.mp4`));
   assert.equal(remy.ws.take("uploaded")[0].member, kai.id);
 
-  const whole = await squad.fetch(request(`/moments/${id}/views/${kai.id}/video`, { token: remy.token }));
+  const whole = await media(squad, bucket, request(`/moments/${id}/views/${kai.id}/video`, { token: remy.token }));
   assert.equal(whole.status, 200);
   assert.equal((await whole.arrayBuffer()).byteLength, 1000);
-  const part = await squad.fetch(request(`/moments/${id}/views/${kai.id}/video`, { token: remy.token, headers: { range: "bytes=100-199" } }));
+  const part = await media(squad, bucket, request(`/moments/${id}/views/${kai.id}/video`, { token: remy.token, headers: { range: "bytes=100-199" } }));
   assert.equal(part.status, 206);
   assert.equal(part.headers.get("content-range"), "bytes 100-199/1000");
   assert.equal(new Uint8Array(await part.arrayBuffer())[0], 100);
+  // The browser already has this upload: answered without reading R2.
+  const reads = bucket.reads;
+  const again = await media(squad, bucket, request(`/moments/${id}/views/${kai.id}/video`, { token: remy.token, headers: { "if-none-match": whole.headers.get("etag") } }));
+  assert.equal(again.status, 304);
+  assert.equal(bucket.reads, reads);
+  // Not uploaded: the Durable Object says so without asking R2.
+  assert.equal((await media(squad, bucket, request(`/moments/${id}/views/${me.id}/thumb`, { token: remy.token }))).status, 404);
+  assert.equal(bucket.reads, reads);
 
   library = await body(await squad.fetch(request("/library", { token: remy.token })));
   assert.ok(library.moments[0].views.find((v) => v.member === kai.id).uploaded);

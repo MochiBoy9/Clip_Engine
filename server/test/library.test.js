@@ -115,11 +115,12 @@ test("plans set how much a library keeps, and only the operator sets them", asyn
   assert.equal(full.status, 507);
   assert.match((await full.json()).error, /Free cloud library is full/);
 
-  assert.equal((await call(env, "/v1/admin/plan", { method: "POST", token: "wrong", body: { account: me.id, plan: "plus" } })).status, 403);
+  assert.equal((await call(env, "/v1/admin/plan", { method: "POST", token: "wrong", body: { account: me.id, plan: "pro" } })).status, 403);
   // Not around the Worker either.
-  assert.equal((await call(env, `${me.base}/admin/plan`, { method: "POST", token: me.token, body: { plan: "plus" } })).status, 404);
-  const plus = await (await call(env, "/v1/admin/plan", { method: "POST", token: "operator-secret", body: { account: me.id, plan: "plus" } })).json();
-  assert.equal(plus.plan, "plus");
+  assert.equal((await call(env, `${me.base}/admin/plan`, { method: "POST", token: me.token, body: { plan: "pro" } })).status, 404);
+  const pro = await (await call(env, "/v1/admin/plan", { method: "POST", token: "operator-secret", body: { account: me.id, plan: "pro" } })).json();
+  assert.equal(pro.plan, "pro");
+  assert.equal(pro.lines, 1440);
   assert.equal((await call(env, `${me.base}/clips/${clip.id}/video`, { method: "PUT", token: me.token, body: new Uint8Array(700 * 1024) })).status, 200);
 });
 
@@ -151,4 +152,29 @@ test("pages escape what players typed", () => {
   assert.equal(normalizeHandle(" @Mochi.Boy_9 "), "mochi.boy_9");
   assert.equal(normalizeHandle(".dot"), null);
   assert.equal(cleanMarkers("nope", 10).length, 0);
+});
+
+test("a sign-in code stops working after a few wrong tries", async () => {
+  const env = fakeEnv();
+  const me = await account(env);
+  const { code } = await (await call(env, `${me.base}/link`, { method: "POST", token: me.token })).json();
+  const wrong = code.slice(0, -1) + (code.endsWith("0") ? "1" : "0");
+  for (let i = 0; i < 5; i++) {
+    assert.equal((await call(env, "/v1/accounts/signin", { method: "POST", body: { code: wrong, device: "device-9999" } })).status, 403);
+  }
+  assert.equal((await call(env, "/v1/accounts/signin", { method: "POST", body: { code, device: "device-9999" } })).status, 403,
+    "the right code no longer works either");
+});
+
+test("each address gets a limited number of sign-ups, code tries and changes a minute", async () => {
+  const counts = new Map();
+  const limiter = (limit) => ({ async limit({ key }) { counts.set(key, (counts.get(key) ?? 0) + 1); return { success: counts.get(key) <= limit }; } });
+  const env = fakeEnv({ AUTH_LIMIT: limiter(3), WRITE_LIMIT: limiter(100) });
+  const from = (ip) => ({ method: "POST", body: { name: "Spam", device: "device-0000" }, headers: { "cf-connecting-ip": ip } });
+  for (let i = 0; i < 3; i++) assert.equal((await call(env, "/v1/accounts", from("203.0.113.7"))).status, 200);
+  const blocked = await call(env, "/v1/accounts", from("203.0.113.7"));
+  assert.equal(blocked.status, 429);
+  assert.equal(blocked.headers.get("retry-after"), "60");
+  assert.equal((await call(env, "/v1/accounts", from("198.51.100.2"))).status, 200, "other addresses aren't affected");
+  assert.equal((await call(env, "/v1/health", { headers: { "cf-connecting-ip": "203.0.113.7" } })).status, 200, "reads aren't limited");
 });

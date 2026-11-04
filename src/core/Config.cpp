@@ -28,6 +28,10 @@ fps = 0
 # Video bitrate in megabits per second. 0 picks one from resolution and frame rate.
 bitrate_mbps = 0
 
+# The highest resolution to record at: native (the monitor's own), or 2160, 1440, 1080, 720 or
+# 480 to record smaller. Never records bigger than the monitor. The app sets it from your plan.
+resolution = native
+
 # auto, h264 or hevc. auto uses H.264 and switches to HEVC when H.264 can't handle the resolution.
 codec = auto
 
@@ -220,6 +224,12 @@ Config Config::Load(const std::filesystem::path& file) {
       setInt(config.fps);
     } else if (key == "bitrate_mbps") {
       setInt(config.bitrateMbps);
+    } else if (key == "resolution") {
+      auto v = Lower(value);
+      if (!v.empty() && v.back() == 'p') v.pop_back();
+      if (v == "native" || v == "auto" || v.empty()) config.resolution = 0;
+      else if (const auto lines = ParseInt(v)) config.resolution = *lines;
+      else log::Warn("Setting resolution should be native or a number of lines like 1080, got '{}'", value);
     } else if (key == "codec") {
       const auto v = Lower(value);
       if (v == "auto" || v == "h264" || v == "hevc") config.codec = v;
@@ -300,6 +310,7 @@ Config Config::Load(const std::filesystem::path& file) {
   for (auto& clipKey : config.moreClipHotkeys) clipKey.seconds = std::clamp(clipKey.seconds, 5, config.bufferSeconds);
   config.fps = std::clamp(config.fps, 0, 360);
   config.bitrateMbps = std::clamp(config.bitrateMbps, 0, 300);
+  config.resolution = config.resolution <= 0 ? 0 : std::clamp(config.resolution, 240, 4320);
   config.clipBeforeSeconds = std::clamp(config.clipBeforeSeconds, 0, config.bufferSeconds - 5);
   config.clipAfterSeconds = std::clamp(config.clipAfterSeconds, 0, 30);
   return config;

@@ -27,13 +27,31 @@ new_sqlite_classes = ["Squad", "Library", "Handles"]
 binding = "CLIPS"
 bucket_name = "clip-engine-clips"
 
+# Per-address limits on top of Cloudflare's own DDoS protection (src/index.js, overLimit). namespace_id is any
+# number unique to this account's limiters.
+[[ratelimits]]
+name = "AUTH_LIMIT"
+namespace_id = "1101"
+simple = { limit = 10, period = 60 }
+
+[[ratelimits]]
+name = "WRITE_LIMIT"
+namespace_id = "1102"
+simple = { limit = 300, period = 60 }
+
 [vars]
 MAX_MEMBERS = "8"
 # Uploaded clips each squad can keep, in MB; the oldest unstarred ones go first when it's full.
 SQUAD_STORAGE_MB = "5120"
 # Uploaded clips are removed after this many days unless starred.
 KEEP_DAYS = "30"
-# Cloud library storage for each plan, in MB.
+# Cloud library storage for each plan, in MB: Free 2 GB, Pro 100 GB, Ultra 250 GB.
 FREE_STORAGE_MB = "2048"
-PLUS_STORAGE_MB = "102400"
+PRO_STORAGE_MB = "102400"
+ULTRA_STORAGE_MB = "256000"
+# Pro and Ultra subscriptions are sold through Polar. Copy these ids from the Polar dashboard;
+# until POLAR_ORGANIZATION_ID is set, the app says subscriptions aren't open yet.
+POLAR_ORGANIZATION_ID = "74bd753b-92a2-432a-8e9d-4cf073398ec3"
+POLAR_PRO_BENEFIT_ID = "0d0f448a-f4ca-4c6d-ad34-d097ad5310c7"
+POLAR_ULTRA_BENEFIT_ID = "d87f2807-053f-4842-ab0e-59905d6d91f1"
 # ADMIN_TOKEN (for setting plans) is a secret: npx wrangler secret put ADMIN_TOKEN

@@ -14,7 +14,20 @@
 //   POST /v1/accounts/signin        sign another PC in        { code, device }
 //   GET|PATCH /v1/accounts/<id>/account, POST /link, GET|POST /clips,
 //   PATCH|DELETE /clips/<clip>, PUT|GET /clips/<clip>/(video|thumb)
+//   POST|DELETE /plan               put a subscription's license key on the account, or take it off { key }
+//   GET|POST /friends, POST /friends/<account>/accept, DELETE /friends/<account>   { handle } or { code }
+//   POST|DELETE /presence           online for friends, with the game and a squad invite { game, invite? }
 //   POST /v1/admin/plan             set an account's plan     { account, plan } (Authorization: Bearer ADMIN_TOKEN)
+//
+// Special keys (for the operator's key maker; every route needs Authorization: Bearer ADMIN_TOKEN):
+//   GET  /v1/admin/grants           every key with its status, PCs and end date
+//   POST /v1/admin/grants           make keys  { count, plan, days, extraStorageGb, themes, lines, maxDevices, note }
+//   PATCH /v1/admin/grants/<key>    change one { any of those, revoked, resetDevices, restart }
+//
+// Plans (src/plans.js):
+//   GET  /v1/plans                  Free, Pro and Ultra: price, storage and resolution
+//   POST /v1/license                check a Polar or special key { key, device, credit? } and list or unlist its name in the credits
+//   GET  /v1/credits                the names subscribers asked to have in the credits
 //
 // Public pages:
 //   GET /c/<code>                   a shared clip's web player, with its moments on the timeline
@@ -29,6 +42,8 @@ import { Handles, normalizeHandle } from "./handles.js";
 import { CLIP_CODE_LENGTH, Library } from "./library.js";
 import { formatInvite } from "./codes.js";
 import { clipPage, invitePage, notFoundPage, profilePage } from "./pages.js";
+import { checkLicense, normalizeGrant, PLANS, planJson } from "./plans.js";
+import { isMediaPointer, serveMedia } from "./media.js";
 import { Squad } from "./squad.js";
 
 export { Handles, Library, Squad };
@@ -78,7 +93,7 @@ async function readBody(request) {
 
 // Paths a Durable Object only takes from the Worker itself, never straight from a client.
 function internal(path) {
-  return /^\/(create|join|admin|public)(\/|$)/.test(path);
+  return /^\/(create|join|admin|public|peer)(\/|$)/.test(path);
 }
 
 // "K7QM-2X9D-PA4R-HT" (or a link ending in it): the account id and the one-time secret.
@@ -87,6 +102,44 @@ function normalizeSignIn(text) {
   const code = text.trim().split(/[/#?=]/).pop().toUpperCase().replace(/[\s-]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
   if (code.length !== SQUAD_ID_LENGTH + 6 || !ALPHABET.test(code)) return null;
   return { account: code.slice(0, SQUAD_ID_LENGTH), secret: code.slice(SQUAD_ID_LENGTH) };
+}
+
+// The operator's routes and the key maker: Authorization: Bearer ADMIN_TOKEN (a Worker secret).
+function admin(request, env) {
+  const token = (request.headers.get("authorization") ?? "").replace(/^Bearer /, "");
+  return Boolean(env.ADMIN_TOKEN) && token.length > 0 && sameSecret(token, env.ADMIN_TOKEN);
+}
+
+// The operator's special keys. The key maker that calls these is a file on the operator's own PC, so these answer
+// any origin; without the token they do nothing.
+async function grantRoute(request, env, url, path, method) {
+  if (method === "OPTIONS") return new Response(null, { status: 204 });
+  if (!admin(request, env)) return json({ error: "Not allowed." }, 403);
+  if (path === "/v1/admin/grants" && method === "GET") {
+    return stub(env.HANDLES, "handles").fetch(new Request(`${url.origin}/grant/list`, { method: "POST", body: "{}" }));
+  }
+  if (path === "/v1/admin/grants" && method === "POST") return directory(env, url, "/grant/create", (await readBody(request)) ?? {});
+  const m = path.match(/^\/v1\/admin\/grants\/([^/]+)$/);
+  if (m && method === "PATCH") {
+    const code = normalizeGrant(decodeURIComponent(m[1]));
+    if (!code) return json({ error: "That isn't a special key." }, 400);
+    return directory(env, url, "/grant/update", { ...((await readBody(request)) ?? {}), code });
+  }
+  return json({ error: "Not found." }, 404);
+}
+
+function withCors(response) {
+  const out = new Response(response.body, response);
+  out.headers.set("access-control-allow-origin", "*");
+  out.headers.set("access-control-allow-methods", "GET, POST, PATCH, OPTIONS");
+  out.headers.set("access-control-allow-headers", "authorization, content-type");
+  out.headers.set("access-control-max-age", "600");
+  out.headers.set("cache-control", "no-store");
+  return out;
+}
+
+function directory(env, url, path, body) {
+  return stub(env.HANDLES, "handles").fetch(new Request(`${url.origin}${path}`, { method: "POST", body: JSON.stringify(body) }));
 }
 
 async function clipRoute(request, env, code, rest) {
@@ -113,10 +166,44 @@ async function profileRoute(request, env, handle, asJson) {
 }
 
 export default {
+  // A clip's video or thumbnail comes back from its Durable Object as a pointer; the bytes are
+  // served here (src/media.js).
   async fetch(request, env) {
+    const response = await route(request, env);
+    return isMediaPointer(response) ? serveMedia(request, env, response) : response;
+  },
+};
+
+// Per-address limits (Workers Rate Limiting, wrangler.toml [[ratelimits]]), on top of Cloudflare's own DDoS
+// protection: making accounts and squads, sign-in and invite codes, and key checks get
+// AUTH_LIMIT; every other change (uploads, friends, edits, the key maker's) gets WRITE_LIMIT. Reads aren't limited
+// here. Without the bindings (tests, wrangler dev) nothing is limited.
+const AUTH_ROUTES = /^\/v1\/(accounts|accounts\/signin|squads|join|license)$/;
+
+async function overLimit(request, env, path, method) {
+  const sensitive = method === "POST" && AUTH_ROUTES.test(path);
+  const limiter = sensitive ? env.AUTH_LIMIT : method !== "GET" && method !== "HEAD" && method !== "OPTIONS" ? env.WRITE_LIMIT : null;
+  if (!limiter?.limit) return false;
+  const address = request.headers.get("cf-connecting-ip") ?? "unknown";
+  try {
+    const { success } = await limiter.limit({ key: `${sensitive ? "auth" : "write"}:${address}` });
+    return !success;
+  } catch {
+    return false;
+  }
+}
+
+async function route(request, env) {
+  {
     const url = new URL(request.url);
     const path = url.pathname;
     const method = request.method;
+
+    if (await overLimit(request, env, path, method)) {
+      return new Response(JSON.stringify({ error: "Too many requests from this address. Wait a minute and try again." }), {
+        status: 429, headers: { "content-type": "application/json", "retry-after": "60" },
+      });
+    }
 
     if (path === "/" || path === "/v1/health") return json({ ok: true, service: "clip-engine", version: VERSION });
 
@@ -155,12 +242,33 @@ export default {
     }
     m = path.match(/^\/v1\/accounts\/([0-9A-Za-z]+)(\/.*)$/);
     if (m && isSquadId(m[1].toUpperCase()) && !internal(m[2])) return forward(stub(env.LIBRARIES, m[1].toUpperCase()), request, m[2]);
+    if (path.startsWith("/v1/admin/grants")) return withCors(await grantRoute(request, env, url, path, method));
+    if (path.startsWith("/v1/admin/") && !admin(request, env)) return json({ error: "Not allowed." }, 403);
     if (path === "/v1/admin/plan" && method === "POST") {
-      const token = (request.headers.get("authorization") ?? "").replace(/^Bearer /, "");
-      if (!env.ADMIN_TOKEN || !sameSecret(token, env.ADMIN_TOKEN)) return json({ error: "Not allowed." }, 403);
       const body = await readBody(request);
       if (!isSquadId(body?.account)) return json({ error: "Which account?" }, 400);
       return forward(stub(env.LIBRARIES, body.account), request, "/admin/plan", { body: JSON.stringify({ plan: body.plan }) });
+    }
+
+    // ---- plans ----
+    if (path === "/v1/plans" && method === "GET") {
+      return json({ plans: Object.keys(PLANS).map((name) => planJson(env, name)), open: Boolean(env.POLAR_ORGANIZATION_ID) });
+    }
+    if (path === "/v1/license" && method === "POST") {
+      const body = await readBody(request);
+      const check = await checkLicense(env, body?.key, typeof body?.device === "string" ? body.device : "");
+      if (!check.ok) return json({ error: check.error, rejected: check.rejected }, check.rejected ? 403 : 503);
+      if (body?.credit !== undefined && check.plan !== "free") {
+        await directory(env, url, "/credits/set", { license: check.license, name: typeof body.credit === "string" ? body.credit : "", plan: check.plan });
+      }
+      return json({ ...planJson(env, check.plan, check.features), display: check.display, expires: check.expires, grant: Boolean(check.grant) });
+    }
+    if (path === "/v1/credits" && method === "GET") {
+      const answer = await stub(env.HANDLES, "handles").fetch(new Request(`${url.origin}/credits`));
+      const response = new Response(answer.body, answer);
+      response.headers.set("cache-control", "public, max-age=300");
+      response.headers.set("access-control-allow-origin", "*");
+      return response;
     }
 
     // ---- public pages ----
@@ -184,5 +292,5 @@ export default {
     }
 
     return json({ error: "Not found." }, 404);
-  },
-};
+  }
+}

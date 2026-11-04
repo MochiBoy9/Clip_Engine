@@ -3,6 +3,8 @@
 // its SQLite storage keeps the squad, and R2 keeps uploaded clips. WebSockets use hibernation,
 // so a squad nobody is using costs nothing.
 
+import { addColumns } from "./library.js";
+import { mediaPointer } from "./media.js";
 import {
   formatInvite,
   INVITE_SECRET_LENGTH,
@@ -37,6 +39,9 @@ CREATE TABLE IF NOT EXISTS views (
   size INTEGER NOT NULL DEFAULT 0, uploaded INTEGER NOT NULL DEFAULT 0, thumb INTEGER NOT NULL DEFAULT 0,
   added INTEGER NOT NULL, PRIMARY KEY (moment, member));
 `;
+
+// Added after the first release: names each upload, so it's served from a cache when it can be (src/media.js).
+const COLUMNS = ["views ADD COLUMN video_v INTEGER NOT NULL DEFAULT 0", "views ADD COLUMN thumb_v INTEGER NOT NULL DEFAULT 0"];
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -76,6 +81,7 @@ export class Squad {
     this.env = env;
     this.sql = ctx.storage.sql;
     this.sql.exec(SCHEMA);
+    addColumns(this.sql, COLUMNS);
     this.rate = new RateLimit(MOMENTS_PER_MINUTE);
   }
 
@@ -363,7 +369,7 @@ export class Squad {
       httpMetadata: { contentType: "video/mp4" },
     });
     const size = object?.size ?? length;
-    this.sql.exec("UPDATE views SET uploaded = 1, size = ? WHERE moment = ? AND member = ?", size, moment, member);
+    this.sql.exec("UPDATE views SET uploaded = 1, size = ?, video_v = ? WHERE moment = ? AND member = ?", size, Date.now(), moment, member);
     this.broadcast({ t: "uploaded", moment, member, size });
     return json({ ok: true, size });
   }
@@ -375,30 +381,23 @@ export class Squad {
     if (!Number.isFinite(length) || length <= 0 || length > MAX_THUMB_BYTES) return fail(413, "Thumbnails are at most 512 KB.");
     const type = request.headers.get("content-type") === "image/png" ? "image/png" : "image/jpeg";
     await this.env.CLIPS.put(this.key(moment, member, "thumb"), withLength(request.body, length), { httpMetadata: { contentType: type } });
-    this.sql.exec("UPDATE views SET thumb = 1 WHERE moment = ? AND member = ?", moment, member);
+    this.sql.exec("UPDATE views SET thumb = 1, thumb_v = ? WHERE moment = ? AND member = ?", Date.now(), moment, member);
     return json({ ok: true });
   }
 
-  async download(request, moment, member, kind) {
+  // Says the Worker may serve this view's video or thumbnail (src/media.js). A view that isn't
+  // uploaded is answered here, without asking R2.
+  download(request, moment, member, kind) {
     if (!isMomentId(moment) || !isMemberId(member)) return fail(404, "Not found.");
-    const object = await this.env.CLIPS.get(this.key(moment, member, kind), { range: request.headers });
-    if (!object) return fail(404, "That view isn't in the squad library (yet).");
-    const headers = new Headers();
-    headers.set("content-type", object.httpMetadata?.contentType ?? (kind === "thumb" ? "image/jpeg" : "video/mp4"));
-    headers.set("accept-ranges", "bytes");
-    headers.set("cache-control", "private, max-age=86400");
-    let status = 200;
-    const range = object.range;
-    if (range && request.headers.has("range")) {
-      const offset = range.offset ?? (range.suffix !== undefined ? object.size - range.suffix : 0);
-      const length = range.length ?? object.size - offset;
-      headers.set("content-range", `bytes ${offset}-${offset + length - 1}/${object.size}`);
-      headers.set("content-length", String(length));
-      status = 206;
-    } else {
-      headers.set("content-length", String(object.size));
-    }
-    return new Response(object.body, { status, headers });
+    const view = this.sql.exec("SELECT * FROM views WHERE moment = ? AND member = ?", moment, member).toArray()[0];
+    if (!view || (kind === "video" ? !view.uploaded : !view.thumb)) return fail(404, "That view isn't in the squad library (yet).");
+    const version = kind === "video" ? view.video_v : view.thumb_v;
+    return mediaPointer(this.key(moment, member, kind), {
+      type: kind === "thumb" ? "image/jpeg" : "video/mp4",
+      cacheControl: "private, max-age=86400",
+      version: version ? `${moment}-${member}-${kind}-${version}` : null,
+      size: kind === "video" ? view.size : null,
+    });
   }
 
   // Frees space for `bytes` more by removing the oldest unstarred uploads. False when even
