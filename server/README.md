@@ -54,6 +54,12 @@ These live in `wrangler.toml` under `[vars]`:
 | `POLAR_PRO_BENEFIT_ID` | empty | The License Keys benefit on the Pro product |
 | `POLAR_ULTRA_BENEFIT_ID` | empty | The License Keys benefit on the Ultra product |
 
+## Costs and protection
+
+**R2 operations.** Each clip put in the cloud library costs two writes (Class A): the video and its thumbnail, each one plain PUT. Watching a clip reads R2 (Class B), but the bytes are served by the Worker (`src/media.js`), not the Durable Object, so nothing stays busy while a video streams. Every upload has an ETag, so a browser that already has it gets `304 Not Modified` without an R2 read. On a custom domain, the Cache API keeps each clip in the Cloudflare location that served it: the first viewer there reads R2 once, and every later viewer and seek there is free. On `*.workers.dev` the Cache API does nothing, so each request reads R2; put the Worker on your own domain (Workers & Pages > clip-engine > Settings > Domains & Routes) to turn caching on.
+
+**Protection.** Cloudflare's DDoS protection is on for every Worker. On top of it, each address gets 10 sign-ups, sign-in or invite code tries and key checks a minute (`AUTH_LIMIT`), and 300 other changes a minute (`WRITE_LIMIT`), both in `wrangler.toml`. A sign-in code stops working after 5 wrong tries. Tokens are stored hashed and compared in constant time, every database query is parameterised, uploads have size limits, and the R2 bucket is private. With a custom domain you can also add WAF and rate limiting rules and Bot Fight Mode in the Cloudflare dashboard.
+
 ## Pro and Ultra on Polar
 
 1. In Polar, make two monthly products: Pro at $2.99 and Ultra at $4.99.

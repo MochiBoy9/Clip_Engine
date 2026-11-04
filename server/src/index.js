@@ -43,6 +43,7 @@ import { CLIP_CODE_LENGTH, Library } from "./library.js";
 import { formatInvite } from "./codes.js";
 import { clipPage, invitePage, notFoundPage, profilePage } from "./pages.js";
 import { checkLicense, normalizeGrant, PLANS, planJson } from "./plans.js";
+import { isMediaPointer, serveMedia } from "./media.js";
 import { Squad } from "./squad.js";
 
 export { Handles, Library, Squad };
@@ -165,10 +166,44 @@ async function profileRoute(request, env, handle, asJson) {
 }
 
 export default {
+  // A clip's video or thumbnail comes back from its Durable Object as a pointer; the bytes are
+  // served here (src/media.js).
   async fetch(request, env) {
+    const response = await route(request, env);
+    return isMediaPointer(response) ? serveMedia(request, env, response) : response;
+  },
+};
+
+// Per-address limits (Workers Rate Limiting, wrangler.toml [[ratelimits]]), on top of Cloudflare's own DDoS
+// protection: making accounts and squads, sign-in and invite codes, and key checks get
+// AUTH_LIMIT; every other change (uploads, friends, edits, the key maker's) gets WRITE_LIMIT. Reads aren't limited
+// here. Without the bindings (tests, wrangler dev) nothing is limited.
+const AUTH_ROUTES = /^\/v1\/(accounts|accounts\/signin|squads|join|license)$/;
+
+async function overLimit(request, env, path, method) {
+  const sensitive = method === "POST" && AUTH_ROUTES.test(path);
+  const limiter = sensitive ? env.AUTH_LIMIT : method !== "GET" && method !== "HEAD" && method !== "OPTIONS" ? env.WRITE_LIMIT : null;
+  if (!limiter?.limit) return false;
+  const address = request.headers.get("cf-connecting-ip") ?? "unknown";
+  try {
+    const { success } = await limiter.limit({ key: `${sensitive ? "auth" : "write"}:${address}` });
+    return !success;
+  } catch {
+    return false;
+  }
+}
+
+async function route(request, env) {
+  {
     const url = new URL(request.url);
     const path = url.pathname;
     const method = request.method;
+
+    if (await overLimit(request, env, path, method)) {
+      return new Response(JSON.stringify({ error: "Too many requests from this address. Wait a minute and try again." }), {
+        status: 429, headers: { "content-type": "application/json", "retry-after": "60" },
+      });
+    }
 
     if (path === "/" || path === "/v1/health") return json({ ok: true, service: "clip-engine", version: VERSION });
 
@@ -257,5 +292,5 @@ export default {
     }
 
     return json({ error: "Not found." }, 404);
-  },
-};
+  }
+}

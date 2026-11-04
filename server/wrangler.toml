@@ -27,6 +27,18 @@ new_sqlite_classes = ["Squad", "Library", "Handles"]
 binding = "CLIPS"
 bucket_name = "clip-engine-clips"
 
+# Per-address limits on top of Cloudflare's own DDoS protection (src/index.js, overLimit). namespace_id is any
+# number unique to this account's limiters.
+[[ratelimits]]
+name = "AUTH_LIMIT"
+namespace_id = "1101"
+simple = { limit = 10, period = 60 }
+
+[[ratelimits]]
+name = "WRITE_LIMIT"
+namespace_id = "1102"
+simple = { limit = 300, period = 60 }
+
 [vars]
 MAX_MEMBERS = "8"
 # Uploaded clips each squad can keep, in MB; the oldest unstarred ones go first when it's full.
