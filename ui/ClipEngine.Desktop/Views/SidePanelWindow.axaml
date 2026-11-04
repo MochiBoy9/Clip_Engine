@@ -87,8 +87,8 @@
                   <Grid ColumnDefinitions="Auto,*">
                     <Border Width="104" Height="58" CornerRadius="0" ClipToBounds="True" Background="{Binding Placeholder}">
                       <Panel>
-                        <TextBlock Text="{Binding Initials}" IsVisible="{Binding !HasThumbnail}" FontSize="18" FontWeight="Black"
-                                   Foreground="#59FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <views:GameBadge Game="{Binding Game}" Wide="True" InitialsSize="18" CornerRadius="0"
+                                         IsVisible="{Binding !HasThumbnail}" />
                         <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" IsVisible="{Binding HasThumbnail}" />
                         <Border Classes="pill onMedia" Padding="5,1" Margin="4"
                                 HorizontalAlignment="Right" VerticalAlignment="Bottom" IsVisible="{Binding HasDuration}">

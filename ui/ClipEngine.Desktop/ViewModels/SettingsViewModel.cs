@@ -237,6 +237,18 @@ public sealed class SettingsViewModel : ObservableObject
         }
     }
 
+    public bool GameArtOnline
+    {
+        get => _desktop.GameArtOnline;
+        set
+        {
+            if (_desktop.GameArtOnline == value) return;
+            _desktop.GameArtOnline = value;
+            TrySaveDesktop();
+            Raise();
+        }
+    }
+
     public bool HasChanges
     {
         get => _hasChanges;

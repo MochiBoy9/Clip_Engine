@@ -9,9 +9,8 @@
       <Border Name="Thumb" CornerRadius="0" ClipToBounds="True" Height="{Binding $parent[views:ClipCard].ThumbnailHeight}"
               Background="{Binding Placeholder}">
         <Panel>
-          <!-- Without a thumbnail yet, show the game's initials on its gradient -->
-          <TextBlock Text="{Binding Initials}" IsVisible="{Binding !HasThumbnail}" FontSize="40" FontWeight="Black"
-                     Foreground="#59FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" LetterSpacing="-1" />
+          <!-- Without a thumbnail yet, show the game's art, or its initials on its colours -->
+          <views:GameBadge Game="{Binding Game}" Wide="True" InitialsSize="40" CornerRadius="0" IsVisible="{Binding !HasThumbnail}" />
           <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" IsVisible="{Binding HasThumbnail}" />
 
           <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8">

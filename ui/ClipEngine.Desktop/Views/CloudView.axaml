@@ -12,6 +12,7 @@
   <ScrollViewer>
     <StackPanel Margin="0,0,40,40" Spacing="22">
       <StackPanel Spacing="4">
+        <views:SectionMark Index="06" Label="Cloud archive" />
         <TextBlock Classes="h1" Text="Cloud" />
         <TextBlock Classes="caption" TextWrapping="Wrap"
                    Text="Short links to your clips that play in any browser, with every moment marked, and a profile page with the ones you're proudest of." />

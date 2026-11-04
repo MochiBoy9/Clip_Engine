@@ -29,16 +29,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.build.outputs.version }}
         run: |
-          zip -r "Clip_Engine-$VERSION-windows-x64.zip" Clip_Engine
+          # One zip, under a name that never changes, so .../releases/latest/download/Clip_Engine-windows-x64.zip (the
+          # website's direct download link) always gets the newest version. The release's tag says which version it is.
+          # Screenshots stay in the build's artifacts, not on the release.
+          zip -r Clip_Engine-windows-x64.zip Clip_Engine
           tag="v$VERSION"
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "Release $tag already exists; bump the version in CMakeLists.txt first." >&2
             exit 1
           fi
-          gh release create "$tag" "Clip_Engine-$VERSION-windows-x64.zip" \
+          gh release create "$tag" Clip_Engine-windows-x64.zip \
             --target "$GITHUB_SHA" --title "Clip Engine $VERSION" --notes-file .github/release-notes.md
 
-      # The source repository is private, so its releases can't be downloaded by players. When the repository variable
+      # For a source repository kept private, whose releases players can't download. When the repository variable
       # DOWNLOADS_REPO (e.g. MochiBoy9/Clip_Engine-downloads, a public repository) and the secret DOWNLOADS_TOKEN (a
       # fine-grained token with Contents: read and write on that repository) are set, the zip is published there too.
       - name: Publish to the public downloads repository
@@ -48,5 +51,5 @@ jobs:
           VERSION: ${{ needs.build.outputs.version }}
           REPO: ${{ vars.DOWNLOADS_REPO }}
         run: |
-          gh release create "v$VERSION" "Clip_Engine-$VERSION-windows-x64.zip" --repo "$REPO" \
+          gh release create "v$VERSION" Clip_Engine-windows-x64.zip --repo "$REPO" \
             --title "Clip Engine $VERSION" --notes-file .github/release-notes.md

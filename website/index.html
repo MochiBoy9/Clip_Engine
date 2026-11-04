@@ -4,79 +4,166 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Clip Engine: automatic game clips, no ads, no Overwolf</title>
-  <meta name="description" content="Clip Engine records your games at your monitor's full resolution and refresh rate, and clips every kill, assist, death and revive by itself. Free, no ads, no watermark.">
+  <meta name="description" content="Clip Engine records your games at your monitor's full resolution and refresh rate, and clips every kill, assist, death and revive by itself. Play with friends to save every moment from each teammate's view. Free, no ads, no watermark.">
   <meta property="og:title" content="Clip Engine">
-  <meta property="og:description" content="Automatic game clips at native resolution. Free, no ads, no watermark, no Overwolf.">
+  <meta property="og:description" content="Automatic game clips at native resolution, squad views and share links. Free, no ads, no watermark, no Overwolf.">
   <meta property="og:image" content="assets/1-home.webp">
-  <meta name="theme-color" content="#120c26">
+  <meta name="theme-color" content="#0b0c0e">
   <link rel="icon" href="favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header class="nav">
-    <a class="brand" href="#top"><img src="assets/icon.png" alt="" width="28" height="28"> Clip Engine</a>
-    <nav>
-      <a href="#features">Features</a>
-      <a href="#compare">Compare</a>
-      <a href="#support">Support</a>
-      <a href="#faq">FAQ</a>
-      <a class="btn small" data-link="download" href="#download">Download</a>
-    </nav>
+    <div class="nav-inner">
+      <a class="brand" href="#top">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">Clip Engine</span>
+        <span class="brand-sep" aria-hidden="true">//</span>
+        <span class="brand-version" data-version-short>v0.10.0</span>
+      </a>
+      <nav>
+        <a href="#features"><span>01</span>Features</a>
+        <a href="#squads"><span>02</span>Squads</a>
+        <a href="#games"><span>03</span>Games</a>
+        <a href="#faq"><span>04</span>FAQ</a>
+        <a class="btn small" data-link="download" href="#download">Download</a>
+      </nav>
+    </div>
   </header>
 
   <main id="top">
     <section class="hero">
-      <p class="eyebrow">Early access · Windows 10 and 11</p>
-      <h1>Every play, clipped<br>before you think to.</h1>
-      <p class="lead">Clip Engine watches your game and saves a clip around every kill, assist, death, revive and match end, at the full resolution and refresh rate of your monitor. No ads, no watermark, no Overwolf.</p>
-      <div class="cta">
-        <a class="btn" data-link="download" href="#download">Download free</a>
-        <a class="btn ghost" href="#support">Support the project</a>
+      <div class="hero-grid">
+        <div>
+          <span class="eyebrow"><i></i>Live · Windows 10 and 11</span>
+          <h1>Every play,<br><em>clipped</em> before<br>you think to.</h1>
+          <p class="lead">Clip Engine watches your game and saves a clip around every kill, assist, death, revive and match end, at the full resolution and refresh rate of your monitor. No ads, no watermark, no Overwolf.</p>
+          <div class="cta">
+            <a class="btn" data-link="download" href="#download">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16"/></svg>
+              Download free
+            </a>
+            <a class="btn ghost" href="#download">Copy download link</a>
+          </div>
+          <p class="fine"><span data-version>Version 0.10.0</span> · <span data-size>42 MB</span> · no account needed</p>
+          <div class="readouts" aria-label="At a glance">
+            <div><b>23</b>games detected</div>
+            <div><b>0</b>ads or watermarks</div>
+            <div><b>1</b>key saves the last 30 s</div>
+          </div>
+        </div>
+        <figure class="figure hero-shot">
+          <div class="stripes" aria-hidden="true"></div>
+          <div class="plate frame"><div class="plate-in">
+            <img src="assets/1-home.webp" alt="Clip Engine's home screen while recording, with recent clips and detected moments" width="1440" height="900">
+          </div></div>
+          <figcaption><span>Fig. 01 · Home</span><span>Recording The Finals</span></figcaption>
+        </figure>
       </div>
-      <p class="fine" data-version>Version 0.5.0 · 39 MB · no account needed</p>
-      <figure class="shot hero-shot">
-        <img src="assets/1-home.webp" alt="Clip Engine home screen showing live recording status and recent clips" width="1440" height="900">
-      </figure>
     </section>
 
     <section id="features" class="section">
+      <div class="mark"><b>01</b>Features<span class="barcode" aria-hidden="true"></span></div>
       <h2>Built to stay out of your way</h2>
-      <div class="grid three">
-        <article class="card">
+      <p class="lead">Recording runs on your GPU's video hardware and the app stays flat and light, so your frame rate is the game's.</p>
+      <div class="grid three shots">
+        <article class="plate feature"><div class="plate-in">
+          <span class="idx">F.01</span>
           <h3>Clips itself</h3>
-          <p>Reads the kill feed and HUD with on-device text recognition, then saves the moments you pick. Moments close together become one clip.</p>
-        </article>
-        <article class="card">
+          <p>Reads the killfeed and HUD with on-device text recognition, and the official events in CS2, Dota 2, League and Rocket League. Moments close together become one clip.</p>
+        </div></article>
+        <article class="plate feature"><div class="plate-in">
+          <span class="idx">F.02</span>
           <h3>Your monitor's real quality</h3>
           <p>Records at native resolution and refresh rate, encoded on your GPU (NVIDIA, AMD or Intel) with H.264 or HEVC.</p>
-        </article>
-        <article class="card">
+        </div></article>
+        <article class="plate feature"><div class="plate-in">
+          <span class="idx">F.03</span>
           <h3>Safe with anti-cheat</h3>
           <p>Uses Windows screen capture. Nothing is injected into the game, so there is nothing for anti-cheat to flag.</p>
-        </article>
-        <article class="card">
+        </div></article>
+        <article class="plate feature"><div class="plate-in">
+          <span class="idx">F.04</span>
           <h3>Moments on the timeline</h3>
-          <p>Every detected kill and revive is marked in the player. Click one to jump straight to it.</p>
-        </article>
-        <article class="card">
-          <h3>Discord in one click</h3>
-          <p>Makes a copy under 10, 50 or 500 MB and puts it on your clipboard, ready to paste.</p>
-        </article>
-        <article class="card">
-          <h3>Your clips stay yours</h3>
-          <p>Everything is saved on your PC. No upload, no account and no tracking needed to use it.</p>
-        </article>
+          <p>Every kill and revive is marked in the player. Click one to jump to it, trim around it, or see why it was counted.</p>
+        </div></article>
+        <article class="plate feature"><div class="plate-in">
+          <span class="idx">F.05</span>
+          <h3>Share anywhere</h3>
+          <p>A copy under 10, 50 or 500 MB on your clipboard for Discord, or a short link that plays in any browser with every moment marked.</p>
+        </div></article>
+        <article class="plate feature"><div class="plate-in">
+          <span class="idx">F.06</span>
+          <h3>Records that count</h3>
+          <p>Kills, K/D, streaks and personal bests from every match, read from games' own scoreboards where they have one.</p>
+        </div></article>
       </div>
       <div class="grid two shots">
-        <figure class="shot"><img src="assets/5-player.webp" alt="Clip player with detected moments on the timeline" loading="lazy" width="1440" height="900"><figcaption>The player, with every moment marked.</figcaption></figure>
-        <figure class="shot"><img src="assets/2-clips.webp" alt="Clip library with thumbnails grouped by game" loading="lazy" width="1440" height="900"><figcaption>Your library, by game.</figcaption></figure>
+        <figure class="figure">
+          <div class="plate frame"><div class="plate-in"><img src="assets/5-player.webp" alt="Clip player with detected moments on the timeline" loading="lazy" width="1440" height="900"></div></div>
+          <figcaption><span>Fig. 02 · Player</span><span>Every moment marked</span></figcaption>
+        </figure>
+        <figure class="figure">
+          <div class="plate frame"><div class="plate-in"><img src="assets/2-clips.webp" alt="Clip library with thumbnails, filtered by game" loading="lazy" width="1440" height="900"></div></div>
+          <figcaption><span>Fig. 03 · Library</span><span>Sorted by game</span></figcaption>
+        </figure>
       </div>
-      <p class="games">Automatic clips today in <strong>Counter-Strike 2</strong>, <strong>Valorant</strong>, <strong>League of Legends</strong>, <strong>Fortnite</strong>, <strong>Apex Legends</strong>, <strong>Dota 2</strong>, <strong>PUBG</strong>, <strong>Marvel Rivals</strong>, <strong>Rainbow Six Siege</strong>, <strong>Call of Duty</strong>, <strong>ARC Raiders</strong>, <strong>Rocket League</strong>, <strong>Delta Force</strong>, <strong>The Finals</strong>, <strong>Overwatch</strong>, <strong>Battlefield 6</strong>, <strong>Deadlock</strong>, <strong>Halo Infinite</strong>, <strong>Destiny 2</strong>, <strong>Team Fortress 2</strong> and <strong>Escape from Tarkov</strong>, with more games every update. F8 saves the last 30 seconds in any game.</p>
+    </section>
+
+    <section id="squads" class="section">
+      <div class="mark"><b>02</b>Squads and cloud<span class="barcode" aria-hidden="true"></span></div>
+      <div class="split">
+        <div>
+          <h2>Every kill, from every teammate's view</h2>
+          <p class="lead">Make a squad and send friends an invite link. When you play the same match, Clip Engine links you up by itself.</p>
+          <ul class="list">
+            <li data-n="01"><span><b>Saved from each view</b>A kill, revive or win by anyone in the squad is saved by every linked teammate too, lined up to the same second.</span></li>
+            <li data-n="02"><span><b>Watch together</b>Up to four views of the same moment side by side on one timeline, or cut into one squad highlight.</span></li>
+            <li data-n="03"><span><b>A library you share</b>Everyone's views land in one place. You choose what you upload and which moments you share.</span></li>
+            <li data-n="04"><span><b>Share links and a profile</b>Short links that play in any browser, and a profile page with the clips you're proudest of.</span></li>
+          </ul>
+        </div>
+        <figure class="figure">
+          <div class="plate frame"><div class="plate-in"><img src="assets/18-watch-together.webp" alt="Four teammates' views of one moment playing side by side" loading="lazy" width="1440" height="900"></div></div>
+          <figcaption><span>Fig. 04 · Watch together</span><span>Four views, one timeline</span></figcaption>
+        </figure>
+      </div>
+      <div class="grid two shots">
+        <figure class="figure">
+          <div class="plate frame"><div class="plate-in"><img src="assets/17-squad.webp" alt="The Squad page with members and shared moments" loading="lazy" width="1440" height="1500"></div></div>
+          <figcaption><span>Fig. 05 · Squad</span><span>Members and moments</span></figcaption>
+        </figure>
+        <figure class="figure">
+          <div class="plate frame"><div class="plate-in"><img src="assets/19-cloud.webp" alt="The Cloud page with share links and a profile" loading="lazy" width="1440" height="900"></div></div>
+          <figcaption><span>Fig. 06 · Cloud</span><span>Links and profile</span></figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section id="games" class="section">
+      <div class="mark"><b>03</b>Game registry<span class="barcode" aria-hidden="true"></span></div>
+      <h2>Starts the moment your game does</h2>
+      <p class="lead">Clip Engine finds the games installed on your PC, through Steam, Epic, Battle.net, the EA app, Ubisoft Connect, Riot, the Xbox app and Roblox, and starts recording on the monitor the game is on.</p>
+      <div class="games shots">
+        <span>Counter-Strike 2</span><span>Valorant</span><span>League of Legends</span><span>Fortnite</span><span>Apex Legends</span>
+        <span>Dota 2</span><span>PUBG</span><span>Marvel Rivals</span><span>Rainbow Six Siege</span><span>Call of Duty</span>
+        <span>ARC Raiders</span><span>Rocket League</span><span>Delta Force</span><span>The Finals</span><span>Overwatch</span>
+        <span>Battlefield 6</span><span>Deadlock</span><span>Halo Infinite</span><span>Destiny 2</span><span>Team Fortress 2</span>
+        <span>Escape from Tarkov</span><span>Roblox</span><span>Minecraft</span><span class="any">+ any game with F8</span>
+      </div>
+      <figure class="figure shots">
+        <div class="plate frame"><div class="plate-in"><img src="assets/3-games.webp" alt="The Games page showing installed games with their art" loading="lazy" width="1440" height="900"></div></div>
+        <figcaption><span>Fig. 07 · Games</span><span>Installed games, with their art</span></figcaption>
+      </figure>
     </section>
 
     <section id="compare" class="section">
+      <div class="mark"><b>04</b>Comparison<span class="barcode" aria-hidden="true"></span></div>
       <h2>How it compares</h2>
-      <div class="table-wrap">
+      <div class="plate table-wrap"><div class="plate-in">
         <table>
           <thead>
             <tr><th></th><th class="us">Clip Engine</th><th>Medal</th><th>Outplayed</th></tr>
@@ -87,44 +174,73 @@
             <tr><td>Every feature free</td><td class="us">Yes</td><td>No, Premium plan</td><td>No, Premium plan</td></tr>
           </tbody>
         </table>
-      </div>
+      </div></div>
       <p class="fine">Based on each product's public pages as of October 2026.</p>
     </section>
 
-    <section id="support" class="section support">
-      <h2>Free, and made for the love of it</h2>
-      <p class="lead">Every recording feature is free for everyone, with no plans, no ads and no watermark. Clip Engine is a passion project, and quality comes first.</p>
-      <div class="card support-card">
-        <h3>Want to help?</h3>
-        <p>Backing Clip Engine on Patreon keeps it growing. Patrons get a supporter key that works forever: extra colour themes, a supporter badge, and your name in the app's thank-you list.</p>
-        <a class="btn" data-link="patreon" href="#support">Support on Patreon</a>
-      </div>
+    <section id="download" class="section download">
+      <div class="mark"><b>05</b>Download<span class="barcode" aria-hidden="true"></span></div>
+      <h2>Get Clip Engine</h2>
+      <div class="plate lead-plate shots"><div class="plate-in">
+        <ol class="steps">
+          <li><span><b>Download the zip</b>One file with the app, the recording engine and its detection rules.</span></li>
+          <li><span><b>Unzip it anywhere</b>Keep the files together, in a folder like <code>C:\Games\Clip Engine</code>. Nothing needs installing.</span></li>
+          <li><span><b>Run <code>ClipEngine.exe</code></b>Launch a supported game and it starts recording by itself. Updates install from inside the app.</span></li>
+        </ol>
+        <div class="link-box">
+          <a class="btn" data-link="download" href="https://github.com/MochiBoy9/Clip_Engine/releases/latest">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16"/></svg>
+            Download for Windows
+          </a>
+          <label class="fine" for="download-link">Direct link</label>
+          <div class="link-row">
+            <input id="download-link" readonly value="https://github.com/MochiBoy9/Clip_Engine/releases/latest" data-link-text="download">
+            <button class="btn" type="button" data-copy="download-link">Copy</button>
+          </div>
+          <span class="copy-state" role="status" aria-live="polite"></span>
+          <dl class="specs">
+            <dt>Version</dt><dd data-version>0.10.0</dd>
+            <dt>Size</dt><dd data-size>42 MB</dd>
+            <dt>Released</dt><dd data-date>4 Nov 2026</dd>
+            <dt>SHA-256</dt><dd data-sha>Shown on the release page</dd>
+            <dt>Needs</dt><dd>Windows 10 1903 or newer, and a GPU with a video encoder (almost any from the last ten years)</dd>
+          </dl>
+          <a class="fine" data-link="releases" href="https://github.com/MochiBoy9/Clip_Engine/releases">All releases and notes</a>
+        </div>
+      </div></div>
     </section>
 
-    <section id="download" class="section download">
-      <h2>Get Clip Engine</h2>
-      <p class="lead">Download the zip, unzip it anywhere and run <code>ClipEngine.exe</code>. Launch a supported game and it starts recording by itself.</p>
-      <a class="btn" data-link="download" href="#download">Download for Windows</a>
-      <p class="fine">Needs Windows 10 version 1903 or newer and a GPU with a hardware video encoder (almost any from the last ten years).</p>
+    <section id="support" class="section support">
+      <div class="mark"><b>06</b>Support<span class="barcode" aria-hidden="true"></span></div>
+      <div class="plate"><div class="plate-in">
+        <div>
+          <h2>Free, and made for the love of it</h2>
+          <p>Every recording feature is free for everyone, with no plans, no ads and no watermark. Backing Clip Engine on Patreon keeps it growing: patrons get a supporter key that works forever, with extra colour themes, a supporter badge, and their name in the app's thank-you list.</p>
+        </div>
+        <a class="btn" data-link="patreon" href="#support">Support on Patreon</a>
+      </div></div>
     </section>
 
     <section id="faq" class="section">
-      <h2>Questions</h2>
+      <div class="mark"><b>07</b>Questions<span class="barcode" aria-hidden="true"></span></div>
       <details><summary>Will it slow my game down?</summary><p>Capture and encoding run on your GPU's dedicated video hardware, and screen reading only looks at frames that are already finished. Most players won't notice it running.</p></details>
       <details><summary>Can I get banned for using it?</summary><p>Clip Engine never touches the game's memory or files. It records the screen the same way Windows' own tools do.</p></details>
       <details><summary>Windows says the app is from an unknown publisher.</summary><p>Early builds aren't code-signed yet. Choose <em>More info → Run anyway</em>. Signed builds are coming before the full launch.</p></details>
-      <details><summary>Is it really free?</summary><p>Yes. Recording, automatic clips, the player and sharing are free for everyone, for good. Patreon supporters get a few cosmetic extras as a thank-you, nothing that changes your clips.</p></details>
-      <details><summary>Which games are supported?</summary><p>Automatic clips work in 21 games today: Counter-Strike 2, Dota 2, League of Legends and Rocket League through their official game events, and Valorant, Fortnite, Apex Legends, PUBG, Marvel Rivals, Rainbow Six Siege, Call of Duty, ARC Raiders, Delta Force, The Finals, Overwatch, Battlefield 6, Deadlock, Halo Infinite, Destiny 2, Team Fortress 2 and Escape from Tarkov by reading the screen. Roblox and Minecraft are recorded too. The F8 replay hotkey works in any game, and more games are added with each update.</p></details>
+      <details><summary>Why a zip and not one .exe?</summary><p><code>ClipEngine.exe</code> is the app, and it runs the recording engine (<code>clip_engine.exe</code>) and reads the detection rules that sit beside it, so they need to stay in one folder. Unzip it anywhere you like; there's nothing to install and nothing left behind if you delete the folder.</p></details>
+      <details><summary>Is it really free?</summary><p>Yes. Recording, automatic clips, the player, squads and sharing are free for everyone. Patreon supporters get a few cosmetic extras as a thank-you, nothing that changes your clips. The cloud library starts with 2 GB of space for free.</p></details>
+      <details><summary>Which games are supported?</summary><p>Automatic clips work in 21 games today: Counter-Strike 2, Dota 2, League of Legends and Rocket League through their official game events, and Valorant, Fortnite, Apex Legends, PUBG, Marvel Rivals, Rainbow Six Siege, Call of Duty, ARC Raiders, Delta Force, The Finals, Overwatch, Battlefield 6, Deadlock, Halo Infinite, Destiny 2, Team Fortress 2 and Escape from Tarkov by reading the screen. Roblox and Minecraft are recorded too. The F8 replay hotkey works in any game, and Detection Studio in the app adds any game you like.</p></details>
     </section>
   </main>
 
   <footer class="footer">
-    <p>© 2026 Clip Engine</p>
-    <nav>
-      <a href="privacy.html">Privacy</a>
-      <a href="terms.html">Terms</a>
-      <a data-link="support" href="#">Support</a>
-    </nav>
+    <div class="footer-inner">
+      <p>© 2026 Clip Engine · <span data-version-short>v0.10.0</span></p>
+      <nav>
+        <a href="privacy.html">Privacy</a>
+        <a href="terms.html">Terms</a>
+        <a data-link="support" href="#">Support</a>
+      </nav>
+    </div>
   </footer>
 
   <script src="site.js"></script>

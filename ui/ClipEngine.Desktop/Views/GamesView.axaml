@@ -7,6 +7,7 @@
   <ScrollViewer>
     <StackPanel Margin="0,0,40,40" Spacing="22">
       <StackPanel Spacing="4">
+        <views:SectionMark Index="05" Label="Game registry" />
         <TextBlock Classes="h1" Text="Games" />
         <TextBlock Classes="caption" Text="Clip Engine starts recording as soon as one of these opens, on the monitor it's on." />
       </StackPanel>
@@ -30,37 +31,55 @@
         </Grid>
       </views:Plate>
 
-      <ItemsControl ItemsSource="{Binding Main.Games}" Margin="0,0,-18,-18">
+      <!-- Installed games only, unless all of them are asked for -->
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+          <TextBlock Classes="eyebrow" Text="ON THIS PC" VerticalAlignment="Center" />
+          <TextBlock Classes="readout" VerticalAlignment="Center"
+                     Text="{Binding Main.ShownGames.Count, StringFormat='{}{0:00}'}" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" IsVisible="{Binding Main.HasHiddenGames}">
+          <TextBlock Classes="caption" Text="{Binding Main.HiddenGamesText}" VerticalAlignment="Center" />
+          <ToggleSwitch IsChecked="{Binding Main.ShowAllGames}" OnContent="{x:Null}" OffContent="{x:Null}" />
+        </StackPanel>
+      </Grid>
+
+      <ItemsControl ItemsSource="{Binding Main.ShownGames}" Margin="0,0,-18,-18">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate><UniformGrid Columns="3" /></ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:GameItemViewModel">
-            <views:Plate Classes="card" Padding="22,20" Margin="0,0,18,18">
-              <StackPanel Spacing="16">
-                <Grid ColumnDefinitions="Auto,*,Auto">
-                  <Border Width="48" Height="48" CornerRadius="2" Background="{Binding Gradient}">
-                    <TextBlock Text="{Binding Initials}" FontSize="17" FontWeight="Black" Foreground="White"
-                               HorizontalAlignment="Center" VerticalAlignment="Center" />
-                  </Border>
-                  <StackPanel Grid.Column="1" Margin="16,0,8,0" VerticalAlignment="Center" Spacing="3">
-                    <TextBlock Classes="h2" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-                    <TextBlock Classes="caption" Text="{Binding Status}" />
-                  </StackPanel>
-                  <Border Grid.Column="2" Classes="pill record" Padding="8,2" VerticalAlignment="Top"
-                          IsVisible="{Binding IsRecording}">
+            <views:Plate Classes="card game" Padding="0" Margin="0,0,18,18" ClipContent="True">
+              <StackPanel>
+                <!-- The game's store banner, or its icon, or its initials -->
+                <Panel Height="150">
+                  <views:GameBadge Game="{Binding Name}" Wide="True" InitialsSize="44" CornerRadius="0"
+                                   Classes.dim="{Binding !IsInstalled}" />
+                  <Border Classes="pill record" Padding="8,2" Margin="12" HorizontalAlignment="Right" VerticalAlignment="Top"
+                          Background="{StaticResource MediaBrush}" IsVisible="{Binding IsRecording}">
                     <StackPanel Orientation="Horizontal" Spacing="6">
                       <Ellipse Classes="liveDot pulsing" Width="6" Height="6" VerticalAlignment="Center" />
                       <TextBlock Text="REC" FontSize="10" FontWeight="Bold" LetterSpacing="1" />
                     </StackPanel>
                   </Border>
-                </Grid>
-                <Border Height="1" Background="{StaticResource Divider}" />
-                <Grid ColumnDefinitions="*,Auto">
-                  <TextBlock Classes="caption" Text="{Binding ClipCountText}" VerticalAlignment="Center" />
-                  <TextBlock Grid.Column="1" Classes="caption" Text="{Binding DetectionText}" VerticalAlignment="Center"
-                             Foreground="{StaticResource TextSecondary}" />
-                </Grid>
+                  <Border Classes="tag" HorizontalAlignment="Left" VerticalAlignment="Bottom">
+                    <TextBlock Text="{Binding StoreTag}" />
+                  </Border>
+                </Panel>
+                <Border Height="2" Background="{DynamicResource AccentBrush}" IsVisible="{Binding IsRunning}" />
+                <StackPanel Margin="20,16,20,18" Spacing="14">
+                  <StackPanel Spacing="3">
+                    <TextBlock Classes="h2" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Classes="caption" Text="{Binding Status}" />
+                  </StackPanel>
+                  <Border Classes="rule" />
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="readout" Text="{Binding ClipCountText}" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Classes="caption" Text="{Binding DetectionText}" VerticalAlignment="Center"
+                               Foreground="{StaticResource TextSecondary}" />
+                  </Grid>
+                </StackPanel>
               </StackPanel>
             </views:Plate>
           </DataTemplate>
