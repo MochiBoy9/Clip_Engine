@@ -26,7 +26,7 @@ You need [Node.js](https://nodejs.org) 20 or newer and a Cloudflare account.
    ```
 
    `wrangler login` opens your browser to allow access. `wrangler deploy` ends by printing the service's address, `https://clip-engine.<your-subdomain>.workers.dev`.
-4. Optional: set an admin token, so you can move accounts to the Plus plan:
+4. Set an admin token. It opens the key maker (`/admin`) and lets you move accounts between plans. Pick a long random one, such as the output of `openssl rand -hex 32`, and keep it to yourself:
 
    ```sh
    npx wrangler secret put ADMIN_TOKEN
@@ -72,6 +72,21 @@ curl -X POST https://clip-engine.<your-subdomain>.workers.dev/v1/admin/plan \
 ```
 
 The account id is the first 8 characters of any of the account's share codes.
+
+### Special keys (the key maker)
+
+Open `https://clip-engine.<your-subdomain>.workers.dev/admin` and type your `ADMIN_TOKEN`. The page is public, but nothing on it works without the token, which stays in that browser tab only. Every call it makes goes to `/v1/admin/grants` with the token.
+
+A special key looks like `CEK-7Q4K-M2XD-9PHA` and goes in the same box as a subscription key (Settings, Plan). Each one gives:
+
+- **a plan:** Pro, Ultra, or Free with only the extras below
+- **how long:** a week, a month, 3 or 6 months, a year, unlimited, or any number of days, counted from the first time it's used
+- **extra cloud storage** in GB, added to the plan's
+- **the highest resolution**, if it should differ from the plan's
+- **the colour themes** it unlocks, or the plan's
+- **how many PCs** can use it (3 by default), and a note only you see
+
+The key list shows each key's status (unused, active, run out or turned off), its end date and how many PCs use it. Edit changes any of the above; the app picks changes up the next time it checks the key (within 12 hours). Turn off ends it, Free PCs lets new PCs use it, and Restart time starts its days again from the next use. A special key on a cloud account gives that account its storage, one account per key.
 
 ## Working on it
 

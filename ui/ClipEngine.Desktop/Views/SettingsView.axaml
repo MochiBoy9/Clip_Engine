@@ -362,10 +362,10 @@
             <StackPanel IsVisible="{Binding ShowKeyBox}">
               <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
               <TextBlock Text="License key" FontWeight="SemiBold" FontSize="14" />
-              <TextBlock Classes="caption" Text="Subscribing emails you a key. Paste it here on each PC you play on."
+              <TextBlock Classes="caption" Text="Subscribing emails you a key. Paste it, or a special key (CEK-...), here on each PC you play on."
                          TextWrapping="Wrap" Margin="0,2,0,12" />
               <Grid ColumnDefinitions="*,Auto">
-                <TextBox Text="{Binding KeyInput}" Watermark="Your Clip Engine license key" />
+                <TextBox Text="{Binding KeyInput}" Watermark="Your license key or special key" />
                 <Button Grid.Column="1" Classes="accent" Content="Activate" Command="{Binding ActivateCommand}" Margin="10,0,0,0" />
               </Grid>
             </StackPanel>

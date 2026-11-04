@@ -17,6 +17,7 @@ public sealed class PlanViewModel : ObservableObject
     private readonly DispatcherTimer? _recheck;
     private Credits _credits = new([], []);
     private Plan _plan;
+    private bool _active;
     private string _keyInput = "";
     private string _creditInput;
     private string? _message;
@@ -31,6 +32,7 @@ public sealed class PlanViewModel : ObservableObject
         _server = server;
         _state = file is null ? new LicenseState() : LicenseState.Load(file);
         _plan = LicenseRules.Effective(_state, DateTimeOffset.UtcNow);
+        _active = LicenseRules.IsActive(_state, DateTimeOffset.UtcNow);
         _creditInput = _state.CreditName.Length > 0 ? _state.CreditName : desktop?.Squad.PlayerName ?? "";
         _fileCredits = credits ?? LoadCredits();
         Themes = AccentThemes.All.Select(t => new ThemeOption(t, Select)).ToList();
@@ -57,7 +59,7 @@ public sealed class PlanViewModel : ObservableObject
     public RelayCommand ManageCommand { get; }
     public RelayCommand SaveCreditCommand { get; }
 
-    // The plan changed: themes, the recording resolution and the cloud library follow it.
+    // The plan or a special key's features changed: themes, the recording resolution and the cloud library follow it.
     public event Action<Plan>? PlanChanged;
     internal event Action<AccentTheme>? ThemeChanged;
 
@@ -69,6 +71,19 @@ public sealed class PlanViewModel : ObservableObject
     public bool IsUltra => _plan == Plan.Ultra;
     public string Badge => _plan.ToString().ToUpperInvariant();
 
+    // Whether the key on this PC gives anything now, a plan or a special key's features.
+    internal bool IsActive => _active;
+    internal bool IsSpecial => _active && _state.IsSpecial;
+
+    // The highest recording resolution: the plan's, or what a special key sets.
+    internal int MaxLines => IsSpecial && _state.Lines is { } lines ? lines : Info.Lines;
+
+    internal long ExtraStorage => IsSpecial ? _state.ExtraStorage : 0;
+
+    // A special key with its own list of themes gives those (and the default); otherwise the plan decides.
+    internal bool IsUnlocked(AccentTheme theme) =>
+        IsSpecial && _state.Themes is { } themes ? theme.IsDefault || themes.Contains(theme.Id) : theme.IsUnlocked(_plan);
+
     public IReadOnlyList<ThemeOption> Themes { get; }
     public IReadOnlyList<PlanOffer> Offers { get; }
 
@@ -78,11 +93,13 @@ public sealed class PlanViewModel : ObservableObject
         get
         {
             var saved = AccentThemes.Find(_desktop?.AccentTheme);
-            return saved.IsUnlocked(_plan) ? saved : AccentThemes.Default;
+            return IsUnlocked(saved) ? saved : AccentThemes.Default;
         }
     }
 
-    public string ThemeCaption => _plan switch
+    public string ThemeCaption => IsSpecial && _state.Themes is not null
+        ? "Changes the accent colour across the app. Your special key unlocks the ones you can pick."
+        : _plan switch
     {
         Plan.Ultra => "Changes the accent colour across the app. The last three are Ultra's own.",
         Plan.Pro => "Changes the accent colour across the app. The last three come with Ultra.",
@@ -98,18 +115,47 @@ public sealed class PlanViewModel : ObservableObject
 
     public string Detail => _plan switch
     {
+        Plan.Free when IsSpecial => $"Your special key gives {SpecialText}{UntilText}{KeyText}.",
         Plan.Free => "Every recording feature is yours. Pro and Ultra add higher resolutions, more cloud storage and a few thank-yous, and keep Clip Engine going.",
-        _ => $"{Info.LinesText} recording, {Info.StorageGb} GB in the cloud{KeyText}. Thank you for backing Clip Engine.",
+        _ => $"{Resolutions.Name(MaxLines)} recording, {StorageText} in the cloud{UntilText}{KeyText}. Thank you for backing Clip Engine.",
     };
 
     private string KeyText => _state.Display.Length > 0 ? $", key {_state.Display}" : "";
+
+    private string StorageText => Gb(Info.StorageGb * (1L << 30) + ExtraStorage);
+
+    private static string Gb(long bytes) =>
+        string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{bytes / (double)(1L << 30):0.#} GB");
+
+    // What a Free special key adds, in words.
+    private string SpecialText
+    {
+        get
+        {
+            var parts = new List<string>();
+            if (MaxLines != Info.Lines) parts.Add($"{Resolutions.Name(MaxLines)} recording");
+            if (ExtraStorage > 0) parts.Add($"{Gb(ExtraStorage)} more cloud storage");
+            if (_state.Themes is { Count: > 0 } themes && themes.Any(t => t != AccentThemes.Default.Id)) parts.Add("extra colour themes");
+            return parts.Count switch
+            {
+                0 => "nothing extra right now",
+                1 => parts[0],
+                _ => string.Join(", ", parts[..^1]) + " and " + parts[^1],
+            };
+        }
+    }
+
+    // A special key's end date. Subscriptions renew, so theirs isn't shown.
+    private string UntilText => IsSpecial && _state.Expires is { } end
+        ? $", until {end.ToLocalTime():MMM d, yyyy}"
+        : "";
 
     public string? StatusText
     {
         get
         {
             if (!_state.HasKey) return null;
-            if (_plan == Plan.Free) return "This key doesn't give a plan right now. Check it again, or remove it.";
+            if (!_active) return "This key doesn't give a plan right now. Check it again, or remove it.";
             if (_state.LastOk is { } ok && DateTimeOffset.UtcNow - ok > TimeSpan.FromDays(1))
             {
                 var left = LicenseRules.OfflineGrace - (DateTimeOffset.UtcNow - ok);
@@ -120,7 +166,7 @@ public sealed class PlanViewModel : ObservableObject
     }
 
     public bool HasStatus => StatusText is not null;
-    public bool ShowKeyBox => !_state.HasKey || _plan == Plan.Free;
+    public bool ShowKeyBox => !_state.HasKey || !_active;
     public bool HasManage => IsPaid && PlanConfig.ManageUrl.Length > 0;
 
     public bool IsBusy
@@ -196,19 +242,14 @@ public sealed class PlanViewModel : ObservableObject
         Message = null;
         try
         {
-            var check = await new LicenseClient(_server()).CheckAsync(key, CreditFor());
+            var check = await new LicenseClient(_server()).CheckAsync(key, CreditFor(), Device());
             if (check.Outcome != LicenseOutcome.Valid)
             {
                 MessageIsError = true;
                 Message = check.Message;
                 return;
             }
-            _state.Key = key;
-            Apply(check);
-            KeyInput = "";
-            MessageIsError = false;
-            Message = $"{Plans.For(check.Plan).Label} is on. Thank you!";
-            SetPlan(check.Plan);
+            Accept(key, check);
         }
         finally
         {
@@ -216,21 +257,35 @@ public sealed class PlanViewModel : ObservableObject
         }
     }
 
+    // A key the service said yes to goes on this PC.
+    internal void Accept(string key, LicenseCheck check)
+    {
+        _state.Key = key;
+        Apply(check);
+        KeyInput = "";
+        MessageIsError = false;
+        Message = check.IsSpecial
+            ? check.Plan == Plan.Free ? "Your special key is on." : $"{Plans.For(check.Plan).Label} is on from your special key."
+            : $"{Plans.For(check.Plan).Label} is on. Thank you!";
+        SetPlan(check.Plan, force: true);
+    }
+
     // Checks the key again twice a day: a renewed subscription carries on, a cancelled one goes back to Free.
     internal async Task RecheckAsync(bool force = false)
     {
         if (!_state.HasKey || (!force && !LicenseRules.NeedsCheck(_state, DateTimeOffset.UtcNow))) return;
-        var check = await new LicenseClient(_server()).CheckAsync(_state.Key, CreditFor());
+        var check = await new LicenseClient(_server()).CheckAsync(_state.Key, CreditFor(), Device());
         _state.LastChecked = DateTimeOffset.UtcNow;
         if (check.Outcome == LicenseOutcome.Valid) Apply(check);
         else if (check.Outcome == LicenseOutcome.Rejected)
         {
             _state.Plan = Plan.Free;
+            _state.LastOk = null;
             MessageIsError = true;
             Message = check.Message;
         }
         Save();
-        SetPlan(LicenseRules.Effective(_state, DateTimeOffset.UtcNow));
+        SetPlan(LicenseRules.Effective(_state, DateTimeOffset.UtcNow), force: true);
     }
 
     private void Apply(LicenseCheck check)
@@ -238,6 +293,10 @@ public sealed class PlanViewModel : ObservableObject
         _state.Plan = check.Plan;
         _state.Display = check.Display;
         _state.Expires = check.Expires;
+        _state.IsSpecial = check.IsSpecial;
+        _state.Lines = check.Lines;
+        _state.Themes = check.Themes?.ToList();
+        _state.ExtraStorage = check.ExtraStorage;
         _state.LastChecked = _state.LastOk = DateTimeOffset.UtcNow;
         Save();
     }
@@ -247,7 +306,26 @@ public sealed class PlanViewModel : ObservableObject
         _state.Clear();
         Save();
         Message = null;
-        SetPlan(Plan.Free);
+        SetPlan(Plan.Free, force: true);
+    }
+
+    // This PC's id, which a special key counts against its limit of PCs.
+    private string Device()
+    {
+        if (_desktop is null) return "";
+        var had = _desktop.DeviceId.Length >= 8;
+        var id = Online.DeviceId(_desktop);
+        if (!had)
+        {
+            try
+            {
+                _desktop.Save();
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+            }
+        }
+        return id;
     }
 
     private string? CreditFor() => _state.InCredits && CreditInput.Trim().Length > 0 ? CreditInput.Trim() : "";
@@ -260,7 +338,7 @@ public sealed class PlanViewModel : ObservableObject
         IsBusy = true;
         try
         {
-            var check = await new LicenseClient(_server()).CheckAsync(_state.Key, CreditFor());
+            var check = await new LicenseClient(_server()).CheckAsync(_state.Key, CreditFor(), Device());
             MessageIsError = check.Outcome != LicenseOutcome.Valid;
             Message = check.Outcome == LicenseOutcome.Valid
                 ? (CreditFor() is { Length: > 0 } name ? $"You're in the credits as {name}." : "Your name is out of the credits.")
@@ -283,10 +361,12 @@ public sealed class PlanViewModel : ObservableObject
         Raise(nameof(HasCredits));
     }
 
-    private void SetPlan(Plan plan)
+    // force: the key was checked or changed, so its features may have too even when the plan is the same.
+    private void SetPlan(Plan plan, bool force = false)
     {
-        var changed = plan != _plan;
+        var changed = plan != _plan || force;
         _plan = plan;
+        _active = LicenseRules.IsActive(_state, DateTimeOffset.UtcNow);
         Raise(string.Empty);
         RemoveCommand.NotifyCanExecuteChanged();
         ManageCommand.NotifyCanExecuteChanged();
@@ -311,7 +391,7 @@ public sealed class PlanViewModel : ObservableObject
 
     private void Select(AccentTheme theme)
     {
-        if (!theme.IsUnlocked(_plan) || _desktop is null) return;
+        if (!IsUnlocked(theme) || _desktop is null) return;
         _desktop.AccentTheme = theme.Id;
         try
         {
@@ -327,7 +407,7 @@ public sealed class PlanViewModel : ObservableObject
     private void UpdateThemes()
     {
         var current = Theme;
-        foreach (var option in Themes) option.Update(option.Theme == current, option.Theme.IsUnlocked(_plan));
+        foreach (var option in Themes) option.Update(option.Theme == current, IsUnlocked(option.Theme));
         Raise(nameof(ThemeCaption));
     }
 
