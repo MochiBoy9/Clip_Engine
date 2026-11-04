@@ -866,6 +866,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (running) UpdateShownGames();
     }
 
+    // A friend came online or started a game: over the game, if notices are on.
+    internal void ShowFriendNotice(string text)
+    {
+        if (DesktopSettings.GameNotifications) GameNoticeRequested?.Invoke(text);
+    }
+
     internal void AddActivity(ActivityKind kind, string text, DateTime? time = null)
     {
         var item = new ActivityItem(time ?? DateTime.Now, kind, text);

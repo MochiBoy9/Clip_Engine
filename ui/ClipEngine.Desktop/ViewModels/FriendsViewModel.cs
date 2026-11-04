@@ -22,6 +22,8 @@ public sealed class FriendsViewModel : ObservableObject
     private string? _message;
     private bool _messageIsError;
     private bool _loaded;
+    // Who was online, and in what game, at the last look: the next look tells you who came on.
+    private Dictionary<string, FriendSeen>? _seen;
 
     internal FriendsViewModel(MainViewModel main, DesktopSettings desktop)
     {
@@ -30,6 +32,7 @@ public sealed class FriendsViewModel : ObservableObject
         AddCommand = new RelayCommand(() => _ = AddAsync(), () => !IsBusy && AddInput.Trim().Length > 0);
         RefreshCommand = new RelayCommand(() => _ = RefreshAsync());
         CopyCodeCommand = new RelayCommand(() => _ = _main.Cloud.CopyAsync(FriendCode, "Friend code copied"));
+        CopyUsernameCommand = new RelayCommand(() => _ = _main.Cloud.CopyAsync(MyHandleText, "Username copied"), () => MyHandleText.Length > 0);
         GoToCloudCommand = new RelayCommand(() => _main.GoToCommand.Execute(Page.Cloud));
         main.Cloud.AccountChanged += OnAccountChanged;
 
@@ -47,6 +50,7 @@ public sealed class FriendsViewModel : ObservableObject
     public RelayCommand AddCommand { get; }
     public RelayCommand RefreshCommand { get; }
     public RelayCommand CopyCodeCommand { get; }
+    public RelayCommand CopyUsernameCommand { get; }
     public RelayCommand GoToCloudCommand { get; }
 
     public bool SignedIn => _main.Cloud.SignedIn;
@@ -63,6 +67,26 @@ public sealed class FriendsViewModel : ObservableObject
 
     public string FriendCode { get => _friendCode; private set { if (Set(ref _friendCode, value)) Raise(nameof(HasFriendCode)); } }
     public bool HasFriendCode => _friendCode.Length > 0;
+
+    // Your username: the one friends see and the one on your cloud profile and posts. Changed on the Cloud page.
+    public string MyHandleText => _main.Cloud.Account?.Handle is { Length: > 0 } h ? $"@{h}" : "";
+    public bool HasMyHandle => MyHandleText.Length > 0;
+    public string MyHandleCaption => HasMyHandle
+        ? "Friends see you by this name, the same one on your cloud profile and clips. Change it on the Cloud page."
+        : "Pick a username on the Cloud page so friends can find you by name.";
+
+    // A small notice when a friend comes online or starts a game.
+    public bool FriendNotices
+    {
+        get => _desktop.FriendNotices;
+        set
+        {
+            if (_desktop.FriendNotices == value) return;
+            _desktop.FriendNotices = value;
+            _main.SaveDesktopSettingsSoon();
+            Raise();
+        }
+    }
 
     public bool ShareSquad
     {
@@ -114,8 +138,13 @@ public sealed class FriendsViewModel : ObservableObject
         RaiseLists();
     }
 
-    internal FriendRow SampleFriend(string account, string name, string? handle, bool online, string game, string? invite) =>
-        new(account, name, handle, online, game, invite, FriendState.Friends, this);
+    internal FriendRow SampleFriend(string account, string name, string? handle, bool online, string game, string? invite,
+                                    TimeSpan? onlineFor = null, TimeSpan? playingFor = null)
+    {
+        var now = DateTimeOffset.UtcNow;
+        return new(account, name, handle, online, game, invite, FriendState.Friends, this,
+                   onlineFor is { } o ? now - o : null, playingFor is { } p ? now - p : null);
+    }
 
     internal FriendRow SampleRequest(string account, string name, string? handle) =>
         new(account, name, handle, false, "", null, FriendState.Received, this);
@@ -124,9 +153,14 @@ public sealed class FriendsViewModel : ObservableObject
     {
         Raise(nameof(SignedIn));
         Raise(nameof(NotSignedIn));
+        Raise(nameof(MyHandleText));
+        Raise(nameof(HasMyHandle));
+        Raise(nameof(MyHandleCaption));
+        CopyUsernameCommand.NotifyCanExecuteChanged();
         if (!SignedIn)
         {
             _loaded = false;
+            _seen = null;
             Friends.Clear();
             Received.Clear();
             Sent.Clear();
@@ -202,12 +236,17 @@ public sealed class FriendsViewModel : ObservableObject
 
     internal Task RemoveAsync(FriendRow row) => CallAsync(HttpMethod.Delete, $"/{row.Account}", null);
 
-    internal void Join(FriendRow row)
+    // Straight into the friend's squad, under your squad name (or your cloud name if you have none yet).
+    internal async Task JoinAsync(FriendRow row)
     {
         if (row.Invite is not { } invite) return;
-        _main.Squad.PrefillInvite(invite);
+        var name = _main.Squad.PlayerName.Trim().Length > 0 ? _main.Squad.PlayerName : _main.Cloud.AccountName;
+        await _main.Squad.JoinFromFriendAsync(invite, name, row.DisplayName);
         _main.GoToCommand.Execute(Page.Squad);
     }
+
+    internal Task CopyUsernameAsync(FriendRow row) =>
+        _main.Cloud.CopyAsync(row.HandleText.Length > 0 ? row.HandleText : row.Name, "Username copied");
 
     private async Task<bool> CallAsync(HttpMethod method, string path, JsonObject? body, bool quiet = false)
     {
@@ -241,6 +280,7 @@ public sealed class FriendsViewModel : ObservableObject
         _loaded = true;
         FriendCode = reply["friendCode"]?.GetValue<string>() ?? FriendCode;
         Fill(Friends, reply["friends"], FriendState.Friends);
+        Announce();
         Fill(Received, reply["received"], FriendState.Received);
         Fill(Sent, reply["sent"], FriendState.Sent);
         RaiseLists();
@@ -256,11 +296,30 @@ public sealed class FriendsViewModel : ObservableObject
                 n?["game"]?.GetValue<string>() ?? "",
                 n?["invite"]?.GetValue<string>(),
                 state,
-                this))
+                this,
+                Time(n?["onlineSince"]),
+                Time(n?["gameSince"])))
             .OrderByDescending(f => f.Online).ThenBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
         list.Clear();
         foreach (var item in items) list.Add(item);
+    }
+
+    private static DateTimeOffset? Time(JsonNode? ms) =>
+        ms is JsonValue v && v.TryGetValue<long>(out var t) && t > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(t) : null;
+
+    // Compares this look with the last one; the first look after signing in only remembers.
+    private void Announce()
+    {
+        var now = Friends.ToDictionary(f => f.Account, f => new FriendSeen(f.DisplayName, f.Online, f.Game));
+        var before = _seen;
+        _seen = now;
+        if (before is null) return;
+        foreach (var text in FriendAlerts.Changes(before, now))
+        {
+            _main.AddActivity(ActivityKind.Info, text);
+            if (FriendNotices) _main.ShowFriendNotice(text);
+        }
     }
 
     private void RaiseLists()
@@ -276,11 +335,45 @@ public sealed class FriendsViewModel : ObservableObject
 
 public enum FriendState { Friends, Received, Sent }
 
+internal sealed record FriendSeen(string Name, bool Online, string Game);
+
+// What changed between two looks at the roster, said the way a notice says it.
+internal static class FriendAlerts
+{
+    public static IReadOnlyList<string> Changes(IReadOnlyDictionary<string, FriendSeen> before, IReadOnlyDictionary<string, FriendSeen> now)
+    {
+        var lines = new List<string>();
+        foreach (var (account, friend) in now)
+        {
+            if (!friend.Online) continue;
+            before.TryGetValue(account, out var was);
+            var wasOnline = was?.Online == true;
+            if (!wasOnline)
+                lines.Add(friend.Game.Length > 0 ? $"{friend.Name} came online · playing {friend.Game}" : $"{friend.Name} came online");
+            else if (friend.Game.Length > 0 && !string.Equals(friend.Game, was!.Game, StringComparison.OrdinalIgnoreCase))
+                lines.Add($"{friend.Name} started playing {friend.Game}");
+        }
+        return lines;
+    }
+
+    // "25 min", "2 h 5 min", "just now".
+    public static string Since(DateTimeOffset start, DateTimeOffset now)
+    {
+        var t = now - start;
+        if (t < TimeSpan.FromMinutes(1)) return "just now";
+        if (t < TimeSpan.FromHours(1)) return $"{(int)t.TotalMinutes} min";
+        var m = t.Minutes;
+        return m == 0 ? $"{(int)t.TotalHours} h" : $"{(int)t.TotalHours} h {m} min";
+    }
+}
+
 public sealed class FriendRow
 {
     internal FriendRow(string account, string name, string? handle, bool online, string game, string? invite, FriendState state,
-                       FriendsViewModel owner)
+                       FriendsViewModel owner, DateTimeOffset? onlineSince = null, DateTimeOffset? gameSince = null)
     {
+        OnlineSince = onlineSince;
+        GameSince = gameSince;
         Account = account;
         Name = name;
         Handle = handle;
@@ -290,7 +383,8 @@ public sealed class FriendRow
         State = state;
         AcceptCommand = new RelayCommand(() => _ = owner.AcceptAsync(this));
         RemoveCommand = new RelayCommand(() => _ = owner.RemoveAsync(this));
-        JoinCommand = new RelayCommand(() => owner.Join(this), () => CanJoin);
+        JoinCommand = new RelayCommand(() => _ = owner.JoinAsync(this), () => CanJoin);
+        CopyUsernameCommand = new RelayCommand(() => _ = owner.CopyUsernameAsync(this));
     }
 
     public string Account { get; }
@@ -300,13 +394,19 @@ public sealed class FriendRow
     public string Game { get; }
     public string? Invite { get; }
     public FriendState State { get; }
+    public DateTimeOffset? OnlineSince { get; }
+    public DateTimeOffset? GameSince { get; }
 
     public RelayCommand AcceptCommand { get; }
     public RelayCommand RemoveCommand { get; }
     public RelayCommand JoinCommand { get; }
+    public RelayCommand CopyUsernameCommand { get; }
 
     public string Initial => Name.Length > 0 ? Name[..1].ToUpperInvariant() : "?";
     public string HandleText => Handle is { Length: > 0 } h ? $"@{h}" : "";
+    // A friend's username is their cloud username; their display name is shown beside it.
+    public string DisplayName => HandleText.Length > 0 ? HandleText : Name;
+    public string SecondaryName => HandleText.Length > 0 && !string.Equals(Name, Handle, StringComparison.OrdinalIgnoreCase) ? Name : "";
     public bool CanJoin => Online && Invite is not null;
     public bool IsPlaying => Online && Game.Length > 0;
 
@@ -315,9 +415,11 @@ public sealed class FriendRow
         FriendState.Received => "Wants to be friends",
         FriendState.Sent => "Request sent",
         _ when !Online => "Offline",
-        _ when Game.Length > 0 => Invite is not null ? $"Playing {Game} · in a squad" : $"Playing {Game}",
-        _ => Invite is not null ? "Online · in a squad" : "Online",
+        _ when Game.Length > 0 => $"Playing {Game}{For(GameSince)}{(Invite is not null ? " · in a squad" : "")}",
+        _ => $"Online{For(OnlineSince)}{(Invite is not null ? " · in a squad" : "")}",
     };
+
+    private static string For(DateTimeOffset? since) => since is { } s ? $" · {FriendAlerts.Since(s, DateTimeOffset.UtcNow)}" : "";
 
     public string RemoveText => State switch
     {

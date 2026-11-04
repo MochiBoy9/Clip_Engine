@@ -42,7 +42,7 @@ public sealed class PlanViewModel : ObservableObject
         ActivateCommand = new RelayCommand(() => _ = ActivateAsync(), () => KeyInput.Trim().Length > 0 && !IsBusy);
         RemoveCommand = new RelayCommand(Remove, () => _state.HasKey);
         ManageCommand = new RelayCommand(() => Shell.Open(PlanConfig.ManageUrl), () => HasManage);
-        SaveCreditCommand = new RelayCommand(() => _ = SaveCreditAsync(), () => IsPaid && !IsBusy);
+        SaveCreditCommand = new RelayCommand(() => _ = SaveCreditAsync(), () => CanBeCredited && !IsBusy);
 
         if (file is not null)
         {
@@ -68,6 +68,8 @@ public sealed class PlanViewModel : ObservableObject
     internal string? LicenseKey => _state.HasKey ? _state.Key : null;
 
     public bool IsPaid => _plan != Plan.Free;
+    // Only people who paid are thanked in the credits: a special key never puts a name there.
+    public bool CanBeCredited => IsPaid && !IsSpecial;
     public bool IsUltra => _plan == Plan.Ultra;
     public string Badge => _plan.ToString().ToUpperInvariant();
 
@@ -328,11 +330,11 @@ public sealed class PlanViewModel : ObservableObject
         return id;
     }
 
-    private string? CreditFor() => _state.InCredits && CreditInput.Trim().Length > 0 ? CreditInput.Trim() : "";
+    private string? CreditFor() => CanBeCredited && _state.InCredits && CreditInput.Trim().Length > 0 ? CreditInput.Trim() : "";
 
     private async Task SaveCreditAsync()
     {
-        if (!_state.HasKey || !IsPaid) return;
+        if (!_state.HasKey || !CanBeCredited) return;
         _state.CreditName = CreditInput.Trim();
         Save();
         IsBusy = true;

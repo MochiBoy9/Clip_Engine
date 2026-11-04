@@ -113,6 +113,10 @@ public sealed class CloudViewModel : ObservableObject
 
     public string ProfileLink => _api is not null && (_account?.Handle ?? Settings.Handle) is { Length: > 0 } handle ? _api.ProfileLink(handle) : "";
     public bool HasProfile => ProfileLink.Length > 0;
+    // Usernames can change once a month on Free and once a week on Pro or Ultra (server/src/library.js).
+    public string HandleLimitText => _account?.HandleChangeAt is { } at && at > DateTimeOffset.UtcNow
+        ? $"You can change your username again on {at.ToLocalTime():MMMM d}."
+        : "You can change it once a month on Free, or once a week with Pro or Ultra.";
 
     public string? LinkCode { get => _linkCode; private set { if (Set(ref _linkCode, value)) Raise(nameof(HasLinkCode)); } }
     public bool HasLinkCode => _linkCode is not null;
@@ -390,6 +394,7 @@ public sealed class CloudViewModel : ObservableObject
         Raise(nameof(ClipsText));
         Raise(nameof(ProfileLink));
         Raise(nameof(HasProfile));
+        Raise(nameof(HandleLimitText));
         Raise(nameof(HasClips));
         Raise(nameof(HasNoClips));
     }

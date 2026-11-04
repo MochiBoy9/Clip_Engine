@@ -59,6 +59,14 @@ std::string Summarize(const std::vector<ClipMetadata::Marker>& markers);
 bool AppendMetadataBox(const std::filesystem::path& mp4, const std::string& json);
 std::optional<std::string> ReadMetadataBox(const std::filesystem::path& mp4);
 
+// Every clip says where it came from: an iTunes-style tag list inside the movie box
+// (moov/udta/meta/ilst) with the encoding tool ("Clip Engine 0.13.0") and a comment that
+// links to the download, which Windows Explorer, VLC, ffprobe and phones all show. Leaves a
+// file that already has it alone, and keeps chunk offsets right wherever the movie box is.
+// AppendMetadataBox does this too, so most callers never need to.
+inline constexpr std::string_view kClipEngineSite = "https://mochiboy9.github.io/Clip_Engine/";
+bool TagMadeWithClipEngine(const std::filesystem::path& mp4);
+
 // The clip's metadata JSON, from the .json next to it or else from inside the file.
 std::optional<std::string> ReadClipMetadataJson(const std::filesystem::path& mp4);
 

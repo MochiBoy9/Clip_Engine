@@ -7,7 +7,7 @@ using ClipEngine.Desktop.Services.Squad;
 namespace ClipEngine.Desktop.Services.Cloud;
 
 internal sealed record CloudAccount(string Id, string Name, string? Handle, string Plan, string PlanLabel, long Used, long Limit, int Clips,
-                                    string? PlanKey = null, string FriendCode = "")
+                                    string? PlanKey = null, string FriendCode = "", DateTimeOffset? HandleChangeAt = null)
 {
     public static CloudAccount From(JsonNode? n) => new(
         n?["id"]?.GetValue<string>() ?? "",
@@ -19,7 +19,8 @@ internal sealed record CloudAccount(string Id, string Name, string? Handle, stri
         n?["storage"]?["limit"]?.GetValue<long>() ?? 0,
         n?["clips"]?.GetValue<int>() ?? 0,
         n?["planKey"]?.GetValue<string>(),
-        n?["friendCode"]?.GetValue<string>() ?? "");
+        n?["friendCode"]?.GetValue<string>() ?? "",
+        n?["handleChangeAt"] is JsonValue at && at.TryGetValue<long>(out var ms) && ms > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(ms) : null);
 }
 
 internal sealed record CloudClip(string Id, string Code, string? LocalId, string Title, string Game, long Recorded, double Seconds,

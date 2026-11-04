@@ -143,3 +143,11 @@ test("special keys read the way people type them", () => {
   assert.equal(normalizeGrant("CEK-ABCD-EFGH"), null);
   assert.equal(normalizeGrant("PRO-KEY-0001"), null);
 });
+
+test("a special key's name is never in the credits", async () => {
+  const env = fakeEnv({ ADMIN_TOKEN: ADMIN });
+  const [{ code }] = (await make(env, { plan: "ultra", days: null })).grants;
+  const info = await (await call(env, "/v1/license", { method: "POST", body: { key: code, device: "pc", credit: "Free Rider" } })).json();
+  assert.equal(info.plan, "ultra");
+  assert.deepEqual(await (await call(env, "/v1/credits")).json(), { ultra: [], pro: [] });
+});

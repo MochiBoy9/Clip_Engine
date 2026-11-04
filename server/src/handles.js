@@ -4,6 +4,7 @@
 // asked to have in the credits; and the special keys made in the key maker. Only the Worker and
 // the libraries talk to it.
 
+import { addColumns } from "./codes.js";
 import { cleanGrant, formatGrant, newGrantCode, PLANS } from "./plans.js";
 
 const SCHEMA = `
@@ -43,6 +44,8 @@ export class Handles {
   constructor(ctx) {
     this.sql = ctx.storage.sql;
     this.sql.exec(SCHEMA);
+    // When someone came online, and started the game they're playing.
+    addColumns(this.sql, ["presence ADD COLUMN online_since INTEGER", "presence ADD COLUMN game_since INTEGER"]);
   }
 
   async fetch(request) {
@@ -83,12 +86,16 @@ export class Handles {
 
     // ---- presence ----
     if (path === "/presence/set" && typeof body?.account === "string") {
+      const game = String(body.game ?? "").slice(0, 64);
+      const was = this.sql.exec("SELECT * FROM presence WHERE account = ? AND until >= ?", body.account, now).toArray()[0];
+      const onlineSince = was?.online_since ?? now;
+      const gameSince = !game ? null : was && was.game === game && was.game_since ? was.game_since : now;
       this.sql.exec(
-        `INSERT INTO presence (account, name, handle, game, invite, until) VALUES (?, ?, ?, ?, ?, ?)
+        `INSERT INTO presence (account, name, handle, game, invite, until, online_since, game_since) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(account) DO UPDATE SET name = excluded.name, handle = excluded.handle, game = excluded.game,
-           invite = excluded.invite, until = excluded.until`,
-        body.account, String(body.name ?? "").slice(0, 32), body.handle ?? null, String(body.game ?? "").slice(0, 64),
-        typeof body.invite === "string" ? body.invite.slice(0, 32) : null, now + PRESENCE_MS);
+           invite = excluded.invite, until = excluded.until, online_since = excluded.online_since, game_since = excluded.game_since`,
+        body.account, String(body.name ?? "").slice(0, 32), body.handle ?? null, game,
+        typeof body.invite === "string" ? body.invite.slice(0, 32) : null, now + PRESENCE_MS, onlineSince, gameSince);
       return json({ ok: true });
     }
     if (path === "/presence/clear" && typeof body?.account === "string") {
@@ -100,7 +107,12 @@ export class Handles {
       const online = {};
       for (const account of body.accounts.slice(0, 500)) {
         const row = this.sql.exec("SELECT * FROM presence WHERE account = ?", String(account)).toArray()[0];
-        if (row) online[row.account] = { name: row.name, handle: row.handle, game: row.game, invite: row.invite };
+        if (row) {
+          online[row.account] = {
+            name: row.name, handle: row.handle, game: row.game, invite: row.invite,
+            onlineSince: row.online_since ?? null, gameSince: row.game_since ?? null,
+          };
+        }
       }
       return json({ online });
     }

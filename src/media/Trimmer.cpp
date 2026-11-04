@@ -124,6 +124,7 @@ int RunTrim(const TrimOptions& options) {
     const auto clip = ReadRange(options.input, start, end);
     if (options.output.has_parent_path()) std::filesystem::create_directories(options.output.parent_path());
     WriteMp4(partial, clip);
+    TagMadeWithClipEngine(partial);
 
     const double from = static_cast<double>(clip.start) / kHnsPerSecond;
     const double to = static_cast<double>(clip.end) / kHnsPerSecond;

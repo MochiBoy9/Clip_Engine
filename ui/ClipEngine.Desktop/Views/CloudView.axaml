@@ -80,12 +80,13 @@
               <ProgressBar Minimum="0" Maximum="100" Value="{Binding StorageFraction}" Height="6" />
               <TextBlock Classes="caption" Text="{Binding StorageText}" />
               <Border Height="1" Background="{StaticResource Divider}" Margin="0,4" />
-              <TextBlock Text="Profile page" FontWeight="SemiBold" FontSize="14" />
+              <TextBlock Text="Username" FontWeight="SemiBold" FontSize="14" />
               <TextBlock Classes="caption" TextWrapping="Wrap"
-                         Text="Pick a handle for a page with your public clips, pinned ones first. Leave it empty for no profile." />
+                         Text="One name for everything: friends find you by it, and it's on your profile page and every clip you post. Leave it empty for no profile page." />
+              <TextBlock Classes="caption" TextWrapping="Wrap" Text="{Binding HandleLimitText}" />
               <Grid ColumnDefinitions="Auto,*,Auto">
                 <TextBlock Text="@" FontFamily="{StaticResource MonoFont}" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,6,0" />
-                <TextBox Grid.Column="1" Text="{Binding HandleInput}" MaxLength="24" Watermark="handle" FontFamily="{StaticResource MonoFont}" />
+                <TextBox Grid.Column="1" Text="{Binding HandleInput}" MaxLength="24" Watermark="username" FontFamily="{StaticResource MonoFont}" />
                 <Button Grid.Column="2" Classes="secondary" Content="Save" Command="{Binding SaveProfileCommand}" Margin="10,0,0,0" />
               </Grid>
               <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding HasProfile}">

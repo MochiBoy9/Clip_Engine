@@ -85,3 +85,15 @@ export function newMemberId() {
 export function isMemberId(id) {
   return typeof id === "string" && /^p[0-9A-Z]{10}$/.test(id);
 }
+
+// Adds columns that came after a table was first made. SQLite has no ADD COLUMN IF NOT EXISTS, so one
+// that is already there just fails.
+export function addColumns(sql, columns) {
+  for (const column of columns) {
+    try {
+      sql.exec(`ALTER TABLE ${column}`);
+    } catch {
+      // Already there.
+    }
+  }
+}

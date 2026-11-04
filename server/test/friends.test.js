@@ -73,3 +73,59 @@ test("friends see who's online, what they're playing and their squad", async () 
   await call(env, `${kai.base}/presence`, { method: "DELETE", token: kai.token });
   assert.equal((await list(env, me)).friends[0].online, false);
 });
+
+test("a username can be changed once a month on Free, and friends see the new one", async () => {
+  const env = fakeEnv();
+  const me = await account(env, "Enterro", "enterro");
+  const kai = await account(env, "Kai", "kai");
+  await call(env, `${me.base}/friends`, { method: "POST", token: me.token, body: { handle: "kai" } });
+  await call(env, `${kai.base}/friends/${me.id}/accept`, { method: "POST", token: kai.token });
+
+  const rename = (handle) => call(env, `${me.base}/account`, { method: "PATCH", token: me.token, body: { handle } });
+  const changed = await rename("enterro_tv");
+  assert.equal(changed.status, 200);
+  const acct = await changed.json();
+  assert.equal(acct.handle, "enterro_tv");
+  assert.ok(acct.handleChangeAt > Date.now() + 29 * 24 * 3600_000, "the next change is a month away");
+  assert.deepEqual((await list(env, kai)).friends.map((f) => f.handle), ["enterro_tv"], "friends get the new username");
+
+  const again = await rename("enterro2");
+  assert.equal(again.status, 429);
+  assert.match((await again.json()).error, /once a month/);
+  assert.equal((await rename("Enterro_TV")).status, 200, "the same name, typed differently, isn't a change");
+  assert.equal((await rename("")).status, 200, "the profile can still be turned off");
+  assert.equal((await rename("enterro3")).status, 429, "and turning it back on with a new name waits too");
+
+  // A month on, it can change again.
+  const realNow = Date.now;
+  try {
+    Date.now = () => realNow() + 31 * 24 * 3600_000;
+    assert.equal((await rename("enterro2")).status, 200);
+    assert.deepEqual((await list(env, kai)).friends.map((f) => f.handle), ["enterro2"]);
+  } finally {
+    Date.now = realNow;
+  }
+});
+
+test("friends see how long someone has been online and playing", async () => {
+  const env = fakeEnv();
+  const me = await account(env, "Enterro", "enterro");
+  const kai = await account(env, "Kai", "kai");
+  await call(env, `${me.base}/friends`, { method: "POST", token: me.token, body: { handle: "kai" } });
+  await call(env, `${kai.base}/friends/${me.id}/accept`, { method: "POST", token: kai.token });
+
+  const before = Date.now();
+  await call(env, `${kai.base}/presence`, { method: "POST", token: kai.token, body: { game: "Valorant" } });
+  const first = (await list(env, me)).friends[0];
+  assert.ok(first.online);
+  assert.ok(first.onlineSince >= before);
+  assert.equal(first.gameSince, first.onlineSince);
+
+  await call(env, `${kai.base}/presence`, { method: "POST", token: kai.token, body: { game: "Valorant" } });
+  const same = (await list(env, me)).friends[0];
+  assert.equal(same.gameSince, first.gameSince, "the same game keeps its start");
+  await call(env, `${kai.base}/presence`, { method: "POST", token: kai.token, body: { game: "" } });
+  const idle = (await list(env, me)).friends[0];
+  assert.equal(idle.gameSince, null);
+  assert.equal(idle.onlineSince, first.onlineSince, "still online since the start");
+});
