@@ -497,6 +497,10 @@
     <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
     <Setter Property="BorderBrush" Value="{x:Null}" />
   </Style>
+  <!-- The plain TextBlock style above would otherwise keep the label white on the accent. -->
+  <Style Selector="RadioButton.chip:checked TextBlock, ToggleButton.chip:checked TextBlock, ListBox.chips ListBoxItem:selected TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
+  </Style>
 
   <!-- Filter chips as a horizontal list -->
   <Style Selector="ListBox.chips">
