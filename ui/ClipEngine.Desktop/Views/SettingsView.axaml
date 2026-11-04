@@ -24,11 +24,22 @@
     <Style Selector="RadioButton.swatch:disabled">
       <Setter Property="Opacity" Value="0.35" />
     </Style>
+    <Style Selector="Border.offer.current">
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <Style Selector="Border.credit.ultra">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="BorderBrush" Value="{x:Null}" />
+    </Style>
+    <Style Selector="Border.credit.ultra TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
   </UserControl.Styles>
   <DockPanel Margin="0">
     <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="0,0,40,22">
       <StackPanel VerticalAlignment="Center" Spacing="4">
-        <views:SectionMark Index="07" Label="System config" />
+        <views:SectionMark Index="08" Label="System config" />
         <TextBlock Classes="h1" Text="Settings" />
         <TextBlock Classes="caption" Text="{Binding SavedMessage, TargetNullValue='Recording changes apply when you save; the engine restarts in a second.'}" />
       </StackPanel>
@@ -91,6 +102,30 @@
               </StackPanel>
               <Panel Grid.Column="2" VerticalAlignment="Center">
                 <ComboBox Width="190" ItemsSource="{Binding FpsOptions}" SelectedItem="{Binding Fps}" />
+              </Panel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
+                <PathIcon Data="{StaticResource IconMonitor}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Resolution" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="{Binding ResolutionHint}" TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <ComboBox Width="210" ItemsSource="{Binding ResolutionOptions}" SelectedItem="{Binding Resolution}">
+                  <ComboBox.Styles>
+                    <Style Selector="ComboBoxItem" x:DataType="vm:ResolutionOption">
+                      <Setter Property="IsEnabled" Value="{Binding IsAvailable}" />
+                    </Style>
+                  </ComboBox.Styles>
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ResolutionOption">
+                      <TextBlock Text="{Binding Label}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
               </Panel>
             </Grid>
             <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
@@ -269,22 +304,89 @@
         </views:Plate>
         </StackPanel>
         <StackPanel Grid.Column="2">
-        <views:Plate Classes="card" Padding="26,24" Margin="0,0,0,22" DataContext="{Binding Supporter}" x:DataType="vm:SupporterViewModel"
+        <views:Plate Classes="card" Padding="26,24" Margin="0,0,0,22" DataContext="{Binding Plan}" x:DataType="vm:PlanViewModel"
                 IsVisible="{Binding $self.DataContext, Converter={x:Static ObjectConverters.IsNotNull}}">
           <StackPanel>
-            <TextBlock Classes="eyebrow" Margin="0,0,0,18" Text="SUPPORT" />
+            <TextBlock Classes="eyebrow" Margin="0,0,0,18" Text="PLAN" />
             <Grid ColumnDefinitions="Auto,*,Auto">
               <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconSparkle}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
-                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="14" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="14" />
+                  <Border Classes="pill accent" Padding="6,1" VerticalAlignment="Center" IsVisible="{Binding IsPaid}">
+                    <TextBlock Text="{Binding Badge}" FontSize="9" FontWeight="Bold" LetterSpacing="1" />
+                  </Border>
+                </StackPanel>
                 <TextBlock Classes="caption" Text="{Binding Detail}" TextWrapping="Wrap" />
               </StackPanel>
               <Panel Grid.Column="2" VerticalAlignment="Center">
-                <Button Classes="secondary" Content="Patreon" Command="{Binding OpenPatreonCommand}" IsVisible="{Binding HasPatreon}" />
+                <Button Classes="secondary" Content="Manage" Command="{Binding ManageCommand}" IsVisible="{Binding HasManage}" />
               </Panel>
             </Grid>
+            <TextBlock Classes="caption error" Text="{Binding StatusText}" IsVisible="{Binding HasStatus}" TextWrapping="Wrap" Margin="0,10,0,0" />
+            <Grid ColumnDefinitions="*,12,*" Margin="0,16,0,0">
+              <ItemsControl Grid.ColumnSpan="3" ItemsSource="{Binding Offers}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate><UniformGrid Rows="1" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:PlanOffer">
+                    <Border Classes="inset offer" Classes.current="{Binding IsCurrent}" Padding="14,12" Margin="0,0,6,0" CornerRadius="2">
+                      <DockPanel>
+                        <Button DockPanel.Dock="Bottom" Classes="accent" Classes.secondary="{Binding !IsUltra}" HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center" Content="{Binding ButtonText}" Command="{Binding SubscribeCommand}" Margin="0,12,0,0" />
+                        <StackPanel Spacing="4">
+                          <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Classes="markLabel" Text="{Binding Label}" FontSize="13" />
+                            <TextBlock Grid.Column="1" Classes="mono" Text="{Binding PriceText}" FontSize="12" FontWeight="Bold" />
+                          </Grid>
+                          <ItemsControl ItemsSource="{Binding Perks}" Margin="0,4,0,0">
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate x:DataType="x:String">
+                                <Grid ColumnDefinitions="Auto,*" Margin="0,2">
+                                  <Border Width="5" Height="5" Background="{DynamicResource AccentBrush}" VerticalAlignment="Top" Margin="0,6,8,0" />
+                                  <TextBlock Grid.Column="1" Classes="caption" Text="{Binding}" TextWrapping="Wrap" />
+                                </Grid>
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+                        </StackPanel>
+                      </DockPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </Grid>
+            <StackPanel IsVisible="{Binding ShowKeyBox}">
+              <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+              <TextBlock Text="License key" FontWeight="SemiBold" FontSize="14" />
+              <TextBlock Classes="caption" Text="Subscribing emails you a key. Paste it here on each PC you play on."
+                         TextWrapping="Wrap" Margin="0,2,0,12" />
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBox Text="{Binding KeyInput}" Watermark="Your Clip Engine license key" />
+                <Button Grid.Column="1" Classes="accent" Content="Activate" Command="{Binding ActivateCommand}" Margin="10,0,0,0" />
+              </Grid>
+            </StackPanel>
+            <StackPanel IsVisible="{Binding IsPaid}">
+              <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Spacing="2" Margin="0,0,16,0">
+                  <TextBlock Text="Name in the credits" FontWeight="SemiBold" FontSize="14" />
+                  <TextBlock Classes="caption" Text="{Binding CreditCaption}" TextWrapping="Wrap" />
+                </StackPanel>
+                <ToggleSwitch Grid.Column="1" IsChecked="{Binding InCredits}" OnContent="" OffContent="" VerticalAlignment="Center" />
+              </Grid>
+              <Grid ColumnDefinitions="*,Auto" Margin="0,10,0,0" IsVisible="{Binding InCredits}">
+                <TextBox Text="{Binding CreditInput}" Watermark="The name to show" MaxLength="40" />
+                <Button Grid.Column="1" Classes="secondary" Content="Save name" Command="{Binding SaveCreditCommand}" Margin="10,0,0,0" />
+              </Grid>
+            </StackPanel>
+            <Button Classes="secondary" Content="Remove key from this PC" Command="{Binding RemoveCommand}" IsVisible="{Binding !ShowKeyBox}"
+                    Margin="0,12,0,0" />
+            <TextBlock Classes="caption" Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextWrapping="Wrap" Margin="0,10,0,0"
+                       Classes.error="{Binding MessageIsError}" />
             <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <TextBlock Text="Colour theme" FontWeight="SemiBold" FontSize="14" />
             <TextBlock Classes="caption" Text="{Binding ThemeCaption}" Margin="0,2,0,10" />
@@ -301,31 +403,17 @@
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
-            <StackPanel IsVisible="{Binding KeysEnabled}">
-              <Border Height="1" Background="{StaticResource Divider}" Margin="0,12,0,16" />
-              <TextBlock Text="Supporter key" FontWeight="SemiBold" FontSize="14" />
-              <TextBlock Classes="caption" Text="Patrons get a key in a Patreon message. It works forever, offline, on all your PCs."
-                         TextWrapping="Wrap" Margin="0,2,0,12" IsVisible="{Binding ShowKeyBox}" />
-              <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding ShowKeyBox}">
-                <TextBox Text="{Binding KeyInput}" Watermark="CE1-…" />
-                <Button Grid.Column="1" Classes="accent" Content="Activate" Command="{Binding ActivateCommand}" Margin="10,0,0,0" />
-              </Grid>
-              <Button Classes="secondary" Content="Remove key from this PC" Command="{Binding RemoveCommand}" IsVisible="{Binding IsSupporter}"
-                      Margin="0,4,0,0" />
-              <TextBlock Classes="caption" Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextWrapping="Wrap" Margin="0,10,0,0"
-                         Classes.error="{Binding MessageIsError}" />
-            </StackPanel>
             <StackPanel IsVisible="{Binding HasCredits}">
-              <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+              <Border Height="1" Background="{StaticResource Divider}" Margin="0,8,0,16" />
               <TextBlock Text="Thanks to our supporters" FontWeight="SemiBold" FontSize="14" Margin="0,0,0,8" />
               <ItemsControl ItemsSource="{Binding Credits}">
                 <ItemsControl.ItemsPanel>
                   <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="x:String">
-                    <Border Classes="inset" CornerRadius="10" Padding="10,4" Margin="0,0,8,8">
-                      <TextBlock Text="{Binding}" FontSize="12" />
+                  <DataTemplate x:DataType="vm:CreditName">
+                    <Border Classes="inset credit" Classes.ultra="{Binding Ultra}" CornerRadius="2" Padding="10,4" Margin="0,0,8,8">
+                      <TextBlock Text="{Binding Name}" FontSize="12" />
                     </Border>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>

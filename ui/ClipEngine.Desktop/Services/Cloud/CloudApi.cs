@@ -6,7 +6,8 @@ using ClipEngine.Desktop.Services.Squad;
 
 namespace ClipEngine.Desktop.Services.Cloud;
 
-internal sealed record CloudAccount(string Id, string Name, string? Handle, string Plan, string PlanLabel, long Used, long Limit, int Clips)
+internal sealed record CloudAccount(string Id, string Name, string? Handle, string Plan, string PlanLabel, long Used, long Limit, int Clips,
+                                    string? PlanKey = null, string FriendCode = "")
 {
     public static CloudAccount From(JsonNode? n) => new(
         n?["id"]?.GetValue<string>() ?? "",
@@ -16,7 +17,9 @@ internal sealed record CloudAccount(string Id, string Name, string? Handle, stri
         n?["planLabel"]?.GetValue<string>() ?? "Free",
         n?["storage"]?["used"]?.GetValue<long>() ?? 0,
         n?["storage"]?["limit"]?.GetValue<long>() ?? 0,
-        n?["clips"]?.GetValue<int>() ?? 0);
+        n?["clips"]?.GetValue<int>() ?? 0,
+        n?["planKey"]?.GetValue<string>(),
+        n?["friendCode"]?.GetValue<string>() ?? "");
 }
 
 internal sealed record CloudClip(string Id, string Code, string? LocalId, string Title, string Game, long Recorded, double Seconds,
@@ -75,6 +78,10 @@ internal sealed class CloudApi(string server, HttpClient? http = null)
         return CloudAccount.From(await SendAsync(HttpMethod.Patch, $"/v1/accounts/{account}/account", token, body));
     }
 
+    // Puts a subscription's license key on the account, which sets its storage to the key's plan.
+    public async Task<CloudAccount> SetPlanAsync(string account, string token, string key) =>
+        CloudAccount.From(await SendAsync(HttpMethod.Post, $"/v1/accounts/{account}/plan", token, new JsonObject { ["key"] = key }));
+
     public async Task<string> LinkCodeAsync(string account, string token) =>
         (await SendAsync(HttpMethod.Post, $"/v1/accounts/{account}/link", token, new JsonObject()))?["code"]?.GetValue<string>() ?? "";
 
@@ -107,6 +114,9 @@ internal sealed class CloudApi(string server, HttpClient? http = null)
         using var response = await _http.SendAsync(request, cancel);
         await ThrowIfFailed(response);
     }
+
+    internal Task<JsonNode?> CallAsync(HttpMethod method, string path, string token, JsonObject? body) =>
+        SendAsync(method, path, token, body);
 
     private async Task<JsonNode?> SendAsync(HttpMethod method, string path, string? token, JsonObject? body)
     {

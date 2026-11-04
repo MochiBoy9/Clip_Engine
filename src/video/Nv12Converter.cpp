@@ -28,10 +28,14 @@ Nv12Converter::Nv12Converter(ID3D11Device* device, ID3D11DeviceContext* context,
   videoContext_->VideoProcessorSetOutputColorSpace(processor_.get(), &output);
   videoContext_->VideoProcessorSetStreamAutoProcessingMode(processor_.get(), 0, FALSE);
 
-  // Encoders need even dimensions, so an odd-sized monitor loses its last row or column.
-  const RECT source{0, 0, static_cast<LONG>(outputWidth), static_cast<LONG>(outputHeight)};
+  // Encoders need even dimensions, so an odd-sized monitor loses its last row or column. The rest
+  // of the frame is scaled to the output, which is smaller when the resolution setting asks.
+  const RECT source{0, 0, static_cast<LONG>(inputWidth & ~1u), static_cast<LONG>(inputHeight & ~1u)};
+  const RECT dest{0, 0, static_cast<LONG>(outputWidth), static_cast<LONG>(outputHeight)};
   videoContext_->VideoProcessorSetStreamSourceRect(processor_.get(), 0, TRUE, &source);
-  videoContext_->VideoProcessorSetStreamDestRect(processor_.get(), 0, TRUE, &source);
+  videoContext_->VideoProcessorSetStreamDestRect(processor_.get(), 0, TRUE, &dest);
+  const RECT target = dest;
+  videoContext_->VideoProcessorSetOutputTargetRect(processor_.get(), TRUE, &target);
 }
 
 void Nv12Converter::Convert(ID3D11Texture2D* bgra, ID3D11Texture2D* nv12) {

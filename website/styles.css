@@ -264,8 +264,19 @@ th.us { color: var(--accent); }
 
 /* ------------------------------------------------------------------ Support, FAQ */
 
-.support .plate-in { display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: center; }
-.support p { margin: 0; color: var(--muted); }
+.plans .grid { margin: 26px 0 14px; align-items: stretch; }
+.tier > .plate-in { display: flex; flex-direction: column; gap: 10px; height: 100%; }
+.tier h3 { margin: 0; font: 700 13px var(--mono); letter-spacing: 0.24em; text-transform: uppercase; }
+.tier .price { margin: 0; font: 800 34px var(--display, inherit); }
+.tier .price span { font: 500 13px var(--mono); color: var(--dim); margin-left: 4px; }
+.tier ul { margin: 6px 0 12px; padding: 0; list-style: none; display: grid; gap: 8px; flex: 1; }
+.tier li { padding-left: 16px; position: relative; color: var(--muted); }
+.tier li::before { content: ""; position: absolute; left: 0; top: 0.55em; width: 6px; height: 6px; background: var(--accent); }
+.tier .btn { align-self: flex-start; }
+.credits h3 { margin: 26px 0 10px; font-size: 16px; }
+.credit-list { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 8px; }
+.credit-list li { padding: 4px 10px; border: 1px solid var(--line-strong); font-size: 13px; }
+.credit-list li.ultra { background: var(--accent); color: #0b0c0e; border-color: transparent; font-weight: 600; }
 
 details { border-bottom: 1px solid var(--line); padding: 18px 2px; }
 summary { cursor: pointer; font: 600 17px var(--display); list-style: none; display: flex; gap: 14px; align-items: baseline; }
@@ -302,7 +313,7 @@ details p { color: var(--muted); margin: 10px 0 0 28px; }
 /* ------------------------------------------------------------------ Small screens */
 
 @media (max-width: 900px) {
-  .hero-grid, .split, .download .plate-in, .support .plate-in { grid-template-columns: 1fr; }
+  .hero-grid, .split, .download .plate-in { grid-template-columns: 1fr; }
   .grid.three, .grid.two { grid-template-columns: 1fr; }
   .nav nav a:not(.btn) { display: none; }
   .brand-sep, .brand-version { display: none; }

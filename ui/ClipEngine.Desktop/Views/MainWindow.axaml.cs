@@ -31,8 +31,8 @@ public partial class MainWindow : Window, IAppDialogs
         {
             if (DataContext is MainViewModel vm)
             {
-                vm.Supporter.ThemeChanged += AccentThemes.ApplyAccent;
-                AccentThemes.ApplyAccent(vm.Supporter.Theme);
+                vm.Plan.ThemeChanged += AccentThemes.ApplyAccent;
+                AccentThemes.ApplyAccent(vm.Plan.Theme);
             }
         };
     }

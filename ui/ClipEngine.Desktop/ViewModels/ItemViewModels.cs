@@ -6,7 +6,7 @@ using ClipEngine.Desktop.Services;
 
 namespace ClipEngine.Desktop.ViewModels;
 
-public enum Page { Home, Clips, Squad, Records, Games, Cloud, Settings }
+public enum Page { Home, Clips, Squad, Friends, Records, Games, Cloud, Settings }
 
 public sealed record NavItem(Page Page, string Title, StreamGeometry Icon)
 {
@@ -322,6 +322,31 @@ public sealed class GameItemViewModel(string name, int paletteIndex) : Observabl
 
 public sealed record FpsOption(int Value, string Label)
 {
+    public override string ToString() => Label;
+}
+
+// One choice in Settings' resolution list. Ones above the plan's are shown with the plan that has them.
+public sealed class ResolutionOption(int value) : ObservableObject
+{
+    private Plan _plan;
+
+    public int Value { get; } = value;
+    public bool IsAvailable => Value <= 0 || Resolutions.Needs(Value) <= _plan;
+
+    public string Label => Value switch
+    {
+        <= 0 => $"Best for plan ({Resolutions.Name(Plans.For(_plan).Lines)})",
+        2160 => IsAvailable ? "4K (2160p)" : "4K (2160p) · Ultra",
+        _ when !IsAvailable => $"{Resolutions.Name(Value)} · {Resolutions.Needs(Value)}",
+        _ => Resolutions.Name(Value),
+    };
+
+    internal void Refresh(Plan plan)
+    {
+        _plan = plan;
+        Raise(string.Empty);
+    }
+
     public override string ToString() => Label;
 }
 

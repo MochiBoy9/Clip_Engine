@@ -24,6 +24,7 @@
     <DataTemplate DataType="vm:SquadViewModel"><views:SquadView /></DataTemplate>
     <DataTemplate DataType="vm:SquadPlayerViewModel"><views:SquadPlayerView /></DataTemplate>
     <DataTemplate DataType="vm:CloudViewModel"><views:CloudView /></DataTemplate>
+    <DataTemplate DataType="vm:FriendsViewModel"><views:FriendsView /></DataTemplate>
   </Window.DataTemplates>
 
   <Panel Name="Root">
@@ -95,8 +96,8 @@
             <views:Barcode Seed="{Binding Version}" Fill="{StaticResource BorderStrongBrush}" Width="44" Height="12"
                            VerticalAlignment="Center" Margin="10,0,0,0" />
             <TextBlock Text="{Binding Version}" Classes="mono caption" FontSize="11" VerticalAlignment="Center" />
-            <Border Classes="pill accent" Padding="6,1" VerticalAlignment="Center" IsVisible="{Binding Supporter.IsSupporter}">
-              <TextBlock Text="SUPPORTER" FontSize="9" FontWeight="Bold" LetterSpacing="1" />
+            <Border Classes="pill accent" Padding="6,1" VerticalAlignment="Center" IsVisible="{Binding Plan.IsPaid}">
+              <TextBlock Text="{Binding Plan.Badge}" FontSize="9" FontWeight="Bold" LetterSpacing="1" />
             </Border>
             <Border Classes="pill accent" Padding="6,1" VerticalAlignment="Center" IsVisible="{Binding Updates.HasUpdate}">
               <TextBlock Text="UPDATE READY" FontSize="9" FontWeight="Bold" LetterSpacing="1" />

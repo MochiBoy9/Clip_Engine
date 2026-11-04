@@ -33,7 +33,13 @@ MAX_MEMBERS = "8"
 SQUAD_STORAGE_MB = "5120"
 # Uploaded clips are removed after this many days unless starred.
 KEEP_DAYS = "30"
-# Cloud library storage for each plan, in MB.
+# Cloud library storage for each plan, in MB: Free 2 GB, Pro 100 GB, Ultra 250 GB.
 FREE_STORAGE_MB = "2048"
-PLUS_STORAGE_MB = "102400"
+PRO_STORAGE_MB = "102400"
+ULTRA_STORAGE_MB = "256000"
+# Pro and Ultra subscriptions are sold through Polar. Copy these ids from the Polar dashboard;
+# until POLAR_ORGANIZATION_ID is set, the app says subscriptions aren't open yet.
+POLAR_ORGANIZATION_ID = ""
+POLAR_PRO_BENEFIT_ID = ""
+POLAR_ULTRA_BENEFIT_ID = ""
 # ADMIN_TOKEN (for setting plans) is a secret: npx wrangler secret put ADMIN_TOKEN

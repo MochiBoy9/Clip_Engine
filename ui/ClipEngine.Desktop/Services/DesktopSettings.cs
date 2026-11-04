@@ -8,6 +8,13 @@ internal sealed class DesktopSettings
 {
     public bool CloseToTray { get; set; } = true;
 
+    // The recording resolution picked in Settings, in lines; 0 is the most the plan allows. The engine gets the
+    // smaller of this and the plan's (Resolutions.Effective).
+    public int Resolution { get; set; }
+
+    // Friends see the squad invite next to your name, so they can join.
+    public bool ShareSquadWithFriends { get; set; } = true;
+
     // The colour theme, from AccentThemes. Only supporters can pick one other than the default.
     public string AccentTheme { get; set; } = "hazard";
 

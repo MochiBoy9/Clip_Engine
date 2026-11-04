@@ -46,6 +46,7 @@ public sealed class CloudViewModel : ObservableObject
         MakeLinkCodeCommand = new RelayCommand(() => _ = MakeLinkCodeAsync(), () => !IsBusy);
         RefreshCommand = new RelayCommand(() => _ = RefreshAsync());
 
+        main.Plan.PlanChanged += plan => _ = SyncPlanAsync();
         if (main.IsLive && Settings.SignedIn) Start();
     }
 
@@ -264,6 +265,7 @@ public sealed class CloudViewModel : ObservableObject
             foreach (var key in Settings.Uploaded.Where(p => !codes.Contains(p.Value)).Select(p => p.Key).ToList()) Settings.Uploaded.Remove(key);
             RaiseAccount();
             if (Settings.SyncStarred) QueueStarred();
+            await SyncPlanAsync();
         }
         catch (SquadException e) when (e.Status is System.Net.HttpStatusCode.Unauthorized)
         {
@@ -275,6 +277,27 @@ public sealed class CloudViewModel : ObservableObject
             Fail(e.Message);
         }
     }
+
+    // A subscription on this PC that the cloud account doesn't have yet goes on it, for its storage.
+    private async Task SyncPlanAsync()
+    {
+        if (_api is not { } api || _account is not { } account || _main.Plan.LicenseKey is not { } key) return;
+        if (!_main.Plan.IsPaid || Plans.FromId(account.Plan) >= _main.Plan.Plan) return;
+        try
+        {
+            _account = await api.SetPlanAsync(Settings.AccountId, _token, key);
+            RaiseAccount();
+            _main.AddActivity(ActivityKind.Info, $"Your cloud library is on {_account.PlanLabel} now: {Format.Bytes(_account.Limit)}");
+        }
+        catch (Exception e) when (e is SquadException or HttpRequestException or TaskCanceledException)
+        {
+            Fail(e.Message);
+        }
+    }
+
+    internal CloudApi? Api => _api;
+    internal string Token => _token;
+    internal CloudAccount? Account => _account;
 
     private async Task SaveProfileAsync()
     {
@@ -349,8 +372,12 @@ public sealed class CloudViewModel : ObservableObject
         else _main.ShowToast("Couldn't put it on the clipboard.", isError: true);
     }
 
+    // Signed in, out, or the account changed; the friends page follows.
+    internal event Action? AccountChanged;
+
     private void RaiseAccount()
     {
+        AccountChanged?.Invoke();
         Raise(nameof(SignedIn));
         Raise(nameof(NotSignedIn));
         Raise(nameof(AccountName));

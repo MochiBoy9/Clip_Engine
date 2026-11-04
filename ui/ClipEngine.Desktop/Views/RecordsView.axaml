@@ -7,7 +7,7 @@
   <ScrollViewer>
     <StackPanel Margin="0,0,40,40" Spacing="22">
       <StackPanel Spacing="4">
-        <views:SectionMark Index="04" Label="Service record" />
+        <views:SectionMark Index="05" Label="Service record" />
         <TextBlock Classes="h1" Text="Records" />
         <TextBlock Classes="caption" Text="{Binding Summary}" TextWrapping="Wrap" />
       </StackPanel>
