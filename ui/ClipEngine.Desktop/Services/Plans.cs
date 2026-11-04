@@ -39,9 +39,9 @@ internal static class Plans
 // the Polar dashboard) and its customer portal. While a link is empty, its button says it's coming soon.
 internal static class PlanConfig
 {
-    public const string ProCheckoutUrl = "";
-    public const string UltraCheckoutUrl = "";
-    public const string ManageUrl = "";
+    public const string ProCheckoutUrl = "https://buy.polar.sh/polar_cl_1Od5CaTH339XapxgyZW8RjFstHRfWZbdkvncB4J3E2h";
+    public const string UltraCheckoutUrl = "https://buy.polar.sh/polar_cl_Bjr9r9ZyxK5Hca0xqYuvaTtzfJynMI1NepwwG4CrrUp";
+    public const string ManageUrl = "https://polar.sh/clip-engine/portal";
 
     public static string CheckoutUrl(Plan plan) => plan switch
     {
