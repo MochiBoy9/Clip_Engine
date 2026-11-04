@@ -1,10 +1,10 @@
-## Clip Engine 0.11.0
+## Clip Engine 0.12.0
 
-A new look, and your own games front and centre.
+Plans, friends, and a resolution you choose.
 
-- **Game art.** Games show their own pictures in place of initials, on the Games page, your clips, matches and records. They come from your PC first (Steam's library art and the game's icon), and otherwise from the Steam store, once. You can turn the download off in Settings.
-- **Only your games.** The Games page lists the games installed on your PC, found through Steam, Epic, Battle.net, the EA app, Ubisoft Connect, Riot, the Xbox app and Roblox, with the store each came from. A switch shows every supported game. Home counts the games you have installed.
-- **A retro-futuristic look.** Numbered sections with ruled lines, crop-mark corners on panels, barcodes, a dotted grid behind the pages, and the page you're on shown as a solid block of your colour.
-- **One download.** Each release now carries one zip, `Clip_Engine-windows-x64.zip`, with no extra files, so the download link never changes.
+- **Free, Pro and Ultra.** Free records every game up to 1080p, with a 2 GB cloud library. Pro ($2.99 a month) goes to 1440p with 100 GB, all seven colour themes, a Pro badge and your name in the credits. Ultra ($9.99 a month) goes to 4K with 250 GB, three Ultra-only themes and top billing in the credits. Subscribing emails a license key: paste it in Settings > Plan. Supporter keys from Patreon are gone.
+- **Pick your resolution.** Settings > Resolution records smaller, from 480p up to the most your plan allows, which is lighter on the game and on your disk. Clip Engine never records bigger than your monitor.
+- **Friends.** The new Friends page adds friends by profile name or friend code, shows who's online and what they're playing, and has a Join squad button when a friend shares their squad. Friends come with your cloud account, so they follow you to every PC.
+- **Easier to read.** Picked chips and squadmate tiles show black text on yellow.
 
 Download `Clip_Engine-windows-x64.zip`, unzip it anywhere and run `ClipEngine.exe`. If you already have Clip Engine, update from Settings.

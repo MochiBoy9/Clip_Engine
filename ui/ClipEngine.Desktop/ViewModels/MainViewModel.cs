@@ -59,6 +59,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             new NavItem(Page.Home, "Home", Icon("IconHome")),
             new NavItem(Page.Clips, "Clips", Icon("IconClips")),
             new NavItem(Page.Squad, "Squad", Icon("IconSquad")),
+            new NavItem(Page.Friends, "Friends", Icon("IconFriends")),
             new NavItem(Page.Records, "Records", Icon("IconTrophy")),
             new NavItem(Page.Games, "Games", Icon("IconGames")),
             new NavItem(Page.Cloud, "Cloud", Icon("IconCloud")),
@@ -68,9 +69,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         var engineSettings = live ? EngineSettings.Load(AppPaths.EngineSettingsFile) : new EngineSettings();
         DesktopSettings = live ? DesktopSettings.Load() : new DesktopSettings();
-        Supporter = live
-            ? new SupporterViewModel(SupporterConfig.PublicKey, AppPaths.SupporterKeyFile, DesktopSettings)
-            : new SupporterViewModel(SupporterConfig.PublicKey, null, DesktopSettings);
+        Plan = new PlanViewModel(live ? AppPaths.LicenseFile : null, DesktopSettings, () => Online.ServerUrl(DesktopSettings));
         Updates = new UpdatesViewModel(DesktopSettings, live)
         {
             PickZip = () => Dialogs?.PickZipAsync() ?? Task.FromResult<string?>(null),
@@ -85,7 +84,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             AddActivity(ActivityKind.Info, $"Clip Engine {release.Version} is out. Install it from Settings > Updates.");
         Settings = new SettingsViewModel(engineSettings, DesktopSettings, live ? RestartEngineAsync : null)
         {
-            Supporter = Supporter,
+            Plan = Plan,
             Updates = Updates,
         };
         Settings.SidePanelHotkeyChanged += _ => Raise(nameof(SidePanelHotkey));
@@ -157,6 +156,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Squad = new SquadViewModel(this, DesktopSettings);
         Squad.SetClipWindow(engineSettings.ClipBeforeSeconds, engineSettings.ClipAfterSeconds);
         Cloud = new CloudViewModel(this, DesktopSettings);
+        Friends = new FriendsViewModel(this, DesktopSettings);
 
         if (!live) return;
         _cleanupTimer.Start();
@@ -168,6 +168,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         // Older copies of detection.ini hid fixes to the built-in rules; keep only the user's changes.
         DetectionIni.MigrateUserFile();
+        Settings.EnforceResolution();
         _engine = new EngineHost();
         _engine.StateChanged += (state, message) => Dispatcher.UIThread.Post(() => OnEngineState(state, message));
         _engine.EventReceived += e => Dispatcher.UIThread.Post(() => OnEngineEvent(e));
@@ -189,7 +190,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public SquadViewModel Squad { get; }
     public CloudViewModel Cloud { get; }
     public SettingsViewModel Settings { get; }
-    public SupporterViewModel Supporter { get; }
+    public PlanViewModel Plan { get; }
+    public FriendsViewModel Friends { get; }
     public UpdatesViewModel Updates { get; }
     internal DesktopSettings DesktopSettings { get; }
 
@@ -248,6 +250,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         Page.Clips => ClipsPage,
         Page.Squad => Squad,
+        Page.Friends => Friends,
         Page.Records => Records,
         Page.Cloud => Cloud,
         Page.Games => GamesPage,
@@ -1113,6 +1116,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         Squad.Dispose();
+        // Friends see this PC go offline now rather than in a few minutes; a short wait, never a hang on exit.
+        if (IsLive) Friends.SignOffAsync().Wait(TimeSpan.FromSeconds(2));
         _engine?.Dispose();
         _library?.Dispose();
     }

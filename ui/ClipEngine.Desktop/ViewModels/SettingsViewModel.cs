@@ -10,6 +10,8 @@ public sealed class SettingsViewModel : ObservableObject
     private double _bufferSeconds = 60;
     private double _clipSeconds = 30;
     private FpsOption _fps;
+    private ResolutionOption _resolution;
+    private PlanViewModel? _plan;
     private double _bitrate;
     private string _codec = "auto";
     private bool _gameAudio = true;
@@ -35,6 +37,8 @@ public sealed class SettingsViewModel : ObservableObject
         _desktop = desktop;
         _applyToEngine = applyToEngine;
         _fps = FpsOptions[0];
+        ResolutionOptions = Resolutions.Choices.Select(c => new ResolutionOption(c)).ToList();
+        _resolution = ResolutionOptions[0];
         AutoClipEvents = EngineSettings.AllEvents
             .Select(e => new EventToggle(e, EventKinds.Plural(e), () => { HasChanges = true; SavedMessage = null; }))
             .ToList();
@@ -60,8 +64,81 @@ public sealed class SettingsViewModel : ObservableObject
     public RelayCommand RevertCommand { get; }
     public RelayCommand CleanUpNowCommand { get; }
 
-    // The support card at the top of the right column.
-    public SupporterViewModel? Supporter { get; init; }
+    // The plan card at the top of the right column. Its plan sets the highest recording resolution.
+    public PlanViewModel? Plan
+    {
+        get => _plan;
+        init
+        {
+            _plan = value;
+            if (value is not null) value.PlanChanged += plan => _ = OnPlanChangedAsync(plan);
+            RefreshResolutions();
+        }
+    }
+
+    private Services.Plan CurrentPlan => _plan?.Plan ?? Services.Plan.Free;
+
+    public IReadOnlyList<ResolutionOption> ResolutionOptions { get; }
+
+    public ResolutionOption Resolution
+    {
+        get => _resolution;
+        set
+        {
+            if (value is null || !value.IsAvailable) return;
+            if (Change(ref _resolution, value)) Raise(nameof(ResolutionHint));
+        }
+    }
+
+    public string ResolutionHint
+    {
+        get
+        {
+            var effective = Resolutions.Effective(_resolution.Value, CurrentPlan);
+            var plan = CurrentPlan switch
+            {
+                Services.Plan.Ultra => "Ultra records up to 4K.",
+                Services.Plan.Pro => "Pro records up to 1440p, and Ultra up to 4K.",
+                _ => "Free records up to 1080p, Pro up to 1440p and Ultra up to 4K.",
+            };
+            return $"Records at {Resolutions.Name(effective)}, or the monitor's own size if that's smaller. Lower is lighter on the game and takes less space. {plan}";
+        }
+    }
+
+    // The engine's file gets the smaller of the picked resolution and the plan's, at start and whenever the plan
+    // changes, so a plan that ended stops recording above Free's.
+    internal bool EnforceResolution()
+    {
+        try
+        {
+            var engine = EngineSettings.Load(AppPaths.EngineSettingsFile);
+            var effective = Resolutions.Effective(_desktop.Resolution, CurrentPlan);
+            if (engine.Resolution == effective) return false;
+            engine.Resolution = effective;
+            engine.Save(AppPaths.EngineSettingsFile);
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private async Task OnPlanChangedAsync(Services.Plan plan)
+    {
+        RefreshResolutions();
+        if (_applyToEngine is null) return;
+        if (EnforceResolution()) await _applyToEngine();
+    }
+
+    private void RefreshResolutions()
+    {
+        foreach (var option in ResolutionOptions) option.Refresh(CurrentPlan);
+        if (!HasChanges) _resolution = ResolutionOptions.FirstOrDefault(o => o.Value == _desktop.Resolution && o.IsAvailable) ?? _resolution;
+        if (!_resolution.IsAvailable) _resolution = ResolutionOptions[0];
+        Raise(nameof(Resolution));
+        Raise(nameof(ResolutionHint));
+    }
 
     // The updates card under it.
     public UpdatesViewModel? Updates { get; init; }
@@ -269,6 +346,7 @@ public sealed class SettingsViewModel : ObservableObject
         ClipSeconds = (int)ClipSeconds,
         Fps = Fps.Value,
         BitrateMbps = (int)Bitrate,
+        Resolution = Resolutions.Effective(_resolution.Value, CurrentPlan),
         Codec = _codec,
         GameAudio = GameAudio,
         MicAudio = MicAudio,
@@ -290,6 +368,8 @@ public sealed class SettingsViewModel : ObservableObject
         try
         {
             ToEngineSettings().Save(AppPaths.EngineSettingsFile);
+            _desktop.Resolution = _resolution.Value;
+            TrySaveDesktop();
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -307,6 +387,7 @@ public sealed class SettingsViewModel : ObservableObject
         _bufferSeconds = Math.Clamp(s.BufferSeconds, 10, 600);
         _clipSeconds = Math.Clamp(s.ClipSeconds, 5, (int)_bufferSeconds);
         _fps = FpsOptions.FirstOrDefault(o => o.Value == s.Fps) ?? new FpsOption(s.Fps, $"{s.Fps} fps");
+        _resolution = ResolutionOptions.FirstOrDefault(o => o.Value == _desktop.Resolution && o.IsAvailable) ?? ResolutionOptions[0];
         _bitrate = Math.Clamp(s.BitrateMbps, 0, 300);
         _codec = s.Codec is "h264" or "hevc" ? s.Codec : "auto";
         _gameAudio = s.GameAudio;

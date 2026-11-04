@@ -3,6 +3,7 @@
 #include "core/Clock.h"
 #include "core/Log.h"
 #include "video/GameNotFoundFrame.h"
+#include "video/OutputSize.h"
 
 #include <avrt.h>
 
@@ -62,8 +63,9 @@ RecordingSession::RecordingSession(const Config& config, HMONITOR monitor, std::
   capture_ = std::make_unique<MonitorCapture>(gpu_, monitor, fps_);
 
   VideoSettings video;
-  video.width = capture_->Width() & ~1u;
-  video.height = capture_->Height() & ~1u;
+  const auto size = OutputSize(capture_->Width(), capture_->Height(), config.resolution);
+  video.width = size.width;
+  video.height = size.height;
   video.fps = fps_;
   video.bitrate = config.bitrateMbps > 0 ? static_cast<UINT>(config.bitrateMbps) * 1'000'000
                                          : AutoBitrate(video.width, video.height, video.fps);

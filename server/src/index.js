@@ -14,7 +14,15 @@
 //   POST /v1/accounts/signin        sign another PC in        { code, device }
 //   GET|PATCH /v1/accounts/<id>/account, POST /link, GET|POST /clips,
 //   PATCH|DELETE /clips/<clip>, PUT|GET /clips/<clip>/(video|thumb)
+//   POST|DELETE /plan               put a subscription's license key on the account, or take it off { key }
+//   GET|POST /friends, POST /friends/<account>/accept, DELETE /friends/<account>   { handle } or { code }
+//   POST|DELETE /presence           online for friends, with the game and a squad invite { game, invite? }
 //   POST /v1/admin/plan             set an account's plan     { account, plan } (Authorization: Bearer ADMIN_TOKEN)
+//
+// Plans (src/plans.js):
+//   GET  /v1/plans                  Free, Pro and Ultra: price, storage and resolution
+//   POST /v1/license                check a Polar license key { key, credit? } and list or unlist its name in the credits
+//   GET  /v1/credits                the names subscribers asked to have in the credits
 //
 // Public pages:
 //   GET /c/<code>                   a shared clip's web player, with its moments on the timeline
@@ -29,6 +37,7 @@ import { Handles, normalizeHandle } from "./handles.js";
 import { CLIP_CODE_LENGTH, Library } from "./library.js";
 import { formatInvite } from "./codes.js";
 import { clipPage, invitePage, notFoundPage, profilePage } from "./pages.js";
+import { checkLicense, PLANS, planJson } from "./plans.js";
 import { Squad } from "./squad.js";
 
 export { Handles, Library, Squad };
@@ -78,7 +87,7 @@ async function readBody(request) {
 
 // Paths a Durable Object only takes from the Worker itself, never straight from a client.
 function internal(path) {
-  return /^\/(create|join|admin|public)(\/|$)/.test(path);
+  return /^\/(create|join|admin|public|peer)(\/|$)/.test(path);
 }
 
 // "K7QM-2X9D-PA4R-HT" (or a link ending in it): the account id and the one-time secret.
@@ -87,6 +96,10 @@ function normalizeSignIn(text) {
   const code = text.trim().split(/[/#?=]/).pop().toUpperCase().replace(/[\s-]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
   if (code.length !== SQUAD_ID_LENGTH + 6 || !ALPHABET.test(code)) return null;
   return { account: code.slice(0, SQUAD_ID_LENGTH), secret: code.slice(SQUAD_ID_LENGTH) };
+}
+
+function directory(env, url, path, body) {
+  return stub(env.HANDLES, "handles").fetch(new Request(`${url.origin}${path}`, { method: "POST", body: JSON.stringify(body) }));
 }
 
 async function clipRoute(request, env, code, rest) {
@@ -161,6 +174,27 @@ export default {
       const body = await readBody(request);
       if (!isSquadId(body?.account)) return json({ error: "Which account?" }, 400);
       return forward(stub(env.LIBRARIES, body.account), request, "/admin/plan", { body: JSON.stringify({ plan: body.plan }) });
+    }
+
+    // ---- plans ----
+    if (path === "/v1/plans" && method === "GET") {
+      return json({ plans: Object.keys(PLANS).map((name) => planJson(env, name)), open: Boolean(env.POLAR_ORGANIZATION_ID) });
+    }
+    if (path === "/v1/license" && method === "POST") {
+      const body = await readBody(request);
+      const check = await checkLicense(env, body?.key);
+      if (!check.ok) return json({ error: check.error, rejected: check.rejected }, check.rejected ? 403 : 503);
+      if (body?.credit !== undefined) {
+        await directory(env, url, "/credits/set", { license: check.license, name: typeof body.credit === "string" ? body.credit : "", plan: check.plan });
+      }
+      return json({ ...planJson(env, check.plan), display: check.display, expires: check.expires });
+    }
+    if (path === "/v1/credits" && method === "GET") {
+      const answer = await stub(env.HANDLES, "handles").fetch(new Request(`${url.origin}/credits`));
+      const response = new Response(answer.body, answer);
+      response.headers.set("cache-control", "public, max-age=300");
+      response.headers.set("access-control-allow-origin", "*");
+      return response;
     }
 
     // ---- public pages ----

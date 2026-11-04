@@ -115,11 +115,12 @@ test("plans set how much a library keeps, and only the operator sets them", asyn
   assert.equal(full.status, 507);
   assert.match((await full.json()).error, /Free cloud library is full/);
 
-  assert.equal((await call(env, "/v1/admin/plan", { method: "POST", token: "wrong", body: { account: me.id, plan: "plus" } })).status, 403);
+  assert.equal((await call(env, "/v1/admin/plan", { method: "POST", token: "wrong", body: { account: me.id, plan: "pro" } })).status, 403);
   // Not around the Worker either.
-  assert.equal((await call(env, `${me.base}/admin/plan`, { method: "POST", token: me.token, body: { plan: "plus" } })).status, 404);
-  const plus = await (await call(env, "/v1/admin/plan", { method: "POST", token: "operator-secret", body: { account: me.id, plan: "plus" } })).json();
-  assert.equal(plus.plan, "plus");
+  assert.equal((await call(env, `${me.base}/admin/plan`, { method: "POST", token: me.token, body: { plan: "pro" } })).status, 404);
+  const pro = await (await call(env, "/v1/admin/plan", { method: "POST", token: "operator-secret", body: { account: me.id, plan: "pro" } })).json();
+  assert.equal(pro.plan, "pro");
+  assert.equal(pro.lines, 1440);
   assert.equal((await call(env, `${me.base}/clips/${clip.id}/video`, { method: "PUT", token: me.token, body: new Uint8Array(700 * 1024) })).status, 200);
 });
 

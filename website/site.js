@@ -1,7 +1,10 @@
 // Links the page points at. Anything left empty keeps its in-page link.
 const LINKS = {
-  // The Clip Engine Patreon page.
-  patreon: "",
+  // Polar checkout links for Pro and Ultra (Products > Checkout links). Empty: the buttons say "Coming soon".
+  pro: "",
+  ultra: "",
+  // Clip Engine's online service, for the names in the credits.
+  service: "https://clip-engine.clip-engine.workers.dev",
   // Where releases are published: this repository's GitHub Releases.
   repo: "MochiBoy9/Clip_Engine",
   support: "mailto:support@clipengine.app",
@@ -21,7 +24,31 @@ function setText(name, text) {
 }
 
 for (const [name, url] of Object.entries(LINKS)) {
-  if (url && name !== "repo") setLink(name, url);
+  if (url && name !== "repo" && name !== "service") setLink(name, url);
+}
+for (const name of ["pro", "ultra"]) {
+  if (!LINKS[name]) continue;
+  for (const el of document.querySelectorAll(`[data-link="${name}"]`)) el.textContent = "Subscribe";
+}
+
+// Subscribers who asked to be thanked, Ultra first.
+if (LINKS.service) {
+  fetch(`${LINKS.service}/v1/credits`)
+    .then((r) => (r.ok ? r.json() : null))
+    .then((credits) => {
+      const names = [...(credits?.ultra ?? []).map((n) => [n, true]), ...(credits?.pro ?? []).map((n) => [n, false])];
+      const box = document.querySelector("[data-credits]");
+      const list = document.querySelector("[data-credit-list]");
+      if (!box || !list || names.length === 0) return;
+      for (const [name, ultra] of names) {
+        const li = document.createElement("li");
+        li.textContent = name;
+        if (ultra) li.className = "ultra";
+        list.append(li);
+      }
+      box.hidden = false;
+    })
+    .catch(() => {});
 }
 setLink("releases", releases);
 setLink("download", `${releases}/latest`);
