@@ -135,6 +135,27 @@
                       ToolTip.Tip="Match the game's own HUD or interface scale setting. The boxes move and resize with it, on any screen shape, ultrawide included" />
             </StackPanel>
 
+            <!-- The game's own clip keys, each saving a clip of its own length -->
+            <Border Classes="inset" Padding="12,10" Margin="0,0,0,12" DataContext="{Binding ClipKeys}" x:DataType="vm:GameClipKeysViewModel">
+              <StackPanel Spacing="8">
+                <Grid ColumnDefinitions="*,Auto,Auto">
+                  <TextBlock Classes="eyebrow" Text="CLIP KEYS IN THIS GAME" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" Classes="caption" Text="Own keys" VerticalAlignment="Center" Margin="0,0,8,0" />
+                  <ToggleSwitch Grid.Column="2" IsChecked="{Binding UseOwn}" OnContent="{x:Null}" OffContent="{x:Null}"
+                                ToolTip.Tip="Give this game its own keys, each saving a clip of its own length, in place of the ones in Settings" />
+                </Grid>
+                <TextBlock Classes="caption" Text="{Binding Summary}" TextWrapping="Wrap" />
+                <Panel IsVisible="{Binding UseOwn}">
+                  <views:ClipKeybindsEditor DataContext="{Binding Keys}" />
+                </Panel>
+                <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding HasChanges}">
+                  <Button Classes="accent" Content="Save keys" Command="{Binding SaveCommand}" />
+                  <Button Classes="secondary" Content="Undo" Command="{Binding RevertCommand}" />
+                </StackPanel>
+                <TextBlock Classes="caption" FontSize="11" Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextWrapping="Wrap" />
+              </StackPanel>
+            </Border>
+
             <TextBlock Classes="caption" TextWrapping="Wrap" Margin="0,0,0,12"
                        IsVisible="{Binding !HasRules}"
                        Text="No rules for this game yet. Add a box rule, draw it where the game shows a kill (or any moment), and type the words it shows." />

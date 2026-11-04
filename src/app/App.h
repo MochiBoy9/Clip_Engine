@@ -33,7 +33,14 @@ class App {
   void StopSession();
   void HandleEvents();
   void SaveReadyAutoClips(bool all);
-  void SaveHotkeyClip();
+  // Saves the last seconds of the recording, for a clip key or the app's Save clip button.
+  void SaveHotkeyClip(int seconds);
+  // Registers these keys to save clips, in place of the ones registered before. game names the
+  // game they belong to, or is empty for the ones from the settings.
+  void UseClipHotkeys(std::vector<ClipHotkey> keys, std::string_view game);
+  // Uses the recorded game's own clip keys when it has some (clip_hotkeys.<game id>, read from
+  // the settings file as it is now), and the usual ones otherwise.
+  void ApplyGameClipHotkeys();
   // Saves [start, end] of the replay buffer. Returns false when there's nothing to save yet.
   // squadMoment names the squad moment it shows, for clips saved for squad sync.
   bool SaveRange(int64_t start, int64_t end, const char* trigger, std::string_view squadMoment = {});
@@ -81,6 +88,11 @@ class App {
   std::unique_ptr<GameIntegration> integration_;
   const GameProfile* integrationGame_ = nullptr;
   DWORD integrationProcess_ = 0;
+
+  // The keys that save a clip right now, and the game whose own keys they are (empty for the
+  // settings' save hotkey and more_clip_hotkeys).
+  std::vector<ClipHotkey> clipHotkeys_;
+  std::string clipHotkeysGame_;
 
   std::unique_ptr<LongRecorder> longRecording_;
   std::vector<GameEvent> longEvents_;  // the moments it caught, for its markers
