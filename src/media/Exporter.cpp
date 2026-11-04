@@ -519,6 +519,7 @@ int RunExport(const ExportOptions& options) {
       const auto size = static_cast<double>(std::filesystem::file_size(options.output));
       if (size <= limitBytes || attempt == 3) {
         if (auto json = ReadClipMetadataJson(options.input)) AppendMetadataBox(options.output, *json);
+        else TagMadeWithClipEngine(options.output);
         log::Info("Export progress 100%");
         log::Info("Exported {:.1f} MB to {}", size / (1024 * 1024), winrt::to_string(options.output.wstring()));
         if (size > limitBytes) log::Warn("The export is a little over {:.0f} MB; this clip is too long to fit", options.maxMegabytes);
