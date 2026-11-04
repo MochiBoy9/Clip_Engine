@@ -236,8 +236,9 @@ internal static class Sample
         vm.SampleTimelines = Timelines(now);
         vm.SetSupportedGames(["The Finals", "Overwatch", "Battlefield 6", "Counter-Strike 2", "Dota 2", "League of Legends",
                               "Rocket League", "Valorant", "Fortnite", "Apex Legends", "PUBG", "Marvel Rivals",
-                              "Rainbow Six Siege", "Call of Duty", "ARC Raiders", "Delta Force", "Deadlock",
-                              "Halo Infinite", "Destiny 2", "Team Fortress 2", "Escape from Tarkov", "Roblox", "Minecraft"]);
+                              "Team Fortress 2", "Rainbow Six Siege", "Call of Duty", "Delta Force", "Deadlock",
+                              "Halo Infinite", "Halo MCC", "Battlefield 2042", "Battlefield V", "Battlefield 1",
+                              "Battlefield 4", "Paladins", "Splitgate", "Roblox", "Minecraft"]);
         SampleGameArt(vm);
 
         var clips = new (string Game, string Thumb, double MinutesAgo, int Seconds, long Mb)[]

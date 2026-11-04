@@ -319,4 +319,115 @@ std::vector<ApiEvent> RocketLeagueTracker::Update(const Json& message) {
   return events;
 }
 
+// ---------------------------------------------------------------------- Team Fortress 2
+
+namespace {
+
+// With con_timestamp 1 every line starts "11/04/2026 - 18:41:17: ", and server-style logs
+// put "L " before that.
+std::string_view StripTimestamp(std::string_view line) {
+  std::string_view rest = line.starts_with("L ") ? line.substr(2) : line;
+  if (rest.size() >= 23 && std::isdigit(static_cast<unsigned char>(rest[0])) && rest[2] == '/' && rest[5] == '/' &&
+      rest.substr(10, 3) == " - " && rest.substr(21, 2) == ": ") {
+    return rest.substr(23);
+  }
+  return line;
+}
+
+std::string_view TrimLine(std::string_view s) {
+  while (!s.empty() && (s.back() == '\r' || s.back() == '\n' || s.back() == ' ')) s.remove_suffix(1);
+  while (!s.empty() && s.front() == ' ') s.remove_prefix(1);
+  return s;
+}
+
+// The weapon as the console names it ("tf_projectile_rocket", "sniperrifle"), tidied up.
+std::string WeaponName(std::string_view weapon) {
+  std::string name(weapon);
+  for (std::string_view prefix : {"tf_projectile_", "tf_weapon_", "obj_"}) {
+    if (name.starts_with(prefix)) name = name.substr(prefix.size());
+  }
+  std::ranges::replace(name, '_', ' ');
+  return name;
+}
+
+}  // namespace
+
+Tf2ConsoleTracker::Tf2ConsoleTracker(std::vector<std::string> names) {
+  for (auto& name : names) {
+    if (!name.empty()) names_.push_back(Lower(std::move(name)));
+  }
+}
+
+bool Tf2ConsoleTracker::IsMe(std::string_view name) const {
+  return !name.empty() && std::ranges::find(names_, Lower(std::string(name))) != names_.end();
+}
+
+std::vector<ApiEvent> Tf2ConsoleTracker::Update(std::string_view raw) {
+  std::vector<ApiEvent> events;
+  const std::string_view line = TrimLine(StripTimestamp(TrimLine(raw)));
+  if (line.empty()) return events;
+
+  // Clip Engine's line in autoexec.cfg runs "name", which prints the player's name:
+  // "name" = "Mochi" ( def. "unnamed" )
+  if (line.starts_with("\"name\" = \"")) {
+    const auto rest = line.substr(10);
+    const auto end = rest.find('"');
+    if (end != std::string_view::npos && end > 0 && rest.substr(0, end) != "unnamed") {
+      std::string name = Lower(std::string(rest.substr(0, end)));
+      if (std::ranges::find(names_, name) == names_.end()) names_.push_back(std::move(name));
+    }
+    return events;
+  }
+  // A new server: the totals start again.
+  if (line.starts_with("Connected to ")) {
+    kills_ = deaths_ = 0;
+    board_.clear();
+    return events;
+  }
+  // Chat is printed as "<name> :  <message>", and a message could look like a kill.
+  if (names_.empty() || line.find(" :  ") != std::string_view::npos) return events;
+
+  if (line.ends_with(" suicided.")) {
+    if (IsMe(line.substr(0, line.size() - 10))) {
+      ++deaths_;
+      events.push_back({EventType::Death, "Suicide"});
+    }
+  } else if (line.ends_with(".") || line.ends_with(". (crit)")) {
+    // "<killer> killed <victim> with <weapon>." Names may hold any text, " killed " and " with "
+    // included, so the player's own name is looked for at either end first.
+    const bool crit = line.ends_with(" (crit)");
+    const std::string_view body = line.substr(0, line.size() - (crit ? 8 : 1));
+    const auto with = body.rfind(" with ");
+    if (with == std::string_view::npos) return events;
+    const std::string_view weapon = body.substr(with + 6);
+    const std::string_view who = body.substr(0, with);
+    const std::string weaponText = WeaponName(weapon) + (crit ? " (crit)" : "");
+    bool counted = false;
+    for (const auto& name : names_) {
+      if (who.size() > name.size() + 8 && Lower(std::string(who.substr(0, name.size()))) == name &&
+          who.substr(name.size(), 8) == " killed ") {
+        const std::string_view victim = who.substr(name.size() + 8);
+        if (IsMe(victim)) break;  // killed themselves with their own rocket: a suicide, printed as such too
+        ++kills_;
+        events.push_back({EventType::Kill, std::format("Killed {} with {}", victim, weaponText)});
+        counted = true;
+        break;
+      }
+      if (who.size() > name.size() + 8 && Lower(std::string(who.substr(who.size() - name.size()))) == name &&
+          who.substr(who.size() - name.size() - 8, 8) == " killed ") {
+        const std::string_view killer = who.substr(0, who.size() - name.size() - 8);
+        ++deaths_;
+        events.push_back({EventType::Death, std::format("Killed by {} with {}", killer, weaponText)});
+        counted = true;
+        break;
+      }
+    }
+    if (!counted) return events;
+  } else {
+    return events;
+  }
+  board_ = {{"kills", kills_}, {"deaths", deaths_}};
+  return events;
+}
+
 }  // namespace clip

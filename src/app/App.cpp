@@ -260,7 +260,7 @@ void App::SyncIntegration(const DetectedGame* game) {
   integrationGame_ = nullptr;
   integrationProcess_ = 0;
   if (!wanted) return;
-  integration_ = StartGameIntegration(*game);
+  integration_ = StartGameIntegration(*game, ReadPlayerNames(config_.file));
   if (!integration_) return;
   integrationGame_ = game->profile;
   integrationProcess_ = game->processId;
@@ -272,6 +272,8 @@ void App::PumpIntegrationEvents() {
   auto events = integration_->TakeEvents();
   // Only moments from the game being recorded belong in its clips.
   if (!session_ || session_->Label() != integrationGame_->name) return;
+  // Once the game reports these itself, its screen rules for them are only a fallback.
+  if (integration_->Live()) session_->PreferApiFor(integration_->Covers());
   for (auto& event : events) session_->AddEvent(event);
 }
 
