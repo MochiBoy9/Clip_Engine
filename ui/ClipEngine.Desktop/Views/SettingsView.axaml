@@ -365,7 +365,7 @@
             <Grid ColumnDefinitions="*,Auto">
               <StackPanel VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
                 <TextBlock Text="Install from a zip" FontWeight="SemiBold" FontSize="14" />
-                <TextBlock Classes="caption" Text="A Clip_Engine-…-windows-x64.zip you already downloaded." TextWrapping="Wrap" />
+                <TextBlock Classes="caption" Text="A Clip_Engine-windows-x64.zip you already downloaded." TextWrapping="Wrap" />
               </StackPanel>
               <Button Grid.Column="1" Classes="secondary" Content="Choose zip" Command="{Binding InstallFromZipCommand}" />
             </Grid>

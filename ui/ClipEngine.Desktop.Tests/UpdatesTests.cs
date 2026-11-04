@@ -53,6 +53,18 @@ public class UpdatesTests : IDisposable
     }
 
     [Fact]
+    public void TakesTheZipUnderItsFixedName()
+    {
+        // Releases from 0.11.0 on carry one zip named the same every time; the tag says the version.
+        var release = UpdateFeed.ParseRelease("""
+            { "tag_name": "v0.11.0", "assets": [ { "name": "Clip_Engine-windows-x64.zip", "url": "u", "size": 42000000 } ] }
+            """);
+        Assert.NotNull(release);
+        Assert.Equal(new Version(0, 11, 0), release.Version);
+        Assert.Equal("Clip_Engine-windows-x64.zip", release.AssetName);
+    }
+
+    [Fact]
     public void SkipsReleasesWithoutAZipAndPrereleases()
     {
         Assert.Null(UpdateFeed.ParseRelease("""{ "tag_name": "v0.6.0", "assets": [ { "name": "notes.txt", "url": "u" } ] }"""));
