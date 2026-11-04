@@ -258,7 +258,10 @@ async function route(request, env) {
       const body = await readBody(request);
       const check = await checkLicense(env, body?.key, typeof body?.device === "string" ? body.device : "");
       if (!check.ok) return json({ error: check.error, rejected: check.rejected }, check.rejected ? 403 : 503);
-      if (body?.credit !== undefined && check.plan !== "free") {
+      // The credits thank people who pay; a special key (made in the key maker, not bought) is never listed.
+      if (check.grant) {
+        await directory(env, url, "/credits/remove", { license: check.license });
+      } else if (body?.credit !== undefined && check.plan !== "free") {
         await directory(env, url, "/credits/set", { license: check.license, name: typeof body.credit === "string" ? body.credit : "", plan: check.plan });
       }
       return json({ ...planJson(env, check.plan, check.features), display: check.display, expires: check.expires, grant: Boolean(check.grant) });

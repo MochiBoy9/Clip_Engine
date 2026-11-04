@@ -3,9 +3,9 @@
 // its SQLite storage keeps the squad, and R2 keeps uploaded clips. WebSockets use hibernation,
 // so a squad nobody is using costs nothing.
 
-import { addColumns } from "./library.js";
 import { mediaPointer } from "./media.js";
 import {
+  addColumns,
   formatInvite,
   INVITE_SECRET_LENGTH,
   isMemberId,

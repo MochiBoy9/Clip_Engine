@@ -3,7 +3,7 @@ import { test } from "node:test";
 import worker from "../src/index.js";
 import { normalizeHandle } from "../src/handles.js";
 import { cleanMarkers } from "../src/library.js";
-import { clipPage, escapeHtml, profilePage, summarize } from "../src/pages.js";
+import { clipPage, escapeHtml, profilePage, SITE_URL, summarize } from "../src/pages.js";
 import { fakeEnv, request } from "./fakes.js";
 
 const call = (env, path, options) => worker.fetch(request(path, options), env);
@@ -177,4 +177,14 @@ test("each address gets a limited number of sign-ups, code tries and changes a m
   assert.equal(blocked.headers.get("retry-after"), "60");
   assert.equal((await call(env, "/v1/accounts", from("198.51.100.2"))).status, 200, "other addresses aren't affected");
   assert.equal((await call(env, "/v1/health", { headers: { "cf-connecting-ip": "203.0.113.7" } })).status, 200, "reads aren't limited");
+});
+
+test("a cloud clip carries a quiet Clip Engine mark that leads to the download", () => {
+  const page = clipPage({ code: "ABCDEFGH123456", title: "Ace", game: "Valorant", seconds: 10, markers: [] }, "https://x");
+  const mark = page.match(/<div class="player"[^>]*>(<a class="watermark"[^>]*>)/);
+  assert.ok(mark, "the mark sits inside the player, over the video");
+  assert.match(mark[1], new RegExp(`href="${SITE_URL}"`));
+  assert.match(page, /\.watermark\{[^}]*opacity:\.55/, "semi-transparent until hovered");
+  assert.match(page, /<meta property="og:site_name" content="Clip Engine">/);
+  assert.match(page, /Download Clip Engine/);
 });

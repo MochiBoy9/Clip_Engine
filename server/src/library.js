@@ -3,7 +3,7 @@
 // much they can keep, and their friends. A Durable Object per account; a clip's short code starts
 // with the account id, so a link finds its library without a global index.
 
-import { isSquadId, normalizeInvite, randomCode, randomToken, sameSecret, sha256Hex, SQUAD_ID_LENGTH } from "./codes.js";
+import { addColumns, isSquadId, normalizeInvite, randomCode, randomToken, sameSecret, sha256Hex, SQUAD_ID_LENGTH } from "./codes.js";
 import { normalizeHandle } from "./handles.js";
 import { mediaPointer } from "./media.js";
 import { checkLicense, cleanKey, OFFLINE_GRACE_MS, PLANS, planName, RECHECK_MS, storageBytes } from "./plans.js";
@@ -12,6 +12,9 @@ import { cleanGame, cleanName, MOMENT_TYPES } from "./protocol.js";
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 const MAX_THUMB_BYTES = 512 * 1024;
 const LINK_CODE_MS = 10 * 60_000;
+// How often a username (@handle) can be changed: once a month on Free, once a week with a plan.
+export const HANDLE_EVERY_FREE_MS = 30 * 24 * 3600_000;
+export const HANDLE_EVERY_PAID_MS = 7 * 24 * 3600_000;
 // Wrong tries before a sign-in code stops working.
 const SIGN_IN_TRIES = 5;
 export const CLIP_CODE_LENGTH = 6;
@@ -38,15 +41,7 @@ CREATE TABLE IF NOT EXISTS friends (account TEXT PRIMARY KEY, name TEXT NOT NULL
 // browser or Cloudflare's cache that already has it doesn't read R2 again.
 const COLUMNS = ["clips ADD COLUMN video_v INTEGER NOT NULL DEFAULT 0", "clips ADD COLUMN thumb_v INTEGER NOT NULL DEFAULT 0"];
 
-export function addColumns(sql, columns) {
-  for (const column of columns) {
-    try {
-      sql.exec(`ALTER TABLE ${column}`);
-    } catch {
-      // Already there.
-    }
-  }
-}
+
 
 // "K7QM-2X9D", an account's id as people pass it on to be added as a friend.
 export function formatFriendCode(id) {
@@ -151,6 +146,7 @@ export class Library {
       planKey: this.meta("plan_display") ?? null,
       lines: plan.lines,
       friendCode: formatFriendCode(this.meta("id")),
+      handleChangeAt: this.meta("handle") ? this.nextHandleChange() : null,
       storage: { used: this.used(), limit: plan.storage },
       clips: this.sql.exec("SELECT COUNT(*) AS n FROM clips WHERE uploaded = 1").toArray()[0].n,
     };
@@ -304,9 +300,11 @@ export class Library {
 
   async updateAccount(request) {
     const body = await readJson(request);
+    let renamed = false;
     if (body?.name !== undefined) {
       const name = cleanName(body.name);
       if (!name) return fail(400, "Pick a name to show on your profile.");
+      renamed = name !== this.meta("name");
       this.setMeta("name", name);
     }
     if (body?.handle !== undefined) {
@@ -315,13 +313,40 @@ export class Library {
         this.sql.exec("DELETE FROM meta WHERE key = 'handle'");
       } else {
         const handle = normalizeHandle(body.handle);
-        if (!handle) return fail(400, "Profile names are 3 to 24 letters, numbers, _ or .");
-        const claimed = await this.handles("/claim", { handle, account: this.meta("id") });
-        if (!claimed.ok) return fail(claimed.status, (await claimed.json()).error);
-        this.setMeta("handle", handle);
+        if (!handle) return fail(400, "Usernames are 3 to 24 letters, numbers, _ or .");
+        const current = this.meta("handle");
+        if (handle !== current) {
+          // Picking the first one is free; after that, changes are limited.
+          const next = this.nextHandleChange();
+          if (current && next && Date.now() < next) {
+            const when = new Date(next).toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" });
+            const how = this.plan().name === "free" ? "once a month, or once a week with Pro or Ultra" : "once a week";
+            return fail(429, `You can change your username ${how}. Next change: ${when}.`);
+          }
+          const claimed = await this.handles("/claim", { handle, account: this.meta("id") });
+          if (!claimed.ok) return fail(claimed.status, (await claimed.json()).error);
+          this.setMeta("handle", handle);
+          if (current) this.setMeta("handle_changed", String(Date.now()));
+          renamed = true;
+        }
       }
     }
+    if (renamed) await this.tellFriendsRenamed();
     return json(this.account());
+  }
+
+  // When the username can next be changed, or null if it can be changed now.
+  nextHandleChange() {
+    const last = Number(this.meta("handle_changed") ?? 0);
+    if (!last) return null;
+    const next = last + (this.plan().name === "free" ? HANDLE_EVERY_FREE_MS : HANDLE_EVERY_PAID_MS);
+    return next > Date.now() ? next : null;
+  }
+
+  // Friends keep a copy of your name and username; a change is sent to each of them.
+  async tellFriendsRenamed() {
+    const rows = this.sql.exec("SELECT account FROM friends").toArray();
+    await Promise.allSettled(rows.map((r) => this.tellPeer(r.account, "renamed")));
   }
 
   handles(path, body) {
@@ -413,7 +438,10 @@ export class Library {
       friendCode: formatFriendCode(this.meta("id")),
       friends: friends.map((r) => {
         const here = online[r.account];
-        return { ...row(r), name: here?.name || r.name, handle: here?.handle ?? r.handle, online: Boolean(here), game: here?.game ?? "", invite: here?.invite ?? null };
+        return {
+          ...row(r), name: here?.name || r.name, handle: here?.handle ?? r.handle, online: Boolean(here), game: here?.game ?? "",
+          invite: here?.invite ?? null, onlineSince: here?.onlineSince ?? null, gameSince: here?.gameSince ?? null,
+        };
       }),
       received: rows.filter((r) => r.state === "received").map(row),
       sent: rows.filter((r) => r.state === "sent").map(row),
@@ -500,6 +528,10 @@ export class Library {
     }
     if (what === "removed") {
       this.sql.exec("DELETE FROM friends WHERE account = ?", from);
+      return json({ ok: true });
+    }
+    if (what === "renamed") {
+      this.sql.exec("UPDATE friends SET name = ?, handle = ? WHERE account = ?", name, handle, from);
       return json({ ok: true });
     }
     return fail(404, "Not found.");

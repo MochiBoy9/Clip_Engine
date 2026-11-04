@@ -32,13 +32,22 @@ function duration(seconds) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
+// Where people get Clip Engine. Every page, and every clip's watermark, leads here.
+export const SITE_URL = "https://mochiboy9.github.io/Clip_Engine/";
+
+// A small play mark, inline so the watermark costs no request.
+const MARK = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><defs><linearGradient id="ceg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b5cf6"/><stop offset="1" stop-color="#3b82f6"/></linearGradient></defs><rect width="24" height="24" rx="6" fill="url(#ceg)"/><path d="M9.5 7.5v9l7-4.5z" fill="#fff"/></svg>`;
+
 const STYLE = `
 :root{--bg:#14161a;--panel:#1d2026;--line:#2c3038;--text:#e9e6df;--dim:#9a9ea8;--amber:#f2a516;--kill:#f2a516;--death:#e0524a;--assist:#6cb4ee;--revive:#5fd08a;--match:#b48cf2;--highlight:#ffd54a}
 *{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
 a{color:var(--amber)}main{max-width:1100px;margin:0 auto;padding:20px 16px 48px}
 header{display:flex;align-items:center;gap:10px;margin-bottom:16px}header .brand{font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:13px;color:var(--amber);text-decoration:none}
 h1{font-size:22px;margin:4px 0 2px}.sub{color:var(--dim);font-size:14px}
-.player{background:#000;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.player{position:relative;background:#000;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.watermark{position:absolute;top:10px;right:12px;display:inline-flex;align-items:center;gap:6px;padding:3px 8px 3px 4px;border-radius:999px;background:rgba(0,0,0,.35);color:#fff;font-size:12px;font-weight:600;letter-spacing:.02em;text-decoration:none;opacity:.55;transition:opacity .2s;z-index:1}
+.watermark:hover,.watermark:focus-visible{opacity:.95}
+@media (max-width:480px){.watermark{top:6px;right:8px;font-size:11px}}
 video{display:block;width:100%;max-height:72vh;background:#000}
 .track{position:relative;height:30px;margin:10px 0 4px;background:var(--panel);border:1px solid var(--line);border-radius:6px;cursor:pointer}
 .track .played{position:absolute;inset:0 auto 0 0;background:rgba(242,165,22,.15);border-radius:6px 0 0 6px;pointer-events:none}
@@ -58,8 +67,8 @@ const COLORS = { kill: "--kill", death: "--death", assist: "--assist", revive: "
 function shell({ title, description, head = "", body }) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(title)}</title><meta name="description" content="${escapeHtml(description)}">${head}<style>${STYLE}</style></head>
-<body><main><header><a class="brand" href="/">Clip Engine</a></header>${body}
-<footer>Recorded and clipped with Clip Engine.</footer></main></body></html>`;
+<body><main><header><a class="brand" href="${SITE_URL}">Clip Engine</a></header>${body}
+<footer>Made with <a href="${SITE_URL}">Clip Engine</a>, free clipping for PC games. <a href="${SITE_URL}#download">Download Clip Engine</a></footer></main></body></html>`;
 }
 
 // The page for /c/<code>.
@@ -76,7 +85,7 @@ export function clipPage(clip, origin) {
 ${clip.thumb ? `<meta property="og:image" content="${escapeHtml(base)}/thumb">` : ""}
 <meta property="og:video" content="${escapeHtml(base)}/video"><meta property="og:video:secure_url" content="${escapeHtml(base)}/video">
 <meta property="og:video:type" content="video/mp4">${clip.width ? `<meta property="og:video:width" content="${clip.width}"><meta property="og:video:height" content="${clip.height}">` : ""}
-<meta name="twitter:card" content="player"><meta name="theme-color" content="#f2a516">`;
+<meta property="og:site_name" content="Clip Engine"><meta name="twitter:card" content="player"><meta name="theme-color" content="#f2a516">`;
   const seconds = clip.seconds > 0 ? clip.seconds : 1;
   const marks = markers
     .map((m) => `<button class="mark" style="left:${Math.min(100, Math.max(0, (m.time / seconds) * 100)).toFixed(2)}%;--c:var(${COLORS[m.type] ?? "--amber"})" data-t="${m.time}" title="${escapeHtml(momentLabel(m.type))} at ${duration(m.time)}${m.text ? " · " + escapeHtml(m.text) : ""}" aria-label="${escapeHtml(momentLabel(m.type))} at ${duration(m.time)}"></button>`)
@@ -87,7 +96,7 @@ ${clip.thumb ? `<meta property="og:image" content="${escapeHtml(base)}/thumb">` 
   const body = `
 <h1>${escapeHtml(title)}</h1>
 <div class="sub">${escapeHtml(clip.game)}${clip.ownerHandle ? ` · <a href="/u/${escapeHtml(clip.ownerHandle)}">@${escapeHtml(clip.ownerHandle)}</a>` : escapeHtml(by)}${summary && summary !== title ? ` · ${escapeHtml(summary)}` : ""}</div>
-<div class="player" style="margin-top:14px"><video id="v" controls playsinline preload="metadata" src="${escapeHtml(base)}/video"${clip.thumb ? ` poster="${escapeHtml(base)}/thumb"` : ""}></video></div>
+<div class="player" style="margin-top:14px"><a class="watermark" href="${SITE_URL}" target="_blank" rel="noopener" title="Made with Clip Engine">${MARK}Clip Engine</a><video id="v" controls playsinline preload="metadata" src="${escapeHtml(base)}/video"${clip.thumb ? ` poster="${escapeHtml(base)}/thumb"` : ""}></video></div>
 ${markers.length ? `<div class="track" id="track"><div class="played" id="played"></div>${marks}</div><ul class="legend">${legend}</ul>` : ""}
 <script>
 const v=document.getElementById("v"),track=document.getElementById("track"),played=document.getElementById("played");
