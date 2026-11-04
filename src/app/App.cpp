@@ -15,8 +15,9 @@
 namespace clip {
 namespace {
 
-constexpr int kSaveHotkeyId = 1;
 constexpr int kRecordHotkeyId = 2;
+// Each key that saves a clip is registered as this plus its place in the list in use.
+constexpr int kFirstClipHotkeyId = 100;
 
 // The desktop app signals these to save a clip, start or stop a long recording, or shut down cleanly.
 constexpr wchar_t kSaveEventName[] = L"Local\\ClipEngine.SaveClip";
@@ -99,13 +100,8 @@ int App::Run() {
   g_mainThread = GetCurrentThreadId();
   SetConsoleCtrlHandler(OnConsoleClose, TRUE);
 
-  // Without a window, WM_HOTKEY is posted to this thread's message queue.
-  if (!RegisterHotKey(nullptr, kSaveHotkeyId, config_.saveHotkey.modifiers | MOD_NOREPEAT, config_.saveHotkey.key)) {
-    log::Error("Couldn't register the save hotkey {}; another app may be using it. Change save_hotkey in the settings.",
-               config_.saveHotkeyText);
-  } else {
-    log::Info("Press {} to save the last {} seconds", config_.saveHotkeyText, config_.clipSeconds);
-  }
+  // Without a window, WM_HOTKEY is posted to this thread's message queue. The record hotkey
+  // goes first, so a clip key set to the same key can't take it.
   if (!RegisterHotKey(nullptr, kRecordHotkeyId, config_.recordHotkey.modifiers | MOD_NOREPEAT, config_.recordHotkey.key)) {
     log::Error("Couldn't register the long recording hotkey {}; another app may be using it. Change record_hotkey in "
                "the settings.",
@@ -113,6 +109,7 @@ int App::Run() {
   } else {
     log::Info("Press {} to start or stop a long recording", config_.recordHotkeyText);
   }
+  UseClipHotkeys(config_.ClipHotkeys(), {});
   if (config_.detection && config_.autoClip) {
     log::Info("Automatic clips: {} s before and {} s after each moment", config_.clipBeforeSeconds,
               config_.clipAfterSeconds);
@@ -139,7 +136,7 @@ int App::Run() {
 
   auto shutDown = [&] {
     log::Info("Shutting down");
-    UnregisterHotKey(nullptr, kSaveHotkeyId);
+    UseClipHotkeys({}, {});
     UnregisterHotKey(nullptr, kRecordHotkeyId);
     StopSession();
     presence_.reset();
@@ -154,13 +151,17 @@ int App::Run() {
   while (true) {
     const DWORD wait = MsgWaitForMultipleObjects(static_cast<DWORD>(waitOn.size()), waitOn.empty() ? nullptr : waitOn.data(),
                                                  FALSE, kLoopWaitMs, QS_ALLINPUT);
-    if (haveEvents && wait == WAIT_OBJECT_0) SaveHotkeyClip();
+    // The app's Save clip button saves what the first key in use would.
+    if (haveEvents && wait == WAIT_OBJECT_0) SaveHotkeyClip(clipHotkeys_.empty() ? config_.clipSeconds : clipHotkeys_[0].seconds);
     if (haveEvents && wait == WAIT_OBJECT_0 + 1) return shutDown();
     if (haveEvents && wait == WAIT_OBJECT_0 + 2) ToggleLongRecording();
     MSG msg;
     while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
       if (msg.message == WM_QUIT) return shutDown();
-      if (msg.message == WM_HOTKEY && msg.wParam == kSaveHotkeyId) SaveHotkeyClip();
+      if (msg.message == WM_HOTKEY && msg.wParam >= static_cast<WPARAM>(kFirstClipHotkeyId)) {
+        const size_t index = static_cast<size_t>(msg.wParam) - kFirstClipHotkeyId;
+        if (index < clipHotkeys_.size()) SaveHotkeyClip(clipHotkeys_[index].seconds);
+      }
       if (msg.message == WM_HOTKEY && msg.wParam == kRecordHotkeyId) ToggleLongRecording();
       TranslateMessage(&msg);
       DispatchMessageW(&msg);
@@ -227,6 +228,7 @@ void App::Poll() {
                                                     std::move(playerNames), rules_.sampleMs, hudScale);
       sessionGameId_ = gameId;
       sessionId_ = LocalTimestamp();
+      ApplyGameClipHotkeys();
       sessionStart_ = NowHns();
       matchStarts_.clear();
       presenceState_ = PresenceState{};
@@ -316,6 +318,7 @@ void App::StopSession() {
   // The long recording reads from this session's buffer, so it ends with it.
   if (longRecording_) FinishLongRecording("the recording it was part of ended");
   log::Info("Stopped recording {}", session_->Label());
+  if (!clipHotkeysGame_.empty()) UseClipHotkeys(config_.ClipHotkeys(), {});
   session_.reset();
   sessionGameId_.clear();
   timeline_.reset();
@@ -372,6 +375,11 @@ void App::SaveReadyAutoClips(bool all) {
 void App::HandleCommands() {
   if (!commands_.Listening()) return;
   for (const auto& line : commands_.Take()) {
+    // Detection Studio changed a game's own clip keys.
+    if (line.starts_with("reload-clip-keys")) {
+      ApplyGameClipHotkeys();
+      continue;
+    }
     if (const auto squad = ParseSquadPresence(line)) {
       squadPresence_ = *squad;
       ApplySquadPresence();
@@ -418,13 +426,45 @@ void App::SaveReadySquadClips(bool all) {
   }
 }
 
-void App::SaveHotkeyClip() {
+void App::UseClipHotkeys(std::vector<ClipHotkey> keys, std::string_view game) {
+  for (size_t i = 0; i < clipHotkeys_.size(); ++i) UnregisterHotKey(nullptr, kFirstClipHotkeyId + static_cast<int>(i));
+  clipHotkeys_ = std::move(keys);
+  clipHotkeysGame_ = std::string(game);
+  for (size_t i = 0; i < clipHotkeys_.size(); ++i) {
+    const auto& key = clipHotkeys_[i];
+    const bool first = i == 0;
+    if (!RegisterHotKey(nullptr, kFirstClipHotkeyId + static_cast<int>(i), key.hotkey.modifiers | MOD_NOREPEAT, key.hotkey.key)) {
+      log::Error("Couldn't register the clip key {}; another app or another of these keys may be using it. Change it {}.",
+                 key.text, game.empty() ? "in the settings" : "in Detection Studio");
+    } else if (!game.empty()) {
+      log::Info("In {}, {} saves the last {} seconds", game, key.text, key.seconds);
+    } else if (first) {
+      // The desktop app reads this line for the hint on its home page.
+      log::Info("Press {} to save the last {} seconds", key.text, key.seconds);
+    } else {
+      log::Info("Also press {} to save the last {} seconds", key.text, key.seconds);
+    }
+  }
+}
+
+void App::ApplyGameClipHotkeys() {
+  std::optional<std::vector<ClipHotkey>> own;
+  if (session_ && !sessionGameId_.empty()) own = ReadGameClipHotkeys(config_.file, sessionGameId_);
+  if (own) {
+    for (auto& key : *own) key.seconds = std::clamp(key.seconds, 5, config_.bufferSeconds);
+    UseClipHotkeys(std::move(*own), session_->Label());
+  } else if (!clipHotkeysGame_.empty()) {
+    UseClipHotkeys(config_.ClipHotkeys(), {});
+  }
+}
+
+void App::SaveHotkeyClip(int seconds) {
   if (!session_) {
     log::Info("Nothing is being recorded right now, so there's no clip to save");
     return;
   }
   const int64_t end = NowHns();
-  if (!SaveRange(end - int64_t{config_.clipSeconds} * kHnsPerSecond, end, "hotkey")) {
+  if (!SaveRange(end - int64_t{seconds} * kHnsPerSecond, end, "hotkey")) {
     log::Info("The recording just started; there's nothing to save yet");
   }
 }

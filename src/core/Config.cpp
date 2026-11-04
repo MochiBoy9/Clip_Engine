@@ -41,6 +41,14 @@ mic_audio = true
 # Examples: F8, Alt+F10, Ctrl+Shift+S
 save_hotkey = F8
 
+# More keys that save a clip, each with its own length in seconds (up to buffer_seconds),
+# separated by commas. Example: Alt+F8 15, Shift+F8 120
+more_clip_hotkeys =
+
+# A game can have its own clip keys, used instead of save_hotkey and more_clip_hotkeys while
+# it's recorded: clip_hotkeys. and the game id from detection.ini. Detection Studio sets them.
+# Example: clip_hotkeys.valorant = F8 20, Alt+F8 60
+
 # Starts a long recording, which keeps going until this is pressed again and still marks every
 # kill, death and other moment on its timeline. Automatic clips carry on as usual meanwhile.
 record_hotkey = F9
@@ -167,55 +175,10 @@ double ReadHudScale(const std::filesystem::path& file, std::string_view gameId) 
   return scale;
 }
 
-std::optional<Hotkey> ParseHotkey(std::string_view text) {
-  Hotkey hotkey{};
-  bool haveKey = false;
-  std::string rest(text);
-  while (!rest.empty()) {
-    const auto plus = rest.find('+');
-    const std::string token = Lower(Trim(rest.substr(0, plus)));
-    rest = plus == std::string::npos ? std::string() : rest.substr(plus + 1);
-    if (token.empty()) return std::nullopt;
-
-    if (token == "ctrl" || token == "control") {
-      hotkey.modifiers |= MOD_CONTROL;
-    } else if (token == "alt") {
-      hotkey.modifiers |= MOD_ALT;
-    } else if (token == "shift") {
-      hotkey.modifiers |= MOD_SHIFT;
-    } else if (token == "win") {
-      hotkey.modifiers |= MOD_WIN;
-    } else if (haveKey) {
-      return std::nullopt;
-    } else {
-      haveKey = true;
-      if (token.size() == 1 && std::isalnum(static_cast<unsigned char>(token[0]))) {
-        hotkey.key = static_cast<UINT>(std::toupper(static_cast<unsigned char>(token[0])));
-      } else if (token[0] == 'f' && token.size() <= 3) {
-        const auto n = ParseInt(token.substr(1));
-        if (!n || *n < 1 || *n > 24) return std::nullopt;
-        hotkey.key = VK_F1 + static_cast<UINT>(*n - 1);
-      } else if (token == "printscreen" || token == "print") {
-        hotkey.key = VK_SNAPSHOT;
-      } else if (token == "insert") {
-        hotkey.key = VK_INSERT;
-      } else if (token == "home") {
-        hotkey.key = VK_HOME;
-      } else if (token == "end") {
-        hotkey.key = VK_END;
-      } else if (token == "pageup") {
-        hotkey.key = VK_PRIOR;
-      } else if (token == "pagedown") {
-        hotkey.key = VK_NEXT;
-      } else if (token == "pause") {
-        hotkey.key = VK_PAUSE;
-      } else {
-        return std::nullopt;
-      }
-    }
-  }
-  if (!haveKey) return std::nullopt;
-  return hotkey;
+std::vector<ClipHotkey> Config::ClipHotkeys() const {
+  std::vector<ClipHotkey> keys{ClipHotkey{saveHotkey, saveHotkeyText, clipSeconds}};
+  keys.insert(keys.end(), moreClipHotkeys.begin(), moreClipHotkeys.end());
+  return keys;
 }
 
 Config Config::Load(const std::filesystem::path& file) {
@@ -283,6 +246,14 @@ Config Config::Load(const std::filesystem::path& file) {
         log::Warn("Setting save_hotkey '{}' isn't a key this app understands, keeping {}", value,
                   config.saveHotkeyText);
       }
+    } else if (key == "more_clip_hotkeys") {
+      std::vector<std::string> bad;
+      config.moreClipHotkeys = ParseClipHotkeys(value, &bad);
+      for (const auto& entry : bad) {
+        log::Warn("more_clip_hotkeys: '{}' should be a key and a length in seconds, like Alt+F8 15", entry);
+      }
+    } else if (key.starts_with("clip_hotkeys.")) {
+      // Read for each game as it starts (ReadGameClipHotkeys).
     } else if (key == "record_hotkey") {
       if (const auto hk = ParseHotkey(value)) {
         config.recordHotkey = *hk;
@@ -336,6 +307,7 @@ Config Config::Load(const std::filesystem::path& file) {
   if (config.outputDir.empty()) config.outputDir = DefaultOutputDir();
   config.bufferSeconds = std::clamp(config.bufferSeconds, 10, 600);
   config.clipSeconds = std::clamp(config.clipSeconds, 5, config.bufferSeconds);
+  for (auto& clipKey : config.moreClipHotkeys) clipKey.seconds = std::clamp(clipKey.seconds, 5, config.bufferSeconds);
   config.fps = std::clamp(config.fps, 0, 360);
   config.bitrateMbps = std::clamp(config.bitrateMbps, 0, 300);
   config.resolution = config.resolution <= 0 ? 0 : std::clamp(config.resolution, 240, 4320);
