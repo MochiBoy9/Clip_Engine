@@ -129,7 +129,11 @@ The app sends the key to `POST /v1/license`, which checks it with Polar's public
 ## Releasing
 
 1. Set the version in `CMakeLists.txt` and `ui/ClipEngine.Desktop/ClipEngine.Desktop.csproj`, and write `.github/release-notes.md`.
-2. Merge to `main`, then run the **Release** workflow from the Actions tab. It builds on Windows and publishes `Clip_Engine-windows-x64.zip` under a fixed name, so `releases/latest/download/Clip_Engine-windows-x64.zip` is always the newest.
+2. Merge to `main`, then run the **Release** workflow from the Actions tab. It builds on Windows and publishes `Clip_Engine-Setup.exe` (the installer, the website's main button) and `Clip_Engine-windows-x64.zip` (portable, and what the in-app updater downloads) under fixed names, so `releases/latest/download/<name>` is always the newest.
+
+The installer is `installer/ClipEngine.iss` (Inno Setup 6), compiled by the Build workflow from `dist\` with `iscc /DAppVersion=<version> /DSourceDir=..\dist installer\ClipEngine.iss`. It installs per user (no admin) into `%LOCALAPPDATA%\Programs\Clip Engine`, so the in-app updater can still swap files there, adds a Start menu entry, an optional desktop shortcut and the `clipengine://` links, and its uninstaller leaves `%LOCALAPPDATA%\Clip_Engine` and the clips alone. Never change its `AppId`; the app (`Services/InstallInfo.cs`) uses it to keep the version shown in Apps & features current after in-app updates.
+
+The website's download counter adds up `download_count` for every `Clip_Engine-*.zip` and `.exe` on this repository's releases, from GitHub's API in the visitor's browser. Deleting releases (Prune old releases) removes their downloads from the total.
 3. The **Website** workflow publishes `website/` to GitHub Pages on every push to `main` that changes it.
 4. **Prune old releases** (Actions tab) deletes releases below a version; tags are kept.
 5. **Deploy online service** (Actions tab) tests and deploys `server/` with the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repository secrets, or run `npx wrangler deploy` in `server/`.

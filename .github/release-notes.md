@@ -1,14 +1,9 @@
-## Clip Engine 0.13.0
+## Clip Engine 0.13.1
 
-Friends get a lot more useful, and you can bind as many clip keys as you like.
+An installer, and shared clips that say where they came from.
 
-- **See what friends are playing, and for how long.** The Friends page shows "Playing Valorant · 42 min" or "Online · 7 min" for each friend.
-- **Know when friends come on.** A small notice, over your game too, when a friend comes online or starts a game. Turn it off on the Friends page.
-- **Right-click to join.** Right-click a friend to join their squad straight away, copy their username or remove them.
-- **One username everywhere.** Your friends see you by the same username as your cloud profile and posted clips. Change it on the Cloud page once a month on Free, or once a week with Pro or Ultra; friends see the new one.
-- **Clip keys your way.** Add keys that each save a clip of their own length (say Alt+F8 for 15 seconds and Shift+F8 for two minutes), and give each game its own set.
-- **Clips say where they came from.** Every clip's file details say it was made with Clip Engine, with a link to get it. Clips shared from the cloud show a small, see-through Clip Engine mark in the corner of the player.
-- **The credits are for supporters.** Names in the credits now only come from paid Pro and Ultra subscriptions.
-- **A new home page** at https://mochiboy9.github.io/Clip_Engine/.
+- **A real installer.** Download `Clip_Engine-Setup.exe`, run it, and Clip Engine is in your Start menu, with an optional desktop shortcut and an uninstaller in Apps & features. It installs for your Windows account only, so there's no admin prompt, and your clips and settings are kept if you uninstall. The portable zip is still there if you prefer it.
+- **Shared links name Clip Engine in Discord.** A cloud link's preview now says the clip was made with Clip Engine, with a link to get it, and the web player has a Download button under the video.
+- **Fixes.** Opening a link in Discord no longer counts as a view of the clip, and a broken profile or invite address shows a not-found page instead of an error.
 
-Download `Clip_Engine-windows-x64.zip`, unzip it anywhere and run `ClipEngine.exe`. If you already have Clip Engine, update from Settings.
+New here? Download `Clip_Engine-Setup.exe` and run it. If you already have Clip Engine, update from Settings.

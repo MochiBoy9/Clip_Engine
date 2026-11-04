@@ -34,6 +34,11 @@ function duration(seconds) {
 
 // Where people get Clip Engine. Every page, and every clip's watermark, leads here.
 export const SITE_URL = "https://mochiboy9.github.io/Clip_Engine/";
+const SITE_SHORT = SITE_URL.replace(/^https:\/\//, "").replace(/\/$/, "");
+const DOWNLOAD_URL = `${SITE_URL}#download`;
+
+// The line every shared clip carries in its link preview (Discord, X, iMessage...), after the clip's own details.
+export const MADE_WITH = `Clipped automatically with Clip Engine. Free for Windows: ${SITE_SHORT}`;
 
 // A small play mark, inline so the watermark costs no request.
 const MARK = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><defs><linearGradient id="ceg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b5cf6"/><stop offset="1" stop-color="#3b82f6"/></linearGradient></defs><rect width="24" height="24" rx="6" fill="url(#ceg)"/><path d="M9.5 7.5v9l7-4.5z" fill="#fff"/></svg>`;
@@ -47,6 +52,9 @@ h1{font-size:22px;margin:4px 0 2px}.sub{color:var(--dim);font-size:14px}
 .player{position:relative;background:#000;border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .watermark{position:absolute;top:10px;right:12px;display:inline-flex;align-items:center;gap:6px;padding:3px 8px 3px 4px;border-radius:999px;background:rgba(0,0,0,.35);color:#fff;font-size:12px;font-weight:600;letter-spacing:.02em;text-decoration:none;opacity:.55;transition:opacity .2s;z-index:1}
 .watermark:hover,.watermark:focus-visible{opacity:.95}
+.watermark .get{display:none}.watermark:hover .get,.watermark:focus-visible .get{display:inline}.watermark:hover .name,.watermark:focus-visible .name{display:none}
+.cta{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;margin-top:18px;padding:12px 14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;font-size:14px;color:var(--dim)}
+.cta b{color:var(--text)}.cta .get-btn{display:inline-block;background:var(--amber);color:#14161a;padding:8px 14px;border-radius:6px;text-decoration:none;font-weight:700;white-space:nowrap}
 @media (max-width:480px){.watermark{top:6px;right:8px;font-size:11px}}
 video{display:block;width:100%;max-height:72vh;background:#000}
 .track{position:relative;height:30px;margin:10px 0 4px;background:var(--panel);border:1px solid var(--line);border-radius:6px;cursor:pointer}
@@ -68,7 +76,7 @@ function shell({ title, description, head = "", body }) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(title)}</title><meta name="description" content="${escapeHtml(description)}">${head}<style>${STYLE}</style></head>
 <body><main><header><a class="brand" href="${SITE_URL}">Clip Engine</a></header>${body}
-<footer>Made with <a href="${SITE_URL}">Clip Engine</a>, free clipping for PC games. <a href="${SITE_URL}#download">Download Clip Engine</a></footer></main></body></html>`;
+<footer>Made with <a href="${SITE_URL}">Clip Engine</a>, free clipping for PC games. <a href="${DOWNLOAD_URL}">Download Clip Engine</a></footer></main></body></html>`;
 }
 
 // The page for /c/<code>.
@@ -78,8 +86,10 @@ export function clipPage(clip, origin) {
   const summary = summarize(markers);
   const title = clip.title || summary || `${clip.game} clip`;
   const by = clip.ownerName ? ` · ${clip.ownerName}` : "";
-  const description = [clip.game, summary, duration(clip.seconds)].filter(Boolean).join(" · ");
+  const details = [clip.game, summary, duration(clip.seconds)].filter(Boolean).join(" · ");
+  const description = `${details}. ${MADE_WITH}`;
   const head = `
+<link rel="alternate" type="application/json+oembed" href="${escapeHtml(base)}/oembed" title="${escapeHtml(title)}">
 <meta property="og:type" content="video.other"><meta property="og:title" content="${escapeHtml(title)}">
 <meta property="og:description" content="${escapeHtml(description)}"><meta property="og:url" content="${escapeHtml(base)}">
 ${clip.thumb ? `<meta property="og:image" content="${escapeHtml(base)}/thumb">` : ""}
@@ -96,8 +106,9 @@ ${clip.thumb ? `<meta property="og:image" content="${escapeHtml(base)}/thumb">` 
   const body = `
 <h1>${escapeHtml(title)}</h1>
 <div class="sub">${escapeHtml(clip.game)}${clip.ownerHandle ? ` · <a href="/u/${escapeHtml(clip.ownerHandle)}">@${escapeHtml(clip.ownerHandle)}</a>` : escapeHtml(by)}${summary && summary !== title ? ` · ${escapeHtml(summary)}` : ""}</div>
-<div class="player" style="margin-top:14px"><a class="watermark" href="${SITE_URL}" target="_blank" rel="noopener" title="Made with Clip Engine">${MARK}Clip Engine</a><video id="v" controls playsinline preload="metadata" src="${escapeHtml(base)}/video"${clip.thumb ? ` poster="${escapeHtml(base)}/thumb"` : ""}></video></div>
+<div class="player" style="margin-top:14px"><a class="watermark" href="${SITE_URL}" target="_blank" rel="noopener" title="Made with Clip Engine. Get it free" aria-label="Made with Clip Engine. Get it free">${MARK}<span class="name">Clip Engine</span><span class="get">Get Clip Engine</span></a><video id="v" controls playsinline preload="metadata" src="${escapeHtml(base)}/video"${clip.thumb ? ` poster="${escapeHtml(base)}/thumb"` : ""}></video></div>
 ${markers.length ? `<div class="track" id="track"><div class="played" id="played"></div>${marks}</div><ul class="legend">${legend}</ul>` : ""}
+<div class="cta"><span><b>Clipped by itself with Clip Engine.</b> Every kill, assist and revive saved for you, free on Windows.</span><a class="get-btn" href="${DOWNLOAD_URL}">Download free</a></div>
 <script>
 const v=document.getElementById("v"),track=document.getElementById("track"),played=document.getElementById("played");
 function seek(t){v.currentTime=Math.max(0,t-1.5);v.play().catch(()=>{});}
@@ -106,6 +117,28 @@ if(track){track.addEventListener("click",e=>{const r=track.getBoundingClientRect
 v.addEventListener("timeupdate",()=>{played.style.width=(v.currentTime/(v.duration||${seconds})*100)+"%";});}
 </script>`;
   return shell({ title: `${title} · Clip Engine`, description, head, body });
+}
+
+// /c/<code>/oembed: what Discord and other apps show around a shared clip's preview. The author line names
+// Clip Engine with a link to get it; the provider line is the site.
+export function clipOembed(clip, origin) {
+  const summary = summarize((clip.markers ?? []).filter((m) => Number.isFinite(m.time)));
+  const by = clip.ownerName ? `${clip.ownerName} · ` : "";
+  const out = {
+    version: "1.0",
+    type: "video",
+    title: clip.title || summary || `${clip.game} clip`,
+    author_name: `${by}Clipped with Clip Engine, free for Windows`,
+    author_url: SITE_URL,
+    provider_name: "Clip Engine",
+    provider_url: SITE_URL,
+  };
+  if (clip.thumb) out.thumbnail_url = `${origin}/c/${clip.code}/thumb`;
+  if (clip.width && clip.height) {
+    out.width = clip.width;
+    out.height = clip.height;
+  }
+  return out;
 }
 
 // The page for /u/<handle>: featured clips first, then the newest public ones.

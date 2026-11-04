@@ -6,7 +6,7 @@
 Kills, clutches, revives and wins are spotted as they happen and clipped for you, with every moment marked.</p>
 
 <p align="center">
-  <a href="https://github.com/MochiBoy9/Clip_Engine/releases/latest/download/Clip_Engine-windows-x64.zip"><b>Download for Windows</b></a> ·
+  <a href="https://github.com/MochiBoy9/Clip_Engine/releases/latest/download/Clip_Engine-Setup.exe"><b>Download for Windows</b></a> ·
   <a href="https://mochiboy9.github.io/Clip_Engine/">Website</a> ·
   <a href="../../releases">All releases</a>
 </p>
@@ -15,7 +15,7 @@ Kills, clutches, revives and wins are spotted as they happen and clipped for you
 
 ## Getting started
 
-1. [Download the latest release](https://github.com/MochiBoy9/Clip_Engine/releases/latest/download/Clip_Engine-windows-x64.zip), unzip it anywhere and run `ClipEngine.exe`.
+1. [Download the installer](https://github.com/MochiBoy9/Clip_Engine/releases/latest/download/Clip_Engine-Setup.exe) and run it. It installs for your Windows account only, with no admin prompt, and adds Clip Engine to the Start menu. If Windows says the app is from an unknown publisher, choose **More info**, then **Run anyway**. Prefer no installing? Get the [portable zip](https://github.com/MochiBoy9/Clip_Engine/releases/latest/download/Clip_Engine-windows-x64.zip), unzip it anywhere and run `ClipEngine.exe`.
 2. Launch a game. Clip Engine notices it and starts recording on the screen the game is on.
 3. Play. Moments are clipped by themselves, and **F8** saves the last 30 seconds whenever you like. **F9** starts a long recording.
 
@@ -38,7 +38,7 @@ You need Windows 10 (version 1903 or newer) or Windows 11, and a graphics card w
 - **Light on your game.** Encodes on the GPU at your monitor's resolution and refresh rate, and records only the game, so nothing else on your PC ends up in a clip.
 - **Discord status.** Shows the game, the match time and your kills while you play.
 
-Every clip made with Clip Engine says so in its file details, with a link back here, and clips you share from the cloud carry a small, see-through Clip Engine mark in the corner of the player.
+Every clip made with Clip Engine says so in its file details, with a link back here, and clips you share from the cloud carry a small, see-through Clip Engine mark in the corner of the player. A shared link's preview in Discord says it was clipped with Clip Engine, with a link to get it.
 
 <p align="center">
   <img src="website/assets/5-player.webp" width="49%" alt="The clip player with moments on the timeline">

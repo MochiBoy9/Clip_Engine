@@ -32,6 +32,7 @@
 // Public pages:
 //   GET /c/<code>                   a shared clip's web player, with its moments on the timeline
 //   GET /c/<code>/video|thumb|.json the clip itself
+//   GET /c/<code>/oembed            the clip's oEmbed, which names Clip Engine in Discord's preview
 //   GET /u/<handle>                 a player's profile with their public clips
 //   GET /s/<invite>                 a squad's join page, for the "Join my squad" button on Discord
 //
@@ -41,7 +42,7 @@ import { isSquadId, normalizeInvite, randomCode, sameSecret, SQUAD_ID_LENGTH } f
 import { Handles, normalizeHandle } from "./handles.js";
 import { CLIP_CODE_LENGTH, Library } from "./library.js";
 import { formatInvite } from "./codes.js";
-import { clipPage, invitePage, notFoundPage, profilePage } from "./pages.js";
+import { clipOembed, clipPage, invitePage, notFoundPage, profilePage } from "./pages.js";
 import { checkLicense, normalizeGrant, PLANS, planJson } from "./plans.js";
 import { isMediaPointer, serveMedia } from "./media.js";
 import { Squad } from "./squad.js";
@@ -121,7 +122,7 @@ async function grantRoute(request, env, url, path, method) {
   if (path === "/v1/admin/grants" && method === "POST") return directory(env, url, "/grant/create", (await readBody(request)) ?? {});
   const m = path.match(/^\/v1\/admin\/grants\/([^/]+)$/);
   if (m && method === "PATCH") {
-    const code = normalizeGrant(decodeURIComponent(m[1]));
+    const code = normalizeGrant(decodeSegment(m[1]) ?? "");
     if (!code) return json({ error: "That isn't a special key." }, 400);
     return directory(env, url, "/grant/update", { ...((await readBody(request)) ?? {}), code });
   }
@@ -142,17 +143,34 @@ function directory(env, url, path, body) {
   return stub(env.HANDLES, "handles").fetch(new Request(`${url.origin}${path}`, { method: "POST", body: JSON.stringify(body) }));
 }
 
+// Link-preview fetchers (Discord, Slack, X...) open a clip's page to build its embed; that isn't a view.
+const PREVIEW_AGENTS = /bot|crawler|spider|preview|facebookexternalhit|embedly|whatsapp|telegram|slack|discord|skype/i;
+
+// A path segment, decoded; null when it isn't valid percent-encoding (so "/u/%E0" is a 404, not a crash).
+function decodeSegment(text) {
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return null;
+  }
+}
+
 async function clipRoute(request, env, code, rest) {
   const account = code.slice(0, SQUAD_ID_LENGTH);
   const clip = code.slice(SQUAD_ID_LENGTH);
   const library = stub(env.LIBRARIES, account);
   if (rest === "/video" || rest === "/thumb") return forward(library, request, `/public/clip/${clip}${rest}`);
   const origin = new URL(request.url).origin;
-  const viewed = rest === "" && request.method === "GET" ? "?view=1" : "";
+  const viewed = rest === "" && request.method === "GET" && !PREVIEW_AGENTS.test(request.headers.get("user-agent") ?? "") ? "?view=1" : "";
   const answer = await library.fetch(new Request(`${origin}/public/clip/${clip}${viewed}`));
-  if (!answer.ok) return rest === ".json" ? json({ error: "That clip isn't shared." }, 404) : html(notFoundPage(), 404);
+  if (!answer.ok) return rest === "" ? html(notFoundPage(), 404) : json({ error: "That clip isn't shared." }, 404);
   const data = await answer.json();
   if (rest === ".json") return json(data);
+  if (rest === "/oembed") {
+    const response = json(clipOembed(data, origin));
+    response.headers.set("cache-control", "public, max-age=300");
+    return response;
+  }
   return html(clipPage(data, origin));
 }
 
@@ -161,7 +179,9 @@ async function profileRoute(request, env, handle, asJson) {
   const found = await stub(env.HANDLES, "handles").fetch(new Request(`${origin}/lookup?handle=${encodeURIComponent(handle)}`));
   if (!found.ok) return asJson ? json({ error: "No one has that name." }, 404) : html(notFoundPage(), 404);
   const { account } = await found.json();
-  const profile = await (await stub(env.LIBRARIES, account).fetch(new Request(`${origin}/public/profile`))).json();
+  const answer = await stub(env.LIBRARIES, account).fetch(new Request(`${origin}/public/profile`));
+  if (!answer.ok) return asJson ? json({ error: "No one has that name." }, 404) : html(notFoundPage(), 404);
+  const profile = await answer.json();
   return asJson ? json(profile) : html(profilePage(profile, origin));
 }
 
@@ -276,15 +296,16 @@ async function route(request, env) {
 
     // ---- public pages ----
     if (method === "GET" || method === "HEAD") {
-      m = path.match(/^\/c\/([0-9A-Za-z]+?)(\/video|\/thumb|\.json)?$/);
+      m = path.match(/^\/c\/([0-9A-Za-z]+?)(\/video|\/thumb|\/oembed|\.json)?$/);
       if (m && m[1].length === SQUAD_ID_LENGTH + CLIP_CODE_LENGTH && ALPHABET.test(m[1].toUpperCase())) {
         return clipRoute(request, env, m[1].toUpperCase(), m[2] ?? "");
       }
       m = path.match(/^\/u\/([^/]+?)(\.json)?$/);
-      if (m && normalizeHandle(decodeURIComponent(m[1]))) return profileRoute(request, env, normalizeHandle(decodeURIComponent(m[1])), Boolean(m[2]));
+      const handle = m && normalizeHandle(decodeSegment(m[1]) ?? "");
+      if (handle) return profileRoute(request, env, handle, Boolean(m[2]));
       m = path.match(/^\/s\/([^/]+)$/);
       if (m) {
-        const invite = normalizeInvite(decodeURIComponent(m[1]));
+        const invite = normalizeInvite(decodeSegment(m[1]) ?? "");
         if (!invite) return html(notFoundPage(), 404);
         const answer = await stub(env.SQUADS, invite.squadId).fetch(
           new Request(`${url.origin}/public/invite?secret=${invite.secret}`, { headers: { "x-squad-id": invite.squadId } }));

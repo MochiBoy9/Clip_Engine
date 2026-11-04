@@ -24,13 +24,19 @@ jobs:
           name: Clip_Engine-${{ needs.build.outputs.version }}-windows-x64
           path: Clip_Engine
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: Clip_Engine-${{ needs.build.outputs.version }}-setup
+          path: setup
+
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.build.outputs.version }}
         run: |
-          # One zip, under a name that never changes, so .../releases/latest/download/Clip_Engine-windows-x64.zip (the
-          # website's direct download link) always gets the newest version. The release's tag says which version it is.
+          # The installer and one zip, under names that never change, so .../releases/latest/download/Clip_Engine-Setup.exe
+          # (the website's download button) and .../Clip_Engine-windows-x64.zip always get the newest version. The
+          # release's tag says which version it is. The app's own updater uses the zip.
           # Screenshots stay in the build's artifacts, not on the release.
           zip -r Clip_Engine-windows-x64.zip Clip_Engine
           tag="v$VERSION"
@@ -38,7 +44,7 @@ jobs:
             echo "Release $tag already exists; bump the version in CMakeLists.txt first." >&2
             exit 1
           fi
-          gh release create "$tag" Clip_Engine-windows-x64.zip \
+          gh release create "$tag" setup/Clip_Engine-Setup.exe Clip_Engine-windows-x64.zip \
             --target "$GITHUB_SHA" --title "Clip Engine $VERSION" --notes-file .github/release-notes.md
 
       # For a source repository kept private, whose releases players can't download. When the repository variable
@@ -51,5 +57,5 @@ jobs:
           VERSION: ${{ needs.build.outputs.version }}
           REPO: ${{ vars.DOWNLOADS_REPO }}
         run: |
-          gh release create "v$VERSION" Clip_Engine-windows-x64.zip --repo "$REPO" \
+          gh release create "v$VERSION" setup/Clip_Engine-Setup.exe Clip_Engine-windows-x64.zip --repo "$REPO" \
             --title "Clip Engine $VERSION" --notes-file .github/release-notes.md
