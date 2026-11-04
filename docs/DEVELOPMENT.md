@@ -61,6 +61,7 @@ Run `ClipEngine.exe` and launch a supported game. `clip_engine.exe` can also run
 | `ui/ClipEngine.Desktop.Preview` | Renders the app's screens to PNGs with sample data |
 | `ui/ClipEngine.Desktop.Tests` | Tests for the app's log parsing, settings file, MP4 reading, clip markers, import, plans and license keys, match grouping, storage cleanup and player records |
 | `website` | The landing page (plain HTML, published to GitHub Pages; see `website/README.md`) |
+| `brand` | The icon (`clip-engine-icon.svg`) and `make-icons.py`, which redraws the app's `.ico`, the website's favicon and its touch and README icons from it |
 
 ## The online service
 

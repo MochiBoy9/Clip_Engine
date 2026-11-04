@@ -74,7 +74,7 @@ const COLORS = { kill: "--kill", death: "--death", assist: "--assist", revive: "
 
 function shell({ title, description, head = "", body }) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${escapeHtml(title)}</title><meta name="description" content="${escapeHtml(description)}">${head}<style>${STYLE}</style></head>
+<title>${escapeHtml(title)}</title><meta name="description" content="${escapeHtml(description)}"><link rel="icon" href="${SITE_URL}favicon.ico">${head}<style>${STYLE}</style></head>
 <body><main><header><a class="brand" href="${SITE_URL}">Clip Engine</a></header>${body}
 <footer>Made with <a href="${SITE_URL}">Clip Engine</a>, free clipping for PC games. <a href="${DOWNLOAD_URL}">Download Clip Engine</a></footer></main></body></html>`;
 }
