@@ -15,13 +15,20 @@
         </StackPanel>
       </Button>
       <StackPanel Grid.Column="1" Margin="20,0" VerticalAlignment="Center" Spacing="4">
-        <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Left">
+        <Grid ColumnDefinitions="*,Auto,Auto" HorizontalAlignment="Left">
           <TextBlock Classes="h1" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
           <Border Grid.Column="1" Classes="pill accent" VerticalAlignment="Center" Padding="8,2" Margin="10,0,0,0"
                   IsVisible="{Binding Clip.IsAutomatic}" ToolTip.Tip="Saved by itself when moments were detected">
             <StackPanel Orientation="Horizontal" Spacing="5">
               <PathIcon Data="{StaticResource IconSparkle}" Width="10" Height="10" />
               <TextBlock Text="AUTO" FontSize="10" FontWeight="Bold" LetterSpacing="1" />
+            </StackPanel>
+          </Border>
+          <Border Grid.Column="2" Classes="pill accent" VerticalAlignment="Center" Padding="8,2" Margin="10,0,0,0"
+                  IsVisible="{Binding Clip.IsVoice}" ToolTip.Tip="Saved when you said so">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <PathIcon Data="{StaticResource IconMic}" Width="10" Height="10" />
+              <TextBlock Text="VOICE" FontSize="10" FontWeight="Bold" LetterSpacing="1" />
             </StackPanel>
           </Border>
         </Grid>

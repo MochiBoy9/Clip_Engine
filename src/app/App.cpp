@@ -169,6 +169,7 @@ int App::Run() {
 
     PumpIntegrationEvents();
     HandleEvents();
+    HandleVoiceClips();
     HandleCommands();
     PumpScoreboards();
     SaveReadyAutoClips(false);
@@ -224,8 +225,11 @@ void App::Poll() {
       if (rules.empty() && game->profile->api == GameApi::None) log::Info("No detection rules for {}, so only the hotkey saves clips", label);
     }
     try {
-      session_ = std::make_unique<RecordingSession>(config_, monitor, label, std::move(rules), std::move(scoreboards),
-                                                    std::move(playerNames), rules_.sampleMs, hudScale);
+      // The audio levels are read again, since the app may have changed them since the engine started.
+      config_.levels = ReadAudioLevels(config_.file);
+      session_ = std::make_unique<RecordingSession>(config_, monitor, label, game.has_value(), std::move(rules),
+                                                    std::move(scoreboards), std::move(playerNames), rules_.sampleMs,
+                                                    hudScale);
       sessionGameId_ = gameId;
       sessionId_ = LocalTimestamp();
       ApplyGameClipHotkeys();
@@ -382,6 +386,19 @@ void App::HandleCommands() {
       ApplyGameClipHotkeys();
       continue;
     }
+    // A track's volume or mute changed in the app.
+    if (line.starts_with("reload-audio")) {
+      config_.levels = ReadAudioLevels(config_.file);
+      if (session_) session_->SetAudioLevels(config_.levels);
+      std::string levels;
+      for (AudioTrack track : kAudioTracks) {
+        const auto i = static_cast<size_t>(track);
+        levels += std::format("{}{} {}", levels.empty() ? "" : ", ", AudioTrackName(track),
+                              config_.levels.muted[i] ? std::string("muted") : std::format("{}%", config_.levels.volume[i]));
+      }
+      log::Info("Audio levels: {}", levels);
+      continue;
+    }
     if (const auto squad = ParseSquadPresence(line)) {
       squadPresence_ = *squad;
       ApplySquadPresence();
@@ -460,6 +477,18 @@ void App::ApplyGameClipHotkeys() {
   }
 }
 
+void App::HandleVoiceClips() {
+  if (!session_) return;
+  for (int seconds : session_->TakeVoiceClips()) {
+    const int64_t end = NowHns();
+    if (SaveRange(end - int64_t{seconds} * kHnsPerSecond, end, "voice")) {
+      log::Info("Saving the last {} seconds, as you asked", seconds);
+    } else {
+      log::Info("The recording just started; there's nothing to save yet");
+    }
+  }
+}
+
 void App::SaveHotkeyClip(int seconds) {
   if (!session_) {
     log::Info("Nothing is being recorded right now, so there's no clip to save");
@@ -508,6 +537,7 @@ bool App::SaveRange(int64_t start, int64_t end, const char* trigger, std::string
   metadata.match = MatchAt(end);
   metadata.utcStartMs = UnixMsAtHns(NowClocks(), clip->start);
   metadata.squadMoment = std::string(squadMoment);
+  metadata.audioTracks = session_->AudioTracks();
   for (const auto& event : session_->EventsBetween(clip->start, end)) {
     metadata.markers.push_back(
         {event.type, static_cast<double>(event.time - clip->start) / kHnsPerSecond, event.text, event.witnesses});
@@ -516,7 +546,8 @@ bool App::SaveRange(int64_t start, int64_t end, const char* trigger, std::string
   const auto path = ClipPath();
   // A view saved for a squadmate's moment isn't one of this player's clips on Discord.
   if (squadMoment.empty()) ++presenceState_.clips;
-  const bool beep = std::string_view(trigger) == "hotkey";
+  // A clip saved by a key or by voice beeps, so the player knows it worked without looking.
+  const bool beep = std::string_view(trigger) == "hotkey" || std::string_view(trigger) == "voice";
   saves_.push_back(std::async(std::launch::async, [clip = std::move(*clip), metadata = std::move(metadata), path, beep] {
     winrt::init_apartment(winrt::apartment_type::multi_threaded);
     // Low CPU and disk priority, so writing a clip never makes the game hitch.
@@ -608,6 +639,7 @@ void App::FinishLongRecording(std::string_view why) {
   metadata.sessionSeconds = SessionSeconds(recorder->Start());
   metadata.match = MatchAt(recorder->Start());
   metadata.utcStartMs = UnixMsAtHns(NowClocks(), recorder->Start());
+  metadata.audioTracks = session_->AudioTracks();
   for (const auto& event : longEvents_) {
     metadata.markers.push_back(
         {event.type, static_cast<double>(event.time - recorder->Start()) / kHnsPerSecond, event.text, event.witnesses});

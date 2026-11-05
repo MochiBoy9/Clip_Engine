@@ -27,6 +27,9 @@ You need Windows 10 (version 1903 or newer) or Windows 11, and a graphics card w
 
 - **Clips itself.** Kills, assists, deaths, revives, multi-kills, match starts and results are found from the game's own live data where it has it, and otherwise by reading the HUD. A clip is saved around each one, with its moments on the timeline.
 - **Clip keys your way.** F8 saves the last 30 seconds; add more keys that each save their own length, and give each game its own set.
+- **Say "clip that".** Turn on voice clips and say a phrase you pick to save the last moments, with no key to reach for. Windows' own speech recognition listens on your PC; nothing you say leaves it.
+- **Audio on its own tracks.** The game, your mic, Discord and other apps each get a track, after one with everything mixed that every player plays. Turn any of them down or mute it from Settings, even mid-game.
+- **Up to 30 minutes of replay.** Keep as much as half an hour ready to save. Settings shows the memory it takes and warns you when your PC would struggle.
 - **Long recordings.** Record a whole session with F9; every moment is still marked.
 - **Records.** Lifetime kills, deaths, K/D and wins, personal bests in every game, and the current match against your best, live.
 - **Squads.** Make a squad and send friends the invite. Every moment one of you gets is saved from everyone's view, lined up to the moment. Watch up to four views side by side, or cut them into one highlight.
@@ -87,7 +90,7 @@ Or get Pro free: invite friends from the **Friends** page. When three of them in
 
 ## Privacy
 
-Clips stay on your PC unless you share them. The first time Clip Engine starts on a PC it tells the online service so, with a hashed id for the PC, so friends who invited you get credit. The cloud library, squads and friends need a free cloud account, which asks for no email. Online, the service keeps only what those features need: the clips you upload, your username, your friends and squads, and whether you're online. See the [privacy notice](website/privacy.html).
+Clips stay on your PC unless you share them. The first time Clip Engine starts on a PC it tells the online service so, with a hashed id for the PC, so friends who invited you get credit. Voice clips are off until you turn them on, and are heard by Windows' speech recognition on your PC, not sent anywhere. The cloud library, squads and friends need a free cloud account, which asks for no email. Online, the service keeps only what those features need: the clips you upload, your username, your friends and squads, and whether you're online. See the [privacy notice](website/privacy.html).
 
 ## Help and feedback
 
