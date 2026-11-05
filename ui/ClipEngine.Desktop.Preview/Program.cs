@@ -111,6 +111,10 @@ Save(window, "5-player.png");
 vm.OpenPlayer(vm.Clips[0]).ShowTrim(4.5, 27.5);
 Save(window, "7-trim.png");
 
+// The editor on that clip: cut into parts, one cut out, the second part picked.
+vm.OpenEditor(vm.Clips[0], vm.OpenPlayer(vm.Clips[0]))!.ShowSample();
+Save(window, "22-editor.png");
+
 vm.OpenPlayer(vm.Clips[0]).ShowCheck();
 Save(window, "13-check-detection.png");
 

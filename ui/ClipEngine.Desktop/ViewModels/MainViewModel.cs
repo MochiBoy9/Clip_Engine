@@ -275,6 +275,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     internal void PausePlayback()
     {
         if (CurrentPage is PlayerViewModel player) player.Pause();
+        if (CurrentPage is EditorViewModel editor) editor.Pause();
         if (CurrentPage is SquadPlayerViewModel squad) squad.Pause();
     }
 
@@ -300,11 +301,32 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     internal PlayerViewModel OpenPlayer(ClipItemViewModel clip)
     {
-        var returnTo = CurrentPage is PlayerViewModel open ? open.ReturnTo : CurrentPage;
+        // A clip opened from the player or the editor goes back to where they were opened from.
+        var returnTo = CurrentPage switch
+        {
+            PlayerViewModel open => open.ReturnTo,
+            EditorViewModel { ReturnTo: PlayerViewModel open } => open.ReturnTo,
+            EditorViewModel editor => editor.ReturnTo,
+            var page => page,
+        };
         var player = new PlayerViewModel(this, clip, returnTo);
         ShowPage(player);
         ShowMainWindowRequested?.Invoke();
         return player;
+    }
+
+    // The video editor on a clip, coming back to `returnTo`. With keepFrom and keepTo it starts on
+    // just that part, as picked with Trim in the player; otherwise on the clip's last edit, if any.
+    internal EditorViewModel? OpenEditor(ClipItemViewModel clip, object returnTo, double? keepFrom = null, double? keepTo = null)
+    {
+        if ((clip.File.Duration?.TotalSeconds ?? clip.File.Metadata?.Seconds ?? 0) < Services.Editing.EditTimeline.MinSegment * 2)
+        {
+            ShowToast("This clip is too short to edit.", isError: true);
+            return null;
+        }
+        var editor = new EditorViewModel(this, clip, returnTo, keepFrom, keepTo);
+        ShowPage(editor);
+        return editor;
     }
 
     // Detection Studio, for making or fixing the rules that spot moments in a game.

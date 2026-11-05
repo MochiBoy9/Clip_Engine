@@ -38,7 +38,8 @@ Run `ClipEngine.exe` and launch a supported game. `clip_engine.exe` can also run
 - `clip_engine.exe --frame <clip.mp4 or image> <out.png> --at 12.5` saves one frame as a PNG, and `clip_engine.exe --read <clip.mp4 or image> --at 12.5 --region 0.65,0.12,0.33,0.05 --words "ELIMINATED|KNOCKED OUT"` reads that box the way detection does and prints the text and how many times the words matched; `--position start|end` reads it as a killfeed (with `{player}` filled in from your in-game names, and `--skip-tag true` for a squad tag before them), and `--image icon.png` also says how alike the box is to an icon. Detection Studio uses both.
 - `clip_engine.exe --scan <clip.mp4> --game <id or name> [--quality medium] [--hud-scale 100] [--rules draft.ini]` runs a game's rules over a whole clip and prints each moment they find with its time; the player's Check detection uses it, and Detection Studio passes `--rules` to test changes before they're saved.
 - `clip_engine.exe --trim <clip.mp4> <out.mp4> --start 4.5 --end 20` copies part of a clip without re-encoding, starting on the keyframe at or before the start (at most a second early).
-- `clip_engine.exe --montage <out.mp4> --part "<clip.mp4>|<from>|<to>" [--part ...] [--height 1080] [--moment <id>]` puts parts of several clips together into one, with their moments. Squad highlights use it.
+- `clip_engine.exe --montage <out.mp4> --part "<clip.mp4>|<from>|<to>" [--part ...] [--height 1080] [--mbps 16|auto] [--moment <id>] [--kind edit]` puts parts of several clips together into one, re-encoded, with their moments. Squad highlights use it, and so does the editor's export (`--kind edit` marks the clip's trigger as `edit`; `--mbps auto` picks 8, 16, 28 or 45 Mbps from the picture height).
+- The editor (Edit in the player) keeps each clip's edit in `%LOCALAPPDATA%\Clip_Engine\edits\<id>.json`: the parts as source times, so reopening the clip picks it up. The model is `EditTimeline` in `ui/ClipEngine.Desktop/Services/Editing/`; every change (split, delete, trim, move, duplicate, undo) goes through it, and new tools are added there first.
 - Squads and the cloud library use Clip Engine's online service, a Cloudflare Worker in `server/`. See [server/README.md](server/README.md) to deploy it, which takes one `npx wrangler deploy`. Release builds name it with `-p:OnlineServer=https://...` (the `ONLINE_SERVER` Actions variable). You can also type it under **Online service** on the Squad or Cloud page. Squad settings, the cloud account and encrypted sign-ins are kept in `%LOCALAPPDATA%\Clip_Engine\desktop.json`. Your views of squad moments are listed in `squad\views.json` there, and squadmates' downloaded views are cached in `squad\cache\` for a week.
 
 ## Layout
@@ -60,7 +61,7 @@ Run `ClipEngine.exe` and launch a supported game. `clip_engine.exe` can also run
 | `tests` | Tests for the detection rules, matching, clip metadata, game API events and killfeed rules |
 | `ui/ClipEngine.Desktop` | The desktop app (C#, Avalonia) |
 | `ui/ClipEngine.Desktop.Preview` | Renders the app's screens to PNGs with sample data |
-| `ui/ClipEngine.Desktop.Tests` | Tests for the app's log parsing, settings file, MP4 reading, clip markers, import, plans and license keys, match grouping, storage cleanup and player records |
+| `ui/ClipEngine.Desktop.Tests` | Tests for the editor's timeline and export, the app's log parsing, settings file, MP4 reading, clip markers, import, plans and license keys, match grouping, storage cleanup and player records |
 | `website` | The landing page (plain HTML, published to GitHub Pages; see `website/README.md`) |
 
 ## The online service
