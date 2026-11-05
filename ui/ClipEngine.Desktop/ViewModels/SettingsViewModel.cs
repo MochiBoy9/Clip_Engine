@@ -14,8 +14,11 @@ public sealed class SettingsViewModel : ObservableObject
     private PlanViewModel? _plan;
     private double _bitrate;
     private string _codec = "auto";
-    private bool _gameAudio = true;
-    private bool _micAudio = true;
+    private bool _voiceClips;
+    private string _voicePhrases = "clip that";
+    private double _voiceClipSeconds;
+    private string _voiceSensitivity = "medium";
+    private CancellationTokenSource? _levelsPending;
     private string _saveHotkey = "F8";
     private string _recordHotkey = "F9";
     private bool _recordWithoutGame;
@@ -42,6 +45,11 @@ public sealed class SettingsViewModel : ObservableObject
         AutoClipEvents = EngineSettings.AllEvents
             .Select(e => new EventToggle(e, EventKinds.Plural(e), () => { HasChanges = true; SavedMessage = null; }))
             .ToList();
+        GameTrack = new AudioTrackViewModel("game", "Game", MarkChanged, OnLevelChanged);
+        MicTrack = new AudioTrackViewModel("mic", "Microphone", MarkChanged, OnLevelChanged);
+        DiscordTrack = new AudioTrackViewModel("discord", "Discord", MarkChanged, OnLevelChanged);
+        AppsTrack = new AudioTrackViewModel("apps", "Other apps", MarkChanged, OnLevelChanged);
+        AudioTracks = [GameTrack, MicTrack, DiscordTrack, AppsTrack];
         MoreClipKeys = new ClipKeybindsViewModel(() => [SaveHotkey, RecordHotkey], () => { HasChanges = true; SavedMessage = null; },
                                                  _bufferSeconds);
         Load(engine);
@@ -55,6 +63,9 @@ public sealed class SettingsViewModel : ObservableObject
             HasChanges = false;
         }, () => HasChanges);
     }
+
+    // Sends a line to the running engine, for changes it takes at once (volumes and mutes). Null when no engine runs.
+    internal Func<string, bool>? EngineCommand { get; init; }
 
     public IReadOnlyList<FpsOption> FpsOptions { get; } =
     [
@@ -91,7 +102,9 @@ public sealed class SettingsViewModel : ObservableObject
         set
         {
             if (value is null || !value.IsAvailable) return;
-            if (Change(ref _resolution, value)) Raise(nameof(ResolutionHint));
+            if (!Change(ref _resolution, value)) return;
+            Raise(nameof(ResolutionHint));
+            RaiseBufferAdvice();
         }
     }
 
@@ -165,8 +178,43 @@ public sealed class SettingsViewModel : ObservableObject
             if (!Change(ref _bufferSeconds, Math.Round(value))) return;
             Raise(nameof(BufferText));
             if (ClipSeconds > _bufferSeconds) ClipSeconds = _bufferSeconds;
+            if (VoiceClipSeconds > _bufferSeconds) VoiceClipSeconds = _bufferSeconds;
             MoreClipKeys.MaxSeconds = _bufferSeconds;
+            RaiseBufferAdvice();
         }
+    }
+
+    public int MaxBufferSeconds => ReplayMemory.MaxSeconds;
+
+    // What the replay buffer takes in memory at the resolution, frame rate and bitrate picked, and a warning when this
+    // PC can't comfortably spare it.
+    private ReplayMemory.Advice BufferAdvice
+    {
+        get
+        {
+            var (lines, hz) = MainScreen.Value;
+            var recorded = Math.Min(lines, Resolutions.Effective(_resolution.Value, MaxLines));
+            var fps = Fps.Value > 0 ? Fps.Value : Math.Clamp(hz, 24, 120);
+            var (memory, cores) = ThisPc.Value;
+            return ReplayMemory.For((int)BufferSeconds, recorded, fps, (int)Bitrate, memory, cores);
+        }
+    }
+
+    private static readonly Lazy<(int Lines, int Hz)> MainScreen = new(ReplayMemory.MainMonitor);
+    private static readonly Lazy<(long Memory, int Cores)> ThisPc = new(ReplayMemory.ThisPc);
+
+    public string BufferHint => BufferAdvice is { Level: ReplayAdviceLevel.Fine or ReplayAdviceLevel.Note } advice
+        ? $"Recent gameplay kept in memory, ready to save. {advice.Text}"
+        : "Recent gameplay kept in memory, ready to save.";
+
+    public string? BufferWarning => BufferAdvice is { Level: ReplayAdviceLevel.Warning or ReplayAdviceLevel.TooBig } advice ? advice.Text : null;
+    public bool HasBufferWarning => BufferWarning is not null;
+
+    private void RaiseBufferAdvice()
+    {
+        Raise(nameof(BufferHint));
+        Raise(nameof(BufferWarning));
+        Raise(nameof(HasBufferWarning));
     }
 
     public double ClipSeconds
@@ -181,14 +229,23 @@ public sealed class SettingsViewModel : ObservableObject
     public string BufferText => FormatSeconds(BufferSeconds);
     public string ClipText => FormatSeconds(ClipSeconds);
 
-    public FpsOption Fps { get => _fps; set => Change(ref _fps, value); }
+    public FpsOption Fps
+    {
+        get => _fps;
+        set
+        {
+            if (Change(ref _fps, value)) RaiseBufferAdvice();
+        }
+    }
 
     public double Bitrate
     {
         get => _bitrate;
         set
         {
-            if (Change(ref _bitrate, Math.Round(value / 5) * 5)) Raise(nameof(BitrateText));
+            if (!Change(ref _bitrate, Math.Round(value / 5) * 5)) return;
+            Raise(nameof(BitrateText));
+            RaiseBufferAdvice();
         }
     }
 
@@ -198,8 +255,53 @@ public sealed class SettingsViewModel : ObservableObject
     public bool CodecH264 { get => _codec == "h264"; set { if (value) SetCodec("h264"); } }
     public bool CodecHevc { get => _codec == "hevc"; set { if (value) SetCodec("hevc"); } }
 
-    public bool GameAudio { get => _gameAudio; set => Change(ref _gameAudio, value); }
-    public bool MicAudio { get => _micAudio; set => Change(ref _micAudio, value); }
+    // The audio tracks: whether each is recorded (saved with the other settings), and its volume and mute, which apply
+    // at once, even mid-game.
+    public AudioTrackViewModel GameTrack { get; }
+    public AudioTrackViewModel MicTrack { get; }
+    public AudioTrackViewModel DiscordTrack { get; }
+    public AudioTrackViewModel AppsTrack { get; }
+    public IReadOnlyList<AudioTrackViewModel> AudioTracks { get; }
+
+    // Saying a phrase saves a clip.
+    public bool VoiceClips { get => _voiceClips; set => Change(ref _voiceClips, value); }
+
+    public string VoicePhrasesText
+    {
+        get => _voicePhrases;
+        set
+        {
+            if (!Change(ref _voicePhrases, value ?? "")) return;
+            Raise(nameof(VoicePhrasesProblem));
+            Raise(nameof(VoicePhrasesAdvice));
+        }
+    }
+
+    public string? VoicePhrasesProblem => VoicePhrases.Problem(_voicePhrases);
+    public string? VoicePhrasesAdvice => VoicePhrasesProblem is null ? VoicePhrases.Advice(_voicePhrases) : null;
+
+    // The length of a clip saved by voice, unless a phrase has its own; 0 is the usual clip length.
+    public double VoiceClipSeconds
+    {
+        get => _voiceClipSeconds;
+        set
+        {
+            if (Change(ref _voiceClipSeconds, Math.Round(Math.Min(value, BufferSeconds)))) Raise(nameof(VoiceClipText));
+        }
+    }
+
+    public string VoiceClipText => VoiceClipSeconds <= 0 ? "Clip length" : FormatSeconds(VoiceClipSeconds);
+
+    public bool VoiceLow { get => _voiceSensitivity == "low"; set { if (value) SetVoiceSensitivity("low"); } }
+    public bool VoiceMedium { get => _voiceSensitivity == "medium"; set { if (value) SetVoiceSensitivity("medium"); } }
+    public bool VoiceHigh { get => _voiceSensitivity == "high"; set { if (value) SetVoiceSensitivity("high"); } }
+
+    public string VoiceSensitivityHint => _voiceSensitivity switch
+    {
+        "low" => "Only a clear, close match counts. The fewest clips by accident; you may need to say it twice in a noisy room.",
+        "high" => "Takes the loosest match. For noisy rooms and voices speech recognition finds hard; expect the odd clip by accident.",
+        _ => "A good match counts. Recommended.",
+    };
     public string SaveHotkey { get => _saveHotkey; set { if (Change(ref _saveHotkey, value)) MoreClipKeys.Recheck(); } }
     public string RecordHotkey { get => _recordHotkey; set { if (Change(ref _recordHotkey, value)) MoreClipKeys.Recheck(); } }
 
@@ -359,8 +461,16 @@ public sealed class SettingsViewModel : ObservableObject
         BitrateMbps = (int)Bitrate,
         Resolution = Resolutions.Effective(_resolution.Value, MaxLines),
         Codec = _codec,
-        GameAudio = GameAudio,
-        MicAudio = MicAudio,
+        GameAudio = GameTrack.IsRecorded,
+        MicAudio = MicTrack.IsRecorded,
+        DiscordAudio = DiscordTrack.IsRecorded,
+        AppsAudio = AppsTrack.IsRecorded,
+        Volumes = AudioTracks.ToDictionary(t => t.Key, t => (int)t.Volume),
+        MutedAudio = AudioTracks.Where(t => t.IsMuted).Select(t => t.Key).ToList(),
+        VoiceClips = VoiceClips,
+        VoicePhrases = string.Join(", ", VoicePhrases.Parse(_voicePhrases).Select(p => p.Seconds > 0 ? $"{p.Words} {p.Seconds}" : p.Words)),
+        VoiceClipSeconds = (int)VoiceClipSeconds,
+        VoiceSensitivity = _voiceSensitivity,
         SaveHotkey = string.IsNullOrWhiteSpace(SaveHotkey) ? "F8" : SaveHotkey.Trim(),
         MoreClipHotkeys = MoreClipKeys.ToKeybinds(),
         RecordHotkey = string.IsNullOrWhiteSpace(RecordHotkey) ? "F9" : RecordHotkey.Trim(),
@@ -382,6 +492,11 @@ public sealed class SettingsViewModel : ObservableObject
             SavedMessage = $"Fix the clip keys first. {problem}";
             return;
         }
+        if (VoiceClips && VoicePhrasesProblem is { } phrases)
+        {
+            SavedMessage = $"Fix the voice phrases first. {phrases}";
+            return;
+        }
         try
         {
             ToEngineSettings().Save(AppPaths.EngineSettingsFile);
@@ -401,14 +516,20 @@ public sealed class SettingsViewModel : ObservableObject
     private void Load(EngineSettings s)
     {
         _outputDir = s.OutputDir;
-        _bufferSeconds = Math.Clamp(s.BufferSeconds, 10, 600);
+        _bufferSeconds = Math.Clamp(s.BufferSeconds, 10, ReplayMemory.MaxSeconds);
         _clipSeconds = Math.Clamp(s.ClipSeconds, 5, (int)_bufferSeconds);
         _fps = FpsOptions.FirstOrDefault(o => o.Value == s.Fps) ?? new FpsOption(s.Fps, $"{s.Fps} fps");
         _resolution = ResolutionOptions.FirstOrDefault(o => o.Value == _desktop.Resolution && o.IsAvailable) ?? ResolutionOptions[0];
         _bitrate = Math.Clamp(s.BitrateMbps, 0, 300);
         _codec = s.Codec is "h264" or "hevc" ? s.Codec : "auto";
-        _gameAudio = s.GameAudio;
-        _micAudio = s.MicAudio;
+        GameTrack.Load(s.GameAudio, s.VolumeOf("game"), s.IsMuted("game"));
+        MicTrack.Load(s.MicAudio, s.VolumeOf("mic"), s.IsMuted("mic"));
+        DiscordTrack.Load(s.DiscordAudio, s.VolumeOf("discord"), s.IsMuted("discord"));
+        AppsTrack.Load(s.AppsAudio, s.VolumeOf("apps"), s.IsMuted("apps"));
+        _voiceClips = s.VoiceClips;
+        _voicePhrases = s.VoicePhrases;
+        _voiceClipSeconds = Math.Clamp(s.VoiceClipSeconds, 0, (int)_bufferSeconds);
+        _voiceSensitivity = EngineSettings.VoiceSensitivities.Contains(s.VoiceSensitivity) ? s.VoiceSensitivity : "medium";
         _saveHotkey = s.SaveHotkey;
         _recordHotkey = s.RecordHotkey;
         MoreClipKeys.MaxSeconds = _bufferSeconds;
@@ -468,6 +589,55 @@ public sealed class SettingsViewModel : ObservableObject
         Raise(nameof(Share500));
     }
 
+    private void SetVoiceSensitivity(string sensitivity)
+    {
+        if (!Change(ref _voiceSensitivity, sensitivity, nameof(VoiceLow))) return;
+        Raise(nameof(VoiceMedium));
+        Raise(nameof(VoiceHigh));
+        Raise(nameof(VoiceSensitivityHint));
+    }
+
+    private void MarkChanged()
+    {
+        HasChanges = true;
+        SavedMessage = null;
+    }
+
+    // A volume or mute changed: once the slider settles, the engine's file gets the new levels and a running engine
+    // is told to take them.
+    private async void OnLevelChanged()
+    {
+        _levelsPending?.Cancel();
+        var pending = _levelsPending = new CancellationTokenSource();
+        try
+        {
+            await Task.Delay(150, pending.Token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+        ApplyLevelsNow();
+    }
+
+    internal void ApplyLevelsNow()
+    {
+        try
+        {
+            new EngineSettings
+            {
+                Volumes = AudioTracks.ToDictionary(t => t.Key, t => (int)t.Volume),
+                MutedAudio = AudioTracks.Where(t => t.IsMuted).Select(t => t.Key).ToList(),
+            }.SaveAudioLevels(AppPaths.EngineSettingsFile);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            SavedMessage = $"Couldn't save the volume: {e.Message}";
+            return;
+        }
+        EngineCommand?.Invoke("reload-audio");
+    }
+
     private void SetReadingQuality(string quality)
     {
         if (!Change(ref _readingQuality, quality, nameof(QualityLow))) return;
@@ -506,6 +676,62 @@ public sealed class SettingsViewModel : ObservableObject
 
     internal static string FormatSeconds(double seconds) =>
         seconds >= 60 && seconds % 60 == 0 ? $"{seconds / 60:0} min" : seconds >= 60 ? $"{(int)seconds / 60}m {(int)seconds % 60}s" : $"{seconds:0} s";
+}
+
+// One audio track on the Settings page: whether it's recorded, which takes a save, and its volume and mute, which apply
+// as they change.
+public sealed class AudioTrackViewModel(string key, string title, Action recordedChanged, Action levelChanged) : ObservableObject
+{
+    private bool _isRecorded = true;
+    private double _volume = 100;
+    private bool _isMuted;
+
+    public string Key { get; } = key;
+    public string Title { get; } = title;
+
+    public bool IsRecorded
+    {
+        get => _isRecorded;
+        set
+        {
+            if (Set(ref _isRecorded, value)) recordedChanged();
+        }
+    }
+
+    public double Volume
+    {
+        get => _volume;
+        set
+        {
+            if (!Set(ref _volume, Math.Clamp(Math.Round(value / 5) * 5, 0, EngineSettings.MaxVolume))) return;
+            Raise(nameof(VolumeText));
+            levelChanged();
+        }
+    }
+
+    public string VolumeText => IsMuted ? "Muted" : $"{Volume:0}%";
+
+    public bool IsMuted
+    {
+        get => _isMuted;
+        set
+        {
+            if (!Set(ref _isMuted, value)) return;
+            Raise(nameof(VolumeText));
+            levelChanged();
+        }
+    }
+
+    internal void Load(bool recorded, int volume, bool muted)
+    {
+        _isRecorded = recorded;
+        _volume = Math.Clamp(volume, 0, EngineSettings.MaxVolume);
+        _isMuted = muted;
+        Raise(nameof(IsRecorded));
+        Raise(nameof(Volume));
+        Raise(nameof(IsMuted));
+        Raise(nameof(VolumeText));
+    }
 }
 
 // One of the moments that can trigger an automatic clip.

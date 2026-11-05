@@ -28,6 +28,9 @@ Run `ClipEngine.exe` and launch a supported game. `clip_engine.exe` can also run
 - Timelines (what the records are built from): `%LOCALAPPDATA%\Clip_Engine\timeline\`, one JSON-lines file per recording with every moment and scoreboard reading
 - Long recordings: next to clips, named `<Game>_<date>_long.mp4`. Change the hotkey with `record_hotkey` in the settings or on the Settings page.
 - Clips: `Videos\Clip_Engine\<Game>\`
+- Audio tracks: with more than one source on, clips have a first track of every source mixed (what players and the share export play), then one per source in the order `game`, `mic`, `discord`, `apps`; one source gives just its track. The clip's `audio_tracks` in its metadata names them. `game_audio`, `mic_audio`, `discord_audio` (Discord, TeamSpeak, Mumble) and `apps_audio` turn each on (a restart); `game_volume` and the others (0 to 200) and `muted_audio = mic, discord` apply at once, since the app sends the engine `reload-audio` after writing them. The game, Discord and apps tracks use process loopback (`ActivateAudioInterfaceAsync`, Windows 10 2004 and later), found from the audio sessions on every output device every two seconds (`src/audio/AppAudioCapture.cpp`); on older Windows the game track is the whole loopback, named `system`. Sources are put on one timeline by their timestamps in `PcmMixer` (`src/audio/PcmMixer.cpp`), 60 ms behind real time for each app track and 150 ms for the mix.
+- Voice clips: `voice_clips = true` listens to the mic with SAPI's in-process recognizer and a grammar of just `voice_phrases` (plus a wildcard rule that takes other speech, so it isn't forced to match), fed 16 kHz mono from the engine's own mic capture (`src/audio/VoiceCommands.cpp`). A phrase can end in its own length (`save the last minute 60`); the rest save `voice_clip_seconds`, or `clip_seconds` when it's 0. `voice_sensitivity` (low, medium, high) is the SAPI confidence a phrase needs. Clips saved this way have `trigger: "voice"`. It needs a Windows speech recognizer for the user's language; the log says so when there isn't one.
+- Replay buffer: `buffer_seconds` goes up to 1800. The buffer is kept to 40% of physical memory by dropping its oldest group of pictures (`ReplayBuffer::SetMaxBytes`), and the log says how much fits when the setting asks for more. Settings estimates the memory from resolution, frame rate and bitrate (`Services/ReplayMemory.cs`) and warns past 10 minutes on PCs with under 16 GB or fewer than 8 logical cores.
 - Clip keys: `save_hotkey` saves the last `clip_seconds`, and `more_clip_hotkeys = Alt+F8 15, Shift+F8 120` adds keys that each save a clip of their own length (set them on the Settings page). A game can have its own set, `clip_hotkeys.<game id> = F8 20, Alt+F8 60`, used instead while it's recorded; Detection Studio sets it, and the engine takes the change at once.
 - Detection rules: `detection.ini` next to the app. To tune a game, change its rules in Detection Studio (or put its sections in `%LOCALAPPDATA%\Clip_Engine\detection.ini`): a game with rules there uses them instead of the shipped ones, and every other game keeps the shipped rules, so updates still reach it. `reading_quality` (low, medium, high or ultra) in the settings trades CPU for more accurate reading. `[<game>.scoreboard]` sections say which column headers a game's scoreboard uses for kills, deaths and the rest. With `detection_debug = true` in the settings, the log shows what the engine reads from each screen region, which is how rules are tuned.
 - Team Fortress 2: the engine appends `con_logfile "clip_engine_console.log"` and `name` to `tf\cfg\autoexec.cfg`, then follows `tf\clip_engine_console.log` (or `tf\console.log` from `-condebug`, whichever grows first) twice a second for "X killed Y with Z." lines, matched to `player_names` or the name the game prints. Until the log grows, the killfeed rules count kills; once it does, the screen's kills and deaths are dropped so nothing counts twice. A log over 64 MB is emptied when the engine starts. `Tf2ConsoleTracker` in `src/integrations/GameStateTrackers.cpp` has the parsing and its tests.
@@ -48,7 +51,7 @@ Run `ClipEngine.exe` and launch a supported game. `clip_engine.exe` can also run
 | `src/app` | App loop, game sessions, hotkey and clip saving |
 | `src/capture` | GPU device and monitor capture |
 | `src/video` | BGRA to NV12 conversion and the hardware encoder |
-| `src/audio` | WASAPI game/mic capture and AAC encoding |
+| `src/audio` | WASAPI mic and per-app capture, mixing the tracks, voice commands and AAC encoding |
 | `src/media` | Replay buffer, MP4 writing, clip metadata, trimming and the share export |
 | `src/detect` | Reading the HUD for kills and other moments, and the rules for each game |
 | `src/game` | Supported games and detection of running games |
@@ -57,10 +60,10 @@ Run `ClipEngine.exe` and launch a supported game. `clip_engine.exe` can also run
 | `server` | The online service for squads, the shared library, share links and profiles (Cloudflare Worker, Durable Objects and R2) |
 | `src/integrations` | Live events from games' own APIs (CS2, Dota 2, League of Legends, Rocket League) and Team Fortress 2's console log, and turning them on |
 | `assets/detection.ini` | Where each game shows kills and other moments, and the words to look for |
-| `tests` | Tests for the detection rules, matching, clip metadata, game API events and killfeed rules |
+| `tests` | Tests for the detection rules, matching, clip metadata, game API events, killfeed rules and audio mixing |
 | `ui/ClipEngine.Desktop` | The desktop app (C#, Avalonia) |
 | `ui/ClipEngine.Desktop.Preview` | Renders the app's screens to PNGs with sample data |
-| `ui/ClipEngine.Desktop.Tests` | Tests for the app's log parsing, settings file, MP4 reading, clip markers, import, plans and license keys, match grouping, storage cleanup and player records |
+| `ui/ClipEngine.Desktop.Tests` | Tests for the app's log parsing, settings file, MP4 reading, clip markers, import, plans and license keys, match grouping, storage cleanup, player records, replay buffer memory and voice phrases |
 | `website` | The landing page (plain HTML, published to GitHub Pages; see `website/README.md`) |
 
 ## The online service

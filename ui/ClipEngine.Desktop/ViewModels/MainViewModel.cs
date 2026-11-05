@@ -86,6 +86,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             Plan = Plan,
             Updates = Updates,
+            EngineCommand = live ? SendEngineCommand : null,
         };
         Settings.SidePanelHotkeyChanged += _ => Raise(nameof(SidePanelHotkey));
         Settings.StorageRulesChanged += OnStorageRulesChanged;

@@ -89,6 +89,17 @@ Capture(Page.Settings, "21-plans.png");
 window.Height = 900;
 vm.Plan.ShowSample(Plan.Free, new Credits([], []));
 
+// The audio tracks with Discord muted and the mic turned down, voice clips on, and a half-hour replay.
+vm.Settings.MicTrack.Load(true, 80, false);
+vm.Settings.DiscordTrack.Load(true, 100, true);
+vm.Settings.AppsTrack.Load(true, 45, false);
+vm.Settings.BufferSeconds = 1800;
+vm.Settings.VoiceClips = true;
+vm.Settings.VoicePhrasesText = "clip that, save the last minute 60";
+window.Height = 2400;
+Capture(Page.Settings, "22-audio-voice.png");
+window.Height = 900;
+
 // The player, opened on the newest clip partway through.
 vm.SelectedNav = vm.Nav.First(n => n.Page == Page.Clips);
 Settle();
