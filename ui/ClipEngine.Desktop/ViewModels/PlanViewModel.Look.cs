@@ -121,8 +121,8 @@ public sealed partial class PlanViewModel
     public bool ShowAdaptiveUltraTag => !CanUseAdaptive;
 
     public string AdaptiveCaption => CanUseAdaptive
-        ? "Gradients from your colour and its neighbour on the wheel, buttons with more snap, and a scan across the background now and then. It all holds still while a game is in front."
-        : "Comes with Ultra: gradients from your colour and its neighbour on the wheel, buttons with more snap, and a scan across the background now and then.";
+        ? "Gradients from your colour and its neighbour on the wheel, buttons with more snap, and a background that answers your pointer. It all holds still while a game is in front."
+        : "Comes with Ultra: gradients from your colour and its neighbour on the wheel, buttons with more snap, and a background that answers your pointer.";
 
     // Sets the wheel from the saved colour.
     private void LoadWheel()

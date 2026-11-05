@@ -361,6 +361,106 @@ details p { color: var(--muted); margin: 10px 0 0 28px; }
   .download .plate-in { padding: 24px; }
 }
 
+/* ------------------------------------------------------------------ Motion */
+
+/* All of it hangs off html.motion, which site.js sets: on unless the visitor's system asks for reduced motion, and
+   the Motion button in the bar turns it on or off. It keeps to the printed look: a light under the pointer, a scan
+   that reads the page now and then, panels that step up and light where the pointer is, and buttons that slip off
+   register like a second print pass. Only transforms and opacity animate, so it all runs on the compositor. */
+
+.motion-toggle {
+  display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; cursor: pointer;
+  background: transparent; border: 1px solid var(--line-strong); color: var(--muted);
+  font: 700 11px var(--mono); letter-spacing: 0.16em; text-transform: uppercase;
+}
+.motion-toggle[hidden] { display: none !important; }
+.motion-toggle i { width: 18px; height: 8px; border: 1px solid currentColor; position: relative; }
+.motion-toggle i::after {
+  content: ""; position: absolute; top: 1px; left: 1px; width: 6px; height: 4px; background: currentColor;
+  transition: transform 0.14s ease;
+}
+.motion-toggle:hover { color: var(--text); }
+.motion-toggle[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+.motion-toggle[aria-pressed="true"] i::after { transform: translateX(10px); }
+
+/* The light under the pointer, and the scan: fixed behind everything, shown only with motion on */
+.glow, .scan { position: fixed; left: 0; top: 0; z-index: -1; pointer-events: none; display: none; }
+.glow {
+  width: 640px; height: 640px; opacity: 0;
+  background: radial-gradient(closest-side, rgba(255, 194, 26, 0.11), rgba(255, 106, 42, 0.045) 55%, transparent);
+  transition: transform 0.42s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 0.3s ease;
+  will-change: transform;
+}
+.scan {
+  right: 0; height: 122px; transform: translateY(-130px);
+  background:
+    linear-gradient(rgba(255, 194, 26, 0), rgba(255, 194, 26, 0.05) 80%, rgba(255, 194, 26, 0.13)) top / 100% 120px no-repeat,
+    linear-gradient(rgba(255, 194, 26, 0.7), rgba(255, 194, 26, 0.7)) bottom 1px left 0 / 100% 1px no-repeat,
+    repeating-linear-gradient(90deg, rgba(255, 194, 26, 0.7) 0 1px, transparent 1px 40px) bottom 2px left 0 / 100% 5px no-repeat;
+}
+html.motion .glow, html.motion .scan { display: block; }
+html.motion .glow.on { opacity: 1; }
+/* A slow scan about every half minute; a quick one when you jump to a section */
+html.motion .scan { animation: scan 32s 0.6s infinite; }
+html.motion .scan.quick { animation: scan-quick 0.7s ease-in-out; }
+@keyframes scan {
+  0% { transform: translateY(-130px); animation-timing-function: ease-in-out; }
+  5%, 100% { transform: translateY(100vh); }
+}
+@keyframes scan-quick {
+  from { transform: translateY(-130px); }
+  to { transform: translateY(100vh); }
+}
+
+/* Panels light where the pointer is (site.js sets --px and --py on the one under it) */
+html.motion .plate > .plate-in {
+  background-image: radial-gradient(circle 280px at var(--px, -999px) var(--py, -999px), rgba(255, 194, 26, 0.075), transparent 70%);
+}
+html.motion .plate.lead-plate > .plate-in {
+  background-image:
+    radial-gradient(circle 280px at var(--px, -999px) var(--py, -999px), rgba(255, 194, 26, 0.075), transparent 70%),
+    linear-gradient(135deg, var(--accent) 0 calc(var(--cut) + 6px), var(--surface) 0);
+}
+html.motion .plate:hover::before, html.motion .plate:hover::after { border-color: var(--accent); }
+
+/* Cards step up under the pointer, and their edge runs from the accent into its partner, like the app's adaptive themes */
+html.motion .feature, html.motion .tier, html.motion .figure .frame {
+  transition: transform 0.16s ease-out, background-position 0.5s ease;
+}
+html.motion .feature:hover, html.motion .tier:hover, html.motion .figure .frame:hover { transform: translateY(-4px); }
+html.motion .feature:hover, html.motion .tier.lead-plate {
+  background: linear-gradient(135deg, var(--accent), #ff6a2a 45%, var(--line-strong) 75%) 0 0 / 200% 200%;
+}
+html.motion .tier.lead-plate:hover { background-position: 100% 100%; }
+
+/* Buttons slip off register under the pointer and flicker as they're pressed */
+html.motion .btn:hover { transform: translate(-1px, -2px); text-shadow: 2px 2px 0 rgba(255, 106, 42, 0.75); }
+html.motion .btn.ghost:hover { text-shadow: 2px 2px 0 rgba(255, 194, 26, 0.45); }
+html.motion .btn:active { transform: translateY(1px); animation: flicker 0.2s steps(1); }
+@keyframes flicker { 25% { opacity: 0.55; } 50% { opacity: 1; } 75% { opacity: 0.75; } }
+
+/* The live dot blinks, as it does in the app */
+html.motion .eyebrow i { animation: live 1.2s ease-in-out infinite alternate; }
+@keyframes live { to { opacity: 0.3; } }
+
+/* Sections draw in as they scroll into view: the ruler runs out, and panels rise in one after another */
+html.motion .mark.reveal::after { transform: scaleX(0); transform-origin: left; transition: transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1); }
+html.motion .mark.reveal.seen::after { transform: none; }
+html.motion .reveal:not(.mark) {
+  opacity: 0; transform: translateY(16px);
+  transition: opacity 0.45s ease-out var(--d, 0ms), transform 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) var(--d, 0ms);
+}
+html.motion .reveal.seen:not(.mark) { opacity: 1; transform: none; }
+
+.brand-name { white-space: nowrap; }
+@media (max-width: 1180px) and (min-width: 901px) {
+  .motion-toggle span { display: none; }
+}
+@media (max-width: 900px) {
+  .motion-toggle { display: none; }
+  .nav.open .motion-toggle { display: flex; justify-content: center; margin-top: 14px; padding: 12px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   * { transition: none !important; }
