@@ -106,7 +106,8 @@ public sealed class CloudViewModel : ObservableObject
     public bool NeedsServer => Online.ServerUrl(_desktop).Length == 0;
 
     public string AccountName => _account?.Name ?? Settings.Name;
-    public string PlanLabel => _account is null ? "" : $"{_account.PlanLabel} plan";
+    public string PlanLabel => _account is null ? ""
+        : _account.RoleLabel is { } role ? $"{role} · {_account.PlanLabel} plan" : $"{_account.PlanLabel} plan";
     public string StorageText => _account is { Limit: > 0 } a ? $"{Format.Bytes(a.Used)} of {Format.Bytes(a.Limit)} used" : "";
     public double StorageFraction => _account is { Limit: > 0 } a ? Math.Clamp((double)a.Used / a.Limit, 0, 1) * 100 : 0;
     public string ClipsText => _account is null ? "" : _account.Clips == 1 ? "1 clip in the cloud" : $"{_account.Clips} clips in the cloud";

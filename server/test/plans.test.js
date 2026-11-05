@@ -73,11 +73,11 @@ test("subscribers can have their name in the credits", async () => {
   await call(env, "/v1/license", { method: "POST", body: { key: "PRO-KEY-0001", credit: "  Kai   the  Clipper " } });
   await call(env, "/v1/license", { method: "POST", body: { key: "ULTRA-KEY-0001", credit: "Mira" } });
   await call(env, "/v1/license", { method: "POST", body: { key: "ULTRA-KEY-0001", credit: "Mira" } });
-  assert.deepEqual(await (await call(env, "/v1/credits")).json(), { ultra: ["Mira"], pro: ["Kai the Clipper"] });
+  assert.deepEqual(await (await call(env, "/v1/credits")).json(), { ultra: ["Mira"], pro: ["Kai the Clipper"], exclusive: [], creator: [], special: [] });
   // Checking without credit leaves it; credit "" takes it off.
   await call(env, "/v1/license", { method: "POST", body: { key: "PRO-KEY-0001" } });
   await call(env, "/v1/license", { method: "POST", body: { key: "ULTRA-KEY-0001", credit: "" } });
-  assert.deepEqual(await (await call(env, "/v1/credits")).json(), { ultra: [], pro: ["Kai the Clipper"] });
+  assert.deepEqual(await (await call(env, "/v1/credits")).json(), { ultra: [], pro: ["Kai the Clipper"], exclusive: [], creator: [], special: [] });
 });
 
 test("a subscription on a cloud account sets its storage, and goes back to Free when it ends", async () => {

@@ -86,6 +86,18 @@ Capture(Page.Friends, "20-friends.png");
 vm.Plan.ShowSample(Plan.Ultra, new Credits(["Mira", "Enterro"], ["Kai the Clipper", "Rook", "Vex"]));
 window.Height = 1300;
 Capture(Page.Settings, "21-plans.png");
+// A Content Creator key from the key maker: its badge, the reason, the credits and the direct line.
+vm.Plan.ShowSample(Plan.Ultra, new Credits(["Mira"], ["Kai the Clipper", "Rook"]) { Creator = ["Enterro"], Exclusive = ["Nova"] });
+vm.Plan.Accept("preview", new LicenseCheck(LicenseOutcome.Valid, "", Plan.Ultra, "CEK-7Q4K…M9XW", DateTimeOffset.UtcNow.AddDays(90), true,
+    Role: "creator", RoleLabel: "Content Creator", Perks: ["contact", "bugs"], CreditsAllowed: true, Reason: "Streams Clip Engine every week"));
+vm.Plan.ShowSampleMessages(
+[
+    new ContactMessage(2, "bug", "The side panel flickers when a game goes fullscreen.", DateTimeOffset.UtcNow.AddHours(-3), null, null),
+    new ContactMessage(1, "message", "Could clips upload straight to YouTube?", DateTimeOffset.UtcNow.AddDays(-1),
+                       "Yes! It's planned for the next update.", DateTimeOffset.UtcNow.AddHours(-20)),
+]);
+window.Height = 1700;
+Capture(Page.Settings, "22-creator-key.png");
 window.Height = 900;
 vm.Plan.ShowSample(Plan.Free, new Credits([], []));
 

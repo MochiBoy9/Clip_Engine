@@ -7,6 +7,7 @@ import { fakeEnv, request } from "./fakes.js";
 const call = (env, path, options) => worker.fetch(request(path, options), env);
 const ADMIN = "operator-secret";
 const DAY = 24 * 3600_000;
+const NO_CREDITS = { ultra: [], pro: [], exclusive: [], creator: [], special: [] };
 
 const make = async (env, body) => (await call(env, "/v1/admin/grants", { method: "POST", token: ADMIN, body })).json();
 const list = async (env) => (await (await call(env, "/v1/admin/grants", { token: ADMIN })).json()).grants;
@@ -113,7 +114,7 @@ test("a Free special key gives only its extras, and stays out of the credits", a
   assert.equal(info.plan, "free");
   assert.equal(info.lines, 1440);
   assert.equal(info.storage, (2048 + 10 * 1024) * 1024 * 1024);
-  assert.deepEqual(await (await call(env, "/v1/credits")).json(), { ultra: [], pro: [] });
+  assert.deepEqual(await (await call(env, "/v1/credits")).json(), NO_CREDITS);
 });
 
 test("a special key on a cloud account sets its storage and resolution, on one account at a time", async () => {
@@ -144,10 +145,147 @@ test("special keys read the way people type them", () => {
   assert.equal(normalizeGrant("PRO-KEY-0001"), null);
 });
 
-test("a special key's name is never in the credits", async () => {
+test("a special key's name stays out of the credits unless the operator lets it in", async () => {
   const env = fakeEnv({ ADMIN_TOKEN: ADMIN });
   const [{ code }] = (await make(env, { plan: "ultra", days: null })).grants;
   const info = await (await call(env, "/v1/license", { method: "POST", body: { key: code, device: "pc", credit: "Free Rider" } })).json();
   assert.equal(info.plan, "ultra");
-  assert.deepEqual(await (await call(env, "/v1/credits")).json(), { ultra: [], pro: [] });
+  assert.deepEqual(await (await call(env, "/v1/credits")).json(), NO_CREDITS);
+});
+
+test("roles, perks, credits and a reason go with a special key", async () => {
+  const env = fakeEnv({ ADMIN_TOKEN: ADMIN });
+  const [made] = (await make(env, {
+    plan: "ultra", role: "creator", days: null, perks: ["contact", "bugs", "contact"], credits: true,
+    reason: "Streams Clip Engine every week", showReason: true, note: "kai's channel",
+  })).grants;
+  assert.equal(made.role, "creator");
+  assert.equal(made.roleLabel, "Content Creator");
+  assert.deepEqual(made.perks, ["contact", "bugs"]);
+  assert.equal(made.credits, true);
+  assert.equal(made.reason, "Streams Clip Engine every week");
+
+  const info = await (await call(env, "/v1/license", { method: "POST", body: { key: made.code, device: "pc", credit: "Kai" } })).json();
+  assert.equal(info.plan, "ultra");
+  assert.equal(info.role, "creator");
+  assert.equal(info.roleLabel, "Content Creator");
+  assert.deepEqual(info.perks, ["contact", "bugs"]);
+  assert.equal(info.credits, true);
+  assert.equal(info.reason, "Streams Clip Engine every week");
+  assert.deepEqual((await (await call(env, "/v1/credits")).json()).creator, ["Kai"]);
+
+  // The reason can stay private, and taking the key out of the credits takes the name off.
+  await patch(env, made.code, { showReason: false, credits: false });
+  const hidden = await (await call(env, "/v1/license", { method: "POST", body: { key: made.code, device: "pc", credit: "Kai" } })).json();
+  assert.equal(hidden.reason, "");
+  assert.equal(hidden.credits, false);
+  assert.deepEqual(await (await call(env, "/v1/credits")).json(), NO_CREDITS);
+
+  // A Special or Exclusive key on a cloud account shows its title there.
+  const [special] = (await make(env, { plan: "pro", role: "exclusive", days: 30 })).grants;
+  const a = await account(env);
+  const acct = await (await call(env, `${a.base}/plan`, { method: "POST", token: a.token, body: { key: special.code } })).json();
+  assert.equal(acct.plan, "pro");
+  assert.equal(acct.roleLabel, "Exclusive");
+
+  assert.equal((await patch(env, made.code, { role: "vip" })).status, 400);
+  assert.equal((await patch(env, made.code, { perks: ["free-money"] })).status, 400);
+  assert.equal((await patch(env, made.code, { role: null })).status, 200);
+  assert.equal((await list(env)).find((g) => g.code === made.code).role, null);
+});
+
+test("a special key can last hours or minutes, or end on a set date", async () => {
+  const env = fakeEnv({ ADMIN_TOKEN: ADMIN });
+  const realNow = Date.now;
+  try {
+    const [hours] = (await make(env, { plan: "pro", minutes: 90 })).grants;
+    assert.equal(hours.minutes, 90);
+    assert.equal(hours.days, null);
+    const first = await (await license(env, hours.code)).json();
+    assert.ok(first.expires > Date.now() + 89 * 60_000 && first.expires <= Date.now() + 90 * 60_000);
+
+    const end = Date.now() + 3 * DAY;
+    const [dated] = (await make(env, { plan: "ultra", days: null, endsAt: end })).grants;
+    assert.equal(dated.expires, end, "a set end shows before the key is used");
+    assert.equal((await (await license(env, dated.code)).json()).expires, end);
+
+    // Both: whichever comes first.
+    const [both] = (await make(env, { plan: "pro", days: 30, endsAt: end })).grants;
+    assert.equal((await (await license(env, both.code)).json()).expires, end);
+
+    Date.now = () => realNow() + 2 * 3600_000;
+    assert.equal((await license(env, hours.code)).status, 403, "an hour and a half is up");
+    assert.equal((await license(env, dated.code)).status, 200);
+    Date.now = () => realNow() + 4 * DAY;
+    const late = await license(env, dated.code);
+    assert.equal(late.status, 403);
+    assert.match((await late.json()).error, /run out/);
+    const [unused] = (await make(env, { plan: "pro", endsAt: realNow() + DAY })).grants;
+    assert.equal(unused.status, "expired", "a key whose date passed before it was used has run out too");
+  } finally {
+    Date.now = realNow;
+  }
+  assert.equal((await make(env, { plan: "pro", minutes: -5 })).error !== undefined, true);
+  assert.equal((await make(env, { plan: "pro", endsAt: "tomorrow" })).error !== undefined, true);
+});
+
+test("a key with a direct line or bug reports reaches the operator's inbox, and gets answers", async () => {
+  const env = fakeEnv({ ADMIN_TOKEN: ADMIN });
+  const [line] = (await make(env, { plan: "pro", role: "special", perks: ["contact"], note: "Mira" })).grants;
+  const [plain] = (await make(env, { plan: "pro" })).grants;
+  const send = (key, body, device = "pc-one") => call(env, "/v1/contact", { method: "POST", body: { key, device, ...body } });
+  const mine = async (key, device = "pc-one") => call(env, "/v1/contact/list", { method: "POST", body: { key, device } });
+
+  assert.equal((await send(line.code, { kind: "message", text: "hi" })).status, 403, "the key has to be on that PC first");
+  await license(env, line.code);
+  await license(env, plain.code);
+
+  const sent = await send(line.code, { kind: "message", text: "  Love the app! Can squads be bigger?  ", name: "Mira" });
+  assert.equal(sent.status, 200);
+  assert.equal((await sent.json()).messages[0].text, "Love the app! Can squads be bigger?");
+  assert.equal((await send(line.code, { kind: "bug", text: "crash" })).status, 403, "bug reports are their own perk");
+  assert.equal((await send(plain.code, { kind: "message", text: "hi" })).status, 403);
+  assert.equal((await send(line.code, { kind: "message", text: "   " })).status, 400);
+  assert.equal((await send(line.code, { kind: "message", text: "from elsewhere" }, "pc-two")).status, 403);
+  assert.equal((await send("some-polar-key", { kind: "message", text: "hi" })).status, 403);
+
+  // The operator sees it with who sent it, answers, and marks it done.
+  for (const token of [undefined, "wrong"]) assert.equal((await call(env, "/v1/admin/messages", { token })).status, 403);
+  const inbox = await (await call(env, "/v1/admin/messages", { token: ADMIN })).json();
+  assert.equal(inbox.messages.length, 1);
+  const [message] = inbox.messages;
+  assert.equal(message.code, line.code);
+  assert.equal(message.kind, "message");
+  assert.equal(message.name, "Mira");
+  assert.equal(message.roleLabel, "Special");
+  assert.equal(message.note, "Mira");
+  assert.equal((await list(env)).find((g) => g.code === line.code).openMessages, 1);
+  const answer = await call(env, `/v1/admin/messages/${message.id}`, { method: "PATCH", token: ADMIN, body: { reply: "Yes, soon!", done: true } });
+  assert.equal(answer.status, 200);
+  assert.equal(answer.headers.get("access-control-allow-origin"), "*");
+  assert.equal((await call(env, "/v1/admin/messages/999", { method: "PATCH", token: ADMIN, body: { done: true } })).status, 404);
+
+  const back = await (await mine(line.code)).json();
+  assert.equal(back.messages[0].reply, "Yes, soon!");
+  assert.ok(back.messages[0].replied > 0);
+  assert.deepEqual(back.perks, ["contact"]);
+  assert.equal((await list(env)).find((g) => g.code === line.code).openMessages, 0);
+
+  // Bug reports, and a daily limit.
+  await patch(env, line.code, { perks: ["contact", "bugs"] });
+  assert.equal((await send(line.code, { kind: "bug", text: "The clip list flickers" })).status, 200);
+  for (let i = 0; i < 18; i++) await send(line.code, { kind: "message", text: `note ${i}` });
+  assert.equal((await send(line.code, { kind: "message", text: "one too many" })).status, 429);
+
+  // A turned-off key can't send.
+  await patch(env, line.code, { revoked: true });
+  assert.equal((await send(line.code, { kind: "bug", text: "hello?" })).status, 403);
+});
+
+test("keys made before minutes keep their days", async () => {
+  const env = fakeEnv({ ADMIN_TOKEN: ADMIN });
+  const [{ code }] = (await make(env, { plan: "pro", days: 7 })).grants;
+  const row = (await list(env)).find((g) => g.code === code);
+  assert.equal(row.days, 7);
+  assert.equal(row.minutes, 7 * 1440);
 });
