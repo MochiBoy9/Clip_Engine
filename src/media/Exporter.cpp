@@ -73,10 +73,13 @@ SourceInfo Inspect(IMFSourceReader* reader) {
       if (SUCCEEDED(MFGetAttributeRatio(type.get(), MF_MT_FRAME_RATE, &num, &den)) && num > 0 && den > 0) {
         info.fps = static_cast<double>(num) / den;
       }
-    } else if (major == MFMediaType_Audio && info.audioStreams.size() < 2) {
+    } else if (major == MFMediaType_Audio) {
       info.audioStreams.push_back(i);
     }
   }
+  // A clip with three or more audio tracks has them all mixed on the first one (the rest are each
+  // source on its own), so that one is all it takes. Older clips had game audio and the mic, mixed here.
+  if (info.audioStreams.size() > 2) info.audioStreams.resize(1);
   if (info.videoStream == MAXDWORD || info.width == 0 || info.height == 0) {
     throw winrt::hresult_error(MF_E_INVALIDMEDIATYPE, L"The file has no video");
   }

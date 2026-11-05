@@ -24,6 +24,13 @@
               <TextBlock Text="AUTO" FontSize="10" FontWeight="Bold" LetterSpacing="1" />
             </StackPanel>
           </Border>
+          <Border Classes="pill accent" VerticalAlignment="Center" Padding="8,2"
+                  IsVisible="{Binding Clip.IsVoice}" ToolTip.Tip="Saved when you said so">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <PathIcon Data="{StaticResource IconMic}" Width="10" Height="10" />
+              <TextBlock Text="VOICE" FontSize="10" FontWeight="Bold" LetterSpacing="1" />
+            </StackPanel>
+          </Border>
         </StackPanel>
         <TextBlock Classes="caption" Text="{Binding Subtitle}" TextTrimming="CharacterEllipsis" />
       </StackPanel>

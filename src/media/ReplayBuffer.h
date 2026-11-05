@@ -26,6 +26,12 @@ class ReplayBuffer {
 
   explicit ReplayBuffer(int64_t maxDuration) : maxDuration_(maxDuration) {}
 
+  // Also keeps it under this many bytes, dropping the oldest stretch first, so a long buffer at a
+  // high bitrate can't take more memory than the PC can spare. 0 = no limit.
+  void SetMaxBytes(size_t maxBytes);
+  // How much gameplay the buffer holds now, from its first video frame to its last.
+  int64_t HeldDuration() const;
+
   // Called once per stream by its encoder, before or with its first packet.
   void SetFormat(int stream, IMFMediaType* type);
   void Push(EncodedPacket&& packet);
@@ -47,6 +53,7 @@ class ReplayBuffer {
  private:
   mutable std::mutex mutex_;
   const int64_t maxDuration_;
+  size_t maxBytes_ = 0;
   std::array<std::deque<PacketPtr>, kStreamCount> streams_;
   std::array<winrt::com_ptr<IMFMediaType>, kStreamCount> formats_;
   size_t bytes_ = 0;
