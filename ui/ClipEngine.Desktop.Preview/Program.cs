@@ -467,7 +467,7 @@ internal static class SampleSquad
     public static void FillCloud(MainViewModel vm)
     {
         var hour = 3_600_000L;
-        vm.Cloud.ShowSample(Server, new CloudAccount("A1B2C3D4", "Enterro", "enterro", "free", "Free", 671_088_640, 2_147_483_648, 4),
+        vm.Cloud.ShowSample(Server, new CloudAccount("A1B2C3D4", "Enterro", "enterro", "pro", "Pro", 671_088_640, 107_374_182_400, 4, BadgeLabel: "Pro"),
         [
             new CloudClip("q7k2mx", "A1B2C3D4q7k2mx", null, "3 kills, 1 revive", "The Finals", Now - hour / 10, 30, 41_943_040, true, true, "public", true, 128),
             new CloudClip("b4nt9w", "A1B2C3D4b4nt9w", null, "Squad highlight: Kai's triple kill", "The Finals", Now - hour / 2, 18, 22_020_096, true, true, "public", false, 46),

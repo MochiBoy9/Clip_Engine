@@ -33,6 +33,8 @@ You need Windows 10 (version 1903 or newer) or Windows 11, and a graphics card w
 - **Friends.** Add friends by username or friend code, see who's online, what they're playing and for how long, get a notice when they come on, and right-click to join their squad.
 - **Share anywhere.** One click puts a short link on your clipboard. It plays in any browser, with the moments marked, and shows a preview in Discord. A small copy that fits Discord's upload limit is a click away too.
 - **Your profile.** Public clips show on your page, pinned ones first, under the same username your friends know you by.
+- **The hub.** Everyone's public clips on the web, newest or most watched, by game, and searchable. Watching needs no account, and nothing goes there unless you set it to Public. Sign in from your phone or any browser with one click in the app (or a username and password you set) to change who can see each clip.
+- **Your badge, your call.** Pro, Ultra and Content Creator badges show next to your name. Hide yours any time from the app or the hub.
 - **Trim, star and tidy.** Trim a clip in the player with no quality lost, star favourites, and have old clips cleaned up by age or size, favourites always kept.
 - **Detection Studio.** Add any game, or fine-tune how one is read: draw a box where the game shows a kill, type the words, and test it on your own clips.
 - **Light on your game.** Encodes on the GPU at your monitor's resolution and refresh rate, and records only the game, so nothing else on your PC ends up in a clip.
