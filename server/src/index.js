@@ -36,6 +36,11 @@
 //   POST /v1/license                check a Polar or special key { key, device, credit? } and list or unlist its name in the credits
 //   GET  /v1/credits                the names in the credits: subscribers, and special keys the operator lets in
 //
+// Inviting friends (one Durable Object, src/referrals.js):
+//   POST /v1/referrals              this PC's invite code and its secret        { pc, device, name? }
+//   GET  /v1/referrals/<code>       friends so far and the Pro keys earned      (Authorization: Bearer <secret>, ?pc=&device=)
+//   POST /v1/referrals/activate     Clip Engine started on a PC                 { pc, device, fresh, code? }
+//
 // The hub (src/hub.js): everyone's public clips, and signing in on the web to look after your own:
 //   GET /hub, /hub/signin, /hub/me and /hub/api/...  (see src/hub.js)
 //   GET  /v1/admin/reports          reported clips (Authorization: Bearer ADMIN_TOKEN)
@@ -47,6 +52,7 @@
 //   GET /c/<code>/oembed            the clip's oEmbed, which names Clip Engine in Discord's preview
 //   GET /u/<handle>                 a player's profile with their public clips
 //   GET /s/<invite>                 a squad's join page, for the "Join my squad" button on Discord
+//   GET /r/<code>                   a friend's invite to Clip Engine, with the download
 //
 // See README.md for the messages on the squad socket.
 
@@ -56,12 +62,13 @@ import { hubRoute } from "./hub.js";
 import { pageCsp } from "./look.js";
 import { CLIP_CODE_LENGTH, Library } from "./library.js";
 import { formatInvite } from "./codes.js";
-import { clipOembed, clipPage, invitePage, notFoundPage, profilePage } from "./pages.js";
+import { clipOembed, clipPage, invitePage, notFoundPage, profilePage, referralPage } from "./pages.js";
 import { checkLicense, creditGroup, normalizeGrant, PLANS, planJson } from "./plans.js";
 import { isMediaPointer, serveMedia } from "./media.js";
+import { normalizeReferral, Referrals } from "./referrals.js";
 import { Squad } from "./squad.js";
 
-export { Handles, Library, Squad };
+export { Handles, Library, Referrals, Squad };
 
 const VERSION = 2;
 const ALPHABET = /^[0-9A-Z]+$/;
@@ -221,7 +228,7 @@ export default {
 // protection: making accounts and squads, sign-in and invite codes, key checks and special-key messages get
 // AUTH_LIMIT; every other change (uploads, friends, edits, the key maker's) gets WRITE_LIMIT. Reads aren't limited
 // here. Without the bindings (tests, wrangler dev) nothing is limited.
-const AUTH_ROUTES = /^\/(v1\/(accounts|accounts\/signin|squads|join|license|contact|contact\/list)|hub\/api\/(signin|report))$/;
+const AUTH_ROUTES = /^\/(v1\/(accounts|accounts\/signin|squads|join|license|contact|contact\/list|referrals|referrals\/activate)|hub\/api\/(signin|report))$/;
 
 async function overLimit(request, env, path, method) {
   const sensitive = method === "POST" && AUTH_ROUTES.test(path);
@@ -300,6 +307,30 @@ async function route(request, env) {
       return forward(stub(env.LIBRARIES, body.account), request, "/admin/plan", { body: JSON.stringify({ plan: body.plan }) });
     }
 
+    // ---- inviting friends ----
+    if (path.startsWith("/v1/referrals")) {
+      const ip = request.headers.get("cf-connecting-ip") ?? "";
+      const referrals = (route, body) => stub(env.REFERRALS, "referrals").fetch(new Request(`${url.origin}/${route}`, {
+        method: "POST", body: JSON.stringify({ ...body, ip, origin: url.origin }),
+      }));
+      if (path === "/v1/referrals" && method === "POST") {
+        const body = (await readBody(request)) ?? {};
+        return referrals("create", { pc: body.pc, device: body.device, name: body.name });
+      }
+      if (path === "/v1/referrals/activate" && method === "POST") {
+        const body = (await readBody(request)) ?? {};
+        return referrals("activate", { pc: body.pc, device: body.device, fresh: body.fresh === true, code: body.code });
+      }
+      m = path.match(/^\/v1\/referrals\/([^/]+)$/);
+      if (m && method === "GET") {
+        const secret = (request.headers.get("authorization") ?? "").replace(/^Bearer /, "");
+        return referrals("status", {
+          code: decodeSegment(m[1]) ?? "", secret, pc: url.searchParams.get("pc") ?? "", device: url.searchParams.get("device") ?? "",
+        });
+      }
+      return json({ error: "Not found." }, 404);
+    }
+
     // ---- plans ----
     if (path === "/v1/plans" && method === "GET") {
       return json({ plans: Object.keys(PLANS).map((name) => planJson(env, name)), open: Boolean(env.POLAR_ORGANIZATION_ID) });
@@ -362,7 +393,23 @@ async function route(request, env) {
         if (!answer.ok) return html(notFoundPage(), 404);
         return html(invitePage(await answer.json(), formatInvite(invite.squadId, invite.secret)));
       }
-      if (path.startsWith("/c/") || path.startsWith("/u/") || path.startsWith("/s/")) return html(notFoundPage(), 404);
+      m = path.match(/^\/r\/([^/]+)$/);
+      const referral = m && normalizeReferral(decodeSegment(m[1]) ?? "");
+      if (referral) {
+        const answer = await stub(env.REFERRALS, "referrals").fetch(new Request(`${url.origin}/click`, {
+          method: "POST",
+          body: JSON.stringify({
+            code: referral, ip: request.headers.get("cf-connecting-ip") ?? "",
+            record: method === "GET" && !PREVIEW_AGENTS.test(request.headers.get("user-agent") ?? ""),
+          }),
+        }));
+        if (answer.ok) {
+          const page = html(referralPage(await answer.json()));
+          page.headers.set("cache-control", "no-store");
+          return page;
+        }
+      }
+      if (path.startsWith("/c/") || path.startsWith("/u/") || path.startsWith("/s/") || path.startsWith("/r/")) return html(notFoundPage(), 404);
     }
 
     return json({ error: "Not found." }, 404);

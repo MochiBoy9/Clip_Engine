@@ -37,6 +37,7 @@
 
     <h2>What is sent over the internet</h2>
     <p>Nothing about you or your clips, unless you join a squad, sign in to the cloud library or add a Pro or Ultra license key. Clip Engine doesn't need an account or an internet connection to record.</p>
+    <p>The one exception is a short note the first time Clip Engine starts on a PC, so a friend who invited you gets credit for it (see <a href="#invites">Inviting friends</a>).</p>
     <p>To show a game's picture that isn't already on your PC, Clip Engine asks the Steam store for it once, by the game's name, and keeps it. Turn off <strong>Game pictures from Steam</strong> in Settings to use only the pictures on your PC.</p>
 
     <h2>Squads</h2>
@@ -58,6 +59,10 @@
 
     <h2>Friends</h2>
     <p>Friends are kept with your cloud account. When you add someone, they see your name and profile name. While Clip Engine is open, your friends see that you're online and which game you're recording, and, if <strong>Let friends join my squad</strong> is on, your squad's invite code. This is forgotten a few minutes after you close the app.</p>
+
+    <h2 id="invites">Inviting friends</h2>
+    <p>The first time Clip Engine starts on a PC, it tells the online service so, with an id for the PC (a one-way hash of the id Windows gives it, which can't be turned back into it) and whether Clip Engine was new there. The service also sees the internet address the note comes from. It keeps the address only as a salted hash, used to check that an invited friend isn't on the same network as the person who invited them.</p>
+    <p>If you get an invite link, the service keeps the same kind of hashed address when you open it, for a week, so the app you install from it knows who invited you. If you share your own link, the service keeps your PC's hashed id, the hashed addresses you've used, the name you pick for the invite page, and how many friends have joined. It never knows who your friends are beyond that their PC counted.</p>
 
     <h2>Pro and Ultra</h2>
     <p>Subscriptions are sold by Polar, our merchant of record, which handles your payment details and tax and emails your license key. See <a href="https://polar.sh/legal/privacy">Polar's privacy policy</a>. Clip Engine sends your key to its online service, which checks it with Polar about twice a day. If you put the key on a cloud account, the service keeps it there to give the account its storage. If you choose a name for the credits, it's shown in the app and on this website for as long as your subscription runs; turn off <strong>Name in the credits</strong> in Settings to remove it.</p>

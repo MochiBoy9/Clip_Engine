@@ -34,11 +34,13 @@ Run `ClipEngine.exe` and launch a supported game. `clip_engine.exe` can also run
 - `clip_engine.exe --export <clip.mp4> <out.mp4> --max-mb 10` makes a small copy for sharing.
 - Plans: Free records up to 1080p with a 2 GB cloud library; Pro ($2.99 a month) up to 1440p with 100 GB, all seven colour themes, a badge and a name in the credits; Ultra ($4.99 a month) up to 4K with 250 GB and three more themes. Subscriptions are sold through Polar, which emails a license key; the app checks it with the online service (`POST /v1/license`), which asks Polar, about twice a day, and a paid plan keeps working for 14 days offline. The key is kept encrypted in `%LOCALAPPDATA%\Clip_Engine\license.json`. Checkout links go in `PlanConfig` in `ui/ClipEngine.Desktop/Services/Plans.cs` and `website/site.js`; the Polar ids go in `server/wrangler.toml`. Older thank-you names live in `ui/ClipEngine.Desktop/Assets/Supporters.txt`.
 - Resolution: `resolution` in the settings (native, or 2160, 1440, 1080, 720 or 480) scales recordings down on the GPU and never up. The app writes the smaller of the one picked in Settings and the plan's.
+- Stats overlay: `StatsOverlay` in `desktop.json` (on, corner, hotkey, which readings), off until turned on in Settings or with its hotkey (Alt+Shift+F). It runs in the desktop app, only while a game is recorded and in front, and stops all sampling when it's hidden. `Services/Stats/` has the pieces: `PresentCounter` starts a real-time ETW session (`ClipEngine-FrameTimes`) for the Present_Start events of Microsoft-Windows-DXGI (42, 55) and Microsoft-Windows-D3D9 (1), filtered by event id at the source and flushed once a second, and keeps the foreground window's process's frame times (the app inside it for Store apps); `FrameTimes` turns them into FPS (the last second) and the 1% low (the average of the slowest 1% of frame times over the last 10 seconds). `HardwareMonitor` reads CPU from `GetSystemTimes`, RAM from `GlobalMemoryStatusEx`, GPU load from PDH `\GPU Engine(*engtype_3D)\Utilization Percentage` (busiest 3D engine, every process added up, as Task Manager does; the video engines are the recording's own work and left out), video memory from `\GPU Adapter Memory(*)\Dedicated Usage`, and the temperature from `D3DKMTQueryAdapterInfo(KMTQAITYPE_ADAPTERPERFDATA)`, all for the adapter with the most dedicated memory. The sampler and the trace's reader run on their own below-normal, EcoQoS threads. The overlay is a click-through Avalonia window kept out of captures (`WDA_EXCLUDEFROMCAPTURE`), like the notices; where Windows can't do that (before 10 2004) it doesn't show. Starting the ETW session needs an administrator or the Performance Log Users group (S-1-5-32-559); Settings' Allow button adds the account with an elevated `Add-LocalGroupMember`, which counts from the next sign-in. Vulkan and OpenGL games don't raise these events, so FPS shows `--` there; the other readings still work. CPU temperature isn't shown, since Windows has no API for it without a driver.
 - Friends: the Friends page adds people by profile name or friend code (an account's id, like `K7QM-2X9D`), shows who's online and what they're playing, and has a Join squad button when a friend shares their squad. Friends are kept with the cloud account.
 - `clip_engine.exe --frame <clip.mp4 or image> <out.png> --at 12.5` saves one frame as a PNG, and `clip_engine.exe --read <clip.mp4 or image> --at 12.5 --region 0.65,0.12,0.33,0.05 --words "ELIMINATED|KNOCKED OUT"` reads that box the way detection does and prints the text and how many times the words matched; `--position start|end` reads it as a killfeed (with `{player}` filled in from your in-game names, and `--skip-tag true` for a squad tag before them), and `--image icon.png` also says how alike the box is to an icon. Detection Studio uses both.
 - `clip_engine.exe --scan <clip.mp4> --game <id or name> [--quality medium] [--hud-scale 100] [--rules draft.ini]` runs a game's rules over a whole clip and prints each moment they find with its time; the player's Check detection uses it, and Detection Studio passes `--rules` to test changes before they're saved.
 - `clip_engine.exe --trim <clip.mp4> <out.mp4> --start 4.5 --end 20` copies part of a clip without re-encoding, starting on the keyframe at or before the start (at most a second early).
-- `clip_engine.exe --montage <out.mp4> --part "<clip.mp4>|<from>|<to>" [--part ...] [--height 1080] [--moment <id>]` puts parts of several clips together into one, with their moments. Squad highlights use it.
+- `clip_engine.exe --montage <out.mp4> --part "<clip.mp4>|<from>|<to>" [--part ...] [--height 1080] [--mbps 16|auto] [--moment <id>] [--kind edit]` puts parts of several clips together into one, re-encoded, with their moments. Squad highlights use it, and so does the editor's export (`--kind edit` marks the clip's trigger as `edit`; `--mbps auto` picks 8, 16, 28 or 45 Mbps from the picture height).
+- The editor (Edit in the player) keeps each clip's edit in `%LOCALAPPDATA%\Clip_Engine\edits\<id>.json`: the parts as source times, so reopening the clip picks it up. The model is `EditTimeline` in `ui/ClipEngine.Desktop/Services/Editing/`; every change (split, delete, trim, move, duplicate, undo) goes through it, and new tools are added there first.
 - Squads and the cloud library use Clip Engine's online service, a Cloudflare Worker in `server/`. See [server/README.md](server/README.md) to deploy it, which takes one `npx wrangler deploy`. Release builds name it with `-p:OnlineServer=https://...` (the `ONLINE_SERVER` Actions variable). You can also type it under **Online service** on the Squad or Cloud page. Squad settings, the cloud account and encrypted sign-ins are kept in `%LOCALAPPDATA%\Clip_Engine\desktop.json`. Your views of squad moments are listed in `squad\views.json` there, and squadmates' downloaded views are cached in `squad\cache\` for a week.
 
 ## Layout
@@ -60,7 +62,7 @@ Run `ClipEngine.exe` and launch a supported game. `clip_engine.exe` can also run
 | `tests` | Tests for the detection rules, matching, clip metadata, game API events and killfeed rules |
 | `ui/ClipEngine.Desktop` | The desktop app (C#, Avalonia) |
 | `ui/ClipEngine.Desktop.Preview` | Renders the app's screens to PNGs with sample data |
-| `ui/ClipEngine.Desktop.Tests` | Tests for the app's log parsing, settings file, MP4 reading, clip markers, import, plans and license keys, match grouping, storage cleanup and player records |
+| `ui/ClipEngine.Desktop.Tests` | Tests for the editor's timeline and export, the app's log parsing, settings file, MP4 reading, clip markers, import, plans and license keys, match grouping, storage cleanup, player records and the stats overlay's readings |
 | `website` | The landing page (plain HTML, published to GitHub Pages; see `website/README.md`) |
 
 ## The online service
@@ -110,6 +112,11 @@ These live in `wrangler.toml` under `[vars]`:
 | `POLAR_ORGANIZATION_ID` | empty | Your Polar organization (Settings > General). Until it's set, license keys are refused with "Subscriptions aren't open yet." |
 | `POLAR_PRO_BENEFIT_ID` | empty | The License Keys benefit on the Pro product |
 | `POLAR_ULTRA_BENEFIT_ID` | empty | The License Keys benefit on the Ultra product |
+| `REFERRAL_FRIENDS` | 3 | Friends who must install Clip Engine from someone's invite for one reward |
+| `REFERRAL_REWARD_DAYS` | 30 | Days of Pro each reward gives, counted from when its key is first used |
+| `REFERRAL_MAX_REWARDS` | 1 | Rewards one person can earn; with 2, six friends give two months |
+| `REFERRAL_CLAIM_DAYS` | 7 | How long after installing a friend can still add an invite code, and how long an opened invite link is remembered |
+| `REFERRAL_IP_CHECK` | true | `false` lets friends on the inviter's own network, or several on one network, count |
 
 ### Costs and protection
 
@@ -151,6 +158,16 @@ The operator's key maker (kept privately, never in this repository) makes specia
 
 Keys made before roles keep working: their days become minutes the first time the directory starts.
 
+
+### Inviting friends
+
+`src/referrals.js`, one `Referrals` Durable Object (migration `v2`). The app's side is `Services/Referrals.cs` and the Invite friends card on the Friends page (`ViewModels/InviteViewModel.cs`).
+
+- **Invite code.** **Get my invite link** calls `POST /v1/referrals` with the PC's id and gets an 8-character code, its link (`/r/<code>`) and a secret, kept encrypted in `desktop.json`. Asking again from the same PC gives the same code and a new secret. The app looks at its friends every 3 hours (`GET /v1/referrals/<code>`, Bearer secret).
+- **Counting a friend.** On its first start on a PC the app calls `POST /v1/referrals/activate` once, with `fresh: true` when nothing of Clip Engine (`clip_engine.ini`, `desktop.json`, `license.json`) was there yet. A friend who opened an invite link in the last 7 days from the same address is credited without typing anything; otherwise they can type the code on the Friends page for 7 days.
+- **Checks.** The PC's id is a SHA-256 of Windows' `MachineGuid` (the app's own random id when it can't be read), so wiping Clip Engine's files doesn't make a PC new. A PC is recorded the first time it's seen and only counts once, ever, for one code, and only when the app said it was a new install. It doesn't count from a PC the inviter used, from an address the inviter used (hashed with a salt kept in the object), or from an address another of the inviter's friends already counted from. A typed code is under `AUTH_LIMIT` like sign-ins.
+- **Reward.** Each `REFERRAL_FRIENDS` counted friends, up to `REFERRAL_MAX_REWARDS`, the service makes a special key in the directory (`/grant/create`: Pro, `REFERRAL_REWARD_DAYS`, 2 PCs, noted "Invited N friends (invite XXXX-XXXX)"), so it shows in the key maker with the others and can be turned off there. The app puts it on at once when the PC has no working key; with a subscription it stays on the card to use later.
+- **Limits.** A determined cheat with VPNs and virtual machines can still fake friends; the checks hold that to one PC per network per invite.
 
 ## Releasing
 

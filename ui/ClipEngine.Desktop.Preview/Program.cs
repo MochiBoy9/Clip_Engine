@@ -8,6 +8,7 @@ using ClipEngine.Desktop;
 using ClipEngine.Desktop.Services;
 using ClipEngine.Desktop.Services.Cloud;
 using ClipEngine.Desktop.Services.Squad;
+using ClipEngine.Desktop.Services.Stats;
 using SquadView = ClipEngine.Desktop.Services.Squad.SquadView;
 using ClipEngine.Desktop.ViewModels;
 using ClipEngine.Desktop.Views;
@@ -80,6 +81,7 @@ friends.ShowSample("A1B2-C3D4",
     friends.SampleFriend("VEX00000", "Vex", "vexed", true, "", null, TimeSpan.FromMinutes(7)),
 ],
 [friends.SampleRequest("N0VA0000", "Nova", "nova")]);
+vm.Invite.ShowSample();
 Capture(Page.Friends, "20-friends.png");
 
 // Ultra: its badge, themes, 4K and the credits.
@@ -101,6 +103,32 @@ Capture(Page.Settings, "22-creator-key.png");
 window.Height = 900;
 vm.Plan.ShowSample(Plan.Free, new Credits([], []));
 
+// The stats overlay's settings, on a PC that hasn't allowed frame timing yet, and the overlay over a game.
+vm.Settings.OnFrameTimingChecked(FrameTiming.NeedsPermission);
+vm.Settings.StatsOverlayOn = true;
+vm.SelectedNav = vm.Nav.First(n => n.Page == Page.Settings);
+Settle();
+var statsHeading = window.GetVisualDescendants().OfType<Avalonia.Controls.TextBlock>().First(t => t.Text == "STATS OVERLAY");
+var settingsScroll = statsHeading.GetVisualAncestors().OfType<Avalonia.Controls.ScrollViewer>().First();
+if (statsHeading.TranslatePoint(new Point(0, 0), (Visual)settingsScroll.Content!) is { } headingAt)
+    settingsScroll.Offset = new Vector(0, headingAt.Y - 60);
+Save(window, "22-stats-settings.png");
+vm.StatsOverlay.Show(new GameStats
+{
+    Frames = FrameTiming.Reading, Fps = 162.4, OnePercentLow = 118.7, CpuPercent = 34, GpuPercent = 91, GpuCelsius = 71,
+    VramUsed = (long)(7.4 * (1L << 30)), VramTotal = 12L << 30, RamUsed = (long)(14.2 * (1L << 30)), RamTotal = 32L << 30,
+}, vm.DesktopSettings.StatsOverlay.Choice);
+var statsOverlay = new StatsOverlayWindow
+{
+    DataContext = vm.StatsOverlay,
+    SizeToContent = Avalonia.Controls.SizeToContent.Manual,
+    Width = 1280,
+    Height = 720,
+    Background = new ImageBrush(SampleFrame()) { Stretch = Stretch.UniformToFill },
+};
+statsOverlay.Show();
+Save(statsOverlay, "23-stats-overlay.png");
+
 // The player, opened on the newest clip partway through.
 vm.SelectedNav = vm.Nav.First(n => n.Page == Page.Clips);
 Settle();
@@ -110,6 +138,10 @@ Save(window, "5-player.png");
 // Trimming that clip down to its best moments.
 vm.OpenPlayer(vm.Clips[0]).ShowTrim(4.5, 27.5);
 Save(window, "7-trim.png");
+
+// The editor on that clip: cut into parts, one cut out, the second part picked.
+vm.OpenEditor(vm.Clips[0], vm.OpenPlayer(vm.Clips[0]))!.ShowSample();
+Save(window, "22-editor.png");
 
 vm.OpenPlayer(vm.Clips[0]).ShowCheck();
 Save(window, "13-check-detection.png");

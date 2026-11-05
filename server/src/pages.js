@@ -167,3 +167,22 @@ export function invitePage(squad, invite) {
   return shell({ title: `Join ${squad.name} · Clip Engine`, description: `Join ${squad.name} on Clip Engine`, body,
     head: `<meta property="og:title" content="Join ${escapeHtml(squad.name)} on Clip Engine">` });
 }
+
+// The newest installer on GitHub Releases, under the fixed name every release carries.
+export const SETUP_URL = "https://github.com/MochiBoy9/Clip_Engine/releases/latest/download/Clip_Engine-Setup.exe";
+
+// The page for /r/<code>: a friend's invite to Clip Engine. Opening it is remembered for the app installed from it.
+export function referralPage(invite) {
+  const who = invite.name ? escapeHtml(invite.name) : "A friend";
+  const app = `clipengine://invite/${invite.code}`;
+  const body = `<h1>${who} invited you to Clip Engine</h1>
+<div class="sub">Free clipping for PC games. It spots your kills, assists, deaths, revives and wins and saves each one as a clip on its own.</div>
+<div style="margin-top:22px;padding:18px;background:var(--panel);border:1px solid var(--line);border-radius:10px;max-width:520px">
+<p style="margin:0 0 14px">Install it on your PC and start it once. That's all it takes for ${invite.name ? who : "your friend"} to get credit for inviting you.</p>
+<p style="margin:0"><a href="${escapeHtml(SETUP_URL)}" style="display:inline-block;background:var(--amber);color:#14161a;padding:9px 16px;border-radius:6px;text-decoration:none;font-weight:700">Download Clip Engine for Windows</a></p>
+<p class="sub" style="margin:18px 0 6px">If the app asks for an invite code, it's</p>
+<div style="font:600 22px/1.2 ui-monospace,Consolas,monospace;letter-spacing:.08em;color:var(--amber)">${escapeHtml(invite.code)}</div>
+<p class="sub" style="margin:12px 0 0">Installed it already? <a href="${escapeHtml(app)}">Open it in Clip Engine</a>, or type the code under Settings, Invite friends.</p></div>`;
+  return shell({ title: "You're invited · Clip Engine", description: `${invite.name || "A friend"} invited you to Clip Engine, free clipping for PC games.`, body,
+    head: `<meta property="og:title" content="${who} invited you to Clip Engine"><meta property="og:description" content="Free clipping for PC games: every kill, revive and win saved on its own."><meta name="theme-color" content="#f2a516">` });
+}
