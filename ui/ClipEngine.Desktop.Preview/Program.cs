@@ -80,6 +80,7 @@ friends.ShowSample("A1B2-C3D4",
     friends.SampleFriend("VEX00000", "Vex", "vexed", true, "", null, TimeSpan.FromMinutes(7)),
 ],
 [friends.SampleRequest("N0VA0000", "Nova", "nova")]);
+vm.Invite.ShowSample();
 Capture(Page.Friends, "20-friends.png");
 
 // Ultra: its badge, themes, 4K and the credits.

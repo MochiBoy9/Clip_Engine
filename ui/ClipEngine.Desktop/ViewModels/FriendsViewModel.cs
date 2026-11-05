@@ -53,6 +53,9 @@ public sealed class FriendsViewModel : ObservableObject
     public RelayCommand CopyUsernameCommand { get; }
     public RelayCommand GoToCloudCommand { get; }
 
+    // Inviting friends to Clip Engine itself, which needs no cloud account.
+    public InviteViewModel Invite => _main.Invite;
+
     public bool SignedIn => _main.Cloud.SignedIn;
     public bool NotSignedIn => !SignedIn;
 

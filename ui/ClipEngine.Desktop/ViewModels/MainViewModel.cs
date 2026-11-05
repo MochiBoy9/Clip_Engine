@@ -67,6 +67,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ];
         _selectedNav = Nav[0];
 
+        // Nothing of Clip Engine on this PC yet: a new install, which can count for a friend's invite.
+        var freshInstall = live && !File.Exists(AppPaths.EngineSettingsFile) && !File.Exists(AppPaths.DesktopSettingsFile)
+                           && !File.Exists(AppPaths.LicenseFile);
         var engineSettings = live ? EngineSettings.Load(AppPaths.EngineSettingsFile) : new EngineSettings();
         DesktopSettings = live ? DesktopSettings.Load() : new DesktopSettings();
         Plan = new PlanViewModel(live ? AppPaths.LicenseFile : null, DesktopSettings, () => Online.ServerUrl(DesktopSettings));
@@ -156,6 +159,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Squad = new SquadViewModel(this, DesktopSettings);
         Squad.SetClipWindow(engineSettings.ClipBeforeSeconds, engineSettings.ClipAfterSeconds);
         Cloud = new CloudViewModel(this, DesktopSettings);
+        Invite = new InviteViewModel(DesktopSettings, () => Online.ServerUrl(DesktopSettings), Plan, live ? freshInstall : null,
+                                     copy: (text, done) => Cloud.CopyAsync(text, done),
+                                     notify: text => AddActivity(ActivityKind.Info, text),
+                                     save: live ? SaveDesktopSettingsNow : null);
         Friends = new FriendsViewModel(this, DesktopSettings);
 
         if (!live) return;
@@ -196,6 +203,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public SettingsViewModel Settings { get; }
     public PlanViewModel Plan { get; }
     public FriendsViewModel Friends { get; }
+    public InviteViewModel Invite { get; }
     public UpdatesViewModel Updates { get; }
     internal DesktopSettings DesktopSettings { get; }
 
@@ -295,6 +303,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             ShowPage(Squad);
             Squad.PrefillInvite(Uri.UnescapeDataString(code));
+        }
+        else if (parts is ["invite", var invite, ..])
+        {
+            ShowPage(Friends);
+            Invite.PrefillCode(Uri.UnescapeDataString(invite));
         }
     }
 

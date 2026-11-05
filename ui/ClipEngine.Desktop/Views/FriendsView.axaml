@@ -47,6 +47,72 @@
       <TextBlock Classes="caption" Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextWrapping="Wrap"
                  Classes.error="{Binding MessageIsError}" />
 
+      <!-- Inviting friends to Clip Engine: a month of Pro for enough of them. Needs no cloud account. -->
+      <views:Plate Classes="card" Padding="26,24" DataContext="{Binding Invite}" x:DataType="vm:InviteViewModel">
+        <StackPanel>
+          <TextBlock Classes="eyebrow" Margin="0,0,0,18" Text="INVITE FRIENDS" />
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
+              <PathIcon Data="{StaticResource IconSparkle}" />
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+              <TextBlock Text="{Binding Headline}" FontWeight="SemiBold" FontSize="14" />
+              <TextBlock Classes="caption" Text="{Binding Caption}" TextWrapping="Wrap" />
+            </StackPanel>
+            <Button Grid.Column="2" Classes="accent" Content="Get my invite link" Command="{Binding GetLinkCommand}"
+                    IsVisible="{Binding NoLink}" VerticalAlignment="Center" />
+          </Grid>
+          <StackPanel IsVisible="{Binding HasLink}" Margin="0,16,0,0">
+            <Grid ColumnDefinitions="*,Auto,Auto">
+              <Border Classes="inset" Padding="12,8" CornerRadius="2">
+                <TextBlock Classes="mono" Text="{Binding Link}" FontSize="13" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
+              </Border>
+              <Button Grid.Column="1" Classes="accent" Content="Copy link" Command="{Binding CopyLinkCommand}" Margin="10,0,0,0" />
+              <Button Grid.Column="2" Classes="icon" Command="{Binding RefreshCommand}" ToolTip.Tip="Check for new friends" Margin="6,0,0,0">
+                <PathIcon Data="{StaticResource IconRefresh}" />
+              </Button>
+            </Grid>
+            <TextBlock Classes="caption" Margin="0,8,0,0" TextWrapping="Wrap" Text="{Binding CodeText}" />
+            <Grid ColumnDefinitions="*,Auto" Margin="0,14,0,0">
+              <ProgressBar Minimum="0" Maximum="1" Value="{Binding Progress}" Height="6" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="1" Classes="caption" Text="{Binding ProgressText}" Margin="12,0,0,0" VerticalAlignment="Center" />
+            </Grid>
+            <StackPanel IsVisible="{Binding HasRewards}" Margin="0,14,0,0" Spacing="8">
+              <TextBlock Text="Your free Pro" FontWeight="SemiBold" FontSize="14" />
+              <ItemsControl ItemsSource="{Binding Rewards}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="x:String">
+                    <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,8">
+                      <Border Classes="inset" Padding="12,6" CornerRadius="2">
+                        <TextBlock Classes="mono" Text="{Binding}" FontSize="13" FontWeight="Bold" />
+                      </Border>
+                      <Button Grid.Column="1" Classes="secondary" Content="Copy" Margin="10,0,0,0"
+                              Command="{Binding $parent[ItemsControl].((vm:InviteViewModel)DataContext).CopyRewardCommand}" CommandParameter="{Binding}" />
+                      <Button Grid.Column="2" Classes="secondary" Content="Use on this PC" Margin="8,0,0,0"
+                              Command="{Binding $parent[ItemsControl].((vm:InviteViewModel)DataContext).UseRewardCommand}" CommandParameter="{Binding}" />
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <TextBlock Classes="caption" TextWrapping="Wrap"
+                         Text="A special key for Pro. Its month starts the first time it's used, so you can save it for later if you already subscribe." />
+            </StackPanel>
+          </StackPanel>
+          <StackPanel IsVisible="{Binding ShowCodeBox}">
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+            <TextBlock Text="Did a friend invite you?" FontWeight="SemiBold" FontSize="14" />
+            <TextBlock Classes="caption" Text="Type their invite code so they get credit. It works for a week after installing." TextWrapping="Wrap" Margin="0,2,0,12" />
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBox Text="{Binding CodeInput}" Watermark="ABCD-1234" MaxLength="64" />
+              <Button Grid.Column="1" Classes="secondary" Content="Add invite code" Command="{Binding AddCodeCommand}" Margin="10,0,0,0" />
+            </Grid>
+          </StackPanel>
+          <TextBlock Classes="caption" Text="{Binding InvitedText}" IsVisible="{Binding HasInvitedText}" TextWrapping="Wrap" Margin="0,12,0,0" />
+          <TextBlock Classes="caption" Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextWrapping="Wrap" Margin="0,10,0,0"
+                     Classes.error="{Binding MessageIsError}" />
+        </StackPanel>
+      </views:Plate>
+
       <!-- Needs a cloud account -->
       <views:Plate Classes="card lead" Padding="28,26" IsVisible="{Binding NotSignedIn}">
         <Grid ColumnDefinitions="Auto,*,Auto">
