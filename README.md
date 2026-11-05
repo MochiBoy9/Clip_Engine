@@ -33,7 +33,7 @@ You need Windows 10 (version 1903 or newer) or Windows 11, and a graphics card w
 - **Friends.** Add friends by username or friend code, see who's online, what they're playing and for how long, get a notice when they come on, and right-click to join their squad.
 - **Share anywhere.** One click puts a short link on your clipboard. It plays in any browser, with the moments marked, and shows a preview in Discord. A small copy that fits Discord's upload limit is a click away too.
 - **Your profile.** Public clips show on your page, pinned ones first, under the same username your friends know you by.
-- **Trim, star and tidy.** Trim a clip in the player with no quality lost, star favourites, and have old clips cleaned up by age or size, favourites always kept.
+- **Trim, edit, star and tidy.** Trim a clip in the player with no quality lost, or open it in the editor to split it into parts, cut what you don't need, put parts in another order and export a new clip with its moments kept. Star favourites, and have old clips cleaned up by age or size, favourites always kept.
 - **Detection Studio.** Add any game, or fine-tune how one is read: draw a box where the game shows a kill, type the words, and test it on your own clips.
 - **Light on your game.** Encodes on the GPU at your monitor's resolution and refresh rate, and records only the game, so nothing else on your PC ends up in a clip.
 - **Discord status.** Shows the game, the match time and your kills while you play.

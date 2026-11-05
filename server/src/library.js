@@ -6,7 +6,7 @@
 import { addColumns, isSquadId, normalizeInvite, randomCode, randomToken, sameSecret, sha256Hex, SQUAD_ID_LENGTH } from "./codes.js";
 import { normalizeHandle } from "./handles.js";
 import { mediaPointer } from "./media.js";
-import { checkLicense, cleanKey, OFFLINE_GRACE_MS, PLANS, planName, RECHECK_MS, storageBytes } from "./plans.js";
+import { checkLicense, cleanKey, OFFLINE_GRACE_MS, PLANS, planName, RECHECK_MS, roleLabel, storageBytes } from "./plans.js";
 import { cleanGame, cleanName, MOMENT_TYPES } from "./protocol.js";
 
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
@@ -107,13 +107,14 @@ export class Library {
     this.sql.exec("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", key, value);
   }
 
-  // The plan, with what a special key adds: extra storage and a different highest resolution.
+  // The plan, with what a special key adds: extra storage, a different highest resolution and a role.
   plan() {
     const name = planName(this.meta("plan"));
     const features = this.features();
     return {
       name,
       label: PLANS[name].label,
+      roleLabel: roleLabel(features.role),
       lines: features.lines ?? PLANS[name].lines,
       storage: storageBytes(this.env, name) + (features.extraMb ?? 0) * 1024 * 1024,
     };
@@ -128,7 +129,7 @@ export class Library {
   }
 
   setFeatures(features) {
-    this.setMeta("plan_features", JSON.stringify({ extraMb: features?.extraMb ?? 0, lines: features?.lines ?? null }));
+    this.setMeta("plan_features", JSON.stringify({ extraMb: features?.extraMb ?? 0, lines: features?.lines ?? null, role: features?.role ?? null }));
   }
 
   used() {
@@ -143,6 +144,7 @@ export class Library {
       handle: this.meta("handle"),
       plan: plan.name,
       planLabel: plan.label,
+      roleLabel: plan.roleLabel,
       planKey: this.meta("plan_display") ?? null,
       lines: plan.lines,
       friendCode: formatFriendCode(this.meta("id")),
@@ -379,7 +381,7 @@ export class Library {
     const previous = this.meta("plan_license");
     if (previous && previous !== check.license) await this.handles("/license/release", { license: previous, account: this.meta("id") });
     this.setMeta("plan", check.plan);
-    this.setFeatures(check.features);
+    this.setFeatures({ ...check.features, role: check.role });
     this.setMeta("plan_key", key);
     this.setMeta("plan_license", check.license);
     this.setMeta("plan_display", check.display || `${key.slice(0, 4)}…${key.slice(-4)}`);
@@ -403,7 +405,7 @@ export class Library {
     const check = await checkLicense(this.env, key);
     if (check.ok) {
       this.setMeta("plan", check.plan);
-      this.setFeatures(check.features);
+      this.setFeatures({ ...check.features, role: check.role });
       this.setMeta("plan_ok", String(Date.now()));
     } else if (check.rejected) {
       await this.forgetLicense();

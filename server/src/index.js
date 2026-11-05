@@ -21,13 +21,20 @@
 //
 // Special keys (for the operator's key maker; every route needs Authorization: Bearer ADMIN_TOKEN):
 //   GET  /v1/admin/grants           every key with its status, PCs and end date
-//   POST /v1/admin/grants           make keys  { count, plan, days, extraStorageGb, themes, lines, maxDevices, note }
+//   POST /v1/admin/grants           make keys  { count, plan, role, minutes (or days), endsAt, extraStorageGb, themes,
+//                                   lines, maxDevices, perks, credits, reason, showReason, note }
 //   PATCH /v1/admin/grants/<key>    change one { any of those, revoked, resetDevices, restart }
+//   GET  /v1/admin/messages         messages and bug reports from special keys, open ones first
+//   PATCH /v1/admin/messages/<id>   answer one or mark it done { reply?, done? }
+//
+// A special key's direct line (its perks, from the key maker):
+//   POST /v1/contact                send the operator a message or a bug report { key, device, kind, text, name? }
+//   POST /v1/contact/list           this key's messages with the operator's answers { key, device }
 //
 // Plans (src/plans.js):
 //   GET  /v1/plans                  Free, Pro and Ultra: price, storage and resolution
 //   POST /v1/license                check a Polar or special key { key, device, credit? } and list or unlist its name in the credits
-//   GET  /v1/credits                the names subscribers asked to have in the credits
+//   GET  /v1/credits                the names in the credits: subscribers, and special keys the operator lets in
 //
 // Inviting friends (one Durable Object, src/referrals.js):
 //   POST /v1/referrals              this PC's invite code and its secret        { pc, device, name? }
@@ -49,7 +56,7 @@ import { Handles, normalizeHandle } from "./handles.js";
 import { CLIP_CODE_LENGTH, Library } from "./library.js";
 import { formatInvite } from "./codes.js";
 import { clipOembed, clipPage, invitePage, notFoundPage, profilePage, referralPage } from "./pages.js";
-import { checkLicense, normalizeGrant, PLANS, planJson } from "./plans.js";
+import { checkLicense, creditGroup, normalizeGrant, PLANS, planJson } from "./plans.js";
 import { isMediaPointer, serveMedia } from "./media.js";
 import { normalizeReferral, Referrals } from "./referrals.js";
 import { Squad } from "./squad.js";
@@ -133,6 +140,12 @@ async function grantRoute(request, env, url, path, method) {
     if (!code) return json({ error: "That isn't a special key." }, 400);
     return directory(env, url, "/grant/update", { ...((await readBody(request)) ?? {}), code });
   }
+  if (path === "/v1/admin/messages" && method === "GET") return directory(env, url, "/grant/inbox", {});
+  const n = path.match(/^\/v1\/admin\/messages\/(\d{1,12})$/);
+  if (n && method === "PATCH") {
+    const body = (await readBody(request)) ?? {};
+    return directory(env, url, "/grant/inbox/update", { reply: body.reply, done: body.done, id: Number(n[1]) });
+  }
   return json({ error: "Not found." }, 404);
 }
 
@@ -202,10 +215,10 @@ export default {
 };
 
 // Per-address limits (Workers Rate Limiting, wrangler.toml [[ratelimits]]), on top of Cloudflare's own DDoS
-// protection: making accounts and squads, sign-in and invite codes, and key checks get
+// protection: making accounts and squads, sign-in and invite codes, key checks and special-key messages get
 // AUTH_LIMIT; every other change (uploads, friends, edits, the key maker's) gets WRITE_LIMIT. Reads aren't limited
 // here. Without the bindings (tests, wrangler dev) nothing is limited.
-const AUTH_ROUTES = /^\/v1\/(accounts|accounts\/signin|squads|join|license|referrals|referrals\/activate)$/;
+const AUTH_ROUTES = /^\/v1\/(accounts|accounts\/signin|squads|join|license|contact|contact\/list|referrals|referrals\/activate)$/;
 
 async function overLimit(request, env, path, method) {
   const sensitive = method === "POST" && AUTH_ROUTES.test(path);
@@ -269,7 +282,7 @@ async function route(request, env) {
     }
     m = path.match(/^\/v1\/accounts\/([0-9A-Za-z]+)(\/.*)$/);
     if (m && isSquadId(m[1].toUpperCase()) && !internal(m[2])) return forward(stub(env.LIBRARIES, m[1].toUpperCase()), request, m[2]);
-    if (path.startsWith("/v1/admin/grants")) return withCors(await grantRoute(request, env, url, path, method));
+    if (/^\/v1\/admin\/(grants|messages)(\/|$)/.test(path)) return withCors(await grantRoute(request, env, url, path, method));
     if (path.startsWith("/v1/admin/") && !admin(request, env)) return json({ error: "Not allowed." }, 403);
     if (path === "/v1/admin/plan" && method === "POST") {
       const body = await readBody(request);
@@ -309,13 +322,33 @@ async function route(request, env) {
       const body = await readBody(request);
       const check = await checkLicense(env, body?.key, typeof body?.device === "string" ? body.device : "");
       if (!check.ok) return json({ error: check.error, rejected: check.rejected }, check.rejected ? 403 : 503);
-      // The credits thank people who pay; a special key (made in the key maker, not bought) is never listed.
-      if (check.grant) {
+      // The credits thank people who pay. A special key (made in the key maker, not bought) is listed only when
+      // the operator ticked "in the credits" for it, under its role.
+      const credit = typeof body?.credit === "string" ? body.credit : "";
+      if (check.grant && !check.credits) {
         await directory(env, url, "/credits/remove", { license: check.license });
-      } else if (body?.credit !== undefined && check.plan !== "free") {
-        await directory(env, url, "/credits/set", { license: check.license, name: typeof body.credit === "string" ? body.credit : "", plan: check.plan });
+      } else if (check.grant && body?.credit !== undefined) {
+        await directory(env, url, "/credits/set", { license: check.license, name: credit, plan: creditGroup(check) });
+      } else if (!check.grant && body?.credit !== undefined && check.plan !== "free") {
+        await directory(env, url, "/credits/set", { license: check.license, name: credit, plan: check.plan });
       }
-      return json({ ...planJson(env, check.plan, check.features), display: check.display, expires: check.expires, grant: Boolean(check.grant) });
+      return json({
+        ...planJson(env, check.plan, check.features, check.role),
+        display: check.display,
+        expires: check.expires,
+        grant: Boolean(check.grant),
+        perks: check.perks ?? [],
+        credits: check.grant ? Boolean(check.credits) : check.plan !== "free",
+        reason: check.reason ?? "",
+      });
+    }
+    if ((path === "/v1/contact" || path === "/v1/contact/list") && method === "POST") {
+      const body = await readBody(request);
+      const code = normalizeGrant(body?.key);
+      if (!code) return json({ error: "Only special keys with a direct line or bug reports can do that." }, 403);
+      const device = typeof body?.device === "string" ? body.device.slice(0, 80) : "";
+      if (path === "/v1/contact/list") return directory(env, url, "/grant/message/list", { code, device });
+      return directory(env, url, "/grant/message/send", { code, device, kind: body?.kind, text: body?.text, name: body?.name });
     }
     if (path === "/v1/credits" && method === "GET") {
       const answer = await stub(env.HANDLES, "handles").fetch(new Request(`${url.origin}/credits`));

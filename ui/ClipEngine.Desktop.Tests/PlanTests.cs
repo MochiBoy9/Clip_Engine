@@ -197,6 +197,109 @@ public class PlanTests : IDisposable
     }
 
     [Fact]
+    public async Task ASpecialKeyCanGiveARoleCreditsAndADirectLine()
+    {
+        var server = new FakeServer((request, _) => request.RequestUri!.AbsolutePath == "/v1/credits"
+            ? (HttpStatusCode.OK, """{"ultra":["Mira"],"pro":["Kai"],"exclusive":["Rook"],"creator":["Vex"],"special":[]}""")
+            : (HttpStatusCode.OK, """{"plan":"ultra","grant":true,"display":"CEK-AAAA…AAAA","role":"creator","roleLabel":"Content Creator","perks":["contact","bugs"],"credits":true,"reason":"Streams every week"}"""));
+        var client = new LicenseClient("https://service.test/", new HttpClient(server));
+
+        var check = await client.CheckAsync("CEK-AAAA-AAAA-AAAA", "Vex", "pc-1");
+        Assert.Equal("creator", check.Role);
+        Assert.Equal("Content Creator", check.RoleLabel);
+        Assert.Equal(["contact", "bugs"], check.Perks);
+        Assert.True(check.CreditsAllowed);
+        Assert.Equal("Streams every week", check.Reason);
+
+        var vm = new PlanViewModel(null, null, () => "", []);
+        vm.Accept("CEK-AAAA-AAAA-AAAA", check);
+        Assert.Equal("CONTENT CREATOR", vm.Badge);
+        Assert.True(vm.ShowBadge);
+        Assert.Equal("Clip Engine Content Creator", vm.Title);
+        Assert.StartsWith("Ultra features: 4K recording", vm.Detail);
+        Assert.Equal("Given for: Streams every week", vm.Reason);
+        Assert.True(vm.CanBeCredited, "the developer let this key into the credits");
+        Assert.True(vm.HasDirectLine);
+        Assert.True(vm.HasBugReports);
+        Assert.Equal("Talk to the developer", vm.ContactTitle);
+        Assert.Equal("Your Content Creator key is on. Welcome!", vm.Message);
+        Assert.False(vm.HasManage, "a special key has no subscription to manage");
+        Assert.False(vm.SendMessageCommand.CanExecute(null), "nothing written yet");
+        vm.ContactInput = "Hello!";
+        Assert.True(vm.SendMessageCommand.CanExecute(null));
+        Assert.True(vm.SendBugCommand.CanExecute(null));
+
+        // A role on Free still shows its badge; no perks means no direct line.
+        vm.Accept("CEK-BBBB", new LicenseCheck(LicenseOutcome.Valid, "", Plan.Free, "", null, true, RoleLabel: "Special", Role: "special"));
+        Assert.True(vm.ShowBadge);
+        Assert.Equal("SPECIAL", vm.Badge);
+        Assert.False(vm.HasContact);
+        Assert.False(vm.SendMessageCommand.CanExecute(null));
+        Assert.False(vm.CanBeCredited);
+        Assert.False(vm.HasReason);
+
+        vm.Remove();
+        Assert.False(vm.ShowBadge);
+        Assert.False(vm.HasRole);
+
+        var credits = await client.CreditsAsync();
+        Assert.Equal(["Rook"], credits.Exclusive);
+        Assert.Equal(["Vex"], credits.Creator);
+        Assert.Empty(credits.Special);
+    }
+
+    [Fact]
+    public void ARolesExtrasAreKept()
+    {
+        var file = Path.Combine(_dir, "license.json");
+        new LicenseState
+        {
+            Key = "CEK-1", IsSpecial = true, Role = "exclusive", RoleLabel = "Exclusive", Perks = ["bugs"], CreditsAllowed = true,
+            Reason = "Beta tester", LastOk = DateTimeOffset.UtcNow,
+        }.Save(file);
+        var loaded = LicenseState.Load(file);
+        Assert.Equal("Exclusive", loaded.RoleLabel);
+        Assert.Equal(["bugs"], loaded.Perks);
+        Assert.True(loaded.CreditsAllowed);
+        Assert.Equal("Beta tester", loaded.Reason);
+        loaded.Clear();
+        Assert.Null(loaded.RoleLabel);
+        Assert.Null(loaded.Perks);
+        Assert.False(loaded.CreditsAllowed);
+    }
+
+    [Fact]
+    public async Task MessagesGoToTheDeveloperAndAnswersComeBack()
+    {
+        var server = new FakeServer((request, body) => request.RequestUri!.AbsolutePath switch
+        {
+            "/v1/contact" when body.Contains("\"kind\":\"bug\"") => (HttpStatusCode.Forbidden, """{"error":"Your key doesn't include bug reports."}"""),
+            "/v1/contact" or "/v1/contact/list" => (HttpStatusCode.OK,
+                """{"messages":[{"id":2,"kind":"message","text":"Bigger squads?","created":1767225600000,"reply":"Soon!","replied":1767229200000},{"id":1,"kind":"bug","text":"Crash","created":1767225000000,"reply":null,"replied":null}]}"""),
+            _ => (HttpStatusCode.NotFound, "{}"),
+        });
+        var client = new ContactClient("https://service.test/", new HttpClient(server));
+
+        var sent = await client.SendAsync("CEK-AAAA", "pc-1", ContactClient.Message, "Bigger squads?", "Mira");
+        Assert.True(sent.Ok);
+        var body = System.Text.Json.Nodes.JsonNode.Parse(server.Bodies[^1])!;
+        Assert.Equal("pc-1", body["device"]!.GetValue<string>());
+        Assert.Equal("message", body["kind"]!.GetValue<string>());
+        Assert.Equal(2, sent.Messages.Count);
+        Assert.Equal("Soon!", sent.Messages[0].Reply);
+        Assert.Null(sent.Messages[1].Reply);
+        var view = new ContactMessageView(sent.Messages[1]);
+        Assert.Equal("BUG REPORT", view.Kind);
+        Assert.False(view.HasReply);
+
+        var refused = await client.SendAsync("CEK-AAAA", "pc-1", ContactClient.Bug, "Crash", "");
+        Assert.False(refused.Ok);
+        Assert.Equal("Your key doesn't include bug reports.", refused.Message);
+        Assert.True((await client.ListAsync("CEK-AAAA", "pc-1")).Ok);
+        Assert.False((await new ContactClient("").ListAsync("CEK-AAAA", "pc-1")).Ok);
+    }
+
+    [Fact]
     public void TheEngineGetsTheResolution()
     {
         var file = Path.Combine(_dir, "clip_engine.ini");
