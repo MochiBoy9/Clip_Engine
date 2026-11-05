@@ -96,7 +96,7 @@
             <views:Barcode Seed="{Binding Version}" Fill="{StaticResource BorderStrongBrush}" Width="44" Height="12"
                            VerticalAlignment="Center" Margin="10,0,0,0" />
             <TextBlock Text="{Binding Version}" Classes="mono caption" FontSize="11" VerticalAlignment="Center" />
-            <Border Classes="pill accent" Padding="6,1" VerticalAlignment="Center" IsVisible="{Binding Plan.IsPaid}">
+            <Border Classes="pill accent" Padding="6,1" VerticalAlignment="Center" IsVisible="{Binding Plan.ShowBadge}">
               <TextBlock Text="{Binding Plan.Badge}" FontSize="9" FontWeight="Bold" LetterSpacing="1" />
             </Border>
             <Border Classes="pill accent" Padding="6,1" VerticalAlignment="Center" IsVisible="{Binding Updates.HasUpdate}">

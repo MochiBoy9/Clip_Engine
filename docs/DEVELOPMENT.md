@@ -126,6 +126,19 @@ These live in `wrangler.toml` under `[vars]`:
 
 The app sends the key to `POST /v1/license`, which checks it with Polar's public license key API (no Polar token needed) and answers with the plan. Putting the key on a cloud account (`POST /v1/accounts/<id>/plan`) gives the account the plan's storage; one subscription is on one account at a time, and the service checks it again twice a day, so a cancelled one goes back to Free. Subscribers can list a name in the credits, `GET /v1/credits`, which the app and the website show.
 
+### Special keys
+
+The operator's key maker (kept privately, never in this repository) makes special keys, `CEK-XXXX-XXXX-XXXX`, through `/v1/admin/grants` with `ADMIN_TOKEN` (see `server/src/index.js`). A key gives:
+
+- a plan (Free, Pro or Ultra), which sets storage, resolution and themes, and optionally a role on top of it: `creator` (Content Creator), `special` or `exclusive`. The app shows the role as the badge, and a cloud account shows it next to the plan.
+- a length in minutes counted from first use (`minutes`, or `days` as before), a fixed end (`endsAt`, ms), both (whichever comes first), or neither.
+- extra cloud storage, a resolution cap, its own colour themes and a PC limit, as before.
+- perks: `contact`, a direct line to the developer, and `bugs`, bug reports that go straight to them. The app's plan card gets a box for them (`POST /v1/contact`, `/v1/contact/list`), checked against the key and a PC it was turned on on, 20 a day per key. The operator reads and answers them in the key maker's inbox (`GET /v1/admin/messages`, `PATCH /v1/admin/messages/<id>`).
+- `credits`: whether the holder may put a name in the credits. Their name is listed under their role (`exclusive`, `creator`, `special` in `GET /v1/credits`), after Ultra and Pro subscribers.
+- `reason`: why it was given. With `showReason` the holder sees it in the app ("Given for: ..."); otherwise only the operator does. `note` is always private.
+
+Keys made before roles keep working: their days become minutes the first time the directory starts.
+
 
 ## Releasing
 
