@@ -81,6 +81,14 @@ export function roleLabel(role) {
   return ROLES[role]?.label ?? null;
 }
 
+// The badge an account shows on its profile, its clips and the hub: its role if a special key gave one,
+// otherwise Pro or Ultra. Free has none. Anyone with a badge can hide it.
+export function badgeFor(plan, role) {
+  if (ROLES[role]) return { kind: role, label: ROLES[role].label };
+  if (plan === "pro" || plan === "ultra") return { kind: plan, label: PLANS[plan].label };
+  return null;
+}
+
 const MAX_MINUTES = 36_500 * 1440;
 const LATEST_END = Date.UTC(2200, 0, 1);
 

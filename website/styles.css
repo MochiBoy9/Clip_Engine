@@ -83,6 +83,7 @@ kbd { border-bottom-width: 3px; }
 }
 .nav nav a:not(.btn) span { color: var(--dim); margin-right: 6px; }
 .nav nav a:not(.btn):hover { color: var(--text); }
+.menu-toggle { display: none; }
 
 /* ------------------------------------------------------------------ Buttons */
 
@@ -330,7 +331,30 @@ details p { color: var(--muted); margin: 10px 0 0 28px; }
 @media (max-width: 900px) {
   .hero-grid, .split, .download .plate-in { grid-template-columns: 1fr; }
   .grid.three, .grid.two { grid-template-columns: 1fr; }
+  .nav-inner { position: relative; padding: 10px 16px; }
+  .menu-toggle {
+    display: grid; place-items: center; order: 3; width: 44px; height: 44px; margin-right: -6px;
+    background: transparent; border: 0; color: var(--text); cursor: pointer;
+  }
+  .menu-toggle span, .menu-toggle span::before, .menu-toggle span::after {
+    display: block; width: 20px; height: 2px; background: currentColor; transition: transform 0.14s ease, opacity 0.14s ease;
+  }
+  .menu-toggle span { position: relative; }
+  .menu-toggle span::before, .menu-toggle span::after { content: ""; position: absolute; left: 0; }
+  .menu-toggle span::before { top: -6px; }
+  .menu-toggle span::after { top: 6px; }
+  .nav.open .menu-toggle span { background: transparent; }
+  .nav.open .menu-toggle span::before { transform: translateY(6px) rotate(45deg); }
+  .nav.open .menu-toggle span::after { transform: translateY(-6px) rotate(-45deg); }
+  .nav nav { margin-left: auto; }
   .nav nav a:not(.btn) { display: none; }
+  .nav.open nav {
+    position: absolute; top: 100%; left: 0; right: 0; flex-direction: column; align-items: stretch; gap: 0;
+    background: var(--rail); border-bottom: 1px solid var(--line); padding: 4px 16px 16px;
+    max-height: calc(100vh - 64px); overflow-y: auto;
+  }
+  .nav.open nav a:not(.btn) { display: block; padding: 14px 0; font-size: 13px; border-bottom: 1px solid var(--line); }
+  .nav.open nav .btn { justify-content: center; margin-top: 14px; padding: 13px 22px; }
   .brand-sep, .brand-version { display: none; }
   .hero { padding-top: 44px; }
   .section { padding-top: 64px; }

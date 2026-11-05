@@ -18,7 +18,9 @@ constexpr std::string_view kDefaultFile = R"(# Clip Engine settings. Delete this
 # Folder for saved clips. Empty means Videos\Clip_Engine.
 output_dir =
 
-# Seconds of recent gameplay kept in memory, and the length of a clip saved with the hotkey.
+# Seconds of recent gameplay kept in memory (up to 1800, half an hour), and the length of a clip
+# saved with the hotkey. A long buffer takes a lot of memory at high resolutions; the engine keeps
+# it to 40% of the PC's memory, and Settings shows what yours would take.
 buffer_seconds = 60
 clip_seconds = 30
 
@@ -35,8 +37,31 @@ resolution = native
 # auto, h264 or hevc. auto uses H.264 and switches to HEVC when H.264 can't handle the resolution.
 codec = auto
 
+# Audio sources, each recorded on its own track, with a track of them all mixed together first
+# that every player plays. game_audio is the game alone (or everything you hear, on Windows older
+# than version 2004); discord_audio is Discord, TeamSpeak and Mumble; apps_audio is every other app.
 game_audio = true
 mic_audio = true
+discord_audio = true
+apps_audio = true
+
+# How loud each track is recorded, in percent (0 to 200), and the tracks that are muted, like
+# muted_audio = mic, discord. The app changes these while you play, and they apply at once.
+game_volume = 100
+mic_volume = 100
+discord_volume = 100
+apps_volume = 100
+muted_audio =
+
+# Say one of these phrases to save a clip, with Windows' own speech recognition, on this PC.
+# Separate phrases with commas; a number after one gives its clip a length of its own in seconds,
+# like: clip that, save the last minute 60. voice_clip_seconds is the length of the others (0 means
+# clip_seconds). voice_sensitivity is low, medium or high: higher catches more in a noisy room,
+# lower saves fewer clips by accident.
+voice_clips = false
+voice_phrases = clip that
+voice_clip_seconds = 0
+voice_sensitivity = medium
 
 # Examples: F8, Alt+F10, Ctrl+Shift+S
 save_hotkey = F8
@@ -238,6 +263,25 @@ Config Config::Load(const std::filesystem::path& file) {
       setBool(config.gameAudio);
     } else if (key == "mic_audio") {
       setBool(config.micAudio);
+    } else if (key == "discord_audio") {
+      setBool(config.discordAudio);
+    } else if (key == "apps_audio") {
+      setBool(config.appsAudio);
+    } else if (std::string badLevel; config.levels.Apply(key, value, &badLevel)) {
+      if (!badLevel.empty()) log::Warn("Setting {}: '{}' isn't a volume or an audio track", key, badLevel);
+    } else if (key == "voice_clips") {
+      setBool(config.voiceClips);
+    } else if (key == "voice_phrases") {
+      std::vector<std::string> bad;
+      config.voicePhrases = ParseVoicePhrases(value, &bad);
+      for (const auto& entry : bad) {
+        log::Warn("voice_phrases: '{}' should be words, perhaps with a length in seconds, like clip that 30", entry);
+      }
+    } else if (key == "voice_clip_seconds") {
+      setInt(config.voiceClipSeconds);
+    } else if (key == "voice_sensitivity") {
+      if (const auto sensitivity = ParseVoiceSensitivity(value)) config.voiceSensitivity = *sensitivity;
+      else log::Warn("Setting voice_sensitivity '{}' should be low, medium or high", value);
     } else if (key == "save_hotkey") {
       if (const auto hk = ParseHotkey(value)) {
         config.saveHotkey = *hk;
@@ -305,9 +349,17 @@ Config Config::Load(const std::filesystem::path& file) {
   }
 
   if (config.outputDir.empty()) config.outputDir = DefaultOutputDir();
-  config.bufferSeconds = std::clamp(config.bufferSeconds, 10, 600);
+  config.bufferSeconds = std::clamp(config.bufferSeconds, 10, kMaxBufferSeconds);
   config.clipSeconds = std::clamp(config.clipSeconds, 5, config.bufferSeconds);
   for (auto& clipKey : config.moreClipHotkeys) clipKey.seconds = std::clamp(clipKey.seconds, 5, config.bufferSeconds);
+  config.voiceClipSeconds = config.voiceClipSeconds <= 0 ? 0 : std::clamp(config.voiceClipSeconds, 5, config.bufferSeconds);
+  for (auto& phrase : config.voicePhrases) {
+    if (phrase.seconds > 0) phrase.seconds = std::clamp(phrase.seconds, 5, config.bufferSeconds);
+  }
+  if (config.voiceClips && config.voicePhrases.empty()) {
+    log::Warn("Voice clips are on but voice_phrases has no phrase to listen for");
+    config.voiceClips = false;
+  }
   config.fps = std::clamp(config.fps, 0, 360);
   config.bitrateMbps = std::clamp(config.bitrateMbps, 0, 300);
   config.resolution = config.resolution <= 0 ? 0 : std::clamp(config.resolution, 240, 4320);

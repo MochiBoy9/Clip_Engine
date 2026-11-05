@@ -8,6 +8,7 @@ using ClipEngine.Desktop;
 using ClipEngine.Desktop.Services;
 using ClipEngine.Desktop.Services.Cloud;
 using ClipEngine.Desktop.Services.Squad;
+using ClipEngine.Desktop.Services.Stats;
 using SquadView = ClipEngine.Desktop.Services.Squad.SquadView;
 using ClipEngine.Desktop.ViewModels;
 using ClipEngine.Desktop.Views;
@@ -80,6 +81,7 @@ friends.ShowSample("A1B2-C3D4",
     friends.SampleFriend("VEX00000", "Vex", "vexed", true, "", null, TimeSpan.FromMinutes(7)),
 ],
 [friends.SampleRequest("N0VA0000", "Nova", "nova")]);
+vm.Invite.ShowSample();
 Capture(Page.Friends, "20-friends.png");
 
 // Ultra: its badge, themes, 4K and the credits.
@@ -107,6 +109,43 @@ vm.Plan.Remove();
 window.Height = 900;
 vm.Plan.ShowSample(Plan.Free, new Credits([], []));
 
+// The stats overlay's settings, on a PC that hasn't allowed frame timing yet, and the overlay over a game.
+vm.Settings.OnFrameTimingChecked(FrameTiming.NeedsPermission);
+vm.Settings.StatsOverlayOn = true;
+vm.SelectedNav = vm.Nav.First(n => n.Page == Page.Settings);
+Settle();
+var statsHeading = window.GetVisualDescendants().OfType<Avalonia.Controls.TextBlock>().First(t => t.Text == "STATS OVERLAY");
+var settingsScroll = statsHeading.GetVisualAncestors().OfType<Avalonia.Controls.ScrollViewer>().First();
+if (statsHeading.TranslatePoint(new Point(0, 0), (Visual)settingsScroll.Content!) is { } headingAt)
+    settingsScroll.Offset = new Vector(0, headingAt.Y - 60);
+Save(window, "22-stats-settings.png");
+vm.StatsOverlay.Show(new GameStats
+{
+    Frames = FrameTiming.Reading, Fps = 162.4, OnePercentLow = 118.7, CpuPercent = 34, GpuPercent = 91, GpuCelsius = 71,
+    VramUsed = (long)(7.4 * (1L << 30)), VramTotal = 12L << 30, RamUsed = (long)(14.2 * (1L << 30)), RamTotal = 32L << 30,
+}, vm.DesktopSettings.StatsOverlay.Choice);
+var statsOverlay = new StatsOverlayWindow
+{
+    DataContext = vm.StatsOverlay,
+    SizeToContent = Avalonia.Controls.SizeToContent.Manual,
+    Width = 1280,
+    Height = 720,
+    Background = new ImageBrush(SampleFrame()) { Stretch = Stretch.UniformToFill },
+};
+statsOverlay.Show();
+Save(statsOverlay, "23-stats-overlay.png");
+
+// The audio tracks with Discord muted and the mic turned down, voice clips on, and a half-hour replay.
+vm.Settings.MicTrack.Load(true, 80, false);
+vm.Settings.DiscordTrack.Load(true, 100, true);
+vm.Settings.AppsTrack.Load(true, 45, false);
+vm.Settings.BufferSeconds = 1800;
+vm.Settings.VoiceClips = true;
+vm.Settings.VoicePhrasesText = "clip that, save the last minute 60";
+window.Height = 2400;
+Capture(Page.Settings, "22-audio-voice.png");
+window.Height = 900;
+
 // The player, opened on the newest clip partway through.
 vm.SelectedNav = vm.Nav.First(n => n.Page == Page.Clips);
 Settle();
@@ -116,6 +155,10 @@ Save(window, "5-player.png");
 // Trimming that clip down to its best moments.
 vm.OpenPlayer(vm.Clips[0]).ShowTrim(4.5, 27.5);
 Save(window, "7-trim.png");
+
+// The editor on that clip: cut into parts, one cut out, the second part picked.
+vm.OpenEditor(vm.Clips[0], vm.OpenPlayer(vm.Clips[0]))!.ShowSample();
+Save(window, "22-editor.png");
 
 vm.OpenPlayer(vm.Clips[0]).ShowCheck();
 Save(window, "13-check-detection.png");
@@ -473,7 +516,7 @@ internal static class SampleSquad
     public static void FillCloud(MainViewModel vm)
     {
         var hour = 3_600_000L;
-        vm.Cloud.ShowSample(Server, new CloudAccount("A1B2C3D4", "Enterro", "enterro", "free", "Free", 671_088_640, 2_147_483_648, 4),
+        vm.Cloud.ShowSample(Server, new CloudAccount("A1B2C3D4", "Enterro", "enterro", "pro", "Pro", 671_088_640, 107_374_182_400, 4, BadgeLabel: "Pro"),
         [
             new CloudClip("q7k2mx", "A1B2C3D4q7k2mx", null, "3 kills, 1 revive", "The Finals", Now - hour / 10, 30, 41_943_040, true, true, "public", true, 128),
             new CloudClip("b4nt9w", "A1B2C3D4b4nt9w", null, "Squad highlight: Kai's triple kill", "The Finals", Now - hour / 2, 18, 22_020_096, true, true, "public", false, 46),

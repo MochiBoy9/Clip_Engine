@@ -33,6 +33,8 @@ class App {
   void StopSession();
   void HandleEvents();
   void SaveReadyAutoClips(bool all);
+  // Saves the clips the player asked for by voice ("clip that").
+  void HandleVoiceClips();
   // Saves the last seconds of the recording, for a clip key or the app's Save clip button.
   void SaveHotkeyClip(int seconds);
   // Registers these keys to save clips, in place of the ones registered before. game names the

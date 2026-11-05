@@ -43,6 +43,27 @@ for (const el of document.querySelectorAll("[data-donate]")) {
   el.rel = "noopener";
 }
 if (LINKS.donate) setText("donate-note", "Polar emails you a key for the app. Thank you!");
+// The hub, where players' public clips are, is part of the online service.
+if (LINKS.service) setLink("hub", `${LINKS.service}/hub`);
+
+// The menu on phones: the button opens the section links under the bar, and picking one (or Escape) closes it.
+const menu = document.querySelector(".menu-toggle");
+const header = document.querySelector(".nav");
+if (menu && header) {
+  const close = () => {
+    header.classList.remove("open");
+    menu.setAttribute("aria-expanded", "false");
+  };
+  menu.addEventListener("click", () => {
+    const open = !header.classList.contains("open");
+    header.classList.toggle("open", open);
+    menu.setAttribute("aria-expanded", String(open));
+  });
+  for (const link of header.querySelectorAll("nav a")) link.addEventListener("click", close);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") close();
+  });
+}
 for (const name of ["pro", "ultra"]) {
   if (!LINKS[name]) continue;
   for (const el of document.querySelectorAll(`[data-link="${name}"]`)) el.textContent = "Subscribe";

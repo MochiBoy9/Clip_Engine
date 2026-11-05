@@ -4,6 +4,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { Handles } from "../src/handles.js";
 import { Library } from "../src/library.js";
+import { Referrals } from "../src/referrals.js";
 import { Squad } from "../src/squad.js";
 
 class FakeSql {
@@ -164,6 +165,7 @@ export function fakeEnv(vars = {}) {
   env.SQUADS = fakeNamespace(Squad, env);
   env.LIBRARIES = fakeNamespace(Library, env);
   env.HANDLES = fakeNamespace(Handles, env);
+  env.REFERRALS = fakeNamespace(Referrals, env);
   return env;
 }
 

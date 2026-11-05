@@ -56,6 +56,13 @@ internal sealed class ClipMetadata
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? SquadMoment { get; set; }
 
+    // The clip's audio tracks in order: "all" (every source mixed, what players play) when there's more than one,
+    // then "game" (or "system", everything heard), "mic", "discord" and "apps". Null for clips from before 0.15,
+    // which have game audio and then the mic.
+    [JsonPropertyName("audio_tracks")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? AudioTracks { get; set; }
+
     // Starred in the app. Favorites are never removed by the storage cleanup.
     [JsonPropertyName("favorite")] public bool Favorite { get; set; }
 
@@ -90,6 +97,7 @@ internal sealed class ClipMetadata
 
     public bool IsAutomatic => Trigger == "auto";
     public bool IsSquadView => Trigger == "squad";
+    public bool IsVoice => Trigger == "voice";
     public bool HasSession => Session.Length > 0 && SessionSeconds >= 0;
 }
 

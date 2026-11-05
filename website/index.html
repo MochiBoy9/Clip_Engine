@@ -24,12 +24,16 @@
         <span class="brand-sep" aria-hidden="true">//</span>
         <span class="brand-version" data-version-short>v0.13.0</span>
       </a>
-      <nav>
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
+        <span aria-hidden="true"></span>
+      </button>
+      <nav id="site-nav">
         <a href="#features"><span>01</span>Features</a>
         <a href="#squads"><span>02</span>Squads</a>
         <a href="#games"><span>03</span>Games</a>
         <a href="#plans"><span>04</span>Plans</a>
         <a href="#faq"><span>05</span>FAQ</a>
+        <a data-link="hub" href="#squads"><span>↗</span>Hub</a>
         <a class="btn small" href="#download">Download</a>
       </nav>
     </div>
@@ -158,7 +162,7 @@
             <li data-n="01"><span><b>Saved from each view</b>A kill, revive or win by anyone in the squad is saved by every linked teammate too, lined up to the same second.</span></li>
             <li data-n="02"><span><b>Watch together</b>Up to four views of the same moment side by side on one timeline, or cut into one squad highlight.</span></li>
             <li data-n="03"><span><b>A library you share</b>Everyone's views land in one place. You choose what you upload and which moments you share.</span></li>
-            <li data-n="04"><span><b>Share links and a profile</b>Short links that play in any browser, and a profile page with the clips you're proudest of.</span></li>
+            <li data-n="04"><span><b>Share links, a profile and the hub</b>Short links that play in any browser, a profile page with the clips you're proudest of, and <a data-link="hub" href="#squads">the hub</a>, where clips you make public sit next to everyone else's. Nothing goes there unless you choose to.</span></li>
           </ul>
         </div>
         <figure class="figure">
@@ -238,7 +242,7 @@
             <li>Records up to 1440p</li>
             <li>100 GB cloud library</li>
             <li>All seven colour themes</li>
-            <li>Pro badge and your name in the credits</li>
+            <li>Pro badge (hide it any time) and your name in the credits</li>
           </ul>
           <a class="btn ghost" data-link="pro" href="#plans">Coming soon</a>
         </div></div>
@@ -250,7 +254,7 @@
             <li>Records up to 4K</li>
             <li>250 GB cloud library</li>
             <li>Three Ultra-only colour themes</li>
-            <li>Ultra badge and top billing in the credits</li>
+            <li>Ultra badge (hide it any time) and top billing in the credits</li>
           </ul>
           <a class="btn" data-link="ultra" href="#plans">Coming soon</a>
         </div></div>
@@ -288,6 +292,7 @@
       <details><summary>Installer or zip?</summary><p>The installer is the easy way: a Start menu entry, an uninstaller in Apps &amp; features, and no admin prompt. The zip is the same app for people who'd rather not install anything: unzip it anywhere, keep the files together, and delete the folder to remove it. Either one updates itself from Settings, and your clips and settings are kept if you uninstall.</p></details>
       <details><summary>Is it really free?</summary><p>Yes. Recording, automatic clips, the player, squads, friends and sharing are free for everyone, up to 1080p. Pro ($2.99 a month) records up to 1440p with a 100 GB cloud library, and Ultra ($4.99 a month) records up to 4K with 250 GB. The free cloud library has 2 GB.</p></details>
       <details><summary>Can I record smaller than my plan allows?</summary><p>Yes. Settings &gt; Resolution goes from 480p up to the most your plan records. Clip Engine never records bigger than your monitor.</p></details>
+      <details><summary>Do my clips get posted anywhere?</summary><p>Only if you choose. Clips stay on your PC until you upload or share one. A shared clip is unlisted (only people with its link can watch) unless you set it to Public, which puts it on your profile and in the <a data-link="hub" href="#squads">hub</a>. Anyone can watch the hub without an account; to manage your own clips there, sign in with a code from the app's Cloud page.</p></details>
       <details><summary>Which games are supported?</summary><p>Automatic clips work in 25 games today: Counter-Strike 2, Dota 2, League of Legends and Rocket League through their official game events, Team Fortress 2 through its console log, and Valorant, Fortnite, Apex Legends, PUBG, Marvel Rivals, Rainbow Six Siege, Call of Duty, Delta Force, The Finals, Overwatch, Battlefield 6, 2042, V, 1 and 4, Deadlock, Halo Infinite, Halo: The Master Chief Collection, Paladins and Splitgate by reading the screen. Roblox and Minecraft are recorded too. The F8 replay hotkey works in any game, and Detection Studio in the app adds any game you like.</p></details>
     </section>
   </main>

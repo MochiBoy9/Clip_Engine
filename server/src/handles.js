@@ -6,6 +6,7 @@
 // operator, and the operator's answers.
 
 import { addColumns } from "./codes.js";
+import { FEED_SCHEMA, feedRequest } from "./feed.js";
 import { cleanGrant, CREDIT_GROUPS, formatGrant, newGrantCode, PERKS, PLANS, roleLabel, ROLES } from "./plans.js";
 
 const SCHEMA = `
@@ -45,7 +46,9 @@ export function normalizeHandle(value) {
 }
 
 // Names nobody gets, so a profile can't pass itself off as the app.
-const RESERVED = new Set(["admin", "api", "clipengine", "clip_engine", "help", "support", "settings", "squad", "squads", "www", "about"]);
+const RESERVED = new Set([
+  "admin", "api", "clipengine", "clip_engine", "help", "support", "settings", "squad", "squads", "www", "about", "hub", "moderator", "staff",
+]);
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -55,6 +58,7 @@ export class Handles {
   constructor(ctx) {
     this.sql = ctx.storage.sql;
     this.sql.exec(SCHEMA);
+    this.sql.exec(FEED_SCHEMA);
     // When someone came online, and started the game they're playing.
     addColumns(this.sql, ["presence ADD COLUMN online_since INTEGER", "presence ADD COLUMN game_since INTEGER"]);
     // Special keys' roles, perks, credits, reason, a length in minutes and a fixed end. Keys made before
@@ -99,9 +103,16 @@ export class Handles {
 
   async directory(request, url) {
     const path = url.pathname;
-    if (!/^\/(presence|license|credits|grant)(\/|$)/.test(path)) return null;
+    if (!/^\/(presence|license|credits|grant|feed)(\/|$)/.test(path)) return null;
     const body = request.method === "POST" ? await request.json().catch(() => null) : null;
     const now = Date.now();
+
+    // ---- the hub's public clips (src/feed.js) ----
+    if (path.startsWith("/feed/")) {
+      const answer = feedRequest(this.sql, path, body, now);
+      if (!answer) return json({ error: "Not found." }, 404);
+      return answer.error ? json({ error: answer.error }, answer.status ?? 400) : json(answer);
+    }
 
     // ---- presence ----
     if (path === "/presence/set" && typeof body?.account === "string") {

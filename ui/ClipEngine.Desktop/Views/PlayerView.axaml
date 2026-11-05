@@ -15,16 +15,23 @@
         </StackPanel>
       </Button>
       <StackPanel Grid.Column="1" Margin="20,0" VerticalAlignment="Center" Spacing="4">
-        <StackPanel Orientation="Horizontal" Spacing="10">
+        <Grid ColumnDefinitions="*,Auto,Auto" HorizontalAlignment="Left">
           <TextBlock Classes="h1" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
-          <Border Classes="pill accent" VerticalAlignment="Center" Padding="8,2"
+          <Border Grid.Column="1" Classes="pill accent" VerticalAlignment="Center" Padding="8,2" Margin="10,0,0,0"
                   IsVisible="{Binding Clip.IsAutomatic}" ToolTip.Tip="Saved by itself when moments were detected">
             <StackPanel Orientation="Horizontal" Spacing="5">
               <PathIcon Data="{StaticResource IconSparkle}" Width="10" Height="10" />
               <TextBlock Text="AUTO" FontSize="10" FontWeight="Bold" LetterSpacing="1" />
             </StackPanel>
           </Border>
-        </StackPanel>
+          <Border Grid.Column="2" Classes="pill accent" VerticalAlignment="Center" Padding="8,2" Margin="10,0,0,0"
+                  IsVisible="{Binding Clip.IsVoice}" ToolTip.Tip="Saved when you said so">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <PathIcon Data="{StaticResource IconMic}" Width="10" Height="10" />
+              <TextBlock Text="VOICE" FontSize="10" FontWeight="Bold" LetterSpacing="1" />
+            </StackPanel>
+          </Border>
+        </Grid>
         <TextBlock Classes="caption" Text="{Binding Subtitle}" TextTrimming="CharacterEllipsis" />
       </StackPanel>
       <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
@@ -42,6 +49,13 @@
             <TextBlock Text="Trim" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
+        <Button Classes="secondary" Command="{Binding EditCommand}"
+                ToolTip.Tip="Open the editor: cut the clip into parts, rearrange them and export a new clip (E)">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <PathIcon Data="{StaticResource IconEdit}" Width="14" Height="14" />
+            <TextBlock Text="Edit" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
         <Button Classes="secondary" Command="{Binding CheckCommand}" Classes.active="{Binding IsChecking}"
                 ToolTip.Tip="Mark what really happened in this clip and see what detection catches, misses and gets wrong">
           <StackPanel Orientation="Horizontal" Spacing="8">
@@ -55,11 +69,8 @@
             <TextBlock Text="Link" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
-        <Button Classes="secondary" Command="{Binding CopyCommand}" ToolTip.Tip="Copy the full-quality clip to paste anywhere">
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <PathIcon Data="{StaticResource IconCopy}" Width="14" Height="14" />
-            <TextBlock Text="Copy" VerticalAlignment="Center" />
-          </StackPanel>
+        <Button Classes="icon" Command="{Binding CopyCommand}" ToolTip.Tip="Copy the full-quality clip to paste anywhere">
+          <PathIcon Data="{StaticResource IconCopy}" />
         </Button>
         <Button Classes="icon" Command="{Binding FavoriteCommand}" ToolTip.Tip="{Binding Clip.FavoriteTip}">
           <Panel>
@@ -195,6 +206,13 @@
               </StackPanel>
               <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                 <Button Classes="secondary" Content="Cancel" Command="{Binding CancelTrimCommand}" />
+                <Button Classes="secondary" Command="{Binding EditCommand}"
+                        ToolTip.Tip="Take this part into the editor, to cut it up further or put parts in another order">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <PathIcon Data="{StaticResource IconEdit}" Width="13" Height="13" />
+                    <TextBlock Text="More editing" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Button>
                 <Button Classes="accent" Command="{Binding SaveTrimCommand}"
                         ToolTip.Tip="Saves this part as a new clip next to the original, at full quality">
                   <Panel>

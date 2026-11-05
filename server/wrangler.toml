@@ -18,9 +18,18 @@ class_name = "Library"
 name = "HANDLES"
 class_name = "Handles"
 
+# Inviting friends: every invite code, which PCs installed from one, and the Pro keys they earned.
+[[durable_objects.bindings]]
+name = "REFERRALS"
+class_name = "Referrals"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Squad", "Library", "Handles"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Referrals"]
 
 # Every uploaded clip: squad views under <squad>/ and cloud library clips under library/<account>/.
 [[r2_buckets]]
@@ -64,4 +73,12 @@ POLAR_DONATION_BENEFIT_ID = ""
 DONATION_GB_PER_DOLLAR = "1"
 DONATION_MAX_GB = "25"
 DONATION_CREDITS_FROM = "5"
+# Inviting friends: this many friends who install Clip Engine on PCs of their own give a month (REFERRAL_REWARD_DAYS) of
+# Pro, at most REFERRAL_MAX_REWARDS times per person. A friend can add an invite code for REFERRAL_CLAIM_DAYS after
+# installing. REFERRAL_IP_CHECK = "false" lets friends on the inviter's own network count.
+REFERRAL_FRIENDS = "3"
+REFERRAL_REWARD_DAYS = "30"
+REFERRAL_MAX_REWARDS = "1"
+REFERRAL_CLAIM_DAYS = "7"
+REFERRAL_IP_CHECK = "true"
 # ADMIN_TOKEN (for setting plans) is a secret: npx wrangler secret put ADMIN_TOKEN

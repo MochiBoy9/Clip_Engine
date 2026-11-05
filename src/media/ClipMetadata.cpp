@@ -209,6 +209,13 @@ std::string ToJson(const ClipMetadata& metadata) {
   }
   if (metadata.utcStartMs > 0) json += std::format("  \"utc_start\": {},\n", metadata.utcStartMs);
   if (!metadata.squadMoment.empty()) json += std::format("  \"squad_moment\": \"{}\",\n", Escape(metadata.squadMoment));
+  if (!metadata.audioTracks.empty()) {
+    json += "  \"audio_tracks\": [";
+    for (size_t i = 0; i < metadata.audioTracks.size(); ++i) {
+      json += std::format("{}\"{}\"", i == 0 ? "" : ", ", Escape(metadata.audioTracks[i]));
+    }
+    json += "],\n";
+  }
   json += std::format("  \"title\": \"{}\",\n  \"events\": [", Escape(Summarize(metadata.markers)));
   for (size_t i = 0; i < metadata.markers.size(); ++i) {
     const auto& m = metadata.markers[i];
@@ -254,6 +261,14 @@ std::optional<ClipMetadata> ParseMetadataJson(std::string_view json) {
     if (field == "seconds") return r.Number(m.seconds);
     if (field == "session_seconds") return r.Number(m.sessionSeconds);
     if (field == "squad_moment") return r.String(m.squadMoment);
+    if (field == "audio_tracks") {
+      return r.Array([&] {
+        std::string name;
+        if (!r.String(name)) return false;
+        m.audioTracks.push_back(std::move(name));
+        return true;
+      });
+    }
     if (field == "utc_start") {
       if (!r.Number(number)) return false;
       m.utcStartMs = number > 0 ? static_cast<int64_t>(number) : 0;
