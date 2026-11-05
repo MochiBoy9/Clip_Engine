@@ -31,6 +31,11 @@ public sealed class SettingsViewModel : ObservableObject
     private bool _hasChanges;
     private string? _savedMessage;
     private string? _cleanupPreview;
+    private string _statsOverlayHotkey;
+    private FrameTimingState _frameTiming;
+    private string? _frameTimingProblem;
+
+    private enum FrameTimingState { Allowed, NeedsPermission, SignInAgain }
 
     internal SettingsViewModel(EngineSettings engine, DesktopSettings desktop, Func<Task>? applyToEngine)
     {
@@ -48,6 +53,9 @@ public sealed class SettingsViewModel : ObservableObject
         _closeToTray = desktop.CloseToTray;
         _sidePanelHotkey = desktop.SidePanelHotkey;
         CleanUpNowCommand = new RelayCommand(() => CleanUpNowRequested?.Invoke());
+        _statsOverlayHotkey = desktop.StatsOverlay.Hotkey;
+        _frameTiming = !OperatingSystem.IsWindows() || Services.Stats.FrameTimingAccess.Allowed() ? FrameTimingState.Allowed : FrameTimingState.NeedsPermission;
+        AllowFrameTimingCommand = new RelayCommand(() => _ = AllowFrameTimingAsync(), () => _frameTiming == FrameTimingState.NeedsPermission);
         SaveCommand = new RelayCommand(() => _ = SaveAsync(), () => HasChanges);
         RevertCommand = new RelayCommand(() =>
         {
@@ -65,6 +73,7 @@ public sealed class SettingsViewModel : ObservableObject
     public RelayCommand SaveCommand { get; }
     public RelayCommand RevertCommand { get; }
     public RelayCommand CleanUpNowCommand { get; }
+    public RelayCommand AllowFrameTimingCommand { get; }
 
     // The plan card at the top of the right column. Its plan sets the highest recording resolution.
     public PlanViewModel? Plan
@@ -151,6 +160,9 @@ public sealed class SettingsViewModel : ObservableObject
     public UpdatesViewModel? Updates { get; init; }
 
     public event Action<string>? SidePanelHotkeyChanged;
+    public event Action<string>? StatsOverlayHotkeyChanged;
+    // Turned on or off, or what it shows or where changed.
+    public event Action? StatsOverlayChanged;
     public event Action? StorageRulesChanged;
     public event Action? CleanUpNowRequested;
 
@@ -300,6 +312,103 @@ public sealed class SettingsViewModel : ObservableObject
     }
 
     public bool HasCleanupPreview => _cleanupPreview is not null;
+
+    // The stats overlay over the game.
+    public bool StatsOverlayOn
+    {
+        get => _desktop.StatsOverlay.On;
+        set => SetStat(o => o.On, (o, v) => o.On = v, value);
+    }
+
+    public bool StatsFps { get => _desktop.StatsOverlay.Fps; set => SetStat(o => o.Fps, (o, v) => o.Fps = v, value); }
+    public bool StatsLows { get => _desktop.StatsOverlay.Lows; set => SetStat(o => o.Lows, (o, v) => o.Lows = v, value); }
+    public bool StatsCpu { get => _desktop.StatsOverlay.Cpu; set => SetStat(o => o.Cpu, (o, v) => o.Cpu = v, value); }
+    public bool StatsGpu { get => _desktop.StatsOverlay.Gpu; set => SetStat(o => o.Gpu, (o, v) => o.Gpu = v, value); }
+    public bool StatsGpuTemp { get => _desktop.StatsOverlay.GpuTemp; set => SetStat(o => o.GpuTemp, (o, v) => o.GpuTemp = v, value); }
+    public bool StatsVram { get => _desktop.StatsOverlay.Vram; set => SetStat(o => o.Vram, (o, v) => o.Vram = v, value); }
+    public bool StatsRam { get => _desktop.StatsOverlay.Ram; set => SetStat(o => o.Ram, (o, v) => o.Ram = v, value); }
+
+    public bool StatsTopLeft { get => _desktop.StatsOverlay.Corner == "top-left"; set { if (value) SetStatsCorner("top-left"); } }
+    public bool StatsTopRight { get => _desktop.StatsOverlay.Corner == "top-right"; set { if (value) SetStatsCorner("top-right"); } }
+    public bool StatsBottomLeft { get => _desktop.StatsOverlay.Corner == "bottom-left"; set { if (value) SetStatsCorner("bottom-left"); } }
+    public bool StatsBottomRight { get => _desktop.StatsOverlay.Corner == "bottom-right"; set { if (value) SetStatsCorner("bottom-right"); } }
+
+    public string StatsOverlayHotkey
+    {
+        get => _statsOverlayHotkey;
+        set
+        {
+            value = value?.Trim() ?? "";
+            if (!Set(ref _statsOverlayHotkey, value)) return;
+            Raise(nameof(StatsOverlayHotkeyProblem));
+            if (!HotkeyText.TryParse(value, out _, out _)) return;
+            _desktop.StatsOverlay.Hotkey = value;
+            TrySaveDesktop();
+            StatsOverlayHotkeyChanged?.Invoke(value);
+        }
+    }
+
+    public string? StatsOverlayHotkeyProblem =>
+        HotkeyText.TryParse(_statsOverlayHotkey, out _, out _) ? null : "Use a key with Ctrl, Alt or Shift, like Alt+Shift+F";
+
+    // FPS needs Windows' frame timing, which it shares with administrators and Performance Log Users.
+    public bool FrameTimingNeedsPermission => _frameTiming == FrameTimingState.NeedsPermission;
+    public bool FrameTimingNeedsSignIn => _frameTiming == FrameTimingState.SignInAgain;
+
+    public string? FrameTimingProblem
+    {
+        get => _frameTimingProblem;
+        private set { if (Set(ref _frameTimingProblem, value)) Raise(nameof(HasFrameTimingProblem)); }
+    }
+
+    public bool HasFrameTimingProblem => _frameTimingProblem is not null;
+
+    // The overlay found Windows wouldn't share frame timing after all (or would).
+    internal void OnFrameTimingChecked(Services.Stats.FrameTiming timing)
+    {
+        if (timing == Services.Stats.FrameTiming.Reading) SetFrameTiming(FrameTimingState.Allowed);
+        else if (timing == Services.Stats.FrameTiming.NeedsPermission && _frameTiming == FrameTimingState.Allowed) SetFrameTiming(FrameTimingState.NeedsPermission);
+    }
+
+    private async Task AllowFrameTimingAsync()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        FrameTimingProblem = null;
+        var problem = await Services.Stats.FrameTimingAccess.RequestAsync();
+        if (problem is null) SetFrameTiming(FrameTimingState.SignInAgain);
+        else FrameTimingProblem = problem;
+    }
+
+    private void SetFrameTiming(FrameTimingState state)
+    {
+        if (_frameTiming == state) return;
+        _frameTiming = state;
+        Raise(nameof(FrameTimingNeedsPermission));
+        Raise(nameof(FrameTimingNeedsSignIn));
+        AllowFrameTimingCommand.NotifyCanExecuteChanged();
+    }
+
+    private void SetStat(Func<StatsOverlaySettings, bool> get, Action<StatsOverlaySettings, bool> set, bool value,
+                         [System.Runtime.CompilerServices.CallerMemberName] string? name = null)
+    {
+        if (get(_desktop.StatsOverlay) == value) return;
+        set(_desktop.StatsOverlay, value);
+        TrySaveDesktop();
+        Raise(name);
+        StatsOverlayChanged?.Invoke();
+    }
+
+    private void SetStatsCorner(string corner)
+    {
+        if (_desktop.StatsOverlay.Corner == corner) return;
+        _desktop.StatsOverlay.Corner = corner;
+        TrySaveDesktop();
+        Raise(nameof(StatsTopLeft));
+        Raise(nameof(StatsTopRight));
+        Raise(nameof(StatsBottomLeft));
+        Raise(nameof(StatsBottomRight));
+        StatsOverlayChanged?.Invoke();
+    }
 
     public bool GameNotifications
     {

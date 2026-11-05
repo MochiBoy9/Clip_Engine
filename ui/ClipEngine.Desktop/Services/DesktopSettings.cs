@@ -45,6 +45,9 @@ internal sealed class DesktopSettings
     // And one when a friend comes online or starts playing something.
     public bool FriendNotices { get; set; } = true;
 
+    // The FPS and hardware readout over the game.
+    public StatsOverlaySettings StatsOverlay { get; set; } = new();
+
     // Clips page: show matches instead of single clips.
     public bool ShowMatches { get; set; }
 
@@ -97,6 +100,24 @@ internal sealed class DesktopSettings
         Directory.CreateDirectory(AppPaths.DataDir);
         File.WriteAllText(AppPaths.DesktopSettingsFile, JsonSerializer.Serialize(this, DesktopSettingsJson.Default.DesktopSettings));
     }
+}
+
+// The stats overlay: whether it's up, which corner it sits in, its hotkey and what it shows.
+internal sealed class StatsOverlaySettings
+{
+    public bool On { get; set; }
+    public string Corner { get; set; } = "top-left";
+    public string Hotkey { get; set; } = "Alt+Shift+F";
+    public bool Fps { get; set; } = true;
+    public bool Lows { get; set; } = true;
+    public bool Cpu { get; set; } = true;
+    public bool Gpu { get; set; } = true;
+    public bool GpuTemp { get; set; } = true;
+    public bool Vram { get; set; }
+    public bool Ram { get; set; } = true;
+
+    [JsonIgnore]
+    public Stats.StatsChoice Choice => new(Fps, Lows, Cpu, Gpu, GpuTemp, Vram, Ram);
 }
 
 [JsonSourceGenerationOptions(WriteIndented = true)]

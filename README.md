@@ -35,6 +35,7 @@ You need Windows 10 (version 1903 or newer) or Windows 11, and a graphics card w
 - **Your profile.** Public clips show on your page, pinned ones first, under the same username your friends know you by.
 - **Trim, edit, star and tidy.** Trim a clip in the player with no quality lost, or open it in the editor to split it into parts, cut what you don't need, put parts in another order and export a new clip with its moments kept. Star favourites, and have old clips cleaned up by age or size, favourites always kept.
 - **Detection Studio.** Add any game, or fine-tune how one is read: draw a box where the game shows a kill, type the words, and test it on your own clips.
+- **FPS and PC stats.** Turn on the stats overlay (Alt+Shift+F) for a slim strip in a corner of the game: frame rate, 1% lows, CPU, GPU and its temperature, video memory and RAM, turning yellow then red when something holds the game back. It reads what Windows already measures, never touches the game (so anti-cheat has nothing to object to), and never shows up in your clips. The FPS counter needs Windows' permission once; Settings asks for it.
 - **Light on your game.** Encodes on the GPU at your monitor's resolution and refresh rate, and records only the game, so nothing else on your PC ends up in a clip.
 - **Discord status.** Shows the game, the match time and your kills while you play.
 
