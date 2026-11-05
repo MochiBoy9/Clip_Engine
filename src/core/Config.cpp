@@ -90,6 +90,10 @@ hud_scale =
 
 # Log everything read off the screen, to see what words a game uses when tuning detection.ini.
 detection_debug = false
+
+# Keep a journal of each run in games built around runs, like ARC Raiders and Escape from
+# Tarkov: the map, whether you went in, enemies destroyed, loot and how the run ended.
+journal = true
 )";
 
 std::string Trim(std::string_view s) {
@@ -274,6 +278,8 @@ Config Config::Load(const std::filesystem::path& file) {
       setBool(config.detection);
     } else if (key == "detection_debug") {
       setBool(config.detectionDebug);
+    } else if (key == "journal") {
+      setBool(config.journal);
     } else if (key == "reading_quality") {
       if (const auto quality = ParseReadQuality(value)) config.readingQuality = *quality;
       else log::Warn("Setting reading_quality '{}' should be low, medium, high or ultra; keeping {}", value,

@@ -39,7 +39,7 @@
   <DockPanel Margin="0">
     <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="0,0,40,22">
       <StackPanel VerticalAlignment="Center" Spacing="4">
-        <views:SectionMark Index="08" Label="System config" />
+        <views:SectionMark Index="09" Label="System config" />
         <TextBlock Classes="h1" Text="Settings" />
         <TextBlock Classes="caption" Text="{Binding SavedMessage, TargetNullValue='Recording changes apply when you save; the engine restarts in a second.'}" />
       </StackPanel>

@@ -53,8 +53,9 @@ int RunCutSoundCommand(const std::filesystem::path& input, const std::filesystem
 // Runs the game's rules over the whole video, frame by frame, as detection would have in game,
 // and logs "Scan found <event> at <seconds>: <text>" for each moment, "Scan progress <n>%" as
 // it goes and "Scan done: <count> moments". The app scores detection against the player's own
-// marks of what really happened with it.
+// marks of what really happened with it. The game's journal rules run too, each note logged as
+// "Scan journal <note> at <seconds>: <value> (<amount>)", for tuning them on a real clip.
 int RunScanCommand(const std::filesystem::path& input, const std::vector<DetectionRule>& rules, ReadQuality quality,
-                   double hudScale = 1);
+                   double hudScale = 1, const std::vector<JournalRule>& journals = {});
 
 }  // namespace clip

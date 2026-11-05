@@ -1,0 +1,234 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ClipEngine.Desktop.ViewModels"
+             xmlns:views="using:ClipEngine.Desktop.Views"
+             x:Class="ClipEngine.Desktop.Views.JournalView"
+             x:DataType="vm:JournalViewModel">
+  <ScrollViewer>
+    <StackPanel Margin="0,0,40,40" Spacing="22">
+      <StackPanel Spacing="4">
+        <views:SectionMark Index="06" Label="Field journal" />
+        <TextBlock Classes="h1" Text="Journal" />
+        <TextBlock Classes="caption" Text="{Binding Summary}" TextWrapping="Wrap" />
+      </StackPanel>
+
+      <!-- The games that keep a journal -->
+      <ItemsControl ItemsSource="{Binding GameTabs}" IsVisible="{Binding HasSeveralGames}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:JournalGameTab">
+            <RadioButton Classes="chip" GroupName="journalGame" Margin="0,0,10,10" IsChecked="{Binding IsSelected, Mode=OneWay}"
+                         Command="{Binding Select}" CommandParameter="{Binding Game}">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="{Binding Game}" />
+                <TextBlock Classes="caption" Text="{Binding Caption}" VerticalAlignment="Center" />
+              </StackPanel>
+            </RadioButton>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <views:Plate Classes="card" Padding="28" IsVisible="{Binding HasNoJournal}">
+        <StackPanel Spacing="8" HorizontalAlignment="Center">
+          <PathIcon Data="{StaticResource IconJournal}" Width="34" Height="34" Foreground="{StaticResource TextTertiary}" />
+          <TextBlock Classes="h2" Text="No runs yet" HorizontalAlignment="Center" />
+          <TextBlock Classes="caption" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="520"
+                     Text="In games built around runs, the journal keeps the story of each one: the map you picked, whether you went in, every enemy you destroyed, what you picked up and carried, and whether you made it out or what you lost. Your shortest and longest runs and extraction rate build up as you play." />
+        </StackPanel>
+      </views:Plate>
+
+      <!-- Totals for the game shown -->
+      <ItemsControl ItemsSource="{Binding Totals}" IsVisible="{Binding HasJournal}" Margin="0,0,-16,0">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate><UniformGrid Columns="6" /></ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:TotalTile">
+            <views:Plate Classes="card" Padding="20,18" Margin="0,0,16,0">
+              <StackPanel Spacing="6">
+                <Border Height="3" Width="22" Background="{Binding Brush}" HorizontalAlignment="Left" />
+                <TextBlock Classes="stat" FontSize="22" Text="{Binding Value}" />
+                <TextBlock Classes="caption" Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </views:Plate>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <!-- Bests in this game -->
+      <StackPanel Spacing="14" IsVisible="{Binding HasJournal}">
+        <TextBlock Classes="eyebrow" Text="PERSONAL BESTS" />
+        <ItemsControl ItemsSource="{Binding Bests}" Margin="0,0,-18,-18">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate><UniformGrid Columns="3" /></ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:JournalBestCard">
+              <views:Plate Classes="card" Padding="0" Margin="0,0,18,18">
+                <Grid ColumnDefinitions="Auto,*">
+                  <Border Width="4" Background="{Binding Gradient}" />
+                  <StackPanel Grid.Column="1" Margin="22,20" Spacing="5">
+                    <TextBlock Classes="eyebrow" Text="{Binding Label}" />
+                    <TextBlock Classes="stat" Text="{Binding Value}" FontSize="34" />
+                    <TextBlock Classes="body" Text="{Binding ValueText}" />
+                    <TextBlock Classes="caption" Text="{Binding Detail}" />
+                  </StackPanel>
+                </Grid>
+              </views:Plate>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+
+      <Grid ColumnDefinitions="*,22,*" IsVisible="{Binding HasJournal}">
+        <!-- Maps played -->
+        <views:Plate Classes="card" Padding="24,22">
+          <StackPanel Spacing="18">
+            <TextBlock Classes="eyebrow" Text="BY MAP" />
+            <TextBlock Classes="caption" Text="No maps seen yet. They're read as you pick them." IsVisible="{Binding !HasMaps}" />
+            <ItemsControl ItemsSource="{Binding Maps}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:JournalPlaceRow">
+                  <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,16">
+                    <Border Width="38" Height="38" CornerRadius="2" Background="{Binding Gradient}" Margin="0,0,12,0">
+                      <TextBlock Text="{Binding Initials}" FontWeight="Bold" FontSize="14" Foreground="White"
+                                 HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Classes="caption" Text="{Binding Caption}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Rate}" FontWeight="Bold" HorizontalAlignment="Right" />
+                      <TextBlock Classes="caption" Text="{Binding RateCaption}" HorizontalAlignment="Right" />
+                    </StackPanel>
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </views:Plate>
+
+        <!-- Enemies, by kind -->
+        <views:Plate Grid.Column="2" Classes="card" Padding="24,22">
+          <StackPanel Spacing="18">
+            <TextBlock Classes="eyebrow" Text="{Binding EnemiesTitle}" />
+            <TextBlock Classes="caption" Text="Nothing destroyed yet." IsVisible="{Binding !HasEnemies}" />
+            <ItemsControl ItemsSource="{Binding Enemies}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:JournalEnemyRow">
+                  <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" Margin="0,0,0,14">
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                      <TextBlock Classes="caption" Text="{Binding Xp}" VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding Count}" FontWeight="Bold" />
+                    </StackPanel>
+                    <Border Grid.Row="1" Grid.ColumnSpan="2" Height="3" Margin="0,6,0,0" HorizontalAlignment="Left"
+                            Width="{Binding Bar}" Background="{DynamicResource AccentBrush}" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </views:Plate>
+      </Grid>
+
+      <!-- Every run, newest first, as a story -->
+      <StackPanel Spacing="14" IsVisible="{Binding HasJournal}">
+        <TextBlock Classes="eyebrow" Text="{Binding RunsTitle}" />
+        <ItemsControl ItemsSource="{Binding Runs}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:JournalRunCard">
+              <views:Plate Classes="card" Padding="24,20" Margin="0,0,0,14">
+                <StackPanel Spacing="12">
+                  <Grid ColumnDefinitions="Auto,*,Auto">
+                    <views:GameBadge Width="38" Height="38" Game="{Binding Game}" InitialsSize="14" Margin="0,0,12,0" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                      <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="15" />
+                        <TextBlock Classes="caption" Text="{Binding Subtitle}" IsVisible="{Binding HasSubtitle}" VerticalAlignment="Center" />
+                        <Border Classes="pill accent" Padding="7,1" IsVisible="{Binding IsRecord}" VerticalAlignment="Center">
+                          <TextBlock Text="RECORD" FontSize="10" FontWeight="Bold" LetterSpacing="0.8" />
+                        </Border>
+                      </StackPanel>
+                      <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Classes="caption" Text="{Binding When}" />
+                        <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding HasLength}">
+                          <PathIcon Data="{StaticResource IconClock}" Width="11" Height="11" Foreground="{StaticResource TextTertiary}" />
+                          <TextBlock Classes="caption" Text="{Binding Length}" />
+                        </StackPanel>
+                      </StackPanel>
+                    </StackPanel>
+                    <Border Grid.Column="2" Classes="pill outcome" Classes.good="{Binding IsGood}" Classes.bad="{Binding IsBad}"
+                            VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Outcome}" FontSize="11" FontWeight="Bold" LetterSpacing="1" />
+                    </Border>
+                  </Grid>
+
+                  <TextBlock Classes="body" Text="{Binding Story}" TextWrapping="Wrap" />
+
+                  <ItemsControl ItemsSource="{Binding EnemyChips}" IsVisible="{Binding HasEnemies}" Margin="0,0,0,-8">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="x:String">
+                        <Border Classes="pill" Padding="8,2" Margin="0,0,8,8">
+                          <TextBlock Text="{Binding}" FontSize="12" />
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+
+                  <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" IsVisible="{Binding Entered}">
+                    <TextBlock Classes="eyebrow" Text="FOUND" Margin="0,2,16,6" IsVisible="{Binding HasFound}" />
+                    <TextBlock Grid.Column="1" Classes="caption" Text="{Binding Found}" TextWrapping="Wrap" Margin="0,0,0,6"
+                               IsVisible="{Binding HasFound}" />
+                    <TextBlock Grid.Row="1" Classes="eyebrow" Text="BROUGHT HOME" Margin="0,2,16,6" IsVisible="{Binding HasBroughtHome}" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Classes="caption win" Text="{Binding BroughtHome}" TextWrapping="Wrap"
+                               Margin="0,0,0,6" IsVisible="{Binding HasBroughtHome}" />
+                    <TextBlock Grid.Row="2" Classes="eyebrow" Text="LOST" Margin="0,2,16,6" IsVisible="{Binding HasLost}" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" Classes="caption loss" Text="{Binding Lost}" TextWrapping="Wrap"
+                               Margin="0,0,0,6" IsVisible="{Binding HasLost}" />
+                  </Grid>
+
+                  <!-- Player kills, which the player can log by hand -->
+                  <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding Entered}" ToolTip.Tip="{Binding PlayerKillsTip}">
+                    <TextBlock Classes="caption" Text="{Binding PlayerKillsLabel}" VerticalAlignment="Center" />
+                    <Button Classes="secondary" Padding="9,1" Command="{Binding RemoveKillCommand}" Content="−" />
+                    <TextBlock Text="{Binding PlayerKills}" FontWeight="Bold" VerticalAlignment="Center" MinWidth="16" TextAlignment="Center" />
+                    <Button Classes="secondary" Padding="9,1" Command="{Binding AddKillCommand}" Content="+" />
+                  </StackPanel>
+                </StackPanel>
+              </views:Plate>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </StackPanel>
+  </ScrollViewer>
+
+  <UserControl.Styles>
+    <Style Selector="TextBlock.caption.win">
+      <Setter Property="Foreground" Value="{StaticResource SuccessBrush}" />
+    </Style>
+    <Style Selector="TextBlock.caption.loss">
+      <Setter Property="Foreground" Value="{StaticResource RecordBrush}" />
+    </Style>
+    <Style Selector="Border.pill.outcome.good">
+      <Setter Property="BorderBrush" Value="{StaticResource SuccessBrush}" />
+    </Style>
+    <Style Selector="Border.pill.outcome.good TextBlock">
+      <Setter Property="Foreground" Value="{StaticResource SuccessBrush}" />
+    </Style>
+    <Style Selector="Border.pill.outcome.bad">
+      <Setter Property="Background" Value="{StaticResource RecordSoftBrush}" />
+      <Setter Property="BorderBrush" Value="#80FF3D52" />
+    </Style>
+    <Style Selector="Border.pill.outcome.bad TextBlock">
+      <Setter Property="Foreground" Value="{StaticResource RecordBrush}" />
+    </Style>
+  </UserControl.Styles>
+</UserControl>

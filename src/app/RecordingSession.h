@@ -22,9 +22,10 @@ class RecordingSession {
  public:
   // rules: what to look for on screen in this game; empty means no event detection.
   // scoreboards: where the game shows the player's totals, found by playerNames.
+  // journals: what to write down in the game's journal.
   RecordingSession(const Config& config, HMONITOR monitor, std::string label, std::vector<DetectionRule> rules,
                    std::vector<ScoreboardRule> scoreboards, std::vector<std::string> playerNames,
-                   int detectionSampleMs, double hudScale = 1);
+                   int detectionSampleMs, double hudScale = 1, std::vector<JournalRule> journals = {});
   ~RecordingSession();
 
   RecordingSession(const RecordingSession&) = delete;
@@ -64,6 +65,8 @@ class RecordingSession {
   std::vector<GameEvent> TakeNewEvents();
   // Scoreboard readings since the last call.
   std::vector<Scoreboard> TakeScoreboards();
+  // Journal notes since the last call.
+  std::vector<JournalNote> TakeJournalNotes();
   // Every detected event still in the replay buffer between start and end.
   std::vector<GameEvent> EventsBetween(int64_t start, int64_t end) const;
 
@@ -97,6 +100,7 @@ class RecordingSession {
   std::deque<GameEvent> history_;
   std::vector<GameEvent> newEvents_;
   std::vector<Scoreboard> newScoreboards_;
+  std::vector<JournalNote> newNotes_;
 
   // game_focus: while another window is in front, the "Game Not Found" frame is recorded
   // instead of the screen, and game audio is silent.

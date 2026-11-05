@@ -19,7 +19,8 @@ const std::vector<GameProfile>& BuiltInGames() {
       {"team_fortress_2", "Team Fortress 2", {L"tf_win64.exe", L"tf.exe"}, GameApi::Tf2ConsoleLog},
       // Read off the screen. Only games whose HUD says plainly when you kill or die: a killfeed
       // with names, or a kill message. Games that keep kills off screen, like Escape from Tarkov,
-      // can't be clipped reliably and aren't listed; Detection Studio can still add them.
+      // can't be clipped on every kill; those built around runs are listed further down for
+      // their journal.
       {"valorant", "Valorant", {L"VALORANT-Win64-Shipping.exe"}},
       {"fortnite", "Fortnite", {L"FortniteClient-Win64-Shipping.exe"}},
       {"apex_legends", "Apex Legends", {L"r5apex.exe", L"r5apex_dx12.exe"}},
@@ -37,6 +38,15 @@ const std::vector<GameProfile>& BuiltInGames() {
       {"battlefield_4", "Battlefield 4", {L"bf4.exe", L"bf4_x86.exe"}},
       {"paladins", "Paladins", {L"Paladins.exe"}},
       {"splitgate", "Splitgate", {L"PortalWars2-Win64-Shipping.exe", L"PortalWars-Win64-Shipping.exe"}},
+      // Games built around runs, with a journal of each one (the journal rules in detection.ini):
+      // the map, going in, enemies, loot and how the run ended. Their raid results are moments
+      // too, but they keep most kills off screen, so the rest is clipped with the hotkey.
+      {"arc_raiders", "ARC Raiders", {L"PioneerGame.exe"}},
+      {"escape_from_tarkov", "Escape from Tarkov", {L"EscapeFromTarkov.exe"}},
+      {"helldivers_2", "Helldivers 2", {L"helldivers2.exe"}},
+      {"deep_rock_galactic", "Deep Rock Galactic", {L"FSD-Win64-Shipping.exe"}},
+      // Its journal comes from the match summary the game writes to a file.
+      {"hunt_showdown", "Hunt: Showdown 1896", {L"HuntGame.exe"}, GameApi::HuntMissionFile},
       // Recorded, with clips from the hotkey; their HUDs differ from one experience or mod to the next.
       {"roblox", "Roblox", {L"RobloxPlayerBeta.exe"}},
       {"minecraft", "Minecraft", {L"Minecraft.Windows.exe"}},

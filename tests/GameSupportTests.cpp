@@ -326,8 +326,25 @@ void TestShippedRules(const char* path) {
     if (!(kill && death && end)) std::printf("%s is missing a kill, death or match end rule\n", game);
     CHECK(kill && death && end);
   }
-  // Games that keep kills off screen were dropped, and every game with rules is a built-in one.
-  for (const char* game : {"escape_from_tarkov", "arc_raiders", "destiny_2"}) CHECK(rules.ForGame(game).empty());
+  // Games that keep kills off screen aren't clipped on kills. Those built around runs have a
+  // journal instead, with how each run ended, which is a moment too.
+  CHECK(rules.ForGame("destiny_2").empty() && rules.JournalsForGame("destiny_2").empty());
+  for (const char* game : {"arc_raiders", "escape_from_tarkov", "helldivers_2", "deep_rock_galactic"}) {
+    bool kill = false, end = false, outcome = false;
+    for (const auto& r : rules.ForGame(game, {"Mochi"})) {
+      kill |= r.event == EventType::Kill;
+      end |= r.event == EventType::MatchEnd;
+    }
+    for (const auto& j : rules.JournalsForGame(game)) outcome |= j.note == "extracted";
+    if (kill || !end || !outcome) std::printf("%s should have a match end and a journal, and no kill rules\n", game);
+    CHECK(!kill && end && outcome);
+  }
+  // Every journal rule is for a built-in game, and reads something.
+  for (const auto& j : rules.journals) {
+    CHECK(j.Reads());
+    CHECK(j.game == "arc_raiders" || j.game == "escape_from_tarkov" || j.game == "helldivers_2" ||
+          j.game == "deep_rock_galactic");
+  }
   // Every scoreboard rule reads kills, and only games that have a scoreboard get one.
   for (const auto& board : rules.scoreboards) {
     CHECK(board.columns.size() >= 2 && board.columns[0].first == "kills");

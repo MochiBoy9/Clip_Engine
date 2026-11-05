@@ -117,6 +117,14 @@ std::vector<DetectionRule> DetectionRules::ForGame(const std::string& game, cons
   return result;
 }
 
+std::vector<JournalRule> DetectionRules::JournalsForGame(const std::string& game) const {
+  std::vector<JournalRule> result;
+  for (const auto& journal : journals) {
+    if (journal.game == game) result.push_back(journal);
+  }
+  return result;
+}
+
 std::vector<ScoreboardRule> DetectionRules::ScoreboardsForGame(const std::string& game) const {
   std::vector<ScoreboardRule> result;
   for (const auto& board : scoreboards) {
@@ -129,6 +137,7 @@ DetectionRules ParseDetectionRules(std::istream& in) {
   DetectionRules result;
   DetectionRule* rule = nullptr;
   ScoreboardRule* board = nullptr;
+  JournalRule* journal = nullptr;
   CustomGame* game = nullptr;
   bool inGlobal = false;
   bool skipping = false;
@@ -161,6 +170,11 @@ DetectionRules ParseDetectionRules(std::istream& in) {
       warn(std::format("[game.{}] needs a name and an exe; ignoring it", game->id));
       result.games.pop_back();
     }
+    if (journal && !journal->Reads()) {
+      warn(std::format("[{}] has no words, values, pattern or lines, so it can never note anything; ignoring it",
+                       journal->name));
+      result.journals.pop_back();
+    }
     if (board && board->columns.empty()) {
       warn(std::format("[{}] lists no columns (like kills = K | KILLS), so it can't read anything; ignoring it",
                        board->name));
@@ -168,6 +182,7 @@ DetectionRules ParseDetectionRules(std::istream& in) {
     }
     rule = nullptr;
     board = nullptr;
+    journal = nullptr;
     game = nullptr;
   };
 
@@ -213,10 +228,24 @@ DetectionRules ParseDetectionRules(std::istream& in) {
         board->game = parts[0];
         continue;
       }
+      if (parts.size() >= 2 && parts[1] == "journal" && !parts[0].empty()) {
+        if (parts.size() < 3 || !IsId(parts[2])) {
+          warn(std::format("[{}] should be [<game>.journal.<note>], with note like map, deploy, extracted, died, enemy "
+                           "or loot",
+                           name));
+          skipping = true;
+          continue;
+        }
+        journal = &result.journals.emplace_back();
+        journal->name = name;
+        journal->game = parts[0];
+        journal->note = parts[2];
+        continue;
+      }
       const auto event = parts.size() >= 2 ? ParseEventType(parts[1]) : std::nullopt;
       if (parts.size() < 2 || parts[0].empty() || !event) {
         warn(std::format("[{}] should be [<game>.<event>], with event one of kill, assist, death, revive, "
-                         "match_start, match_end, highlight or scoreboard",
+                         "match_start, match_end, highlight, scoreboard or journal",
                          name));
         skipping = true;
         continue;
@@ -260,40 +289,85 @@ DetectionRules ParseDetectionRules(std::istream& in) {
       }
       continue;
     }
-    if (!rule && !board) {
+    if (!rule && !board && !journal) {
       warn("setting outside of a section");
       continue;
     }
 
-    const std::string& section = rule ? rule->name : board->name;
-    if (key == "region") {
+    const std::string& section = rule ? rule->name : board ? board->name : journal->name;
+    ScreenRegion& sectionRegion = rule ? rule->region : board ? board->region : journal->region;
+    int& sectionThreshold = rule ? rule->threshold : board ? board->threshold : journal->threshold;
+    auto parseRegion = [&](ScreenRegion& region) {
       const auto numbers = Split(value, ',');
       double v[4]{};
       bool ok = numbers.size() == 4;
       for (size_t i = 0; ok && i < 4; ++i) ok = ParseDouble(numbers[i], v[i]) && v[i] >= 0 && v[i] <= 1;
-      if (ok && v[2] > 0 && v[3] > 0 && v[0] + v[2] <= 1.0001 && v[1] + v[3] <= 1.0001) {
-        ScreenRegion& region = rule ? rule->region : board->region;
-        region.left = v[0];
-        region.top = v[1];
-        region.width = v[2];
-        region.height = v[3];
-      } else {
-        warn(std::format("[{}] region must be four fractions: left, top, width, height", section));
+      if (!ok || v[2] <= 0 || v[3] <= 0 || v[0] + v[2] > 1.0001 || v[1] + v[3] > 1.0001) return false;
+      region.left = v[0];
+      region.top = v[1];
+      region.width = v[2];
+      region.height = v[3];
+      return true;
+    };
+    if (journal && key != "region" && key != "anchor" && key != "aspect" && key != "threshold") {
+      auto flag = [&](bool& out) {
+        const std::string v = Lower(value);
+        if (v == "true" || v == "yes" || v == "1") out = true;
+        else if (v == "false" || v == "no" || v == "0") out = false;
+        else warn(std::format("[{}] {} must be true or false", journal->name, key));
+      };
+      auto number = [&](int& out, int low, int high) {
+        int n = 0;
+        if (ParseInt(value, n) && n >= low && n <= high) out = n;
+        else warn(std::format("[{}] {} must be {} to {}", journal->name, key, low, high));
+      };
+      std::vector<std::string> withPlayer;
+      if (key == "words") journal->words = ParsePhrases(value, withPlayer);
+      else if (key == "exclude") journal->exclude = ParsePhrases(value, withPlayer);
+      else if (key == "when") journal->when = ParsePhrases(value, withPlayer);
+      else if (key == "values") journal->values = ParseJournalValues(value);
+      else if (key == "pattern" || key == "patterns") {
+        journal->patterns = ParseJournalPatterns(value);
+        const auto written = std::ranges::count_if(Split(value, '|'), [](const std::string& p) { return !p.empty(); });
+        if (std::ssize(journal->patterns) < written) {
+          warn(std::format("[{}] each pattern needs a word to look for besides {{value}}, {{number}} and {{xp}}; "
+                           "those without one are left out",
+                           journal->name));
+        }
       }
+      else if (key == "lines") flag(journal->lines);
+      else if (key == "pick") flag(journal->pick);
+      else if (key == "when_region") {
+        ScreenRegion region;
+        if (parseRegion(region)) journal->whenRegion = region;
+        else warn(std::format("[{}] when_region must be four fractions: left, top, width, height", journal->name));
+      }
+      else if (key == "sample_ms") {
+        number(journal->sampleMs, 100, 10000);
+        journal->sampleMsSet = true;
+      }
+      else if (key == "cooldown_ms") number(journal->cooldownMs, 0, 600000);
+      else if (key == "forget_ms") number(journal->forgetMs, 0, 3600000);
+      else warn(std::format("[{}] unknown setting '{}'", journal->name, key));
+      if (!withPlayer.empty()) warn(std::format("[{}] journal rules can't use {{player}}", journal->name));
+      continue;
+    }
+    if (key == "region") {
+      if (!parseRegion(sectionRegion)) warn(std::format("[{}] region must be four fractions: left, top, width, height", section));
     } else if (key == "anchor") {
-      ScreenRegion& region = rule ? rule->region : board->region;
+      ScreenRegion& region = sectionRegion;
       if (!ParseAnchor(value, region.anchorX, region.anchorY)) {
         warn(std::format("[{}] anchor must be auto, or where the box keeps to: left, right, top, bottom or center, "
                          "like top-right",
                          section));
       }
     } else if (key == "aspect") {
-      if (!ParseAspect(value, (rule ? rule->region : board->region).aspect)) {
+      if (!ParseAspect(value, sectionRegion.aspect)) {
         warn(std::format("[{}] aspect must be the shape of the screen the box was made on, like 16:9 or 21:9", section));
       }
     } else if (key == "threshold") {
       int t = 0;
-      if (ParseInt(value, t) && t >= 0 && t <= 255) (rule ? rule->threshold : board->threshold) = t;
+      if (ParseInt(value, t) && t >= 0 && t <= 255) sectionThreshold = t;
       else warn(std::format("[{}] threshold must be 0 to 255", section));
     } else if (board) {
       if (key == "sample_ms") {
@@ -380,6 +454,15 @@ DetectionRules ParseDetectionRules(std::istream& in) {
   for (auto& r : result.rules) {
     if (r.sampleMs == 0) r.sampleMs = DefaultSampleMs(r.event, result.sampleMs);
   }
+  for (auto& j : result.journals) {
+    if (j.sampleMs == 0) j.sampleMs = DefaultJournalSampleMs(j);
+    // when_region keeps to the same edge as the region, and was drawn on the same screen.
+    if (j.whenRegion) {
+      j.whenRegion->anchorX = j.region.anchorX;
+      j.whenRegion->anchorY = j.region.anchorY;
+      j.whenRegion->aspect = j.region.aspect;
+    }
+  }
   return result;
 }
 
@@ -410,6 +493,13 @@ DetectionRules MergeDetectionRules(DetectionRules shipped, DetectionRules user) 
     if (!userBoards.contains(board.game)) merged.scoreboards.push_back(std::move(board));
   }
   for (auto& board : user.scoreboards) merged.scoreboards.push_back(std::move(board));
+
+  std::set<std::string> userJournals;
+  for (const auto& journal : user.journals) userJournals.insert(journal.game);
+  for (auto& journal : shipped.journals) {
+    if (!userJournals.contains(journal.game)) merged.journals.push_back(std::move(journal));
+  }
+  for (auto& journal : user.journals) merged.journals.push_back(std::move(journal));
 
   merged.warnings = std::move(shipped.warnings);
   merged.warnings.insert(merged.warnings.end(), user.warnings.begin(), user.warnings.end());

@@ -19,6 +19,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private readonly ClipLibrary? _library;
     private readonly DispatcherTimer _toastTimer;
     private readonly DispatcherTimer _saveDesktopTimer;
+    private readonly DispatcherTimer _journalTimer;
     private readonly DispatcherTimer _cleanupTimer;
     private readonly DispatcherTimer _longRecordingTimer;
     private DateTime? _longRecordingSince;
@@ -61,6 +62,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             new NavItem(Page.Squad, "Squad", Icon("IconSquad")),
             new NavItem(Page.Friends, "Friends", Icon("IconFriends")),
             new NavItem(Page.Records, "Records", Icon("IconTrophy")),
+            new NavItem(Page.Journal, "Journal", Icon("IconJournal")),
             new NavItem(Page.Games, "Games", Icon("IconGames")),
             new NavItem(Page.Cloud, "Cloud", Icon("IconCloud")),
             new NavItem(Page.Settings, "Settings", Icon("IconSettings")),
@@ -101,6 +103,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ClipsPage = new ClipsPage(this);
         GamesPage = new GamesPage(this);
         Records = new RecordsViewModel(this);
+        Journal = new JournalViewModel(this) { LogPlayerKills = LogJournalPlayerKills };
         _currentPage = Home;
 
         SaveClipCommand = new RelayCommand(SaveClip, () => IsRecording);
@@ -134,6 +137,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             Toast = null;
         };
 
+        _journalTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+        _journalTimer.Tick += (_, _) =>
+        {
+            _journalTimer.Stop();
+            _ = RefreshRecordsAsync();
+        };
         _saveDesktopTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _saveDesktopTimer.Tick += (_, _) =>
         {
@@ -191,6 +200,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public ClipsPage ClipsPage { get; }
     public GamesPage GamesPage { get; }
     public RecordsViewModel Records { get; }
+    public JournalViewModel Journal { get; }
     public SquadViewModel Squad { get; }
     public CloudViewModel Cloud { get; }
     public SettingsViewModel Settings { get; }
@@ -256,6 +266,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Page.Squad => Squad,
         Page.Friends => Friends,
         Page.Records => Records,
+        Page.Journal => Journal,
         Page.Cloud => Cloud,
         Page.Games => GamesPage,
         Page.Settings => Settings,
@@ -742,6 +753,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             case ScoreboardRead b:
                 Records.SetLiveScoreboard(b.Game, b.Stats);
                 break;
+            case JournalNoted j:
+                if (j.Note is "extracted" or "died" or "failed" or "left")
+                    AddActivity(ActivityKind.Moment, $"{JournalNoted.Describe(j.Note)} in {j.Game}");
+                OnJournalNoted();
+                break;
             case ClipSaved s when ClipMetadataFile.ReadSidecar(s.Path)?.Trigger == "squad":
                 // A view of a squadmate's moment: the squad page says so, not a toast over the game.
                 _ = RefreshClipsAsync();
@@ -954,17 +970,41 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     // Timelines the preview tool shows records from, in place of the ones on disk.
     internal IReadOnlyList<Timeline> SampleTimelines { get; set; } = [];
 
-    // Rebuilds the records from every timeline and clip. Cheap enough to run after each change.
+    // Rebuilds the records and the journal from every timeline and clip. Cheap enough to run after each change.
     internal async Task RefreshRecordsAsync()
     {
         var files = _files;
+        var logged = new Dictionary<string, int>(DesktopSettings.JournalPlayerKills);
         if (!IsLive)
         {
             Records.SetBook(PlayerRecords.Build(SampleTimelines, files));
+            Journal.SetBook(Services.Journal.Build(SampleTimelines, logged));
             return;
         }
-        var book = await Task.Run(() => PlayerRecords.Build(Timeline.LoadAll(Timeline.Folder), files));
+        var (book, journal) = await Task.Run(() =>
+        {
+            var timelines = Timeline.LoadAll(Timeline.Folder);
+            return (PlayerRecords.Build(timelines, files), Services.Journal.Build(timelines, logged));
+        });
         Records.SetBook(book);
+        Journal.SetBook(journal);
+    }
+
+    // The player logged a kill on a run that the screen didn't show, or took away a misread one.
+    private void LogJournalPlayerKills(string runId, int by)
+    {
+        var total = DesktopSettings.JournalPlayerKills.GetValueOrDefault(runId) + by;
+        if (total == 0) DesktopSettings.JournalPlayerKills.Remove(runId);
+        else DesktopSettings.JournalPlayerKills[runId] = total;
+        SaveDesktopSettingsSoon();
+        _ = RefreshRecordsAsync();
+    }
+
+    // While a game with a journal is played, its page catches up a few seconds after each note.
+    private void OnJournalNoted()
+    {
+        _journalTimer.Stop();
+        _journalTimer.Start();
     }
 
     private static async Task LoadThumbnailAsync(ClipItemViewModel clip)

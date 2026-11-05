@@ -9,9 +9,10 @@
 namespace clip {
 
 // Games that report kills and other moments themselves: through an official live API, or, for
-// Team Fortress 2, in its console log. The rest are read off the screen with the rules in
+// Team Fortress 2, in its console log. Hunt: Showdown 1896 writes each match's summary to a
+// file, which goes into its journal. The rest are read off the screen with the rules in
 // detection.ini.
-enum class GameApi { None, Cs2Gsi, Dota2Gsi, LeagueLiveClient, RocketLeagueStats, Tf2ConsoleLog };
+enum class GameApi { None, Cs2Gsi, Dota2Gsi, LeagueLiveClient, RocketLeagueStats, Tf2ConsoleLog, HuntMissionFile };
 
 struct GameProfile {
   std::string id;    // stable key, also used for detection.ini sections

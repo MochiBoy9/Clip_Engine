@@ -1,6 +1,7 @@
 #pragma once
 
 #include "detect/GameEvent.h"
+#include "detect/Journal.h"
 #include "game/GameDetector.h"
 #include "integrations/GameStateTrackers.h"
 
@@ -29,6 +30,8 @@ class GameIntegration {
   std::vector<GameEvent> TakeEvents();
   // The player's totals for the match, when they changed since the last call.
   std::optional<Scoreboard> TakeScoreboard();
+  // Journal notes from the game's own files, since the last call.
+  std::vector<JournalNote> TakeNotes();
 
   // Whether the game is talking to us yet.
   bool Live() const { return connected_; }
@@ -53,6 +56,8 @@ class GameIntegration {
   void Report(const Stats& board);
   // Logs once that the game is talking to us.
   void Connected();
+  // Writes down journal notes, timed now.
+  void Note(std::vector<JournalNote> notes);
 
   const std::string gameName_;
   std::atomic<bool> stop_{false};
@@ -61,6 +66,7 @@ class GameIntegration {
   std::mutex mutex_;
   std::condition_variable wake_;
   std::vector<GameEvent> events_;
+  std::vector<JournalNote> notes_;
   Stats board_;
   std::optional<Scoreboard> newBoard_;
   std::atomic<bool> connected_{false};
