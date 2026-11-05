@@ -91,8 +91,9 @@ clip::DetectionRules LoadDetectionRules(const std::filesystem::path& dataDir, st
 
 }  // namespace
 
-// clip_engine.exe --export <clip.mp4> <out.mp4> [--max-mb 10]
-// Makes a small copy for sharing and exits. Runs alongside a recording engine.
+// clip_engine.exe --export <clip.mp4> <out.mp4> [--max-mb 10] [--max-height 1080]
+// Makes a small copy for sharing and exits. Runs alongside a recording engine. --max-height 2160 lets the cloud
+// library's copies for Pro and Ultra stay 4K.
 int RunExportCommand(int argc, wchar_t** argv) {
   using namespace clip;
   ExportOptions options;
@@ -100,6 +101,9 @@ int RunExportCommand(int argc, wchar_t** argv) {
   options.output = argv[3];
   for (int i = 4; i + 1 < argc; i += 2) {
     if (std::wstring_view(argv[i]) == L"--max-mb") options.maxMegabytes = std::clamp(_wtof(argv[i + 1]), 1.0, 4000.0);
+    if (std::wstring_view(argv[i]) == L"--max-height") {
+      options.maxHeight = static_cast<unsigned>(std::clamp(_wtoi(argv[i + 1]), 360, 2160));
+    }
   }
   winrt::init_apartment(winrt::apartment_type::multi_threaded);
   if (FAILED(MFStartup(MF_VERSION))) {

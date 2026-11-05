@@ -119,8 +119,9 @@ public sealed partial class PlanViewModel : ObservableObject
     internal bool IsActive => _active;
     internal bool IsSpecial => _active && _state.IsSpecial;
 
-    // The highest recording resolution: the plan's, or what a special key sets.
-    internal int MaxLines => IsSpecial && _state.Lines is { } lines ? lines : Info.Lines;
+    // The highest resolution clips go up to the cloud at: the plan's, or what a special key sets. Recording isn't
+    // limited by plan.
+    internal int CloudLines => IsSpecial && _state.Lines is { } lines ? lines : Info.CloudLines;
 
     // More cloud storage from a special key or a donation.
     internal long ExtraStorage => IsSpecial || IsSupporter ? _state.ExtraStorage : 0;
@@ -168,10 +169,10 @@ public sealed partial class PlanViewModel : ObservableObject
     {
         Plan.Free when IsSpecial => $"Your special key gives {SpecialText}{UntilText}{KeyText}.",
         Plan.Free when IsSupporter => $"Thank you for {DonationText}. It keeps Clip Engine going, and adds {Gb(ExtraStorage)} to your cloud library{KeyText}.",
-        _ when HasRole => $"{Info.Label} features: {Resolutions.Name(MaxLines)} recording, {StorageText} in the cloud{UntilText}{KeyText}.",
-        Plan.Free => "Every recording feature is yours. Pro and Ultra add higher resolutions, more cloud storage and a few thank-yous, and keep Clip Engine going.",
-        _ when IsSupporter => $"{Resolutions.Name(MaxLines)} recording, {StorageText} in the cloud{KeyText}. Thank you for backing Clip Engine, and for {DonationText}.",
-        _ => $"{Resolutions.Name(MaxLines)} recording, {StorageText} in the cloud{UntilText}{KeyText}. Thank you for backing Clip Engine.",
+        _ when HasRole => $"{Info.Label} features: {CloudText}, {StorageText} in the cloud{UntilText}{KeyText}.",
+        Plan.Free => "Every recording feature is yours, up to 4K. Pro and Ultra keep 4K, bigger and longer clips in the cloud, add more storage and a few thank-yous, and keep Clip Engine going.",
+        _ when IsSupporter => $"{CloudText}, {StorageText} in the cloud{KeyText}. Thank you for backing Clip Engine, and for {DonationText}.",
+        _ => $"{CloudText}, {StorageText} in the cloud{UntilText}{KeyText}. Thank you for backing Clip Engine.",
     };
 
     private string DonationText => _state.Donated is { } cents && cents > 0 ? $"your {Donations.Money(cents)} in donations" : "your donation";
@@ -179,6 +180,11 @@ public sealed partial class PlanViewModel : ObservableObject
     private string KeyText => _state.Display.Length > 0 ? $", key {_state.Display}" : "";
 
     private string StorageText => Gb(Info.StorageGb * (1L << 30) + ExtraStorage);
+
+    // "4K clips up to 1 GB and 10 minutes": what goes up to the cloud.
+    private string CloudText => $"{Resolutions.Name(CloudLines)} clips up to {ClipSize(Info.ClipMb)} and {Info.ClipSeconds / 60} minutes";
+
+    private static string ClipSize(int mb) => mb >= 1024 ? $"{mb / 1024} GB" : $"{mb} MB";
 
     private static string Gb(long bytes) =>
         string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{bytes / (double)(1L << 30):0.#} GB");
@@ -189,7 +195,7 @@ public sealed partial class PlanViewModel : ObservableObject
         get
         {
             var parts = new List<string>();
-            if (MaxLines != Info.Lines) parts.Add($"{Resolutions.Name(MaxLines)} recording");
+            if (CloudLines != Info.CloudLines) parts.Add($"{Resolutions.Name(CloudLines)} clips in the cloud");
             if (ExtraStorage > 0) parts.Add($"{Gb(ExtraStorage)} more cloud storage");
             if (_state.Themes is { Count: > 0 } themes && themes.Any(t => t != AccentThemes.Default.Id)) parts.Add("extra colour themes");
             return parts.Count switch

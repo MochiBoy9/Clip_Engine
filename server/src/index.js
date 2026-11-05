@@ -14,6 +14,7 @@
 //   POST /v1/accounts/signin        sign another PC in        { code, device }
 //   GET|PATCH /v1/accounts/<id>/account, POST /link, GET|POST /clips,
 //   PATCH|DELETE /clips/<clip>, PUT|GET /clips/<clip>/(video|thumb)
+//   POST /clips/<clip>/video/parts, PUT /parts/<n>, POST /parts/done   a clip over 100 MB, in parts (Pro and Ultra)
 //   POST|DELETE /plan               put a subscription's license key on the account, or take it off { key }
 //   GET|POST /friends, POST /friends/<account>/accept, DELETE /friends/<account>   { handle } or { code }
 //   POST|DELETE /presence           online for friends, with the game and a squad invite { game, invite? }
@@ -32,7 +33,7 @@
 //   POST /v1/contact/list           this key's messages with the operator's answers { key, device }
 //
 // Plans (src/plans.js):
-//   GET  /v1/plans                  Free, Pro and Ultra: price, storage and resolution; and what donations give
+//   GET  /v1/plans                  Free, Pro and Ultra: price, storage, cloud resolution and clip size; and what donations give
 //   POST /v1/license                check a Polar or special key { key, device, credit? } and list or unlist its name in the credits.
 //                                   A donation's key, or any key of someone who donated, also answers supporter and donated (cents)
 //   GET  /v1/credits                the names in the credits: subscribers, supporters from $5, and special keys the operator lets in

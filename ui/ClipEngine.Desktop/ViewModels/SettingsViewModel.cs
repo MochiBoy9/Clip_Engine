@@ -87,22 +87,18 @@ public sealed class SettingsViewModel : ObservableObject
     public RelayCommand CleanUpNowCommand { get; }
     public RelayCommand AllowFrameTimingCommand { get; }
 
-    // The plan card at the top of the right column. Its plan sets the highest recording resolution.
+    // The plan card at the top of the right column. Every plan records up to 4K; the plan sets the cloud library.
     public PlanViewModel? Plan
     {
         get => _plan;
         init
         {
             _plan = value;
-            if (value is not null) value.PlanChanged += plan => _ = OnPlanChangedAsync(plan);
-            RefreshResolutions();
+            if (value is not null) value.PlanChanged += _ => Raise(nameof(ResolutionHint));
         }
     }
 
     private Services.Plan CurrentPlan => _plan?.Plan ?? Services.Plan.Free;
-
-    // The highest resolution allowed: the plan's, or a special key's.
-    private int MaxLines => _plan?.MaxLines ?? Plans.Free.Lines;
 
     public IReadOnlyList<ResolutionOption> ResolutionOptions { get; }
 
@@ -111,7 +107,7 @@ public sealed class SettingsViewModel : ObservableObject
         get => _resolution;
         set
         {
-            if (value is null || !value.IsAvailable) return;
+            if (value is null) return;
             if (!Change(ref _resolution, value)) return;
             Raise(nameof(ResolutionHint));
             RaiseBufferAdvice();
@@ -122,27 +118,22 @@ public sealed class SettingsViewModel : ObservableObject
     {
         get
         {
-            var effective = Resolutions.Effective(_resolution.Value, MaxLines);
-            var plan = _plan?.IsSpecial == true && MaxLines != Plans.For(CurrentPlan).Lines
-                ? $"Your special key records up to {Resolutions.Name(MaxLines)}."
-                : CurrentPlan switch
-            {
-                Services.Plan.Ultra => "Ultra records up to 4K.",
-                Services.Plan.Pro => "Pro records up to 1440p, and Ultra up to 4K.",
-                _ => "Free records up to 1080p, Pro up to 1440p and Ultra up to 4K.",
-            };
+            var effective = Resolutions.Effective(_resolution.Value);
+            var cloud = _plan?.CloudLines ?? Plans.Free.CloudLines;
+            var plan = cloud >= Resolutions.Max
+                ? "Every plan records up to 4K, and yours keeps 4K clips in 4K in the cloud."
+                : $"Every plan records up to 4K. Clips go to the cloud at {Resolutions.Name(cloud)} on {Plans.For(CurrentPlan).Label}; Pro and Ultra keep them in 4K.";
             return $"Records at {Resolutions.Name(effective)}, or the monitor's own size if that's smaller. Lower is lighter on the game and takes less space. {plan}";
         }
     }
 
-    // The engine's file gets the smaller of the picked resolution and the plan's, at start and whenever the plan
-    // changes, so a plan that ended stops recording above Free's.
+    // The engine's file gets the picked resolution, at most 4K, at start. Older versions wrote a lower plan cap there.
     internal bool EnforceResolution()
     {
         try
         {
             var engine = EngineSettings.Load(AppPaths.EngineSettingsFile);
-            var effective = Resolutions.Effective(_desktop.Resolution, MaxLines);
+            var effective = Resolutions.Effective(_desktop.Resolution);
             if (engine.Resolution == effective) return false;
             engine.Resolution = effective;
             engine.Save(AppPaths.EngineSettingsFile);
@@ -152,22 +143,6 @@ public sealed class SettingsViewModel : ObservableObject
         {
             return false;
         }
-    }
-
-    private async Task OnPlanChangedAsync(Services.Plan plan)
-    {
-        RefreshResolutions();
-        if (_applyToEngine is null) return;
-        if (EnforceResolution()) await _applyToEngine();
-    }
-
-    private void RefreshResolutions()
-    {
-        foreach (var option in ResolutionOptions) option.Refresh(MaxLines);
-        if (!HasChanges) _resolution = ResolutionOptions.FirstOrDefault(o => o.Value == _desktop.Resolution && o.IsAvailable) ?? _resolution;
-        if (!_resolution.IsAvailable) _resolution = ResolutionOptions[0];
-        Raise(nameof(Resolution));
-        Raise(nameof(ResolutionHint));
     }
 
     // The updates card under it.
@@ -209,7 +184,7 @@ public sealed class SettingsViewModel : ObservableObject
         get
         {
             var (lines, hz) = MainScreen.Value;
-            var recorded = Math.Min(lines, Resolutions.Effective(_resolution.Value, MaxLines));
+            var recorded = Math.Min(lines, Resolutions.Effective(_resolution.Value));
             var fps = Fps.Value > 0 ? Fps.Value : Math.Clamp(hz, 24, 120);
             var (memory, cores) = ThisPc.Value;
             return ReplayMemory.For((int)BufferSeconds, recorded, fps, (int)Bitrate, memory, cores);
@@ -549,7 +524,7 @@ public sealed class SettingsViewModel : ObservableObject
         ClipSeconds = (int)ClipSeconds,
         Fps = Fps.Value,
         BitrateMbps = (int)Bitrate,
-        Resolution = Resolutions.Effective(_resolution.Value, MaxLines),
+        Resolution = Resolutions.Effective(_resolution.Value),
         Codec = _codec,
         GameAudio = GameTrack.IsRecorded,
         MicAudio = MicTrack.IsRecorded,
@@ -610,7 +585,7 @@ public sealed class SettingsViewModel : ObservableObject
         _bufferSeconds = Math.Clamp(s.BufferSeconds, 10, ReplayMemory.MaxSeconds);
         _clipSeconds = Math.Clamp(s.ClipSeconds, 5, (int)_bufferSeconds);
         _fps = FpsOptions.FirstOrDefault(o => o.Value == s.Fps) ?? new FpsOption(s.Fps, $"{s.Fps} fps");
-        _resolution = ResolutionOptions.FirstOrDefault(o => o.Value == _desktop.Resolution && o.IsAvailable) ?? ResolutionOptions[0];
+        _resolution = ResolutionOptions.FirstOrDefault(o => o.Value == _desktop.Resolution) ?? ResolutionOptions[0];
         _bitrate = Math.Clamp(s.BitrateMbps, 0, 300);
         _codec = s.Codec is "h264" or "hevc" ? s.Codec : "auto";
         GameTrack.Load(s.GameAudio, s.VolumeOf("game"), s.IsMuted("game"));

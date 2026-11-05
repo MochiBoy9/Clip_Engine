@@ -11,10 +11,13 @@ struct ExportOptions {
   std::filesystem::path output;
   double maxMegabytes = 10;  // Discord's limit for free accounts
   unsigned maxFps = 60;
+  // The tallest picture the copy may have. 1080 for sharing; the cloud library's copies for Pro and Ultra go up to
+  // 2160 (4K) when the bitrate that fits is high enough for it.
+  unsigned maxHeight = 1080;
 };
 
 // Re-encodes a clip into a small H.264 MP4 that fits under maxMegabytes, for sharing where
-// uploads are size-limited. Picks the resolution and frame rate from the bitrate that fits,
+// uploads are size-limited. Picks the resolution (up to maxHeight) and frame rate from the bitrate that fits,
 // mixes the game and mic tracks into one, and carries over the clip's event markers.
 // Logs "Export progress N%" lines while working. Returns the process exit code.
 int RunExport(const ExportOptions& options);

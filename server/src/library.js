@@ -6,10 +6,15 @@
 import { addColumns, isSquadId, normalizeInvite, randomCode, randomToken, sameSecret, sha256Hex, SQUAD_ID_LENGTH } from "./codes.js";
 import { normalizeHandle } from "./handles.js";
 import { mediaPointer } from "./media.js";
-import { badgeFor, checkLicense, cleanKey, OFFLINE_GRACE_MS, PLANS, planName, RECHECK_MS, roleLabel, storageBytes } from "./plans.js";
+import { badgeFor, checkLicense, cleanKey, clipBytes, OFFLINE_GRACE_MS, PLANS, planName, RECHECK_MS, roleLabel, storageBytes } from "./plans.js";
 import { cleanGame, cleanName, MOMENT_TYPES } from "./protocol.js";
 
+// A Worker takes a request body of at most 100 MB, so a clip bigger than that (Pro and Ultra take them) goes up in
+// parts of PART_BYTES each, put together in R2 as a multipart upload. R2 wants every part but the last the same size,
+// and at least 5 MB. UPLOAD_PART_BYTES in the Worker's vars changes it (the tests use small parts).
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
+export const PART_BYTES = 64 * 1024 * 1024;
+const MIN_PART_BYTES = 5 * 1024 * 1024;
 const MAX_THUMB_BYTES = 512 * 1024;
 const LINK_CODE_MS = 10 * 60_000;
 // How often a username (@handle) can be changed: once a month on Free, once a week with a plan.
@@ -35,6 +40,8 @@ CREATE TABLE IF NOT EXISTS clips (
 CREATE UNIQUE INDEX IF NOT EXISTS clips_local ON clips(local_id);
 CREATE TABLE IF NOT EXISTS friends (account TEXT PRIMARY KEY, name TEXT NOT NULL, handle TEXT, state TEXT NOT NULL,
   since INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS uploads (clip TEXT PRIMARY KEY, upload_id TEXT NOT NULL, size INTEGER NOT NULL,
+  part_bytes INTEGER NOT NULL, parts TEXT NOT NULL DEFAULT '[]', started INTEGER NOT NULL);
 `;
 
 // Columns added after the first release. video_v and thumb_v name each upload (its ETag), so a
@@ -89,6 +96,19 @@ async function readJson(request) {
   }
 }
 
+function lineName(lines) {
+  return lines >= 2160 ? "4K" : `${lines}p`;
+}
+
+function durationName(seconds) {
+  return seconds >= 60 ? `${Math.round(seconds / 60)} minutes` : `${seconds} seconds`;
+}
+
+function sizeName(bytes) {
+  const mb = bytes / (1024 * 1024);
+  return mb >= 1024 ? `${Math.round((mb / 1024) * 10) / 10} GB` : `${Math.round(mb)} MB`;
+}
+
 function withLength(body, length) {
   if (typeof FixedLengthStream === "undefined" || !body) return body;
   const { readable, writable } = new FixedLengthStream(length);
@@ -123,7 +143,8 @@ export class Library {
     this.sql.exec("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", key, value);
   }
 
-  // The plan, with what a special key adds: extra storage, a different highest resolution and a role.
+  // The plan, with what a special key adds: extra storage, a different highest cloud resolution and a role. lines is
+  // the highest resolution a clip goes up at and clipBytes the biggest clip; recording on the PC isn't limited by plan.
   plan() {
     const name = planName(this.meta("plan"));
     const features = this.features();
@@ -132,6 +153,8 @@ export class Library {
       label: PLANS[name].label,
       roleLabel: roleLabel(features.role),
       lines: features.lines ?? PLANS[name].lines,
+      clipBytes: clipBytes(name),
+      clipSeconds: PLANS[name].clipSeconds,
       storage: storageBytes(this.env, name) + (features.extraMb ?? 0) * 1024 * 1024,
     };
   }
@@ -172,6 +195,8 @@ export class Library {
       roleLabel: plan.roleLabel,
       planKey: this.meta("plan_display") ?? null,
       lines: plan.lines,
+      maxClip: plan.clipBytes,
+      maxSeconds: plan.clipSeconds,
       badge: this.badge(),
       hideBadge: this.meta("hide_badge") === "1",
       webPassword: Boolean(this.meta("web_password")),
@@ -295,13 +320,22 @@ export class Library {
     }
     if (path === "/clips" && method === "POST") return this.addClip(request);
 
-    const m = path.match(/^\/clips\/([0-9A-Z]{6})(?:\/(video|thumb))?$/);
+    const m = path.match(/^\/clips\/([0-9A-Z]{6})(?:\/(video|thumb))?(?:\/parts(?:\/(\d{1,4}|done))?)?$/);
     if (m) {
-      const [, id, kind] = m;
+      const [, id, kind, part] = m;
+      const parts = path.includes("/parts");
       const row = this.clipRow(id);
       if (!row) return fail(404, "That clip isn't in your cloud library.");
+      if (parts) {
+        if (kind !== "video") return fail(404, "Not found.");
+        if (!part && method === "POST") return this.startParts(request, row);
+        if (part === "done" && method === "POST") return this.finishParts(row);
+        if (part && part !== "done" && method === "PUT") return this.uploadPart(request, row, Number(part));
+        return fail(404, "Not found.");
+      }
       if (!kind && method === "PATCH") return this.updateClip(request, row);
       if (!kind && method === "DELETE") {
+        await this.abortParts(id);
         await this.env.CLIPS.delete([this.key(id, "video"), this.key(id, "thumb")]);
         this.sql.exec("DELETE FROM clips WHERE id = ?", id);
         await this.syncClip(id);
@@ -694,8 +728,15 @@ export class Library {
     if (localId) {
       // The same clip uploaded again from the same PC: the clip it already has.
       const known = this.sql.exec("SELECT * FROM clips WHERE local_id = ?", localId).toArray()[0];
+      if (known && !known.uploaded && Number.isInteger(body?.width) && Number.isInteger(body?.height)) {
+        // Not up yet: the copy that goes up this time may be a different size, for a plan that changed since.
+        this.sql.exec("UPDATE clips SET width = ?, height = ? WHERE id = ?", body.width, body.height, known.id);
+        return json(this.clipJson(this.clipRow(known.id)));
+      }
       if (known) return json(this.clipJson(known));
     }
+    const tooLong = this.refuseLength(seconds);
+    if (tooLong) return tooLong;
     let id;
     do id = randomCode(6);
     while (this.clipRow(id));
@@ -730,17 +771,120 @@ export class Library {
       if (row.visibility === "public" && row.uploaded) await this.syncClip(row.id);
       return json({ ok: true });
     }
-    if (length > MAX_UPLOAD_BYTES) return fail(413, "That clip is over 100 MB. Upload a smaller copy.");
-    const plan = this.plan();
-    if (this.used() - (row.uploaded ? row.size : 0) + length > plan.storage) {
-      return fail(507, `Your ${plan.label} cloud library is full. Remove some clips to make room.`);
-    }
+    const refused = this.refuseVideo(row, length);
+    if (refused) return refused;
+    if (length > MAX_UPLOAD_BYTES) return fail(413, "Clips over 100 MB go up in parts. Update Clip Engine to upload this one.");
     const object = await this.env.CLIPS.put(this.key(row.id, "video"), withLength(request.body, length), {
       httpMetadata: { contentType: "video/mp4" },
     });
-    this.sql.exec("UPDATE clips SET uploaded = 1, size = ?, video_v = ? WHERE id = ?", object?.size ?? length, Math.max(Date.now(), row.video_v + 1), row.id);
+    await this.abortParts(row.id);
+    return this.uploaded(row, object?.size ?? length);
+  }
+
+  // Why the plan's cloud library won't take this clip's video, or null when it will: a clip above the plan's
+  // resolution (4K needs Pro or Ultra), bigger than its biggest clip, or one that doesn't fit in what's left.
+  refuseVideo(row, length) {
+    const tooLong = this.refuseLength(row.seconds);
+    if (tooLong) return tooLong;
+    const plan = this.plan();
+    if (row.height > plan.lines) {
+      return fail(403, `Your ${plan.label} plan puts clips in the cloud at up to ${lineName(plan.lines)}. `
+        + "Pro and Ultra take 4K clips. Recording in 4K on your PC works on every plan.");
+    }
+    if (length > plan.clipBytes) {
+      return fail(413, `Your ${plan.label} plan takes clips of up to ${sizeName(plan.clipBytes)} in the cloud. `
+        + (plan.name === "ultra" ? "Upload a shorter clip." : "Pro and Ultra take bigger ones."));
+    }
+    if (this.used() - (row.uploaded ? row.size : 0) + length > plan.storage) {
+      return fail(507, `Your ${plan.label} cloud library is full. Remove some clips to make room.`);
+    }
+    return null;
+  }
+
+  // A clip longer than the plan's cloud library takes: 40 seconds on Free, 10 minutes on Pro and 30 on Ultra. A
+  // second over is let through, for how lengths round.
+  refuseLength(seconds) {
+    const plan = this.plan();
+    if (seconds <= plan.clipSeconds + 1) return null;
+    return fail(403, `Your ${plan.label} plan takes clips of up to ${durationName(plan.clipSeconds)} in the cloud. `
+      + (plan.name === "ultra" ? "Trim this one to upload it." : "Trim this one, or Pro and Ultra take longer ones."));
+  }
+
+  async uploaded(row, size) {
+    this.sql.exec("UPDATE clips SET uploaded = 1, size = ?, video_v = ? WHERE id = ?", size, Math.max(Date.now(), row.video_v + 1), row.id);
     if (row.visibility === "public") await this.syncClip(row.id);
     return json(this.clipJson(this.clipRow(row.id)));
+  }
+
+  // ---- uploads in parts (clips over 100 MB) ----
+  //
+  //   POST /clips/<clip>/video/parts         { size }  starts one: { partBytes, parts }
+  //   PUT  /clips/<clip>/video/parts/<n>     part n, from 1; each is partBytes but the last
+  //   POST /clips/<clip>/video/parts/done    puts the parts together; answers the clip
+  // Starting again drops one that didn't finish, as does removing the clip.
+
+  async startParts(request, row) {
+    const body = await readJson(request);
+    const size = Number(body?.size);
+    if (!Number.isInteger(size) || size <= 0) return fail(400, "An upload in parts needs the clip's size.");
+    const refused = this.refuseVideo(row, size);
+    if (refused) return refused;
+    await this.abortParts(row.id);
+    const configured = Number(this.env?.UPLOAD_PART_BYTES);
+    const partBytes = Number.isInteger(configured) && configured >= MIN_PART_BYTES && configured <= MAX_UPLOAD_BYTES ? configured : PART_BYTES;
+    const upload = await this.env.CLIPS.createMultipartUpload(this.key(row.id, "video"), {
+      httpMetadata: { contentType: "video/mp4" },
+    });
+    this.sql.exec("INSERT INTO uploads (clip, upload_id, size, part_bytes, parts, started) VALUES (?, ?, ?, ?, '[]', ?)",
+      row.id, upload.uploadId, size, partBytes, Date.now());
+    return json({ partBytes, parts: Math.ceil(size / partBytes) });
+  }
+
+  async uploadPart(request, row, number) {
+    const upload = this.sql.exec("SELECT * FROM uploads WHERE clip = ?", row.id).toArray()[0];
+    if (!upload) return fail(409, "That upload isn't going on any more. Start it again.");
+    const count = Math.ceil(upload.size / upload.part_bytes);
+    if (!Number.isInteger(number) || number < 1 || number > count) return fail(400, `Parts are numbered 1 to ${count}.`);
+    const expected = number < count ? upload.part_bytes : upload.size - upload.part_bytes * (count - 1);
+    const length = Number(request.headers.get("content-length"));
+    if (length !== expected) return fail(400, `Part ${number} is ${expected} bytes.`);
+    const part = await this.env.CLIPS.resumeMultipartUpload(this.key(row.id, "video"), upload.upload_id)
+      .uploadPart(number, withLength(request.body, length));
+    // Read again: other parts may have finished while this one went up.
+    const now = this.sql.exec("SELECT parts FROM uploads WHERE clip = ? AND upload_id = ?", row.id, upload.upload_id).toArray()[0];
+    if (!now) return fail(409, "That upload isn't going on any more. Start it again.");
+    const done = JSON.parse(now.parts).filter((p) => p.partNumber !== number);
+    done.push({ partNumber: number, etag: part.etag });
+    this.sql.exec("UPDATE uploads SET parts = ? WHERE clip = ?", JSON.stringify(done), row.id);
+    return json({ ok: true, part: number });
+  }
+
+  async finishParts(row) {
+    const upload = this.sql.exec("SELECT * FROM uploads WHERE clip = ?", row.id).toArray()[0];
+    if (!upload) return fail(409, "That upload isn't going on any more. Start it again.");
+    const count = Math.ceil(upload.size / upload.part_bytes);
+    const parts = JSON.parse(upload.parts).sort((a, b) => a.partNumber - b.partNumber);
+    if (parts.length !== count) return fail(409, `${count - parts.length} of ${count} parts haven't gone up yet.`);
+    // The plan may have changed while it went up.
+    const refused = this.refuseVideo(row, upload.size);
+    if (refused) {
+      await this.abortParts(row.id);
+      return refused;
+    }
+    const object = await this.env.CLIPS.resumeMultipartUpload(this.key(row.id, "video"), upload.upload_id).complete(parts);
+    this.sql.exec("DELETE FROM uploads WHERE clip = ?", row.id);
+    return this.uploaded(row, object?.size ?? upload.size);
+  }
+
+  async abortParts(id) {
+    const upload = this.sql.exec("SELECT * FROM uploads WHERE clip = ?", id).toArray()[0];
+    if (!upload) return;
+    this.sql.exec("DELETE FROM uploads WHERE clip = ?", id);
+    try {
+      await this.env.CLIPS.resumeMultipartUpload(this.key(id, "video"), upload.upload_id).abort();
+    } catch {
+      // Gone already; R2 drops unfinished uploads after a week anyway.
+    }
   }
 
   // Says the Worker may serve this clip's video or thumbnail (src/media.js), without reading R2 here.

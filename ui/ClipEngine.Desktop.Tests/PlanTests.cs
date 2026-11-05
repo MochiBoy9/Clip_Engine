@@ -26,31 +26,40 @@ public class PlanTests : IDisposable
     }
 
     [Fact]
-    public void PlansCapTheResolution()
+    public void EveryPlanRecords4KAndPlansSetTheCloud()
     {
-        Assert.Equal(1080, Resolutions.Effective(0, Plan.Free));
-        Assert.Equal(1440, Resolutions.Effective(0, Plan.Pro));
-        Assert.Equal(2160, Resolutions.Effective(0, Plan.Ultra));
-        Assert.Equal(1080, Resolutions.Effective(2160, Plan.Free));
-        Assert.Equal(720, Resolutions.Effective(720, Plan.Ultra));
-        Assert.Equal(1440, Resolutions.Effective(1440, Plan.Ultra));
-        Assert.Equal(Plan.Ultra, Resolutions.Needs(2160));
-        Assert.Equal(Plan.Pro, Resolutions.Needs(1440));
-        Assert.Equal(Plan.Free, Resolutions.Needs(720));
+        Assert.Equal(2160, Resolutions.Effective(0));
+        Assert.Equal(2160, Resolutions.Effective(2160));
+        Assert.Equal(1440, Resolutions.Effective(1440));
+        Assert.Equal(720, Resolutions.Effective(720));
+        Assert.Equal(2160, Resolutions.Effective(4320));
         Assert.Equal("$2.99/mo", Plans.Pro.PriceText);
         Assert.Equal("$4.99/mo", Plans.Ultra.PriceText);
         Assert.Equal(Plan.Pro, Plans.FromId("plus"));
 
-        var option = new ResolutionOption(1440);
-        option.Refresh(Plans.Free.Lines);
-        Assert.False(option.IsAvailable);
-        Assert.Equal("1440p · Pro", option.Label);
-        option.Refresh(Plans.Pro.Lines);
-        Assert.True(option.IsAvailable);
-        Assert.Equal("1440p", option.Label);
-        var best = new ResolutionOption(0);
-        best.Refresh(Plans.Ultra.Lines);
-        Assert.Equal("Best for plan (4K)", best.Label);
+        // The cloud: Free clips go up at 1080p and up to 100 MB; Pro and Ultra take 4K and bigger ones.
+        Assert.Equal((1080, 100, 40), (Plans.Free.CloudLines, Plans.Free.ClipMb, Plans.Free.ClipSeconds));
+        Assert.Equal((2160, 1024, 600), (Plans.Pro.CloudLines, Plans.Pro.ClipMb, Plans.Pro.ClipSeconds));
+        Assert.Equal((2160, 4096, 1800), (Plans.Ultra.CloudLines, Plans.Ultra.ClipMb, Plans.Ultra.ClipSeconds));
+        Assert.Contains("Records up to 4K", Plans.Free.Perks);
+
+        Assert.Equal("1440p", new ResolutionOption(1440).Label);
+        Assert.Equal("4K (2160p)", new ResolutionOption(2160).Label);
+        Assert.Equal("Best (up to 4K)", new ResolutionOption(0).Label);
+    }
+
+    [Fact]
+    public void ACloudAccountSaysWhatItsPlanTakes()
+    {
+        var free = Services.Cloud.CloudAccount.From(System.Text.Json.Nodes.JsonNode.Parse("""{"id":"A","plan":"free"}"""));
+        Assert.Equal(1080, free.Lines);
+        Assert.Equal(100L << 20, free.MaxClip);
+        Assert.Equal(40, free.MaxSeconds);
+        var ultra = Services.Cloud.CloudAccount.From(System.Text.Json.Nodes.JsonNode.Parse(
+            """{"id":"A","plan":"ultra","lines":2160,"maxClip":4294967296,"maxSeconds":1800}"""));
+        Assert.Equal(2160, ultra.Lines);
+        Assert.Equal(4L << 30, ultra.MaxClip);
+        Assert.Equal(1800, ultra.MaxSeconds);
     }
 
     [Fact]
@@ -76,31 +85,31 @@ public class PlanTests : IDisposable
         Assert.Equal(Plan.Free, vm.Plan);
         Assert.True(vm.IsSpecial);
         Assert.False(vm.ShowKeyBox);
-        Assert.Equal(1440, vm.MaxLines);
+        Assert.Equal(1440, vm.CloudLines);
         Assert.Equal(10L << 30, vm.ExtraStorage);
         Assert.True(vm.IsUnlocked(AccentThemes.Find("chrome")), "a special key can give an Ultra theme");
         Assert.True(vm.IsUnlocked(AccentThemes.Default));
         Assert.False(vm.IsUnlocked(AccentThemes.Find("mint")));
-        Assert.Contains("1440p recording, 10 GB more cloud storage and extra colour themes", vm.Detail);
+        Assert.Contains("1440p clips in the cloud, 10 GB more cloud storage and extra colour themes", vm.Detail);
         Assert.Contains("until", vm.Detail);
 
         // Pro from a special key with the plan's themes: the plan decides, with the key's resolution.
-        vm.Accept("CEK-PRO", new LicenseCheck(LicenseOutcome.Valid, "", Plan.Pro, "", null, true, 2160, null, 0));
+        vm.Accept("CEK-PRO", new LicenseCheck(LicenseOutcome.Valid, "", Plan.Pro, "", null, true, 1440, null, 0));
         Assert.False(vm.CanBeCredited, "only paying supporters are offered the credits");
         Assert.False(vm.SaveCreditCommand.CanExecute(null));
-        Assert.Equal(2160, vm.MaxLines);
+        Assert.Equal(1440, vm.CloudLines);
         Assert.True(vm.IsUnlocked(AccentThemes.Find("mint")));
         Assert.False(vm.IsUnlocked(AccentThemes.Find("chrome")));
-        Assert.Equal(1440, Resolutions.Effective(1440, vm.MaxLines));
 
         // A subscription key never carries a special key's features over.
         vm.Accept("POLAR", new LicenseCheck(LicenseOutcome.Valid, "", Plan.Pro));
         Assert.False(vm.IsSpecial);
         Assert.True(vm.CanBeCredited);
-        Assert.Equal(1440, vm.MaxLines);
+        Assert.Equal(2160, vm.CloudLines);
+        Assert.Contains("4K clips up to 1 GB and 10 minutes, 100 GB in the cloud", vm.Detail);
 
         vm.Remove();
-        Assert.Equal(1080, vm.MaxLines);
+        Assert.Equal(1080, vm.CloudLines);
         Assert.True(vm.ShowKeyBox);
     }
 
@@ -216,7 +225,7 @@ public class PlanTests : IDisposable
         Assert.Equal("CONTENT CREATOR", vm.Badge);
         Assert.True(vm.ShowBadge);
         Assert.Equal("Clip Engine Content Creator", vm.Title);
-        Assert.StartsWith("Ultra features: 4K recording", vm.Detail);
+        Assert.StartsWith("Ultra features: 4K clips up to 4 GB and 30 minutes", vm.Detail);
         Assert.Equal("Given for: Streams every week", vm.Reason);
         Assert.True(vm.CanBeCredited, "the developer let this key into the credits");
         Assert.True(vm.HasDirectLine);
