@@ -111,8 +111,9 @@ int RunExportCommand(int argc, wchar_t** argv) {
   return result;
 }
 
-// clip_engine.exe --montage <out.mp4> --part "<clip>|<from>|<to>" [--part ...] [--height 1080] [--moment <id>]
-// Puts parts of several clips together into one, for squad highlights, and exits.
+// clip_engine.exe --montage <out.mp4> --part "<clip>|<from>|<to>" [--part ...] [--height 1080] [--mbps 16|auto]
+//                 [--moment <id>] [--kind edit]
+// Puts parts of several clips together into one, for squad highlights and the app's editor, and exits.
 int RunMontageCommand(int argc, wchar_t** argv) {
   using namespace clip;
   MontageOptions options;
@@ -128,6 +129,11 @@ int RunMontageCommand(int argc, wchar_t** argv) {
       options.parts.push_back({std::filesystem::path(winrt::to_hstring(part->path).c_str()), part->from, part->to});
     }
     if (flag == L"--height") options.maxHeight = static_cast<unsigned>(std::clamp(_wtoi(argv[i + 1]), 360, 2160));
+    if (flag == L"--mbps") {
+      const std::wstring_view value = argv[i + 1];
+      options.mbps = value == L"auto" ? 0.0 : std::clamp(_wtof(argv[i + 1]), 2.0, 80.0);
+    }
+    if (flag == L"--kind" && std::wstring_view(argv[i + 1]) == L"edit") options.trigger = "edit";
     if (flag == L"--moment") {
       const std::string moment = winrt::to_string(argv[i + 1]);
       if (IsSquadMomentId(moment)) options.squadMoment = moment;

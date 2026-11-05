@@ -92,6 +92,14 @@ internal sealed class LicenseState
     public List<string>? Themes { get; set; }
     public long ExtraStorage { get; set; }
 
+    // A special key's title (Content Creator, Special, Exclusive), its perks (a direct line to the developer, bug
+    // reports), whether its name may go in the credits, and why it was given, when the developer shares that.
+    public string? Role { get; set; }
+    public string? RoleLabel { get; set; }
+    public List<string>? Perks { get; set; }
+    public bool CreditsAllowed { get; set; }
+    public string Reason { get; set; } = "";
+
     [JsonIgnore] public bool HasKey => Key.Length > 0;
 
     public static LicenseState Load(string file)
@@ -127,6 +135,11 @@ internal sealed class LicenseState
             Lines = Lines,
             Themes = Themes,
             ExtraStorage = ExtraStorage,
+            Role = Role,
+            RoleLabel = RoleLabel,
+            Perks = Perks,
+            CreditsAllowed = CreditsAllowed,
+            Reason = Reason,
         };
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
         File.WriteAllText(file, JsonSerializer.Serialize(stored, PlanJson.Default.LicenseState));
@@ -141,6 +154,10 @@ internal sealed class LicenseState
         Lines = null;
         Themes = null;
         ExtraStorage = 0;
+        Role = RoleLabel = null;
+        Perks = null;
+        CreditsAllowed = false;
+        Reason = "";
     }
 }
 
@@ -170,9 +187,24 @@ internal enum LicenseOutcome { Valid, Rejected, Offline }
 
 internal sealed record LicenseCheck(LicenseOutcome Outcome, string Message, Plan Plan = Plan.Free, string Display = "",
                                     DateTimeOffset? Expires = null, bool IsSpecial = false, int? Lines = null,
-                                    IReadOnlyList<string>? Themes = null, long ExtraStorage = 0);
+                                    IReadOnlyList<string>? Themes = null, long ExtraStorage = 0, string? Role = null,
+                                    string? RoleLabel = null, IReadOnlyList<string>? Perks = null, bool CreditsAllowed = false,
+                                    string Reason = "");
 
-internal sealed record Credits(IReadOnlyList<string> Ultra, IReadOnlyList<string> Pro);
+// What a special key can let its holder do besides the plan (server/src/plans.js, PERKS).
+internal static class PerkIds
+{
+    public const string DirectLine = "contact";
+    public const string BugReports = "bugs";
+}
+
+// The names in the credits: subscribers, then people the developer thanked with a special role.
+internal sealed record Credits(IReadOnlyList<string> Ultra, IReadOnlyList<string> Pro)
+{
+    public IReadOnlyList<string> Exclusive { get; init; } = [];
+    public IReadOnlyList<string> Creator { get; init; } = [];
+    public IReadOnlyList<string> Special { get; init; } = [];
+}
 
 // Checks keys with Clip Engine's online service, which asks Polar or, for a special key ("CEK-..."), its own list
 // (server/src/index.js, POST /v1/license).
@@ -213,7 +245,13 @@ internal sealed class LicenseClient(string server, HttpClient? http = null)
                 ? t.Select(x => x?.GetValue<string>() ?? "").Where(x => x.Length > 0).ToList()
                 : null;
             var extra = reply?["extraStorage"] is JsonValue x && x.TryGetValue<long>(out var bytes) ? bytes : 0;
-            return new(LicenseOutcome.Valid, "", plan, reply?["display"]?.GetValue<string>() ?? "", expires, true, lines, themes, extra);
+            var perks = reply?["perks"] is JsonArray p
+                ? p.Select(x => x is JsonValue v && v.TryGetValue<string>(out var s) ? s : "").Where(x => x.Length > 0).ToList()
+                : [];
+            return new(LicenseOutcome.Valid, "", plan, reply?["display"]?.GetValue<string>() ?? "", expires, true, lines, themes, extra,
+                       Text(reply?["role"]), Text(reply?["roleLabel"]), perks,
+                       reply?["credits"] is JsonValue c && c.TryGetValue<bool>(out var credited) && credited,
+                       Text(reply?["reason"]) ?? "");
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException)
         {
@@ -221,18 +259,83 @@ internal sealed class LicenseClient(string server, HttpClient? http = null)
         }
     }
 
+    private static string? Text(JsonNode? node) =>
+        node is JsonValue v && v.TryGetValue<string>(out var s) && s.Length > 0 ? s : null;
+
     public async Task<Credits> CreditsAsync(CancellationToken cancel = default)
     {
         try
         {
             var reply = JsonNode.Parse(await _http.GetStringAsync($"{_server}/v1/credits", cancel));
             static IReadOnlyList<string> Names(JsonNode? n) =>
-                (n?.AsArray() ?? []).Select(x => x?.GetValue<string>() ?? "").Where(x => x.Length > 0).ToList();
-            return new(Names(reply?["ultra"]), Names(reply?["pro"]));
+                (n as JsonArray ?? []).Select(x => x?.GetValue<string>() ?? "").Where(x => x.Length > 0).ToList();
+            return new(Names(reply?["ultra"]), Names(reply?["pro"]))
+            {
+                Exclusive = Names(reply?["exclusive"]),
+                Creator = Names(reply?["creator"]),
+                Special = Names(reply?["special"]),
+            };
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException)
         {
             return new([], []);
+        }
+    }
+}
+
+// A message or bug report a special key's holder sent the developer, with the developer's answer.
+internal sealed record ContactMessage(long Id, string Kind, string Text, DateTimeOffset Sent, string? Reply, DateTimeOffset? Replied)
+{
+    public static ContactMessage? From(JsonNode? n)
+    {
+        if (n is not JsonObject) return null;
+        static DateTimeOffset? Time(JsonNode? t) =>
+            t is JsonValue v && v.TryGetValue<long>(out var ms) && ms > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(ms) : null;
+        return new(n["id"] is JsonValue i && i.TryGetValue<long>(out var id) ? id : 0,
+                   n["kind"]?.GetValue<string>() ?? "message",
+                   n["text"]?.GetValue<string>() ?? "",
+                   Time(n["created"]) ?? DateTimeOffset.UnixEpoch,
+                   n["reply"] is JsonValue r && r.TryGetValue<string>(out var reply) && reply.Length > 0 ? reply : null,
+                   Time(n["replied"]));
+    }
+}
+
+internal sealed record ContactResult(bool Ok, string Message, IReadOnlyList<ContactMessage> Messages);
+
+// A special key's direct line to the developer and its bug reports (server/src/index.js, POST /v1/contact). The key
+// and this PC's id are what let a message through; the developer answers in the key maker.
+internal sealed class ContactClient(string server, HttpClient? http = null)
+{
+    private static readonly HttpClient Shared = new() { Timeout = TimeSpan.FromSeconds(20) };
+    private readonly HttpClient _http = http ?? Shared;
+    private readonly string _server = server.TrimEnd('/');
+
+    public const string Message = "message";
+    public const string Bug = "bug";
+
+    public Task<ContactResult> SendAsync(string key, string device, string kind, string text, string name, CancellationToken cancel = default) =>
+        PostAsync("/v1/contact", new JsonObject { ["key"] = key, ["device"] = device, ["kind"] = kind, ["text"] = text, ["name"] = name }, cancel);
+
+    public Task<ContactResult> ListAsync(string key, string device, CancellationToken cancel = default) =>
+        PostAsync("/v1/contact/list", new JsonObject { ["key"] = key, ["device"] = device }, cancel);
+
+    private async Task<ContactResult> PostAsync(string path, JsonObject body, CancellationToken cancel)
+    {
+        if (_server.Length == 0) return new(false, "No online service is set. Add its address in Settings > Online.", []);
+        try
+        {
+            using var content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
+            using var response = await _http.PostAsync(_server + path, content, cancel);
+            var text = await response.Content.ReadAsStringAsync(cancel);
+            var reply = text.Length > 0 ? JsonNode.Parse(text) : null;
+            if (!response.IsSuccessStatusCode)
+                return new(false, reply?["error"]?.GetValue<string>() ?? $"The online service answered {(int)response.StatusCode}.", []);
+            var messages = (reply?["messages"] as JsonArray ?? []).Select(ContactMessage.From).OfType<ContactMessage>().ToList();
+            return new(true, "", messages);
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException)
+        {
+            return new(false, "Couldn't reach Clip Engine's online service. Try again in a minute.", []);
         }
     }
 }

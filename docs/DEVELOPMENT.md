@@ -39,7 +39,8 @@ Run `ClipEngine.exe` and launch a supported game. `clip_engine.exe` can also run
 - `clip_engine.exe --frame <clip.mp4 or image> <out.png> --at 12.5` saves one frame as a PNG, and `clip_engine.exe --read <clip.mp4 or image> --at 12.5 --region 0.65,0.12,0.33,0.05 --words "ELIMINATED|KNOCKED OUT"` reads that box the way detection does and prints the text and how many times the words matched; `--position start|end` reads it as a killfeed (with `{player}` filled in from your in-game names, and `--skip-tag true` for a squad tag before them), and `--image icon.png` also says how alike the box is to an icon. Detection Studio uses both.
 - `clip_engine.exe --scan <clip.mp4> --game <id or name> [--quality medium] [--hud-scale 100] [--rules draft.ini]` runs a game's rules over a whole clip and prints each moment they find with its time; the player's Check detection uses it, and Detection Studio passes `--rules` to test changes before they're saved.
 - `clip_engine.exe --trim <clip.mp4> <out.mp4> --start 4.5 --end 20` copies part of a clip without re-encoding, starting on the keyframe at or before the start (at most a second early).
-- `clip_engine.exe --montage <out.mp4> --part "<clip.mp4>|<from>|<to>" [--part ...] [--height 1080] [--moment <id>]` puts parts of several clips together into one, with their moments. Squad highlights use it.
+- `clip_engine.exe --montage <out.mp4> --part "<clip.mp4>|<from>|<to>" [--part ...] [--height 1080] [--mbps 16|auto] [--moment <id>] [--kind edit]` puts parts of several clips together into one, re-encoded, with their moments. Squad highlights use it, and so does the editor's export (`--kind edit` marks the clip's trigger as `edit`; `--mbps auto` picks 8, 16, 28 or 45 Mbps from the picture height).
+- The editor (Edit in the player) keeps each clip's edit in `%LOCALAPPDATA%\Clip_Engine\edits\<id>.json`: the parts as source times, so reopening the clip picks it up. The model is `EditTimeline` in `ui/ClipEngine.Desktop/Services/Editing/`; every change (split, delete, trim, move, duplicate, undo) goes through it, and new tools are added there first.
 - Squads and the cloud library use Clip Engine's online service, a Cloudflare Worker in `server/`. See [server/README.md](server/README.md) to deploy it, which takes one `npx wrangler deploy`. Release builds name it with `-p:OnlineServer=https://...` (the `ONLINE_SERVER` Actions variable). You can also type it under **Online service** on the Squad or Cloud page. Squad settings, the cloud account and encrypted sign-ins are kept in `%LOCALAPPDATA%\Clip_Engine\desktop.json`. Your views of squad moments are listed in `squad\views.json` there, and squadmates' downloaded views are cached in `squad\cache\` for a week.
 
 ## Layout
@@ -61,7 +62,7 @@ Run `ClipEngine.exe` and launch a supported game. `clip_engine.exe` can also run
 | `tests` | Tests for the detection rules, matching, clip metadata, game API events and killfeed rules |
 | `ui/ClipEngine.Desktop` | The desktop app (C#, Avalonia) |
 | `ui/ClipEngine.Desktop.Preview` | Renders the app's screens to PNGs with sample data |
-| `ui/ClipEngine.Desktop.Tests` | Tests for the app's log parsing, settings file, MP4 reading, clip markers, import, plans and license keys, match grouping, storage cleanup, player records and the stats overlay's readings |
+| `ui/ClipEngine.Desktop.Tests` | Tests for the editor's timeline and export, the app's log parsing, settings file, MP4 reading, clip markers, import, plans and license keys, match grouping, storage cleanup, player records and the stats overlay's readings |
 | `website` | The landing page (plain HTML, published to GitHub Pages; see `website/README.md`) |
 
 ## The online service
@@ -126,6 +127,19 @@ These live in `wrangler.toml` under `[vars]`:
 4. Make a checkout link for each product and put them in `PlanConfig` (`ui/ClipEngine.Desktop/Services/Plans.cs`) and `LINKS` (`website/site.js`). The customer portal link goes in `PlanConfig.ManageUrl`.
 
 The app sends the key to `POST /v1/license`, which checks it with Polar's public license key API (no Polar token needed) and answers with the plan. Putting the key on a cloud account (`POST /v1/accounts/<id>/plan`) gives the account the plan's storage; one subscription is on one account at a time, and the service checks it again twice a day, so a cancelled one goes back to Free. Subscribers can list a name in the credits, `GET /v1/credits`, which the app and the website show.
+
+### Special keys
+
+The operator's key maker (kept privately, never in this repository) makes special keys, `CEK-XXXX-XXXX-XXXX`, through `/v1/admin/grants` with `ADMIN_TOKEN` (see `server/src/index.js`). A key gives:
+
+- a plan (Free, Pro or Ultra), which sets storage, resolution and themes, and optionally a role on top of it: `creator` (Content Creator), `special` or `exclusive`. The app shows the role as the badge, and a cloud account shows it next to the plan.
+- a length in minutes counted from first use (`minutes`, or `days` as before), a fixed end (`endsAt`, ms), both (whichever comes first), or neither.
+- extra cloud storage, a resolution cap, its own colour themes and a PC limit, as before.
+- perks: `contact`, a direct line to the developer, and `bugs`, bug reports that go straight to them. The app's plan card gets a box for them (`POST /v1/contact`, `/v1/contact/list`), checked against the key and a PC it was turned on on, 20 a day per key. The operator reads and answers them in the key maker's inbox (`GET /v1/admin/messages`, `PATCH /v1/admin/messages/<id>`).
+- `credits`: whether the holder may put a name in the credits. Their name is listed under their role (`exclusive`, `creator`, `special` in `GET /v1/credits`), after Ultra and Pro subscribers.
+- `reason`: why it was given. With `showReason` the holder sees it in the app ("Given for: ..."); otherwise only the operator does. `note` is always private.
+
+Keys made before roles keep working: their days become minutes the first time the directory starts.
 
 
 ## Releasing
