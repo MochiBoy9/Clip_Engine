@@ -300,6 +300,95 @@ public class PlanTests : IDisposable
     }
 
     [Fact]
+    public async Task ADonationMakesASupporter()
+    {
+        var server = new FakeServer((request, body) => request.RequestUri!.AbsolutePath == "/v1/credits"
+            ? (HttpStatusCode.OK, """{"ultra":[],"pro":["Kai"],"supporter":["Mira","Rook"],"exclusive":[],"creator":[],"special":[]}""")
+            : body.Contains("GIFT-SMALL")
+                ? (HttpStatusCode.OK, """{"plan":"free","grant":false,"display":"****-SMAL","role":"supporter","roleLabel":"Supporter","extraStorage":3221225472,"credits":false,"supporter":true,"donated":300,"expires":null}""")
+                : (HttpStatusCode.OK, """{"plan":"free","grant":false,"display":"****-BIG1","role":"supporter","roleLabel":"Supporter","extraStorage":10737418240,"credits":true,"supporter":true,"donated":1000,"expires":null}"""));
+        var client = new LicenseClient("https://service.test/", new HttpClient(server));
+
+        var small = await client.CheckAsync("GIFT-SMALL", null, "pc-1");
+        Assert.Equal(LicenseOutcome.Valid, small.Outcome);
+        Assert.False(small.IsSpecial);
+        Assert.True(small.Supporter);
+        Assert.Equal(300L, small.Donated!.Value);
+        Assert.Equal(3L << 30, small.ExtraStorage);
+        Assert.Equal("Supporter", small.RoleLabel);
+
+        var vm = new PlanViewModel(null, null, () => "", []);
+        vm.Accept("GIFT-SMALL", small);
+        Assert.Equal(Plan.Free, vm.Plan);
+        Assert.True(vm.IsSupporter);
+        Assert.Equal("SUPPORTER", vm.Badge);
+        Assert.True(vm.ShowBadge);
+        Assert.Equal("Clip Engine Supporter", vm.Title);
+        Assert.Equal(3L << 30, vm.ExtraStorage);
+        Assert.Contains("your $3 in donations", vm.Detail);
+        Assert.Contains("3 GB", vm.Detail);
+        Assert.False(vm.CanBeCredited, "under $5: not in the credits yet");
+        Assert.Equal("You've given $3 so far. From $5 in all, your name can go in the credits.", vm.DonateStatus);
+        Assert.False(vm.HasManage, "a donation has no subscription to manage");
+        Assert.False(vm.ShowKeyBox);
+        Assert.StartsWith("You're a Supporter", vm.Message);
+
+        var big = await client.CheckAsync("GIFT-BIG", "Mira", "pc-1");
+        vm.Accept("GIFT-BIG", big);
+        Assert.True(vm.CanBeCredited, "from $5 in all");
+        Assert.False(vm.HasDonateStatus);
+        Assert.Equal(10L << 30, vm.ExtraStorage);
+
+        // A subscriber who donated keeps their plan's badge, with the storage bonus on top.
+        vm.Accept("POLAR-PRO", new LicenseCheck(LicenseOutcome.Valid, "", Plan.Pro, "****-PRO1", null, ExtraStorage: 10L << 30,
+                                                Supporter: true, Donated: 1000));
+        Assert.Equal("PRO", vm.Badge);
+        Assert.True(vm.IsSupporter);
+        Assert.True(vm.CanBeCredited);
+        Assert.Contains("110 GB in the cloud", vm.Detail);
+        Assert.Contains("and for your $10 in donations", vm.Detail);
+
+        // A plain subscription has no bonus.
+        vm.Accept("POLAR-PRO", new LicenseCheck(LicenseOutcome.Valid, "", Plan.Pro));
+        Assert.False(vm.IsSupporter);
+        Assert.Equal(0, vm.ExtraStorage);
+        vm.Remove();
+        Assert.False(vm.IsSupporter);
+        Assert.False(vm.ShowBadge);
+
+        var credits = await client.CreditsAsync();
+        Assert.Equal(["Mira", "Rook"], credits.Supporter);
+    }
+
+    [Fact]
+    public void DonateLinksFillInTheAmount()
+    {
+        Assert.Equal("$5", Donations.Money(500));
+        Assert.Equal("$2.50", Donations.Money(250));
+        Assert.Equal(["$3", "$5", "$10", "$25", "Any amount"], new PlanViewModel(null, null, () => "", []).DonateOptions.Select(o => o.Label).ToList());
+        if (PlanConfig.DonateUrl.Length == 0)
+        {
+            Assert.Equal("", PlanConfig.DonateLink(5));
+            return;
+        }
+        Assert.EndsWith("amount=500", PlanConfig.DonateLink(5));
+        Assert.Equal(PlanConfig.DonateUrl, PlanConfig.DonateLink(0));
+    }
+
+    [Fact]
+    public void ADonationIsKept()
+    {
+        var file = Path.Combine(_dir, "license.json");
+        new LicenseState { Key = "GIFT", Supporter = true, Donated = 1200, ExtraStorage = 12L << 30, LastOk = DateTimeOffset.UtcNow }.Save(file);
+        var loaded = LicenseState.Load(file);
+        Assert.True(loaded.Supporter);
+        Assert.Equal(1200L, loaded.Donated!.Value);
+        loaded.Clear();
+        Assert.False(loaded.Supporter);
+        Assert.Null(loaded.Donated);
+    }
+
+    [Fact]
     public void TheEngineGetsTheResolution()
     {
         var file = Path.Combine(_dir, "clip_engine.ini");

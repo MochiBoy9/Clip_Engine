@@ -9,6 +9,12 @@
 //   POLAR_ORGANIZATION_ID   Settings > General
 //   POLAR_PRO_BENEFIT_ID    the Pro product's License Keys benefit
 //   POLAR_ULTRA_BENEFIT_ID  the Ultra product's License Keys benefit
+//
+// Donations are a one-time, pay-what-you-want Polar product with its own License Keys benefit:
+//   POLAR_DONATION_PRODUCT_ID  the Donation product
+//   POLAR_DONATION_BENEFIT_ID  its License Keys benefit
+// How much someone gave comes from their Polar orders, which needs an organization access token with
+// orders:read, kept as a secret: npx wrangler secret put POLAR_ACCESS_TOKEN
 
 import { randomCode } from "./codes.js";
 
@@ -54,10 +60,12 @@ export const LINES = [480, 720, 1080, 1440, 2160];
 const GRANT_LENGTH = 12;
 
 // Titles a special key can give on top of its plan. The plan still sets storage, resolution and themes.
+// Supporter is also what a donation's key gives on its own (see donations below).
 export const ROLES = {
   creator: { label: "Content Creator" },
   special: { label: "Special" },
   exclusive: { label: "Exclusive" },
+  supporter: { label: "Supporter" },
 };
 
 // What a special key can let its holder do besides the plan.
@@ -65,8 +73,9 @@ export const ROLES = {
 //   bugs     bug reports that go straight to the operator's inbox
 export const PERKS = ["contact", "bugs"];
 
-// The groups in the credits, in the order they're shown: subscribers first, then the roles.
-export const CREDIT_GROUPS = ["ultra", "pro", "exclusive", "creator", "special"];
+// The groups in the credits, in the order they're shown: subscribers first, then supporters who donated, then the
+// roles the operator gives.
+export const CREDIT_GROUPS = ["ultra", "pro", "supporter", "exclusive", "creator", "special"];
 
 export function roleLabel(role) {
   return ROLES[role]?.label ?? null;
@@ -221,20 +230,101 @@ export async function checkLicense(env, value, device) {
   }
   const expires = info.expires_at ? Date.parse(info.expires_at) : null;
   if (expires && expires <= Date.now()) return { ok: false, rejected: true, error: "This key has run out. Renew the subscription to keep your plan." };
+  const donationKey = Boolean(info.benefit_id) && info.benefit_id === env.POLAR_DONATION_BENEFIT_ID;
   const plan = info.benefit_id && info.benefit_id === env.POLAR_ULTRA_BENEFIT_ID ? "ultra"
     : info.benefit_id && info.benefit_id === env.POLAR_PRO_BENEFIT_ID ? "pro"
+    : donationKey ? "free"
     : null;
   if (!plan) return { ok: false, rejected: true, error: "This key isn't for a Clip Engine plan." };
+  // Anyone who donated with the same Polar account gets the supporter perks, whether this key is the donation's
+  // own or a subscription's.
+  const cents = await donatedCents(env, info.customer_id ?? info.customer?.id);
+  if (donationKey && cents === 0) {
+    return { ok: false, rejected: true, error: "This donation hasn't gone through, or was refunded. Try again once Polar emails your receipt." };
+  }
+  const donation = donationKey || cents > 0 ? donationPerks(env, cents) : null;
   return {
     ok: true,
     plan,
     license: String(info.id ?? key).slice(0, 64),
     display: typeof info.display_key === "string" ? info.display_key.slice(0, 64) : "",
-    expires,
-    features: { extraMb: 0, themes: null, lines: null },
-    role: null,
+    expires: donationKey ? null : expires,
+    features: { extraMb: donation?.extraMb ?? 0, themes: null, lines: null },
+    // A subscriber keeps their plan's badge; a donation's key on its own makes its holder a Supporter.
+    role: donation && plan === "free" ? "supporter" : null,
     perks: [],
+    donation,
   };
+}
+
+// ---- donations ----
+//
+// Donations are any amount, through Polar. They're there to keep Clip Engine developed and maintained, and give a
+// few small thank-yous: the Supporter badge, a little more cloud storage for each dollar given (up to a cap), and
+// from $5 in all, a name in the credits. All three numbers can be changed in wrangler.toml [vars].
+
+export const DONATION_DEFAULTS = { gbPerDollar: 1, maxGb: 25, creditsFrom: 5 };
+
+export function donationSettings(env) {
+  const number = (name, fallback) => {
+    const value = Number(env?.[name]);
+    return env?.[name] !== undefined && env?.[name] !== "" && Number.isFinite(value) && value >= 0 ? value : fallback;
+  };
+  return {
+    gbPerDollar: number("DONATION_GB_PER_DOLLAR", DONATION_DEFAULTS.gbPerDollar),
+    maxGb: number("DONATION_MAX_GB", DONATION_DEFAULTS.maxGb),
+    creditsFrom: number("DONATION_CREDITS_FROM", DONATION_DEFAULTS.creditsFrom),
+  };
+}
+
+// What a donation gives. cents is everything the person gave, after refunds and before tax, or null when it
+// couldn't be looked up (no access token, or Polar didn't answer): then it's the smallest thank-you, without the
+// credits, until the next check.
+export function donationPerks(env, cents) {
+  const { gbPerDollar, maxGb, creditsFrom } = donationSettings(env);
+  const dollars = cents === null ? 0 : cents / 100;
+  const gb = Math.min(maxGb, Math.max(1, Math.floor(dollars * gbPerDollar)));
+  return {
+    cents,
+    extraMb: maxGb > 0 && gbPerDollar > 0 ? Math.round(gb * 1024) : 0,
+    credits: cents !== null && dollars >= creditsFrom,
+  };
+}
+
+// Everything a Polar customer gave through the Donation product, in cents: paid orders, less what was refunded,
+// before tax. 0 when they haven't donated, null when it can't be told.
+export async function donatedCents(env, customer) {
+  const product = env?.POLAR_DONATION_PRODUCT_ID;
+  const token = env?.POLAR_ACCESS_TOKEN;
+  if (!product || !token || typeof customer !== "string" || !customer) return null;
+  const api = (env.POLAR_API ?? "https://api.polar.sh").replace(/\/$/, "");
+  const send = env.POLAR_FETCH ?? fetch;
+  let total = 0;
+  try {
+    for (let page = 1; page <= 10; page++) {
+      const query = new URLSearchParams({ customer_id: customer, product_id: product, limit: "100", page: String(page) });
+      if (env.POLAR_ORGANIZATION_ID) query.set("organization_id", env.POLAR_ORGANIZATION_ID);
+      const response = await send(`${api}/v1/orders/?${query}`, {
+        headers: { authorization: `Bearer ${token}`, accept: "application/json" },
+      });
+      if (!response.ok) return null;
+      const list = await response.json();
+      for (const order of list?.items ?? []) {
+        if (order.customer_id && order.customer_id !== customer) continue;
+        if (order.product_id && order.product_id !== product) continue;
+        const paid = order.paid === true || ["paid", "partially_refunded"].includes(order.status);
+        if (!paid) continue;
+        const net = Number(order.net_amount ?? order.subtotal_amount ?? order.amount ?? 0);
+        const refunded = Number(order.refunded_amount ?? 0) - Number(order.refunded_tax_amount ?? 0);
+        total += Math.max(0, (Number.isFinite(net) ? net : 0) - (Number.isFinite(refunded) ? Math.max(0, refunded) : 0));
+      }
+      const pages = Number(list?.pagination?.max_page ?? 1);
+      if (!(page < pages)) break;
+    }
+  } catch {
+    return null;
+  }
+  return Math.round(total);
 }
 
 // The plan's details as the app shows them, with a special key's changes.

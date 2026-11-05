@@ -40,6 +40,7 @@ Run `ClipEngine.exe` and launch a supported game. `clip_engine.exe` can also run
 - Team Fortress 2: the engine appends `con_logfile "clip_engine_console.log"` and `name` to `tf\cfg\autoexec.cfg`, then follows `tf\clip_engine_console.log` (or `tf\console.log` from `-condebug`, whichever grows first) twice a second for "X killed Y with Z." lines, matched to `player_names` or the name the game prints. Until the log grows, the killfeed rules count kills; once it does, the screen's kills and deaths are dropped so nothing counts twice. A log over 64 MB is emptied when the engine starts. `Tf2ConsoleTracker` in `src/integrations/GameStateTrackers.cpp` has the parsing and its tests.
 - `clip_engine.exe --export <clip.mp4> <out.mp4> --max-mb 10` makes a small copy for sharing.
 - Plans: Free records up to 1080p with a 2 GB cloud library; Pro ($2.99 a month) up to 1440p with 100 GB, all seven colour themes, a badge and a name in the credits; Ultra ($4.99 a month) up to 4K with 250 GB and three more themes. Subscriptions are sold through Polar, which emails a license key; the app checks it with the online service (`POST /v1/license`), which asks Polar, about twice a day, and a paid plan keeps working for 14 days offline. The key is kept encrypted in `%LOCALAPPDATA%\Clip_Engine\license.json`. Checkout links go in `PlanConfig` in `ui/ClipEngine.Desktop/Services/Plans.cs` and `website/site.js`; the Polar ids go in `server/wrangler.toml`. Older thank-you names live in `ui/ClipEngine.Desktop/Assets/Supporters.txt`.
+- Donations: any amount, once, through Polar. A donation's key on its own is the Free plan with the Supporter role; anyone who donated (with that key, or a subscription's key from the same Polar customer) gets 1 GB more cloud storage per dollar, up to 25 GB, and from $5 in all, a name in the credits. See "Donations on Polar" below.
 - Resolution: `resolution` in the settings (native, or 2160, 1440, 1080, 720 or 480) scales recordings down on the GPU and never up. The app writes the smaller of the one picked in Settings and the plan's.
 - Stats overlay: `StatsOverlay` in `desktop.json` (on, corner, hotkey, which readings), off until turned on in Settings or with its hotkey (Alt+Shift+F). It runs in the desktop app, only while a game is recorded and in front, and stops all sampling when it's hidden. `Services/Stats/` has the pieces: `PresentCounter` starts a real-time ETW session (`ClipEngine-FrameTimes`) for the Present_Start events of Microsoft-Windows-DXGI (42, 55) and Microsoft-Windows-D3D9 (1), filtered by event id at the source and flushed once a second, and keeps the foreground window's process's frame times (the app inside it for Store apps); `FrameTimes` turns them into FPS (the last second) and the 1% low (the average of the slowest 1% of frame times over the last 10 seconds). `HardwareMonitor` reads CPU from `GetSystemTimes`, RAM from `GlobalMemoryStatusEx`, GPU load from PDH `\GPU Engine(*engtype_3D)\Utilization Percentage` (busiest 3D engine, every process added up, as Task Manager does; the video engines are the recording's own work and left out), video memory from `\GPU Adapter Memory(*)\Dedicated Usage`, and the temperature from `D3DKMTQueryAdapterInfo(KMTQAITYPE_ADAPTERPERFDATA)`, all for the adapter with the most dedicated memory. The sampler and the trace's reader run on their own below-normal, EcoQoS threads. The overlay is a click-through Avalonia window kept out of captures (`WDA_EXCLUDEFROMCAPTURE`), like the notices; where Windows can't do that (before 10 2004) it doesn't show. Starting the ETW session needs an administrator or the Performance Log Users group (S-1-5-32-559); Settings' Allow button adds the account with an elevated `Add-LocalGroupMember`, which counts from the next sign-in. Vulkan and OpenGL games don't raise these events, so FPS shows `--` there; the other readings still work. CPU temperature isn't shown, since Windows has no API for it without a driver.
 - Friends: the Friends page adds people by profile name or friend code (an account's id, like `K7QM-2X9D`), shows who's online and what they're playing, and has a Join squad button when a friend shares their squad. Friends are kept with the cloud account.
@@ -119,11 +120,18 @@ These live in `wrangler.toml` under `[vars]`:
 | `POLAR_ORGANIZATION_ID` | empty | Your Polar organization (Settings > General). Until it's set, license keys are refused with "Subscriptions aren't open yet." |
 | `POLAR_PRO_BENEFIT_ID` | empty | The License Keys benefit on the Pro product |
 | `POLAR_ULTRA_BENEFIT_ID` | empty | The License Keys benefit on the Ultra product |
+| `POLAR_DONATION_PRODUCT_ID` | empty | The Donation product (one-time, pay what you want) |
+| `POLAR_DONATION_BENEFIT_ID` | empty | The License Keys benefit on the Donation product. Until it's set, donation keys are refused like any other unknown key. |
+| `DONATION_GB_PER_DOLLAR` | 1 | Extra cloud storage for each dollar donated, in GB (at least 1 GB for any donation; 0 turns it off) |
+| `DONATION_MAX_GB` | 25 | The most extra storage donations give, in GB |
+| `DONATION_CREDITS_FROM` | 5 | Dollars donated in all before a supporter's name can go in the credits |
 | `REFERRAL_FRIENDS` | 3 | Friends who must install Clip Engine from someone's invite for one reward |
 | `REFERRAL_REWARD_DAYS` | 30 | Days of Pro each reward gives, counted from when its key is first used |
 | `REFERRAL_MAX_REWARDS` | 1 | Rewards one person can earn; with 2, six friends give two months |
 | `REFERRAL_CLAIM_DAYS` | 7 | How long after installing a friend can still add an invite code, and how long an opened invite link is remembered |
 | `REFERRAL_IP_CHECK` | true | `false` lets friends on the inviter's own network, or several on one network, count |
+
+`POLAR_ACCESS_TOKEN` is a secret (`npx wrangler secret put POLAR_ACCESS_TOKEN`): a Polar organization access token with `orders:read`, used only to add up how much a customer donated.
 
 ### Costs and protection
 
@@ -152,15 +160,27 @@ To try it locally: put `ADMIN_TOKEN=<anything>` in `server/.dev.vars` (ignored b
 
 The app sends the key to `POST /v1/license`, which checks it with Polar's public license key API (no Polar token needed) and answers with the plan. Putting the key on a cloud account (`POST /v1/accounts/<id>/plan`) gives the account the plan's storage; one subscription is on one account at a time, and the service checks it again twice a day, so a cancelled one goes back to Free. Subscribers can list a name in the credits, `GET /v1/credits`, which the app and the website show.
 
+### Donations on Polar
+
+1. In Polar, make a one-time product called Donation with a **Pay what you want** price. Set a minimum of $1 or more, so a key always comes from a paid order.
+2. Give it a **License Keys** benefit, with no expiry and no activation limit.
+3. Make an organization access token with the `orders:read` scope (Settings > Developers) and run `npx wrangler secret put POLAR_ACCESS_TOKEN`.
+4. Copy the product id and the benefit id into `POLAR_DONATION_PRODUCT_ID` and `POLAR_DONATION_BENEFIT_ID` in `[vars]`, and `npx wrangler deploy`.
+5. Make a checkout link for the product and put it in `PlanConfig.DonateUrl` (`ui/ClipEngine.Desktop/Services/Plans.cs`) and `LINKS.donate` (`website/site.js`). The $3, $5, $10 and $25 buttons add `?amount=<cents>` to it, which Polar fills in on its page; Any amount leaves it to the donor.
+
+How it works: Polar emails the donor a license key. `POST /v1/license` checks it with Polar's public API like a subscription's key, then lists that customer's paid Donation orders (`GET /v1/orders/?customer_id=...&product_id=...` with the access token) and adds them up, less refunds, before tax. The answer has `supporter`, `donated` (cents) and the storage bonus in `extraStorage`; a donation's own key also has `role: "supporter"`. Because it's by Polar customer, a subscriber who donates with the same email gets the bonus on their subscription's key, and keeps their plan's badge. A refund takes the bonus and credits down at the next check (twice a day). If the orders can't be read (no token, or Polar is down), a donation's key still works with 1 GB and no change to the credits. Supporters are listed under `supporter` in `GET /v1/credits`, after Pro; unlike subscribers', their names stay after their app stops checking in, since a donation doesn't run out. Donation keys go on a cloud account like any other (`POST /v1/accounts/<id>/plan`), which adds the bonus to its storage and shows Supporter. The key maker can also give the `supporter` role to a special key.
+
+The perks the app lists are in `Donations` (`Plans.cs`) and the website's donate box; change them with the `DONATION_*` vars.
+
 ### Special keys
 
 The operator's key maker (kept privately, never in this repository) makes special keys, `CEK-XXXX-XXXX-XXXX`, through `/v1/admin/grants` with `ADMIN_TOKEN` (see `server/src/index.js`). A key gives:
 
-- a plan (Free, Pro or Ultra), which sets storage, resolution and themes, and optionally a role on top of it: `creator` (Content Creator), `special` or `exclusive`. The app shows the role as the badge, and a cloud account shows it next to the plan.
+- a plan (Free, Pro or Ultra), which sets storage, resolution and themes, and optionally a role on top of it: `creator` (Content Creator), `special`, `exclusive` or `supporter`. The app shows the role as the badge, and a cloud account shows it next to the plan.
 - a length in minutes counted from first use (`minutes`, or `days` as before), a fixed end (`endsAt`, ms), both (whichever comes first), or neither.
 - extra cloud storage, a resolution cap, its own colour themes and a PC limit, as before.
 - perks: `contact`, a direct line to the developer, and `bugs`, bug reports that go straight to them. The app's plan card gets a box for them (`POST /v1/contact`, `/v1/contact/list`), checked against the key and a PC it was turned on on, 20 a day per key. The operator reads and answers them in the key maker's inbox (`GET /v1/admin/messages`, `PATCH /v1/admin/messages/<id>`).
-- `credits`: whether the holder may put a name in the credits. Their name is listed under their role (`exclusive`, `creator`, `special` in `GET /v1/credits`), after Ultra and Pro subscribers.
+- `credits`: whether the holder may put a name in the credits. Their name is listed under their role (`supporter`, `exclusive`, `creator`, `special` in `GET /v1/credits`), after Ultra and Pro subscribers.
 - `reason`: why it was given. With `showReason` the holder sees it in the app ("Given for: ..."); otherwise only the operator does. `note` is always private.
 
 Keys made before roles keep working: their days become minutes the first time the directory starts.

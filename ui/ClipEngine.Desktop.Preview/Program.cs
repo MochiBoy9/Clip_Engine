@@ -103,6 +103,12 @@ vm.Plan.ShowSampleMessages(
 ]);
 window.Height = 1700;
 Capture(Page.Settings, "22-creator-key.png");
+// A supporter who donated $8 on Free: the Supporter badge, the storage it adds, the donate box and the credits.
+vm.Plan.Remove();
+vm.Plan.ShowSampleSupporter(Plan.Free, 800, new Credits(["Mira"], ["Kai the Clipper"]) { Supporter = ["Enterro", "Rook"] });
+window.Height = 1500;
+Capture(Page.Settings, "23-supporter.png");
+vm.Plan.Remove();
 window.Height = 900;
 vm.Plan.ShowSample(Plan.Free, new Credits([], []));
 

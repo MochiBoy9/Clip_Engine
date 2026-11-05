@@ -93,6 +93,16 @@ Subscribe from the [website](https://mochiboy9.github.io/Clip_Engine/#plans) and
 
 Or get Pro free: invite friends from the **Friends** page. When three of them install Clip Engine on their own PC and start it, you get a month of Pro. Each friend has to be on a PC and an internet connection of their own, so a second PC at home doesn't count.
 
+### Donations
+
+You can also donate any amount, once, to help keep Clip Engine developed and maintained. It's never needed, and a few small thank-yous come with it:
+
+- a **Supporter** badge in the app and on your cloud account,
+- 1 GB more cloud storage for every dollar, up to 25 GB, for good,
+- from $5 in all, your name in the credits in the app and on the website.
+
+Donate from **Settings > Plan** or the [website](https://mochiboy9.github.io/Clip_Engine/#donate), and paste the key you're emailed into **Settings > Plan**. If you subscribe with the same email, the thank-yous join your plan on their own.
+
 ## Privacy
 
 Clips stay on your PC unless you share them. The first time Clip Engine starts on a PC it tells the online service so, with a hashed id for the PC, so friends who invited you get credit. Voice clips are off until you turn them on, and are heard by Windows' speech recognition on your PC, not sent anywhere. The cloud library, squads and friends need a free cloud account, which asks for no email. Online, the service keeps only what those features need: the clips you upload, your username, your friends and squads, and whether you're online. See the [privacy notice](website/privacy.html).

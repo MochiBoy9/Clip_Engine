@@ -7,7 +7,7 @@ import { fakeEnv, request } from "./fakes.js";
 const call = (env, path, options) => worker.fetch(request(path, options), env);
 const ADMIN = "operator-secret";
 const DAY = 24 * 3600_000;
-const NO_CREDITS = { ultra: [], pro: [], exclusive: [], creator: [], special: [] };
+const NO_CREDITS = { ultra: [], pro: [], supporter: [], exclusive: [], creator: [], special: [] };
 
 const make = async (env, body) => (await call(env, "/v1/admin/grants", { method: "POST", token: ADMIN, body })).json();
 const list = async (env) => (await (await call(env, "/v1/admin/grants", { token: ADMIN })).json()).grants;
