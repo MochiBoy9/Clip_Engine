@@ -48,7 +48,7 @@
                  Classes.error="{Binding MessageIsError}" />
 
       <!-- Inviting friends to Clip Engine: a month of Pro for enough of them. Needs no cloud account. -->
-      <views:Plate Classes="card" Padding="26,24" DataContext="{Binding Invite}" x:DataType="vm:InviteViewModel">
+      <views:Plate Classes="card" Padding="26,24" DataContext="{Binding Inviting}" x:DataType="vm:InviteViewModel">
         <StackPanel>
           <TextBlock Classes="eyebrow" Margin="0,0,0,18" Text="INVITE FRIENDS" />
           <Grid ColumnDefinitions="Auto,*,Auto">
