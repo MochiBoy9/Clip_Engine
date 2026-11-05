@@ -6,7 +6,7 @@
 import { addColumns, isSquadId, normalizeInvite, randomCode, randomToken, sameSecret, sha256Hex, SQUAD_ID_LENGTH } from "./codes.js";
 import { normalizeHandle } from "./handles.js";
 import { mediaPointer } from "./media.js";
-import { checkLicense, cleanKey, OFFLINE_GRACE_MS, PLANS, planName, RECHECK_MS, roleLabel, storageBytes } from "./plans.js";
+import { badgeFor, checkLicense, cleanKey, OFFLINE_GRACE_MS, PLANS, planName, RECHECK_MS, roleLabel, storageBytes } from "./plans.js";
 import { cleanGame, cleanName, MOMENT_TYPES } from "./protocol.js";
 
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
@@ -39,7 +39,23 @@ CREATE TABLE IF NOT EXISTS friends (account TEXT PRIMARY KEY, name TEXT NOT NULL
 
 // Columns added after the first release. video_v and thumb_v name each upload (its ETag), so a
 // browser or Cloudflare's cache that already has it doesn't read R2 again.
-const COLUMNS = ["clips ADD COLUMN video_v INTEGER NOT NULL DEFAULT 0", "clips ADD COLUMN thumb_v INTEGER NOT NULL DEFAULT 0"];
+const COLUMNS = ["clips ADD COLUMN video_v INTEGER NOT NULL DEFAULT 0", "clips ADD COLUMN thumb_v INTEGER NOT NULL DEFAULT 0",
+  // Sign-ins on the hub (the website) end after WEB_SESSION_MS; the app's never do.
+  "devices ADD COLUMN expires INTEGER"];
+
+// The hub: how long a sign-in on the website lasts, how a web password is kept and how many wrong ones lock it.
+export const WEB_SESSION_MS = 30 * 24 * 3600_000;
+const PASSWORD_ITERATIONS = 100_000;
+const PASSWORD_TRIES = 5;
+const PASSWORD_LOCK_MS = 15 * 60_000;
+export const MIN_PASSWORD = 8;
+const MAX_PASSWORD = 200;
+
+async function passwordHash(password, salt, iterations = PASSWORD_ITERATIONS) {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: new TextEncoder().encode(salt), iterations }, key, 256);
+  return [...new Uint8Array(bits)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 
 
@@ -136,6 +152,15 @@ export class Library {
     return this.sql.exec("SELECT COALESCE(SUM(size), 0) AS used FROM clips WHERE uploaded = 1").toArray()[0].used;
   }
 
+  // The badge others see (null when there's none or it's hidden), and the one the account has.
+  badge() {
+    return badgeFor(this.plan().name, this.features().role);
+  }
+
+  shownBadge() {
+    return this.meta("hide_badge") === "1" ? null : this.badge();
+  }
+
   account() {
     const plan = this.plan();
     return {
@@ -147,6 +172,9 @@ export class Library {
       roleLabel: plan.roleLabel,
       planKey: this.meta("plan_display") ?? null,
       lines: plan.lines,
+      badge: this.badge(),
+      hideBadge: this.meta("hide_badge") === "1",
+      webPassword: Boolean(this.meta("web_password")),
       friendCode: formatFriendCode(this.meta("id")),
       handleChangeAt: this.nextHandleChange(),
       storage: { used: this.used(), limit: plan.storage },
@@ -154,17 +182,25 @@ export class Library {
     };
   }
 
-  async addDevice(device) {
+  // A sign-in: a PC running the app, which lasts until it signs out, or the hub, which lasts WEB_SESSION_MS.
+  async addDevice(device, web = false) {
     const token = randomToken();
-    this.sql.exec("INSERT INTO devices (token_hash, device, added) VALUES (?, ?, ?)", await sha256Hex(token), device, Date.now());
+    this.sql.exec("DELETE FROM devices WHERE expires IS NOT NULL AND expires < ?", Date.now());
+    this.sql.exec("INSERT INTO devices (token_hash, device, added, expires) VALUES (?, ?, ?, ?)",
+      await sha256Hex(token), device, Date.now(), web ? Date.now() + WEB_SESSION_MS : null);
     return token;
   }
 
-  async authorized(request) {
+  async tokenHash(request) {
     const header = request.headers.get("authorization") ?? "";
     const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
-    if (!token || token.length > 128) return false;
-    return this.sql.exec("SELECT 1 FROM devices WHERE token_hash = ?", await sha256Hex(token)).toArray().length > 0;
+    return token && token.length <= 128 ? sha256Hex(token) : null;
+  }
+
+  async authorized(request) {
+    const hash = await this.tokenHash(request);
+    if (!hash) return false;
+    return this.sql.exec("SELECT 1 FROM devices WHERE token_hash = ? AND (expires IS NULL OR expires > ?)", hash, Date.now()).toArray().length > 0;
   }
 
   clipRow(id) {
@@ -205,6 +241,7 @@ export class Library {
     if (path === "/create" && method === "POST") return this.create(request);
     if (!this.meta("id")) return fail(404, "There's no such account.");
     if (path === "/join" && method === "POST") return this.join(request);
+    if (path === "/web/login" && method === "POST") return this.passwordLogin(request);
     if (path.startsWith("/public/")) return this.publicRequest(request, path.slice(8));
     if (path.startsWith("/peer/") && method === "POST") return this.peer(path.slice(6), await readJson(request));
     if (path === "/admin/plan" && method === "POST") {
@@ -212,18 +249,27 @@ export class Library {
       if (!PLANS[body?.plan]) return fail(400, "Unknown plan.");
       await this.forgetLicense();
       this.setMeta("plan", body.plan);
+      await this.syncOwner();
       return json(this.account());
     }
 
     if (!(await this.authorized(request))) return fail(401, "This PC isn't signed in to that account any more.");
     await this.recheckPlan();
+    await this.backfillFeed();
 
     if (path === "/plan" && method === "POST") return this.claimPlan(request);
     if (path === "/plan" && method === "DELETE") {
       await this.forgetLicense();
       this.setMeta("plan", "free");
+      await this.syncOwner();
       return json(this.account());
     }
+    // Signing this sign-in out (the hub's Sign out).
+    if (path === "/session" && method === "DELETE") {
+      this.sql.exec("DELETE FROM devices WHERE token_hash = ?", await this.tokenHash(request));
+      return json({ ok: true });
+    }
+    if (path === "/password" && method === "POST") return this.setPassword(request);
     if (path === "/friends" && method === "GET") return this.friendList();
     if (path === "/friends" && method === "POST") return this.addFriend(request);
     const f = path.match(/^\/friends\/([0-9A-Z]{8})(\/accept)?$/);
@@ -258,6 +304,7 @@ export class Library {
       if (!kind && method === "DELETE") {
         await this.env.CLIPS.delete([this.key(id, "video"), this.key(id, "thumb")]);
         this.sql.exec("DELETE FROM clips WHERE id = ?", id);
+        await this.syncClip(id);
         return json({ ok: true });
       }
       if (kind && method === "PUT") return this.upload(request, row, kind);
@@ -296,13 +343,57 @@ export class Library {
       return fail(403, "That sign-in code isn't right or has run out. Make a new one on the PC that's signed in.");
     }
     this.sql.exec("DELETE FROM meta WHERE key = 'link'");
-    const token = await this.addDevice(device);
+    const token = await this.addDevice(device, body?.web === true);
+    return json({ token, account: this.account() });
+  }
+
+  // ---- the hub's own sign-in: a username and a password set from a signed-in PC or the hub ----
+
+  async setPassword(request) {
+    const body = await readJson(request);
+    if (body?.password === null || body?.password === "") {
+      this.sql.exec("DELETE FROM meta WHERE key IN ('web_password', 'web_fails')");
+      return json(this.account());
+    }
+    const password = typeof body?.password === "string" ? body.password : "";
+    if (password.length < MIN_PASSWORD || password.length > MAX_PASSWORD) {
+      return fail(400, `Pick a password of at least ${MIN_PASSWORD} characters.`);
+    }
+    const salt = randomToken();
+    this.setMeta("web_password", JSON.stringify({ salt, iterations: PASSWORD_ITERATIONS, hash: await passwordHash(password, salt) }));
+    this.sql.exec("DELETE FROM meta WHERE key = 'web_fails'");
+    return json(this.account());
+  }
+
+  async passwordLogin(request) {
+    const body = await readJson(request);
+    const saved = JSON.parse(this.meta("web_password") ?? "null");
+    const wrong = () => fail(403, "That username and password don't match.");
+    if (!saved || typeof body?.password !== "string" || body.password.length > MAX_PASSWORD) return wrong();
+    const fails = JSON.parse(this.meta("web_fails") ?? "null") ?? { count: 0, until: 0 };
+    if (fails.until > Date.now()) return fail(429, "Too many wrong passwords. Try again in 15 minutes, or sign in with a code from the app.");
+    const hash = await passwordHash(body.password, saved.salt, saved.iterations);
+    if (!sameSecret(hash, saved.hash)) {
+      fails.count += 1;
+      if (fails.count >= PASSWORD_TRIES) {
+        fails.count = 0;
+        fails.until = Date.now() + PASSWORD_LOCK_MS;
+      }
+      this.setMeta("web_fails", JSON.stringify(fails));
+      return wrong();
+    }
+    this.sql.exec("DELETE FROM meta WHERE key = 'web_fails'");
+    const token = await this.addDevice("web", true);
     return json({ token, account: this.account() });
   }
 
   async updateAccount(request) {
     const body = await readJson(request);
     let renamed = false;
+    if (typeof body?.hideBadge === "boolean") {
+      this.setMeta("hide_badge", body.hideBadge ? "1" : "0");
+      await this.syncOwner();
+    }
     if (body?.name !== undefined) {
       const name = cleanName(body.name);
       if (!name) return fail(400, "Pick a name to show on your profile.");
@@ -339,7 +430,10 @@ export class Library {
         }
       }
     }
-    if (renamed) await this.tellFriendsRenamed();
+    if (renamed) {
+      await this.tellFriendsRenamed();
+      await this.syncOwner();
+    }
     return json(this.account());
   }
 
@@ -387,6 +481,7 @@ export class Library {
     this.setMeta("plan_display", check.display || `${key.slice(0, 4)}…${key.slice(-4)}`);
     this.setMeta("plan_checked", String(Date.now()));
     this.setMeta("plan_ok", String(Date.now()));
+    await this.syncOwner();
     return json(this.account());
   }
 
@@ -402,6 +497,7 @@ export class Library {
     const key = this.meta("plan_key");
     if (!key || Date.now() - Number(this.meta("plan_checked") ?? 0) < RECHECK_MS) return;
     this.setMeta("plan_checked", String(Date.now()));
+    const badge = JSON.stringify(this.shownBadge());
     const check = await checkLicense(this.env, key);
     if (check.ok) {
       this.setMeta("plan", check.plan);
@@ -413,6 +509,38 @@ export class Library {
     } else if (Date.now() - Number(this.meta("plan_ok") ?? 0) > OFFLINE_GRACE_MS) {
       this.setMeta("plan", "free");
     }
+    if (JSON.stringify(this.shownBadge()) !== badge) await this.syncOwner();
+  }
+
+  // ---- the hub (src/feed.js) ----
+
+  owner() {
+    return { name: this.meta("name"), handle: this.meta("handle"), badge: this.shownBadge() };
+  }
+
+  // Puts a clip in the hub when it's public and uploaded, and takes it off otherwise.
+  async syncClip(id) {
+    const row = this.clipRow(id);
+    const code = this.meta("id") + id;
+    if (row && row.visibility === "public" && row.uploaded === 1) {
+      await this.handles("/feed/put", { ...this.clipJson(row), account: this.meta("id"), owner: this.owner() });
+    } else {
+      await this.handles("/feed/remove", { code });
+    }
+  }
+
+  // Clips made public before the hub existed go in the first time the account is used after it.
+  async backfillFeed() {
+    if (this.meta("feed_v")) return;
+    this.setMeta("feed_v", "1");
+    const rows = this.sql.exec("SELECT id FROM clips WHERE visibility = 'public' AND uploaded = 1").toArray();
+    for (const row of rows) await this.syncClip(row.id);
+  }
+
+  // The name, username or badge on every one of this account's clips in the hub.
+  async syncOwner() {
+    const any = this.sql.exec("SELECT 1 FROM clips WHERE visibility = 'public' AND uploaded = 1 LIMIT 1").toArray().length > 0;
+    if (any) await this.handles("/feed/owner", { account: this.meta("id"), ...this.owner() });
   }
 
   // ---- friends ----
@@ -587,6 +715,7 @@ export class Library {
     if (typeof body?.title === "string") this.sql.exec("UPDATE clips SET title = ? WHERE id = ?", body.title.slice(0, 120), row.id);
     if (VISIBILITY.includes(body?.visibility)) this.sql.exec("UPDATE clips SET visibility = ? WHERE id = ?", body.visibility, row.id);
     if (typeof body?.featured === "boolean") this.sql.exec("UPDATE clips SET featured = ? WHERE id = ?", body.featured ? 1 : 0, row.id);
+    await this.syncClip(row.id);
     return json(this.clipJson(this.clipRow(row.id)));
   }
 
@@ -598,6 +727,7 @@ export class Library {
       const type = request.headers.get("content-type") === "image/png" ? "image/png" : "image/jpeg";
       await this.env.CLIPS.put(this.key(row.id, "thumb"), withLength(request.body, length), { httpMetadata: { contentType: type } });
       this.sql.exec("UPDATE clips SET thumb = 1, thumb_v = ? WHERE id = ?", Math.max(Date.now(), row.thumb_v + 1), row.id);
+      if (row.visibility === "public" && row.uploaded) await this.syncClip(row.id);
       return json({ ok: true });
     }
     if (length > MAX_UPLOAD_BYTES) return fail(413, "That clip is over 100 MB. Upload a smaller copy.");
@@ -609,6 +739,7 @@ export class Library {
       httpMetadata: { contentType: "video/mp4" },
     });
     this.sql.exec("UPDATE clips SET uploaded = 1, size = ?, video_v = ? WHERE id = ?", object?.size ?? length, Math.max(Date.now(), row.video_v + 1), row.id);
+    if (row.visibility === "public") await this.syncClip(row.id);
     return json(this.clipJson(this.clipRow(row.id)));
   }
 
@@ -628,16 +759,26 @@ export class Library {
   // What anyone can see: an unlisted or public clip by its code, and the public profile.
   async publicRequest(request, rest) {
     if (rest === "profile") {
+      await this.backfillFeed();
       const rows = this.sql.exec(
         "SELECT * FROM clips WHERE visibility = 'public' AND uploaded = 1 ORDER BY featured DESC, recorded DESC LIMIT 60").toArray();
-      return json({ name: this.meta("name"), handle: this.meta("handle"), clips: rows.map((r) => this.clipJson(r)) });
+      return json({ name: this.meta("name"), handle: this.meta("handle"), badge: this.shownBadge(), clips: rows.map((r) => this.clipJson(r)) });
     }
     const m = rest.match(/^clip\/([0-9A-Z]{6})(?:\/(video|thumb))?$/);
     const row = m && this.clipRow(m[1]);
     if (!row || row.visibility === "private" || !row.uploaded) return fail(404, "That clip isn't shared.");
     if (m[2]) return this.stream(request, row, m[2]);
-    if (new URL(request.url).searchParams.get("view") === "1") this.sql.exec("UPDATE clips SET views = views + 1 WHERE id = ?", row.id);
-    return json({ ...this.clipJson(this.clipRow(row.id)), ownerName: this.meta("name"), ownerHandle: this.meta("handle") });
+    if (new URL(request.url).searchParams.get("view") === "1") {
+      this.sql.exec("UPDATE clips SET views = views + 1 WHERE id = ?", row.id);
+      // The hub's count follows along: every view at first, then every tenth, so a popular clip doesn't keep the directory busy.
+      const views = row.views + 1;
+      if (row.visibility === "public" && (views <= 20 || views % 10 === 0)) {
+        await this.handles("/feed/views", { code: this.meta("id") + row.id, views });
+      }
+    }
+    return json({
+      ...this.clipJson(this.clipRow(row.id)), ownerName: this.meta("name"), ownerHandle: this.meta("handle"), ownerBadge: this.shownBadge(),
+    });
   }
 }
 

@@ -122,6 +122,21 @@
                 </StackPanel>
                 <ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding SyncStarred}" OnContent="{x:Null}" OffContent="{x:Null}" />
               </Grid>
+              <StackPanel IsVisible="{Binding HasBadge}">
+                <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel Spacing="2" Margin="0,0,16,0">
+                    <TextBlock Text="{Binding BadgeText}" FontWeight="SemiBold" FontSize="14" />
+                    <TextBlock Classes="caption" TextWrapping="Wrap" Text="Next to your name on your profile, your clips and the hub." />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding ShowBadge}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                </Grid>
+              </StackPanel>
+              <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+              <TextBlock Text="The hub" FontWeight="SemiBold" FontSize="14" />
+              <TextBlock Classes="caption" TextWrapping="Wrap" Margin="0,2,0,10"
+                         Text="Everyone's public clips on the web, and yours to manage from any phone or browser. Opens signed in." />
+              <Button Classes="secondary" Content="Open the hub" Command="{Binding OpenHubCommand}" HorizontalAlignment="Left" />
               <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
               <TextBlock Text="Your other PCs" FontWeight="SemiBold" FontSize="14" />
               <TextBlock Classes="caption" TextWrapping="Wrap" Margin="0,2,0,10"

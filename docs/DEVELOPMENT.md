@@ -56,7 +56,7 @@ Run `ClipEngine.exe` and launch a supported game. `clip_engine.exe` can also run
 | `src/game` | Supported games and detection of running games |
 | `src/core` | Settings, logging, clock, JSON |
 | `src/squad` | Squad sync's engine side: wall-clock times, the app's save requests, the Discord squad line and highlight parts |
-| `server` | The online service for squads, the shared library, share links and profiles (Cloudflare Worker, Durable Objects and R2) |
+| `server` | The online service for squads, the shared library, share links, profiles and the hub (Cloudflare Worker, Durable Objects and R2) |
 | `src/integrations` | Live events from games' own APIs (CS2, Dota 2, League of Legends, Rocket League) and Team Fortress 2's console log, and turning them on |
 | `assets/detection.ini` | Where each game shows kills and other moments, and the words to look for |
 | `tests` | Tests for the detection rules, matching, clip metadata, game API events and killfeed rules |
@@ -123,6 +123,18 @@ These live in `wrangler.toml` under `[vars]`:
 **R2 operations.** Each clip put in the cloud library costs two writes (Class A): the video and its thumbnail, each one plain PUT. Watching a clip reads R2 (Class B), but the bytes are served by the Worker (`src/media.js`), not the Durable Object, so nothing stays busy while a video streams. Every upload has an ETag, so a browser that already has it gets `304 Not Modified` without an R2 read. On a custom domain, the Cache API keeps each clip in the Cloudflare location that served it: the first viewer there reads R2 once, and every later viewer and seek there is free. On `*.workers.dev` the Cache API does nothing, so each request reads R2; put the Worker on your own domain (Workers & Pages > clip-engine > Settings > Domains & Routes) to turn caching on.
 
 **Protection.** Cloudflare's DDoS protection is on for every Worker. On top of it, each address gets 10 sign-ups, sign-in or invite code tries and key checks a minute (`AUTH_LIMIT`), and 300 other changes a minute (`WRITE_LIMIT`), both in `wrangler.toml`. A sign-in code stops working after 5 wrong tries. Tokens are stored hashed and compared in constant time, every database query is parameterised, uploads have size limits, and the R2 bucket is private. With a custom domain you can also add WAF and rate limiting rules and Bot Fight Mode in the Cloudflare dashboard.
+
+### The hub
+
+`/hub` on the service (`src/hub.js`) lists every public, uploaded clip. Each library tells the directory object when one of its clips becomes public or stops being (`src/feed.js`, the `feed` table), and when the owner's name, username or badge changes, so the hub reads one table instead of every library. Views follow every view for the first 20, then every tenth. The pages are server-rendered and work without scripts; scripts add "load more" and the signed-in pages. `/` in a browser redirects to `/hub`.
+
+Signing in: a code from the app (the same one-time code as **Link another PC**; **Open the hub** opens `/hub/signin#code=...`, and the code stays in the fragment so it isn't logged) or a username and password set on the hub (PBKDF2-SHA256, 100,000 rounds; 5 wrong tries lock it for 15 minutes). Either makes a device token on the account that expires after 30 days, kept in an HttpOnly, Secure, SameSite=Lax cookie (`ce_hub`); `ce_hub_who` holds only the name shown in the bar. Every change also needs an `x-hub: 1` header and, when the browser sends one, this origin, so other sites can't act with the cookie. `/hub/api/signin` and `/hub/api/report` are under `AUTH_LIMIT`.
+
+Badges: `badgeFor` in `src/plans.js` (a special key's role, else Pro or Ultra). `PATCH /v1/accounts/<id>/account { hideBadge }` hides it on the profile, shared clips and the hub; the app's Cloud page and the hub both have the switch.
+
+Reports land in the directory. `GET /v1/admin/reports` lists reported clips and `POST /v1/admin/hide { code, hidden, clearReports }` takes one out of the hub (its link still plays), both with the admin token.
+
+To try it locally: put `ADMIN_TOKEN=<anything>` in `server/.dev.vars` (ignored by git) and run `npx wrangler dev`; the hub is at `http://localhost:8787/hub`.
 
 ### Pro and Ultra on Polar
 

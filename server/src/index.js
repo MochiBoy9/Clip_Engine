@@ -41,6 +41,11 @@
 //   GET  /v1/referrals/<code>       friends so far and the Pro keys earned      (Authorization: Bearer <secret>, ?pc=&device=)
 //   POST /v1/referrals/activate     Clip Engine started on a PC                 { pc, device, fresh, code? }
 //
+// The hub (src/hub.js): everyone's public clips, and signing in on the web to look after your own:
+//   GET /hub, /hub/signin, /hub/me and /hub/api/...  (see src/hub.js)
+//   GET  /v1/admin/reports          reported clips (Authorization: Bearer ADMIN_TOKEN)
+//   POST /v1/admin/hide             hide a clip from the hub, or bring it back { code, hidden, clearReports }
+//
 // Public pages:
 //   GET /c/<code>                   a shared clip's web player, with its moments on the timeline
 //   GET /c/<code>/video|thumb|.json the clip itself
@@ -53,6 +58,8 @@
 
 import { isSquadId, normalizeInvite, randomCode, sameSecret, SQUAD_ID_LENGTH } from "./codes.js";
 import { Handles, normalizeHandle } from "./handles.js";
+import { hubRoute } from "./hub.js";
+import { pageCsp } from "./look.js";
 import { CLIP_CODE_LENGTH, Library } from "./library.js";
 import { formatInvite } from "./codes.js";
 import { clipOembed, clipPage, invitePage, notFoundPage, profilePage, referralPage } from "./pages.js";
@@ -77,7 +84,7 @@ function html(body, status = 200) {
       "content-type": "text/html; charset=utf-8",
       "cache-control": status === 200 ? "public, max-age=60" : "no-store",
       "x-content-type-options": "nosniff",
-      "content-security-policy": "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self'; media-src 'self'; frame-ancestors *",
+      "content-security-policy": pageCsp("*"),
     },
   });
 }
@@ -108,7 +115,7 @@ async function readBody(request) {
 
 // Paths a Durable Object only takes from the Worker itself, never straight from a client.
 function internal(path) {
-  return /^\/(create|join|admin|public|peer)(\/|$)/.test(path);
+  return /^\/(create|join|admin|public|peer|web)(\/|$)/.test(path);
 }
 
 // "K7QM-2X9D-PA4R-HT" (or a link ending in it): the account id and the one-time secret.
@@ -146,6 +153,9 @@ async function grantRoute(request, env, url, path, method) {
     const body = (await readBody(request)) ?? {};
     return directory(env, url, "/grant/inbox/update", { reply: body.reply, done: body.done, id: Number(n[1]) });
   }
+  // The hub's reported clips: list them, and hide one (or bring it back).
+  if (path === "/v1/admin/reports" && method === "GET") return directory(env, url, "/feed/reports", {});
+  if (path === "/v1/admin/hide" && method === "POST") return directory(env, url, "/feed/hide", (await readBody(request)) ?? {});
   return json({ error: "Not found." }, 404);
 }
 
@@ -218,7 +228,7 @@ export default {
 // protection: making accounts and squads, sign-in and invite codes, key checks and special-key messages get
 // AUTH_LIMIT; every other change (uploads, friends, edits, the key maker's) gets WRITE_LIMIT. Reads aren't limited
 // here. Without the bindings (tests, wrangler dev) nothing is limited.
-const AUTH_ROUTES = /^\/v1\/(accounts|accounts\/signin|squads|join|license|contact|contact\/list|referrals|referrals\/activate)$/;
+const AUTH_ROUTES = /^\/(v1\/(accounts|accounts\/signin|squads|join|license|contact|contact\/list|referrals|referrals\/activate)|hub\/api\/(signin|report))$/;
 
 async function overLimit(request, env, path, method) {
   const sensitive = method === "POST" && AUTH_ROUTES.test(path);
@@ -245,7 +255,14 @@ async function route(request, env) {
       });
     }
 
+    // Someone opening the service's address in a browser lands on the hub.
+    if (path === "/" && method === "GET" && (request.headers.get("accept") ?? "").includes("text/html")) {
+      return Response.redirect(`${url.origin}/hub`, 302);
+    }
     if (path === "/" || path === "/v1/health") return json({ ok: true, service: "clip-engine", version: VERSION });
+
+    // ---- the hub (src/hub.js) ----
+    if (path === "/hub" || path.startsWith("/hub/")) return hubRoute(request, env, url);
 
     // ---- squads ----
     if (path === "/v1/squads" && method === "POST") {
@@ -282,7 +299,7 @@ async function route(request, env) {
     }
     m = path.match(/^\/v1\/accounts\/([0-9A-Za-z]+)(\/.*)$/);
     if (m && isSquadId(m[1].toUpperCase()) && !internal(m[2])) return forward(stub(env.LIBRARIES, m[1].toUpperCase()), request, m[2]);
-    if (/^\/v1\/admin\/(grants|messages)(\/|$)/.test(path)) return withCors(await grantRoute(request, env, url, path, method));
+    if (/^\/v1\/admin\/(grants|messages|reports|hide)(\/|$)/.test(path)) return withCors(await grantRoute(request, env, url, path, method));
     if (path.startsWith("/v1/admin/") && !admin(request, env)) return json({ error: "Not allowed." }, 403);
     if (path === "/v1/admin/plan" && method === "POST") {
       const body = await readBody(request);
