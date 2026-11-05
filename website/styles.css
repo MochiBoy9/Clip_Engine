@@ -410,9 +410,8 @@ details p { color: var(--muted); margin: 10px 0 0 28px; }
 /* ------------------------------------------------------------------ Motion */
 
 /* All of it hangs off html.motion, which site.js sets: on unless the visitor's system asks for reduced motion, and
-   the Motion button in the bar turns it on or off. It keeps to the printed look: a light under the pointer, a scan
-   that reads the page now and then, panels that step up and light where the pointer is, and buttons that slip off
-   register like a second print pass. Only transforms and opacity animate, so it all runs on the compositor. */
+   the Motion button in the bar turns it on or off. It keeps to the printed look: panels that step up and light where
+   the pointer is, and buttons that slip off register like a second print pass. Only transforms and opacity animate, so it all runs on the compositor. */
 
 .motion-toggle {
   display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; cursor: pointer;
@@ -428,35 +427,6 @@ details p { color: var(--muted); margin: 10px 0 0 28px; }
 .motion-toggle:hover { color: var(--text); }
 .motion-toggle[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
 .motion-toggle[aria-pressed="true"] i::after { transform: translateX(10px); }
-
-/* The light under the pointer, and the scan: fixed behind everything, shown only with motion on */
-.glow, .scan { position: fixed; left: 0; top: 0; z-index: -1; pointer-events: none; display: none; }
-.glow {
-  width: 640px; height: 640px; opacity: 0;
-  background: radial-gradient(closest-side, rgba(255, 194, 26, 0.11), rgba(255, 106, 42, 0.045) 55%, transparent);
-  transition: transform 0.42s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 0.3s ease;
-  will-change: transform;
-}
-.scan {
-  right: 0; height: 122px; transform: translateY(-130px);
-  background:
-    linear-gradient(rgba(255, 194, 26, 0), rgba(255, 194, 26, 0.05) 80%, rgba(255, 194, 26, 0.13)) top / 100% 120px no-repeat,
-    linear-gradient(rgba(255, 194, 26, 0.7), rgba(255, 194, 26, 0.7)) bottom 1px left 0 / 100% 1px no-repeat,
-    repeating-linear-gradient(90deg, rgba(255, 194, 26, 0.7) 0 1px, transparent 1px 40px) bottom 2px left 0 / 100% 5px no-repeat;
-}
-html.motion .glow, html.motion .scan { display: block; }
-html.motion .glow.on { opacity: 1; }
-/* A slow scan about every half minute; a quick one when you jump to a section */
-html.motion .scan { animation: scan 32s 0.6s infinite; }
-html.motion .scan.quick { animation: scan-quick 0.7s ease-in-out; }
-@keyframes scan {
-  0% { transform: translateY(-130px); animation-timing-function: ease-in-out; }
-  5%, 100% { transform: translateY(100vh); }
-}
-@keyframes scan-quick {
-  from { transform: translateY(-130px); }
-  to { transform: translateY(100vh); }
-}
 
 /* Panels light where the pointer is (site.js sets --px and --py on the one under it) */
 html.motion .plate > .plate-in {

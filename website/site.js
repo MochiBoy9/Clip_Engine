@@ -191,18 +191,13 @@ setInterval(() => {
   if (!document.hidden) refreshDownloads();
 }, 5 * 60 * 1000);
 
-// Motion (styles.css, under html.motion): a light that follows the pointer, a scan down the page now and then and
-// when you jump to a section, panels that light where the pointer is, and sections that draw in as they scroll into
-// view. On unless the visitor's system asks for reduced motion; the Motion button turns it on or off, remembered.
+// Motion (styles.css, under html.motion): panels that light where the pointer is, and sections that draw in as they
+// scroll into view. On unless the visitor's system asks for reduced motion; the Motion button turns it on or off,
+// remembered.
 const MOTION_KEY = "clip-engine-motion";
 const root = document.documentElement;
 const reducedMotion = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
 const motionToggle = document.querySelector(".motion-toggle");
-const glow = Object.assign(document.createElement("div"), { className: "glow" });
-const scan = Object.assign(document.createElement("div"), { className: "scan" });
-glow.setAttribute("aria-hidden", "true");
-scan.setAttribute("aria-hidden", "true");
-document.body.prepend(glow, scan);
 
 function savedMotion() {
   try {
@@ -264,7 +259,7 @@ if (reducedMotion && reducedMotion.addEventListener) {
   });
 }
 
-// The light and the panel under the pointer, moved once a frame at most.
+// The panel under the pointer lights where it is, moved once a frame at most.
 let pointer = null;
 let pointerFrame = 0;
 let litPlate = null;
@@ -275,8 +270,6 @@ window.addEventListener("pointermove", (e) => {
     pointerFrame = requestAnimationFrame(() => {
       pointerFrame = 0;
       const p = pointer;
-      glow.style.transform = `translate(${p.clientX - 320}px, ${p.clientY - 320}px)`;
-      glow.classList.add("on");
       const plate = p.target instanceof Element ? p.target.closest(".plate") : null;
       if (litPlate && litPlate !== plate) {
         litPlate.style.removeProperty("--px");
@@ -291,20 +284,6 @@ window.addEventListener("pointermove", (e) => {
     });
   }
 }, { passive: true });
-root.addEventListener("pointerleave", () => glow.classList.remove("on"));
-
-// Jumping to a section runs a quick scan, like the app does when you change page.
-for (const link of document.querySelectorAll('a[href^="#"]')) {
-  link.addEventListener("click", () => {
-    if (!motionOn()) return;
-    scan.classList.remove("quick");
-    void scan.offsetWidth;
-    scan.classList.add("quick");
-  });
-}
-scan.addEventListener("animationend", (e) => {
-  if (e.animationName === "scan-quick") scan.classList.remove("quick");
-});
 
 // Copy buttons: copy the field they name, and say so.
 for (const button of document.querySelectorAll("[data-copy]")) {
