@@ -530,14 +530,16 @@ internal static class Journal
     {
         if (count == 1)
         {
-            if (plural is null && name.EndsWith('s')) return $"1 {name}";
+            // "Metal Parts" is already many; "Boss" is one.
+            if (plural is null && name.EndsWith('s') && !name.EndsWith("ss", StringComparison.OrdinalIgnoreCase)) return $"1 {name}";
             return $"{("aeiou".Contains(char.ToLowerInvariant(name[0])) ? "an" : "a")} {name}";
         }
         return $"{count.ToString("N0", CultureInfo.CurrentCulture)} {plural ?? Plural(name)}";
     }
 
     private static string Plural(string name) =>
-        name.EndsWith("ss", StringComparison.OrdinalIgnoreCase) ? name + "es"
+        name.EndsWith("ss", StringComparison.OrdinalIgnoreCase) || name.EndsWith("ch", StringComparison.OrdinalIgnoreCase)
+            || name.EndsWith("sh", StringComparison.OrdinalIgnoreCase) || name.EndsWith('x') ? name + "es"
         : name.EndsWith('s') || name.EndsWith("ARC", StringComparison.Ordinal) ? name
         : name.EndsWith('y') && name.Length > 1 && !"aeiou".Contains(name[^2]) ? name[..^1] + "ies"
         : name + "s";

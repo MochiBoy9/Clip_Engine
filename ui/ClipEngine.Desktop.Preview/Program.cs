@@ -59,6 +59,9 @@ Capture(Page.Clips, "2-clips.png");
 Capture(Page.Games, "3-games.png");
 Capture(Page.Settings, "4-settings.png");
 Capture(Page.Records, "11-records.png");
+window.Height = 1700;
+Capture(Page.Journal, "23-journal.png");
+window.Height = 900;
 
 // A squad of four, two playing with you, and the moments in its shared library.
 SampleSquad.Fill(vm);
@@ -380,7 +383,69 @@ internal static class Sample
             }
             if (Timeline.Parse(lines) is { } timeline) timelines.Add(timeline);
         }
+        timelines.AddRange(JournalTimelines(now));
         return timelines;
+    }
+
+    // A week of ARC Raiders and a night of Hunt: Showdown 1896, as journal notes, for the Journal page.
+    private static IEnumerable<Timeline> JournalTimelines(DateTime now)
+    {
+        var random = new Random(11);
+        string Note(double t, string note, string value = "", int amount = 0, int xp = 0) =>
+            $$"""{"t": {{t:0.00}}, "match": 0, "note": "{{note}}", "value": "{{value}}", "amount": {{amount}}, "xp": {{xp}}, "text": ""}""";
+        var maps = new[] { "Dam Battlegrounds", "Buried City", "Spaceport", "The Blue Gate", "Stella Montis" };
+        var arc = new (string Name, int Xp)[] { ("Wasp", 50), ("Hornet", 75), ("Tick", 25), ("Snitch", 50), ("Leaper", 400), ("Rocketeer", 500) };
+        var kit = new[] { "Ferro", "Stitcher", "Bandage", "Light Shield", "Adrenaline Shot", "Light Ammo" };
+        var finds = new[] { "Metal Parts", "ARC Alloy", "Rubber Parts", "Battery", "ARC Powercell", "Plastic Parts", "Fabric" };
+        for (var day = 1; day <= 7; day += 1 + random.Next(2))
+        {
+            var start = now.Date.AddDays(-day).AddHours(19);
+            var lines = new List<string> { $$"""{"session": "{{start:yyyy-MM-dd'T'HH:mm:ss}}", "game": "ARC Raiders", "version": 1}""" };
+            double t = 20;
+            for (var raid = 0; raid < 2 + random.Next(3); raid++)
+            {
+                lines.Add(Note(t, "map", maps[random.Next(maps.Length)]));
+                if (random.Next(4) == 0) lines.Add(Note(t + 2, "condition", random.Next(2) == 0 ? "Night Raid" : "Electromagnetic Storm"));
+                foreach (var item in kit.OrderBy(_ => random.Next()).Take(3))
+                    lines.Add(Note(t + 5, "inventory", item, item is "Bandage" or "Light Ammo" ? 2 + random.Next(4) : 1));
+                lines.Add(Note(t + 10, "queue"));
+                if (random.Next(6) == 0)
+                {
+                    t += 25 * 60;  // backed out of the queue
+                    continue;
+                }
+                t += 40;
+                lines.Add(Note(t, "deploy"));
+                var length = 5 * 60 + random.Next(25 * 60);
+                var end = t + length;
+                for (var at = t + 30 + random.Next(120); at < end; at += 40 + random.Next(200))
+                {
+                    if (random.Next(3) == 0) lines.Add(Note(at, "loot", finds[random.Next(finds.Length)], 1 + random.Next(3)));
+                    else
+                    {
+                        var (name, xp) = arc[random.Next(random.Next(4) == 0 ? arc.Length : 4)];
+                        lines.Add(Note(at, "enemy", name, xp: xp));
+                    }
+                }
+                if (random.Next(5) == 0) lines.Add(Note(end - 30, "player_kill"));
+                var died = random.Next(3) == 0;
+                lines.Add(Note(end, died ? "died" : "extracted"));
+                lines.Add(Note(end + 15, "xp", amount: 1500 + random.Next(6000)));
+                t = end + 120;
+            }
+            if (Timeline.Parse(lines) is { } timeline) yield return timeline;
+        }
+
+        var hunt = now.Date.AddDays(-2).AddHours(22);
+        var hunts = new List<string> { $$"""{"session": "{{hunt:yyyy-MM-dd'T'HH:mm:ss}}", "game": "Hunt: Showdown 1896", "version": 1}""" };
+        hunts.Add(Note(1800, "deploy", "Bounty Hunt"));
+        hunts.Add(Note(1800, "enemy", "Monster", 14));
+        hunts.Add(Note(1800, "enemy", "Boss", 1));
+        hunts.Add(Note(1800, "player_kill", amount: 3));
+        hunts.Add(Note(1800, "objective", "Bounty extracted"));
+        hunts.Add(Note(1800, "xp", amount: 3150));
+        hunts.Add(Note(1800, "extracted"));
+        if (Timeline.Parse(hunts) is { } huntLine) yield return huntLine;
     }
 
     // How the newest clip's kills were found, as the engine saves it: the killfeed counted each

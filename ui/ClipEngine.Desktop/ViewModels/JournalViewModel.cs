@@ -142,9 +142,12 @@ public sealed class JournalViewModel : ObservableObject
 
     private static string Outcome(JournalRun run) => run.Outcome switch
     {
-        RunOutcome.Extracted => $"{run.Words.Extracted} · {run.Map ?? run.Game}",
-        RunOutcome.Died => $"Died · {run.Map ?? run.Game}",
-        _ => run.Map ?? run.Game,
+        // The map is on the line under it.
+        RunOutcome.Extracted => run.Words.Extracted,
+        RunOutcome.Died => "Died",
+        RunOutcome.Failed => $"The {run.Words.Run} failed",
+        RunOutcome.Left => "Left early",
+        _ => Cap(run.Words.Run),
     };
 
     internal static string Count(int n) => n.ToString("N0", CultureInfo.CurrentCulture);
