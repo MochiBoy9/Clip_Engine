@@ -1,0 +1,140 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="using:ClipEngine.Desktop.Views">
+
+  <!-- Adaptive themes, Ultra's: the hazard look with its accent run into a second colour next to it on the wheel
+       (Services/AdaptiveLook.cs), and controls that answer the pointer with more snap. Everything here hangs off the
+       main window's "adaptive" class, so the side panel and notices over a game never get it.
+
+       The motion keeps to the printed-panel look: things shift, register and snap like a misaligned second print
+       pass, never float, bounce or glow. As in Theme.axaml, only colours, opacity and render transforms move, and
+       only while a pointer is on something, so layout never reruns and nothing animates on its own. The one thing
+       that moves by itself is the backdrop's scan (Views/AdaptiveBackdrop.cs). -->
+
+  <!-- Accent buttons: the accent turning into its partner, and on hover a second outline slides out from under the
+       button like a print pass off register. A click snaps it across and it flickers out like a bad signal. -->
+  <Style Selector=".adaptive Button.accent">
+    <Setter Property="Background" Value="{DynamicResource AccentGradientBrush}" />
+    <!-- The outline sits a few pixels outside the button -->
+    <Setter Property="ClipToBounds" Value="False" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Panel>
+          <!-- Its resting transform and opacity are set here rather than in a style: the toast's animation in
+               Theme.axaml would otherwise give every plate without a transform one of its own, which no style can
+               then change. -->
+          <views:Plate Name="PART_Ghost" BorderBrush="{DynamicResource AccentPartnerBrush}" BorderThickness="1.5" Cut="7"
+                       IsHitTestVisible="False" Opacity="0" RenderTransform="translate(0px,0px)" />
+          <views:Plate Name="PART_Plate" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                       Cut="7" Padding="{TemplateBinding Padding}">
+            <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                              HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+          </views:Plate>
+        </Panel>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector=".adaptive Button.accent /template/ views|Plate#PART_Ghost">
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.09" />
+        <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.14" Easing="CubicEaseOut" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector=".adaptive Button.accent:pointerover /template/ views|Plate#PART_Ghost">
+    <Setter Property="Opacity" Value="1" />
+    <Setter Property="RenderTransform" Value="translate(4px,4px)" />
+  </Style>
+  <Style Selector=".adaptive Button.accent:pointerover">
+    <Setter Property="Background" Value="{DynamicResource AccentGradientHoverBrush}" />
+    <Setter Property="RenderTransform" Value="translate(-2px,-2px)" />
+  </Style>
+  <Style Selector=".adaptive Button.accent:pressed">
+    <Setter Property="Background" Value="{DynamicResource AccentPressedBrush}" />
+    <Setter Property="RenderTransform" Value="translate(1px,1px)" />
+  </Style>
+  <Style Selector=".adaptive Button.accent:pressed /template/ views|Plate#PART_Ghost">
+    <Setter Property="RenderTransform" Value="translate(-2px,-2px)" />
+    <Style.Animations>
+      <Animation Duration="0:0:0.2" FillMode="Forward">
+        <KeyFrame Cue="0%"><Setter Property="Opacity" Value="1" /></KeyFrame>
+        <KeyFrame Cue="25%"><Setter Property="Opacity" Value="0.15" /></KeyFrame>
+        <KeyFrame Cue="50%"><Setter Property="Opacity" Value="0.9" /></KeyFrame>
+        <KeyFrame Cue="75%"><Setter Property="Opacity" Value="0.3" /></KeyFrame>
+        <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0" /></KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+  <Style Selector=".adaptive Button.accent:disabled">
+    <Setter Property="Background" Value="{StaticResource ControlBrush}" />
+    <Setter Property="RenderTransform" Value="translate(0px,0px)" />
+  </Style>
+  <Style Selector=".adaptive Button.accent:disabled /template/ views|Plate#PART_Ghost">
+    <Setter Property="Opacity" Value="0" />
+  </Style>
+
+  <!-- Plain and icon buttons rise a step and take the accent edge under the pointer, and press in harder -->
+  <Style Selector=".adaptive Button.secondary:pointerover, .adaptive Button.icon:pointerover">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="RenderTransform" Value="translate(0px,-2px)" />
+  </Style>
+  <Style Selector=".adaptive Button.icon:pointerover PathIcon">
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector=".adaptive Button.icon.danger:pointerover">
+    <Setter Property="BorderBrush" Value="{StaticResource RecordBrush}" />
+  </Style>
+  <Style Selector=".adaptive Button.icon.danger:pointerover PathIcon">
+    <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+  </Style>
+  <Style Selector=".adaptive Button.secondary:pressed, .adaptive Button.icon:pressed, .adaptive Button.record:pressed">
+    <Setter Property="RenderTransform" Value="scale(0.93)" />
+  </Style>
+  <Style Selector=".adaptive Button.secondary.active">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentGradientBrush}" />
+  </Style>
+
+  <!-- The navigation rail: the page you're on in the gradient, and the others' icons jump up under the pointer -->
+  <Style Selector=".adaptive ListBox.nav ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter, .adaptive ListBox.nav ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentGradientBrush}" />
+  </Style>
+  <Style Selector=".adaptive ListBox.nav ListBoxItem:pointerover:not(:selected) PathIcon.navIcon">
+    <Setter Property="RenderTransform" Value="translateY(-4px)" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector=".adaptive ListBox.nav ListBoxItem:pointerover:not(:selected) TextBlock.navIndex">
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+  </Style>
+
+  <!-- Cards: their crop marks light up under the pointer, and ones you open lift higher, edged in the gradient -->
+  <Style Selector=".adaptive views|Plate.card:pointerover">
+    <Setter Property="Brackets" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector=".adaptive views|Plate.card.lead">
+    <Setter Property="Marker" Value="{DynamicResource AccentGradientBrush}" />
+  </Style>
+  <Style Selector=".adaptive views|Plate.clipCard:pointerover, .adaptive views|Plate.card.lift:pointerover">
+    <Setter Property="RenderTransform" Value="translateY(-5px)" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentEdgeBrush}" />
+  </Style>
+
+  <!-- Small pieces of the accent take the gradient too -->
+  <Style Selector=".adaptive Border.pill.accent">
+    <Setter Property="Background" Value="{DynamicResource AccentGradientBrush}" />
+  </Style>
+  <Style Selector=".adaptive Border.tile:not(.neutral):not(.record):not(.warn)">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentGradientBrush}" />
+  </Style>
+  <Style Selector=".adaptive RadioButton.chip:checked /template/ views|Plate#PART_Chip, .adaptive ToggleButton.chip:checked /template/ views|Plate#PART_Chip">
+    <Setter Property="Background" Value="{DynamicResource AccentGradientBrush}" />
+  </Style>
+  <Style Selector=".adaptive ListBox.chips ListBoxItem:selected">
+    <Setter Property="Background" Value="{DynamicResource AccentGradientBrush}" />
+  </Style>
+  <Style Selector=".adaptive RadioButton.segment:checked /template/ Border#PART_Segment">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentGradientBrush}" />
+  </Style>
+</Styles>

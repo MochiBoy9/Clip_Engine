@@ -87,7 +87,7 @@ Clip Engine is free. Subscriptions add more for people who want it:
 | Recording | Up to 1080p | Up to 1440p | Up to 4K |
 | Cloud library | 2 GB | 100 GB | 250 GB |
 | Username changes | Once a month | Once a week | Once a week |
-| Extras | | Colour themes, a badge, a name in the credits | Every theme, a badge, a name at the top of the credits |
+| Extras | | Thirteen colour themes, a badge, a name in the credits | Every colour on a colour wheel, adaptive themes with gradients and motion, a badge, a name at the top of the credits |
 
 Subscribe from the [website](https://mochiboy9.github.io/Clip_Engine/#plans) and paste the key you're emailed into **Settings > Plan**.
 

@@ -83,6 +83,8 @@
       <Grid Grid.Column="1" RowDefinitions="40,*">
         <!-- Graph paper behind the pages -->
         <views:DotGrid Grid.Row="1" IsHitTestVisible="False" />
+        <!-- Ultra's adaptive themes: a wash of colour and, now and then, a scan down the page -->
+        <views:AdaptiveBackdrop Name="Backdrop" Grid.Row="1" />
         <!-- The title bar: where you are and what the engine is doing. Not clickable, so it drags the window. -->
         <Grid ColumnDefinitions="*,Auto" Margin="40,0,150,0" IsHitTestVisible="False">
           <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">

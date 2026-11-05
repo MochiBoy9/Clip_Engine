@@ -11,6 +11,7 @@
       </FluentTheme.Palettes>
     </FluentTheme>
     <StyleInclude Source="avares://ClipEngine/Theme/Theme.axaml" />
+    <StyleInclude Source="avares://ClipEngine/Theme/Adaptive.axaml" />
   </Application.Styles>
 
   <TrayIcon.Icons>
