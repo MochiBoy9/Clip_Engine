@@ -28,6 +28,9 @@ internal sealed class DesktopSettings
     // The clip player's volume, 0 to 100.
     public int PlayerVolume { get; set; } = 80;
 
+    // The editor's export quality, from EditExport.Qualities: "Original", "1080p" or "720p".
+    public string EditExportQuality { get; set; } = "Original";
+
     // Storage cleanup: delete clips older than this many days, and the oldest clips once the
     // library is over this many GB. 0 turns a rule off; both are off until the user picks one.
     public int DeleteAfterDays { get; set; }
