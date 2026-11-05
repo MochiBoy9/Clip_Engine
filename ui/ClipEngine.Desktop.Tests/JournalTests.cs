@@ -174,6 +174,64 @@ public class JournalTests
     }
 
     [Fact]
+    public void TheResultsScreenEndsARunWhoseEndingWasMissed()
+    {
+        // No extraction banner was read, and the results screen is read a minute later, counting up as it opens.
+        var timeline = Parse("""
+            {"session": "2026-11-04T19:00:00", "game": "ARC Raiders", "version": 1}
+            {"t": 10.00, "match": 0, "note": "deploy", "text": "DEPLOYING"}
+            {"t": 100.00, "match": 0, "note": "enemy", "value": "Wasp", "xp": 100, "text": "DESTROYED WASP 100 XP"}
+            {"t": 700.00, "match": 0, "note": "enemy", "value": "Arc", "text": "DESTROYED ARC 1 100"}
+            {"t": 701.00, "match": 0, "note": "xp", "amount": 340, "text": "SCAVENGED 340"}
+            {"t": 702.00, "match": 0, "note": "xp", "amount": 2450, "text": "SCAVENGED 2 450"}
+            {"t": 702.00, "match": 0, "note": "xp", "amount": 1100, "text": "DESTROYED ARC 1 100"}
+            {"t": 702.50, "match": 0, "note": "extracted", "text": "SAFE RETURN BONUS 1 500"}
+            {"t": 703.00, "match": 0, "note": "xp", "amount": 1500, "text": "SAFE RETURN BONUS 1 500"}
+            {"t": 760.00, "match": 0, "note": "enemy", "value": "Arc", "text": "DESTROYED ARC 1 100"}
+            {"t": 761.00, "match": 0, "note": "xp", "amount": 2450, "text": "SCAVENGED 2 450"}
+            {"t": 900.00, "match": 0, "note": "queue", "text": "SEARCHING"}
+            {"t": 960.00, "match": 0, "note": "deploy", "text": "DEPLOYING"}
+            {"t": 1000.00, "match": 0, "note": "enemy", "value": "Tick", "text": "DESTROYED TICK"}
+            """);
+        var runs = Journal.Build([timeline]).Games[0].Runs;
+        Assert.Equal(2, runs.Count);  // the results screen read again isn't another raid
+        var raid = runs[1];
+        Assert.Equal(RunOutcome.Extracted, raid.Outcome);
+        // Each line at the most it showed, once: 2,450 + 1,100 + 1,500.
+        Assert.Equal(5050, raid.Xp);
+        Assert.Equal(TimeSpan.FromSeconds(691), raid.Duration);
+        // The summary's line for every ARC destroyed is read as one more just before the screen is known for what it is.
+        Assert.Equal(2, raid.EnemyCount);
+        Assert.Equal(new[] { new JournalEnemy("Tick", 1, 0) }, runs[0].Enemies);
+    }
+
+    [Fact]
+    public void TheResultsTotalIsTheRunsXp()
+    {
+        var timeline = Parse("""
+            {"session": "2026-11-04T19:00:00", "game": "Escape from Tarkov", "version": 1}
+            {"t": 10.00, "match": 0, "note": "deploy", "text": "DEPLOYING"}
+            {"t": 600.00, "match": 0, "note": "extracted", "text": "SURVIVED"}
+            {"t": 610.00, "match": 0, "note": "xp", "amount": 4200, "text": "EXPERIENCE GAINED 4 200"}
+            {"t": 610.00, "match": 0, "note": "xp", "amount": 5100, "text": "TOTAL EXPERIENCE 5 100"}
+            """);
+        Assert.Equal(5100, Assert.Single(Journal.Build([timeline]).Games[0].Runs).Xp);
+    }
+
+    [Fact]
+    public void AKillTallyOnTheResultsCountsForTheRunThatEnded()
+    {
+        var timeline = Parse("""
+            {"session": "2026-11-04T19:00:00", "game": "Helldivers 2", "version": 1}
+            {"t": 10.00, "match": 0, "note": "deploy", "text": "DEPLOYING"}
+            {"t": 1500.00, "match": 0, "note": "extracted", "text": "MISSION COMPLETE"}
+            {"t": 1560.00, "match": 0, "note": "enemy", "amount": 212, "text": "KILLS 212"}
+            """);
+        var run = Assert.Single(Journal.Build([timeline]).Games[0].Runs);
+        Assert.Equal((RunOutcome.Extracted, 212), (run.Outcome, run.EnemyCount));
+    }
+
+    [Fact]
     public void TiesRunsToTheirClipsAndTalliesItems()
     {
         var day = new DateTime(2026, 11, 1, 20, 0, 0);

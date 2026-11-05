@@ -271,6 +271,8 @@ std::vector<JournalNote> FindNotes(const JournalRule& rule, const std::vector<st
       for (const auto& token : row) {
         if (HasLetters(token, 1)) words.push_back(token);
       }
+      // An item's name is a few words; a longer line is its description in a tooltip.
+      if (words.size() > 6) continue;
       const auto value = CleanValue(words);
       const bool named = std::ranges::any_of(value, [](const std::string& w) { return HasLetters(w, 3); });
       if (!title && named) {

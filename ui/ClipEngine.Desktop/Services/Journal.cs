@@ -275,8 +275,13 @@ internal static class Journal
         public int PlayerKills, Downs;
         public Items Loadout = new(), Loot = new(), Carried = new(), Lost = new();
         public double LastInventory = double.NegativeInfinity;
-        public int XpNotes, XpLines;
-        public bool SawXpNotes;
+        // The results screen's XP lines, by what each line is for (SCAVENGED, TOTAL XP), at the most each read showed:
+        // a screen read again, or counting up as it opens, is the same line.
+        public readonly Dictionary<string, int> XpByLine = new(StringComparer.OrdinalIgnoreCase);
+        public int XpLines;
+        public int Xp => XpByLine.Count == 0 ? XpLines
+            : XpByLine.Where(x => x.Key.Contains("TOTAL", StringComparison.OrdinalIgnoreCase)).Select(x => x.Value).DefaultIfEmpty().Max() is > 0 and var total
+                ? total : XpByLine.Values.Sum();
         public readonly List<string> Objectives = [], Other = [];
     }
 
@@ -315,7 +320,7 @@ internal static class Journal
                 Loot = draft.Loot.List(),
                 Carried = Items.Union(draft.Carried, draft.Loadout, draft.Loot),
                 Lost = lost,
-                Xp = draft.SawXpNotes ? draft.XpNotes : draft.XpLines,
+                Xp = draft.Xp,
                 Objectives = draft.Objectives,
                 Other = draft.Other,
             };
@@ -342,6 +347,16 @@ internal static class Journal
             drafts.Add(draft);
             last = draft;
             run = null;
+        }
+
+        // The run that just ended, for its results screen read after it: soon after, and before the player queued again.
+        Draft? Results(double t) => run is null && last is not null && t - last.End <= ResultsFor && pending.QueuedAt is null ? last : null;
+
+        void AddEnemy(Draft draft, string name, int count, int xp)
+        {
+            var i = draft.Enemies.FindIndex(e => string.Equals(e.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (i >= 0) draft.Enemies[i] = (draft.Enemies[i].Name, draft.Enemies[i].Count + count, draft.Enemies[i].Xp + xp);
+            else draft.Enemies.Add((name, count, xp));
         }
 
         // A queue that never turned into a run: the player backed out.
@@ -422,12 +437,15 @@ internal static class Journal
                 case "xp":
                 case "lost":
                 {
-                    var target = run ?? (last is not null && t - last.End <= ResultsFor ? last : null);
+                    // XP is only noted from a results screen, so one showing means the run is over, even when how it
+                    // ended was missed; the outcome read next fills that in.
+                    if (note.Note == "xp" && run is not null) Close(run, RunOutcome.Unknown, t);
+                    var target = run ?? Results(t);
                     if (target is null) break;
                     if (note.Note == "xp")
                     {
-                        target.XpNotes += note.Amount;
-                        target.SawXpNotes = true;
+                        var line = string.Join(' ', note.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(w => w.Any(char.IsLetter)));
+                        target.XpByLine[line] = Math.Max(target.XpByLine.GetValueOrDefault(line), note.Amount);
                     }
                     else
                     {
@@ -449,7 +467,12 @@ internal static class Journal
                     };
                     if (run is null)
                     {
-                        if (last is not null && t - last.End < ResultsFor) break;
+                        // The same ending read again, or how a run closed by its results screen ended.
+                        if (Results(t) is { } ended)
+                        {
+                            if (ended.Outcome == RunOutcome.Unknown) ended.Outcome = outcome;
+                            break;
+                        }
                         run = Open(t, startSeen: false);
                     }
                     Close(run, outcome, t);
@@ -458,19 +481,20 @@ internal static class Journal
                 default:
                     if (run is null)
                     {
-                        // Its results, read just after it ended.
-                        if (last is not null && t - last.End < 20 && note.Note is "enemy" or "player_kill" or "objective") break;
+                        // Its results, read after it ended. A tally there (KILLS 212) is the run's; a line naming one
+                        // (DESTROYED ARC 1,100) is the same kills again, not a new run.
+                        if (note.Note is "enemy" or "player_kill" or "objective" && Results(t) is { } ended)
+                        {
+                            if (note.Amount > 0 && note.Note == "enemy") AddEnemy(ended, value.Length > 0 ? value : "Enemy", note.Amount, note.Xp);
+                            if (note.Amount > 0 && note.Note == "player_kill") ended.PlayerKills += note.Amount;
+                            break;
+                        }
                         run = Open(t, startSeen: false);
                     }
                     run.End = t;
                     switch (note.Note)
                     {
-                        case "enemy":
-                            var name = value.Length > 0 ? value : "Enemy";
-                            var i = run.Enemies.FindIndex(e => string.Equals(e.Name, name, StringComparison.OrdinalIgnoreCase));
-                            if (i >= 0) run.Enemies[i] = (run.Enemies[i].Name, run.Enemies[i].Count + count, run.Enemies[i].Xp + note.Xp);
-                            else run.Enemies.Add((name, count, note.Xp));
-                            break;
+                        case "enemy": AddEnemy(run, value.Length > 0 ? value : "Enemy", count, note.Xp); break;
                         case "player_kill": run.PlayerKills += count; break;
                         case "downed": run.Downs++; break;
                         case "loot": run.Loot.Add(value, count); break;
@@ -485,7 +509,7 @@ internal static class Journal
                     break;
             }
             // XP on a line: the run's, or the one that just ended, when it's on its results ("EXTRACTED +1,200 XP").
-            if (note.Xp > 0 && note.Note != "xp" && (run ?? (last is not null && t - last.End <= ResultsFor ? last : null)) is { } earner)
+            if (note.Xp > 0 && note.Note != "xp" && (run ?? Results(t)) is { } earner)
                 earner.XpLines += note.Xp;
         }
 
