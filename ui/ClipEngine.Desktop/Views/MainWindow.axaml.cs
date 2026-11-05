@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using ClipEngine.Desktop.Services;
 using ClipEngine.Desktop.ViewModels;
@@ -41,8 +42,16 @@ public partial class MainWindow : Window, IAppDialogs
             {
                 vm.Plan.LookChanged += ApplyLook;
                 ApplyLook(vm.Plan.Look);
+                // A new page gets a quick scan, like the sheet being read in.
+                vm.PropertyChanged += (_, e) =>
+                {
+                    if (e.PropertyName == nameof(MainViewModel.CurrentPage)) Backdrop.Sweep(AdaptiveBackdrop.PageSweepTime);
+                };
             }
         };
+        // The backdrop's light follows the pointer anywhere over the window, even over buttons that handle it.
+        AddHandler(PointerMovedEvent, (_, e) => Backdrop.Follow(e.GetPosition(Backdrop)), RoutingStrategies.Tunnel, true);
+        PointerExited += (_, _) => Backdrop.HideLight();
     }
 
     // The accent, and with an adaptive theme its gradients, livelier buttons (Theme/Adaptive.axaml, under the window's
@@ -52,6 +61,7 @@ public partial class MainWindow : Window, IAppDialogs
         AdaptiveLook.Apply(look);
         Classes.Set("adaptive", look.Adaptive);
         Backdrop.Show(look);
+        Classes.Set("motion", Backdrop.MotionOn);
     }
 
     nint IAppDialogs.WindowHandle => TryGetPlatformHandle()?.Handle ?? 0;

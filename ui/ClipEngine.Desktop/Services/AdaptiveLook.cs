@@ -61,6 +61,13 @@ internal static class AdaptiveLook
             (WithAlpha(accent, 0x1C), 0), (WithAlpha(accent, 0x08), 0.45), (WithAlpha(accent, 0x00), 1));
         app.Resources["AdaptiveWashPartnerBrush"] = Linear(new RelativePoint(0, 1, RelativeUnit.Relative), new RelativePoint(0.5, 0.35, RelativeUnit.Relative),
             (WithAlpha(partner, 0x14), 0), (WithAlpha(partner, 0x00), 1));
+
+        // The light under the pointer: the accent at its heart, fading through its partner to nothing.
+        var light = new RadialGradientBrush();
+        light.GradientStops.Add(new GradientStop(WithAlpha(accent, 0x38), 0));
+        light.GradientStops.Add(new GradientStop(WithAlpha(partner, 0x16), 0.45));
+        light.GradientStops.Add(new GradientStop(WithAlpha(partner, 0x00), 1));
+        app.Resources["AdaptiveLightBrush"] = light.ToImmutable();
     }
 
     private static IBrush Linear(RelativePoint start, RelativePoint end, params (Color Color, double Offset)[] stops)

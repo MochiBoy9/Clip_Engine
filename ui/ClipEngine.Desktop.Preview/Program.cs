@@ -229,6 +229,8 @@ vm.ShowPage(vm.Home);
 Settle();
 var backdrop = window.GetVisualDescendants().OfType<AdaptiveBackdrop>().First();
 backdrop.ShowScan(0.42);
+// The light under the pointer, resting in the gutter between the recent clips and the activity.
+backdrop.ShowLight(new Point(835, 360));
 // Hover shown at its end state: the preview's clock doesn't run transitions.
 foreach (var button in window.GetVisualDescendants().OfType<Avalonia.Controls.Button>().Where(b => b.Classes.Contains("accent")).Take(1))
 {

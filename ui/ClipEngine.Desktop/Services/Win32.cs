@@ -91,6 +91,17 @@ internal static unsafe partial class Win32
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool UnregisterHotKey(nint hwnd, int id);
 
+    [LibraryImport("user32.dll", EntryPoint = "SystemParametersInfoW")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool SystemParametersInfo(uint action, uint param, out int value, uint winIni);
+
+    // Windows' Settings > Accessibility > Visual effects > Animation effects. Assumed on when it can't be read.
+    public static bool ClientAreaAnimation()
+    {
+        const uint SPI_GETCLIENTAREAANIMATION = 0x1042;
+        return !SystemParametersInfo(SPI_GETCLIENTAREAANIMATION, 0, out var on, 0) || on != 0;
+    }
+
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool OpenClipboard(nint owner);
