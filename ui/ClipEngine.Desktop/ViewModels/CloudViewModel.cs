@@ -283,13 +283,15 @@ public sealed class CloudViewModel : ObservableObject
         }
     }
 
-    // A subscription or special key on this PC that the cloud account doesn't have yet goes on it, for its storage.
+    // A subscription, donation or special key on this PC that the cloud account doesn't have yet goes on it, for its
+    // storage. A key with only extra storage (a donation's, or a Free special key) goes on an account without a key.
     private async Task SyncPlanAsync()
     {
         if (_api is not { } api || _account is not { } account || _main.Plan.LicenseKey is not { } key) return;
         var better = _main.Plan.IsSpecial
             ? account.PlanKey is null && (_main.Plan.ExtraStorage > 0 || Plans.FromId(account.Plan) < _main.Plan.Plan)
-            : _main.Plan.IsPaid && Plans.FromId(account.Plan) < _main.Plan.Plan;
+            : (_main.Plan.IsPaid && Plans.FromId(account.Plan) < _main.Plan.Plan)
+              || (account.PlanKey is null && _main.Plan.IsSupporter && _main.Plan.ExtraStorage > 0);
         if (!better) return;
         try
         {

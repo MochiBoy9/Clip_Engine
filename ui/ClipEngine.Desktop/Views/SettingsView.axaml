@@ -360,10 +360,42 @@
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
             </Grid>
+            <Border Classes="inset" Padding="14,12" Margin="0,12,0,0" CornerRadius="2">
+              <StackPanel>
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Classes="markLabel" Text="Support Clip Engine" FontSize="13" />
+                  <TextBlock Grid.Column="1" Classes="mono" Text="ANY AMOUNT" FontSize="11" FontWeight="Bold" LetterSpacing="1" />
+                </Grid>
+                <TextBlock Classes="caption" Text="{Binding DonateCaption}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                <ItemsControl ItemsSource="{Binding DonationPerks}" Margin="0,6,0,0">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="x:String">
+                      <Grid ColumnDefinitions="Auto,*" Margin="0,2">
+                        <Border Width="5" Height="5" Background="{DynamicResource AccentBrush}" VerticalAlignment="Top" Margin="0,6,8,0" />
+                        <TextBlock Grid.Column="1" Classes="caption" Text="{Binding}" TextWrapping="Wrap" />
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <ItemsControl ItemsSource="{Binding DonateOptions}" Margin="0,10,0,0">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:DonateOption">
+                      <Button Classes="accent" Classes.secondary="{Binding !IsAny}" Content="{Binding Label}" Command="{Binding DonateCommand}"
+                              Margin="0,0,8,8" MinWidth="64" HorizontalContentAlignment="Center" />
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Classes="caption" Text="{Binding DonateStatus}" IsVisible="{Binding HasDonateStatus}" TextWrapping="Wrap" />
+                <TextBlock Classes="caption" Text="{Binding DonateHint}" TextWrapping="Wrap" FontSize="11" Margin="0,2,0,0" />
+              </StackPanel>
+            </Border>
             <StackPanel IsVisible="{Binding ShowKeyBox}">
               <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
               <TextBlock Text="License key" FontWeight="SemiBold" FontSize="14" />
-              <TextBlock Classes="caption" Text="Subscribing emails you a key. Paste it, or a special key (CEK-...), here on each PC you play on."
+              <TextBlock Classes="caption" Text="Subscribing or donating emails you a key. Paste it, or a special key (CEK-...), here on each PC you play on."
                          TextWrapping="Wrap" Margin="0,2,0,12" />
               <Grid ColumnDefinitions="*,Auto">
                 <TextBox Text="{Binding KeyInput}" Watermark="Your license key or special key" />

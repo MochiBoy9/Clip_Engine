@@ -6,7 +6,7 @@ The part of Clip Engine that lives on the internet. It's what makes these work:
 - **Profiles.** `/u/<username>` shows someone's public clips, pinned ones first.
 - **Squads.** Friends join with an invite (`/s/<invite>`). Squadmates playing the same match are linked, each one's app hears about the others' moments, and everyone's views go into a library the squad shares.
 - **Friends.** Who's online, what they're playing and for how long, and a way into their squad.
-- **Plans.** It checks subscription keys, so Pro and Ultra work on every PC you sign in on.
+- **Plans and donations.** It checks subscription and donation keys, so Pro, Ultra and the Supporter thank-yous work on every PC you sign in on.
 
 ## What's kept, and how it's protected
 

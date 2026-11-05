@@ -3,6 +3,8 @@ const LINKS = {
   // Polar checkout links for Pro and Ultra (Products > Checkout links). Empty: the buttons say "Coming soon".
   pro: "https://buy.polar.sh/polar_cl_1Od5CaTH339XapxgyZW8RjFstHRfWZbdkvncB4J3E2h",
   ultra: "https://buy.polar.sh/polar_cl_Bjr9r9ZyxK5Hca0xqYuvaTtzfJynMI1NepwwG4CrrUp",
+  // The Donation product's checkout link (one-time, pay what you want). Empty: the donate buttons say it's coming soon.
+  donate: "",
   // Clip Engine's online service, for the names in the credits.
   service: "https://clip-engine.clip-engine.workers.dev",
   // Where releases are published: this repository's GitHub Releases.
@@ -26,16 +28,29 @@ function setText(name, text) {
 }
 
 for (const [name, url] of Object.entries(LINKS)) {
-  if (url && name !== "repo" && name !== "service") setLink(name, url);
+  if (url && name !== "repo" && name !== "service" && name !== "donate") setLink(name, url);
 }
+
+// Donate buttons: Polar's page with the amount filled in (in cents), or left to the donor.
+for (const el of document.querySelectorAll("[data-donate]")) {
+  const cents = Math.round(Number(el.dataset.donate) * 100);
+  if (!LINKS.donate) {
+    el.setAttribute("aria-disabled", "true");
+    continue;
+  }
+  el.href = cents > 0 ? `${LINKS.donate}${LINKS.donate.includes("?") ? "&" : "?"}amount=${cents}` : LINKS.donate;
+  el.target = "_blank";
+  el.rel = "noopener";
+}
+if (LINKS.donate) setText("donate-note", "Polar emails you a key for the app. Thank you!");
 for (const name of ["pro", "ultra"]) {
   if (!LINKS[name]) continue;
   for (const el of document.querySelectorAll(`[data-link="${name}"]`)) el.textContent = "Subscribe";
 }
 
-// Subscribers who asked to be thanked, Ultra first, then the content creators and others the developer
-// thanked with a special role.
-const CREDIT_ROLES = { exclusive: "Exclusive", creator: "Content Creator", special: "Special" };
+// Subscribers who asked to be thanked, Ultra first, then supporters who donated $5 or more, then the content
+// creators and others the developer thanked with a special role.
+const CREDIT_ROLES = { supporter: "Supporter", exclusive: "Exclusive", creator: "Content Creator", special: "Special" };
 if (LINKS.service) {
   fetch(`${LINKS.service}/v1/credits`)
     .then((r) => (r.ok ? r.json() : null))
