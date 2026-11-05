@@ -18,6 +18,12 @@ internal sealed class DesktopSettings
     // The colour theme, from AccentThemes. Only supporters can pick one other than the default.
     public string AccentTheme { get; set; } = "hazard";
 
+    // Ultra: the colour picked on the colour wheel (used while AccentTheme is "wheel"), and adaptive themes, with or
+    // without the background moving now and then.
+    public string CustomAccent { get; set; } = "#FFC21A";
+    public bool AdaptiveTheme { get; set; } = true;
+    public bool BackgroundMotion { get; set; } = true;
+
     // The side panel that docks to the edge of the screen.
     public string SidePanelEdge { get; set; } = "right";
     public string SidePanelHotkey { get; set; } = "Alt+Shift+C";

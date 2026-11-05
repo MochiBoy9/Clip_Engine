@@ -130,7 +130,7 @@ public class PlanTests : IDisposable
         Assert.True(ember.IsUnlocked(Plan.Pro));
         Assert.False(chrome.IsUnlocked(Plan.Pro));
         Assert.True(chrome.IsUnlocked(Plan.Ultra));
-        Assert.Equal(10, AccentThemes.All.Count);
+        Assert.Equal(16, AccentThemes.All.Count);
     }
 
     [Fact]

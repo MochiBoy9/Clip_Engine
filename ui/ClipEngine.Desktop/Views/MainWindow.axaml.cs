@@ -25,16 +25,33 @@ public partial class MainWindow : Window, IAppDialogs
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
         AddHandler(DragDrop.DropEvent, OnDrop);
         // In front, the window lives; behind the game or out of sight, it holds still and runs light.
-        Activated += (_, _) => Classes.Set("awake", true);
-        Deactivated += (_, _) => Classes.Set("awake", false);
+        Activated += (_, _) =>
+        {
+            Classes.Set("awake", true);
+            Backdrop.Awake = true;
+        };
+        Deactivated += (_, _) =>
+        {
+            Classes.Set("awake", false);
+            Backdrop.Awake = false;
+        };
         DataContextChanged += (_, _) =>
         {
             if (DataContext is MainViewModel vm)
             {
-                vm.Plan.ThemeChanged += AccentThemes.ApplyAccent;
-                AccentThemes.ApplyAccent(vm.Plan.Theme);
+                vm.Plan.LookChanged += ApplyLook;
+                ApplyLook(vm.Plan.Look);
             }
         };
+    }
+
+    // The accent, and with an adaptive theme its gradients, livelier buttons (Theme/Adaptive.axaml, under the window's
+    // "adaptive" class) and the backdrop behind the pages.
+    internal void ApplyLook(ThemeLook look)
+    {
+        AdaptiveLook.Apply(look);
+        Classes.Set("adaptive", look.Adaptive);
+        Backdrop.Show(look);
     }
 
     nint IAppDialogs.WindowHandle => TryGetPlatformHandle()?.Handle ?? 0;

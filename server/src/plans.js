@@ -49,7 +49,10 @@ export function cleanKey(value) {
 // credits, and a reason for giving it. It lasts a number of minutes from when it's first used, until a
 // set date, or for good. They're kept in the directory object (src/handles.js) and work without Polar.
 
-export const THEME_IDS = ["hazard", "aurora", "ember", "mint", "sakura", "ocean", "volt", "chrome", "arc", "redline"];
+// The app's colour themes (ui/ClipEngine.Desktop/Services/AccentThemes.cs), then Ultra's colour wheel and adaptive
+// themes, which a special key can give on their own.
+export const THEME_IDS = ["hazard", "aurora", "ember", "mint", "sakura", "ocean", "volt", "cobalt", "toxin", "orchid", "flare",
+  "glacier", "bone", "chrome", "arc", "redline", "wheel", "adaptive"];
 export const LINES = [480, 720, 1080, 1440, 2160];
 const GRANT_LENGTH = 12;
 

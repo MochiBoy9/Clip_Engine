@@ -9,7 +9,7 @@ namespace ClipEngine.Desktop.ViewModels;
 // plan unlocks, the subscriber's name in the credits and the names of everyone who backs Clip Engine. A special key
 // can add a role (Content Creator, Special, Exclusive), a place in the credits, and a direct line to the developer
 // or bug reports that go straight to them.
-public sealed class PlanViewModel : ObservableObject
+public sealed partial class PlanViewModel : ObservableObject
 {
     private readonly string? _file;
     private readonly DesktopSettings? _desktop;
@@ -42,7 +42,8 @@ public sealed class PlanViewModel : ObservableObject
         _active = LicenseRules.IsActive(_state, DateTimeOffset.UtcNow);
         _creditInput = _state.CreditName.Length > 0 ? _state.CreditName : desktop?.Squad.PlayerName ?? "";
         _fileCredits = credits ?? LoadCredits();
-        Themes = AccentThemes.All.Select(t => new ThemeOption(t, Select)).ToList();
+        Themes = AccentThemes.All.Append(AccentThemes.Custom(CustomAccent)).Select(t => new ThemeOption(t, Select)).ToList();
+        LoadWheel();
         Offers = Plans.All.Where(p => p.Plan != Plan.Free).Select(p => new PlanOffer(p, this)).ToList();
         UpdateThemes();
 
@@ -77,7 +78,6 @@ public sealed class PlanViewModel : ObservableObject
 
     // The plan or a special key's features changed: themes, the recording resolution and the cloud library follow it.
     public event Action<Plan>? PlanChanged;
-    internal event Action<AccentTheme>? ThemeChanged;
 
     public Plan Plan => _plan;
     internal PlanInfo Info => Plans.For(_plan);
@@ -111,6 +111,11 @@ public sealed class PlanViewModel : ObservableObject
     internal bool IsUnlocked(AccentTheme theme) =>
         IsSpecial && _state.Themes is { } themes ? theme.IsDefault || themes.Contains(theme.Id) : theme.IsUnlocked(_plan);
 
+    // Ultra's colour wheel and adaptive themes, or a special key that lists them.
+    public bool CanUseWheel => Allows(AccentThemes.WheelId);
+    public bool CanUseAdaptive => Allows(AccentThemes.AdaptiveId);
+    private bool Allows(string feature) => IsSpecial && _state.Themes is { } themes ? themes.Contains(feature) : _plan == Plan.Ultra;
+
     public IReadOnlyList<ThemeOption> Themes { get; }
     public IReadOnlyList<PlanOffer> Offers { get; }
 
@@ -119,7 +124,8 @@ public sealed class PlanViewModel : ObservableObject
     {
         get
         {
-            var saved = AccentThemes.Find(_desktop?.AccentTheme);
+            if (SavedThemeId == AccentThemes.WheelId) return CanUseWheel ? AccentThemes.Custom(CustomAccent) : AccentThemes.Default;
+            var saved = AccentThemes.Find(SavedThemeId);
             return IsUnlocked(saved) ? saved : AccentThemes.Default;
         }
     }
@@ -128,9 +134,9 @@ public sealed class PlanViewModel : ObservableObject
         ? "Changes the accent colour across the app. Your special key unlocks the ones you can pick."
         : _plan switch
     {
-        Plan.Ultra => "Changes the accent colour across the app. The last three are Ultra's own.",
-        Plan.Pro => "Changes the accent colour across the app. The last three come with Ultra.",
-        _ => "Pro unlocks the first seven, and Ultra all ten.",
+        Plan.Ultra => "Changes the accent colour across the app. The last three and the colour wheel are Ultra's own.",
+        Plan.Pro => "Changes the accent colour across the app. The last three and the colour wheel come with Ultra.",
+        _ => "Pro unlocks the first thirteen. Ultra adds three more, a colour wheel for any colour and adaptive themes.",
     };
 
     public string Title => HasRole ? $"Clip Engine {RoleLabel}" : _plan switch
@@ -508,7 +514,7 @@ public sealed class PlanViewModel : ObservableObject
         SendBugCommand.NotifyCanExecuteChanged();
         foreach (var offer in Offers) offer.Refresh();
         UpdateThemes();
-        ThemeChanged?.Invoke(Theme);
+        RaiseLook();
         if (changed) PlanChanged?.Invoke(plan);
     }
 
@@ -526,24 +532,21 @@ public sealed class PlanViewModel : ObservableObject
 
     private void Select(AccentTheme theme)
     {
-        if (!IsUnlocked(theme) || _desktop is null) return;
-        _desktop.AccentTheme = theme.Id;
-        try
-        {
-            _desktop.Save();
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-        }
+        var allowed = theme.Id == AccentThemes.WheelId ? CanUseWheel : IsUnlocked(theme);
+        if (!allowed) return;
+        SavedThemeId = theme.Id;
+        SaveDesktop();
         UpdateThemes();
-        ThemeChanged?.Invoke(Theme);
+        RaiseLook();
     }
 
     private void UpdateThemes()
     {
         var current = Theme;
-        foreach (var option in Themes) option.Update(option.Theme == current, IsUnlocked(option.Theme));
+        foreach (var option in Themes)
+            option.Update(option.Theme.Id == current.Id, option.Theme.Id == AccentThemes.WheelId ? CanUseWheel : IsUnlocked(option.Theme));
         Raise(nameof(ThemeCaption));
+        RaiseLookProperties();
     }
 
     // Names from Assets/Supporters.txt, for people thanked before subscriptions.
@@ -634,7 +637,8 @@ public sealed class ThemeOption : ObservableObject
     }
 
     internal AccentTheme Theme { get; }
-    public string Name => Theme.Needs == Plan.Ultra ? $"{Theme.Name} (Ultra)" : Theme.Name;
+    public string Name => Theme.Id == AccentThemes.WheelId ? "Colour wheel (Ultra)"
+        : Theme.Needs == Plan.Ultra ? $"{Theme.Name} (Ultra)" : Theme.Name;
     public IBrush Preview { get; }
     public bool IsAvailable { get => _isAvailable; private set => Set(ref _isAvailable, value); }
 
