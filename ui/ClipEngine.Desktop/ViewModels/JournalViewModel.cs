@@ -46,7 +46,7 @@ public sealed class JournalViewModel : ObservableObject
                 return "Play ARC Raiders, Escape from Tarkov, Hunt: Showdown 1896, Helldivers 2 or Deep Rock Galactic with Clip Engine running, and the story of every run starts here.";
             var w = g.Words;
             var skipped = g.NotEntered > 0 ? $", and {PlayerRecords.Plural(g.NotEntered, "time")} you picked a map and backed out" : "";
-            return $"{Cap(PlayerRecords.Plural(g.Entered, w.Run, w.Runs))} in {g.Game}{skipped}. Every map, fight, find and loss the engine saw, run by run.";
+            return $"{Cap(PlayerRecords.Plural(g.Entered, w.Run, w.Runs))} in {g.Game}{skipped}.{Lately(g)} Every map, fight, find and loss the engine saw, run by run.";
         }
     }
 
@@ -54,6 +54,11 @@ public sealed class JournalViewModel : ObservableObject
     public IReadOnlyList<JournalBestCard> Bests { get; private set; } = [];
     public IReadOnlyList<JournalPlaceRow> Maps { get; private set; } = [];
     public IReadOnlyList<JournalEnemyRow> Enemies { get; private set; } = [];
+    public IReadOnlyList<JournalEnemyRow> MostLost { get; private set; } = [];
+    public IReadOnlyList<JournalEnemyRow> MostFound { get; private set; } = [];
+    public bool HasItems => MostLost.Count > 0 || MostFound.Count > 0;
+    public bool HasMostLost => MostLost.Count > 0;
+    public bool HasMostFound => MostFound.Count > 0;
     public IReadOnlyList<JournalRunCard> Runs { get; private set; } = [];
     public bool HasMaps => Maps.Count > 0;
     public bool HasEnemies => Enemies.Count > 0;
@@ -107,6 +112,8 @@ public sealed class JournalViewModel : ObservableObject
             Maps = g.Maps.Take(8).Select(p => new JournalPlaceRow(p, w)).ToList();
             var most = g.EnemyTypes.Select(e => e.Count).DefaultIfEmpty(1).Max();
             Enemies = g.EnemyTypes.Take(8).Select(e => new JournalEnemyRow(e, most)).ToList();
+            MostLost = ItemRows(g.MostLost);
+            MostFound = ItemRows(g.MostFound);
             Runs = g.Runs.Take(ShownRuns).Select(r => new JournalRunCard(r, this)).ToList();
         }
         else
@@ -115,6 +122,8 @@ public sealed class JournalViewModel : ObservableObject
             Bests = [];
             Maps = [];
             Enemies = [];
+            MostLost = [];
+            MostFound = [];
             Runs = [];
         }
         Raise(nameof(HasJournal));
@@ -129,10 +138,37 @@ public sealed class JournalViewModel : ObservableObject
         Raise(nameof(Enemies));
         Raise(nameof(HasMaps));
         Raise(nameof(HasEnemies));
+        Raise(nameof(MostLost));
+        Raise(nameof(MostFound));
+        Raise(nameof(HasItems));
+        Raise(nameof(HasMostLost));
+        Raise(nameof(HasMostFound));
         Raise(nameof(EnemiesTitle));
         Raise(nameof(RunsTitle));
         Raise(nameof(Runs));
     }
+
+    // "Lately 7 of your last 10 raids made it out, up from 52% overall."
+    private static string Lately(JournalGame g)
+    {
+        // Only worth saying once there's more than the latest runs to compare them with.
+        if (g.Ended <= g.RecentEnded || g.RecentEnded < 5) return "";
+        var w = g.Words;
+        var diff = g.RecentExtractionRate - g.ExtractionRate;
+        var trend = Math.Abs(diff) < 0.05 ? "about your"
+            : diff > 0 ? "up from" : "down from";
+        return $" Lately {g.RecentExtracted} of your last {g.RecentEnded} {w.Runs} ended {w.Extracted.ToLowerInvariant()}, " +
+               $"{trend} {g.ExtractionRate.ToString("0%", CultureInfo.CurrentCulture)} overall.";
+    }
+
+    private static List<JournalEnemyRow> ItemRows(IReadOnlyList<JournalItem> items)
+    {
+        var most = items.Select(i => i.Count).DefaultIfEmpty(1).Max();
+        return items.Take(6).Select(i => new JournalEnemyRow(new JournalEnemy(i.Name, i.Count, 0), most)).ToList();
+    }
+
+    // Opens a run's clips in the player, from the first.
+    internal Action<ClipFile>? OpenClip { get; set; }
 
     internal void ChangePlayerKills(JournalRun run, int by)
     {
@@ -242,6 +278,8 @@ public sealed class JournalRunCard : ObservableObject
         Entered = run.Entered;
         PlayerKillsLabel = JournalViewModel.Cap($"{w.Players} {w.PlayerVerb.ToLowerInvariant()}");
         IsRecord = run.Highlights.Count > 0;
+        ClipsLabel = run.Clips.Count == 0 ? "" : PlayerRecords.Plural(run.Clips.Count, "clip");
+        WatchClipsCommand = new RelayCommand(() => owner.OpenClip?.Invoke(_run.Clips[0]), () => _run.Clips.Count > 0);
         AddKillCommand = new RelayCommand(() => owner.ChangePlayerKills(_run, 1));
         RemoveKillCommand = new RelayCommand(() => owner.ChangePlayerKills(_run, -1), () => _run.PlayerKills > 0);
     }
@@ -272,6 +310,9 @@ public sealed class JournalRunCard : ObservableObject
     public string PlayerKillsTip => _run.LoggedPlayerKills == 0
         ? "Seen by the engine. Use + and − to log kills it missed."
         : $"{_run.NotedPlayerKills} seen by the engine, {(_run.LoggedPlayerKills > 0 ? "+" : "")}{_run.LoggedPlayerKills} logged by you";
+    public string ClipsLabel { get; }
+    public bool HasClips => ClipsLabel.Length > 0;
+    public RelayCommand WatchClipsCommand { get; }
     public RelayCommand AddKillCommand { get; }
     public RelayCommand RemoveKillCommand { get; }
 }

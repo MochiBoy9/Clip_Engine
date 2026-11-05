@@ -36,6 +36,7 @@ internal sealed class JournalRun
     public required string Id { get; init; }      // game|session|start, for what the player logs by hand
     public required string Game { get; init; }
     public required DateTime Start { get; init; }
+    public DateTime End { get; init; }            // the last thing seen in it
     public TimeSpan? Duration { get; init; }      // null when it couldn't be told
     public bool DurationApproximate { get; init; } // the start wasn't seen, only the first thing in it
     public string? Map { get; init; }
@@ -55,6 +56,8 @@ internal sealed class JournalRun
     public IReadOnlyList<string> Other { get; init; } = [];
     // What made this run stand out among the game's runs, like "Your longest raid yet".
     public List<string> Highlights { get; } = [];
+    // The clips saved during it, oldest first.
+    public IReadOnlyList<ClipFile> Clips { get; set; } = [];
 
     public int EnemyCount => Enemies.Sum(e => e.Count);
     public int PlayerKills => Math.Max(0, NotedPlayerKills + LoggedPlayerKills);
@@ -63,9 +66,10 @@ internal sealed class JournalRun
     public JournalWords Words => JournalWords.For(Game);
 }
 
-internal sealed record JournalPlace(string Name, int Runs, int Extracted)
+// Ended: the runs there whose result was seen, which the extraction rate is out of, as for the game's.
+internal sealed record JournalPlace(string Name, int Runs, int Extracted, int Ended)
 {
-    public double ExtractionRate => Runs == 0 ? 0 : (double)Extracted / Runs;
+    public double ExtractionRate => Ended == 0 ? 0 : (double)Extracted / Ended;
 }
 
 internal sealed class JournalGame
@@ -91,6 +95,12 @@ internal sealed class JournalGame
     public int BestExtractionStreak { get; init; }
     public IReadOnlyList<JournalPlace> Maps { get; init; } = [];        // most played first
     public IReadOnlyList<JournalEnemy> EnemyTypes { get; init; } = [];  // most destroyed first
+    public IReadOnlyList<JournalItem> MostLost { get; init; } = [];     // across every run, most first
+    public IReadOnlyList<JournalItem> MostFound { get; init; } = [];
+    // How the last few runs went, against the extraction rate over all of them.
+    public int RecentEnded { get; init; }
+    public int RecentExtracted { get; init; }
+    public double RecentExtractionRate => RecentEnded == 0 ? 0 : (double)RecentExtracted / RecentEnded;
 }
 
 internal sealed class JournalBook
@@ -110,14 +120,29 @@ internal static class Journal
     private const double InventoryLook = 10;
     // A run this short can't really have been timed.
     private const double ShortestTimed = 10;
+    // A clip is saved a few seconds after its moment, so one saved this soon after a run ended is still from it.
+    private static readonly TimeSpan ClipSavedWithin = TimeSpan.FromSeconds(30);
+    // How many of the latest ended runs make up "lately".
+    public const int RecentRuns = 10;
 
-    public static JournalBook Build(IEnumerable<Timeline> timelines, IReadOnlyDictionary<string, int>? logged = null)
+    public static JournalBook Build(IEnumerable<Timeline> timelines, IReadOnlyDictionary<string, int>? logged = null,
+                                    IEnumerable<ClipFile>? clips = null)
     {
         var runs = new List<JournalRun>();
         foreach (var timeline in timelines)
         {
             if (timeline.Notes.Count == 0 || timeline.Start is not { } start) continue;
             runs.AddRange(RunsOf(timeline, start, logged ?? new Dictionary<string, int>()));
+        }
+        if (clips is not null)
+        {
+            var byGame = clips.GroupBy(c => c.Game, StringComparer.OrdinalIgnoreCase)
+                              .ToDictionary(g => g.Key, g => g.OrderBy(c => c.Created).ToList(), StringComparer.OrdinalIgnoreCase);
+            foreach (var run in runs.Where(r => r.Entered))
+            {
+                if (!byGame.TryGetValue(run.Game, out var saved)) continue;
+                run.Clips = saved.Where(c => c.Created >= run.Start && c.Created <= run.End + ClipSavedWithin).ToList();
+            }
         }
 
         var games = new List<JournalGame>();
@@ -152,6 +177,14 @@ internal static class Journal
             if (list.Count(r => r.EnemyCount > 0) >= 2)
                 mostEnemies?.Highlights.Add($"The most {words.Enemies} you've {words.EnemyVerb.ToLowerInvariant()} in one {words.Run}.");
             if (bestStreak >= 2) streakEnd?.Highlights.Add($"{bestStreak} {words.Runs} in a row without dying.");
+            // Making it out of a map for the first time, after trying it before.
+            foreach (var map in list.Where(r => r.Map is not null && r.Ended).GroupBy(r => r.Map!, StringComparer.OrdinalIgnoreCase))
+            {
+                var tries = map.OrderBy(r => r.Start).ToList();
+                var first = tries.FindIndex(r => r.Outcome == RunOutcome.Extracted);
+                if (first > 0) tries[first].Highlights.Add($"Your first time making it out of {tries[first].Map}, after {PlayerRecords.Plural(first, "try", "tries")}.");
+            }
+            var recent = list.Where(r => r.Ended).Take(RecentRuns).ToList();
 
             games.Add(new JournalGame
             {
@@ -164,18 +197,27 @@ internal static class Journal
                 BestExtractionStreak = bestStreak,
                 Maps = list.Where(r => r.Entered && r.Map is not null)
                            .GroupBy(r => r.Map!, StringComparer.OrdinalIgnoreCase)
-                           .Select(g => new JournalPlace(g.First().Map!, g.Count(), g.Count(r => r.Outcome == RunOutcome.Extracted)))
+                           .Select(g => new JournalPlace(g.First().Map!, g.Count(), g.Count(r => r.Outcome == RunOutcome.Extracted), g.Count(r => r.Ended)))
                            .OrderByDescending(p => p.Runs).ThenBy(p => p.Name).ToList(),
                 EnemyTypes = list.SelectMany(r => r.Enemies)
                                  .GroupBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
                                  .Select(g => new JournalEnemy(g.First().Name, g.Sum(e => e.Count), g.Sum(e => e.Xp)))
                                  .OrderByDescending(e => e.Count).ThenBy(e => e.Name).ToList(),
+                MostLost = Tally(list.SelectMany(r => r.Lost)),
+                MostFound = Tally(list.SelectMany(r => r.Loot)),
+                RecentEnded = recent.Count,
+                RecentExtracted = recent.Count(r => r.Outcome == RunOutcome.Extracted),
             });
         }
         games.Sort((a, b) => b.Runs.Count != a.Runs.Count ? b.Runs.Count.CompareTo(a.Runs.Count)
                                                             : b.Runs[0].Start.CompareTo(a.Runs[0].Start));
         return new JournalBook { Games = games };
     }
+
+    private static List<JournalItem> Tally(IEnumerable<JournalItem> items) =>
+        items.GroupBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
+             .Select(g => new JournalItem(g.First().Name, g.Sum(i => i.Count)))
+             .OrderByDescending(i => i.Count).ThenBy(i => i.Name).ToList();
 
     // ---------------------------------------------------------------- One recording's runs
 
@@ -233,8 +275,15 @@ internal static class Journal
         public int PlayerKills, Downs;
         public Items Loadout = new(), Loot = new(), Carried = new(), Lost = new();
         public double LastInventory = double.NegativeInfinity;
-        public int XpNotes, XpLines;
-        public bool SawXpNotes;
+        // The results screen's XP lines, by what each line is for (SCAVENGED, TOTAL XP), at the most each read showed:
+        // a screen read again, or counting up as it opens, is the same line.
+        public readonly Dictionary<string, int> XpByLine = new(StringComparer.OrdinalIgnoreCase);
+        public int XpLines;
+        // Kill tallies on its results (enemy|Enemy, player_kill|), at the most a read showed, as for XP.
+        public readonly Dictionary<string, int> Tallies = new(StringComparer.OrdinalIgnoreCase);
+        public int Xp => XpByLine.Count == 0 ? XpLines
+            : XpByLine.Where(x => x.Key.Contains("TOTAL", StringComparison.OrdinalIgnoreCase)).Select(x => x.Value).DefaultIfEmpty().Max() is > 0 and var total
+                ? total : XpByLine.Values.Sum();
         public readonly List<string> Objectives = [], Other = [];
     }
 
@@ -248,6 +297,11 @@ internal static class Journal
         JournalRun Finish(Draft draft)
         {
             var id = $"{timeline.Game}|{timeline.Session}|{draft.Start.ToString("0", CultureInfo.InvariantCulture)}";
+            foreach (var (key, tally) in draft.Tallies)
+            {
+                if (key.StartsWith("enemy|", StringComparison.Ordinal)) AddEnemy(draft, key["enemy|".Length..], tally, 0);
+                else draft.PlayerKills += tally;
+            }
             var outcome = draft.Outcome ?? RunOutcome.Unknown;
             var seconds = draft.End - draft.Start;
             TimeSpan? duration = outcome != RunOutcome.NotEntered && seconds >= ShortestTimed ? TimeSpan.FromSeconds(seconds) : null;
@@ -258,6 +312,7 @@ internal static class Journal
                 Id = id,
                 Game = timeline.Game,
                 Start = start.AddSeconds(draft.Start),
+                End = start.AddSeconds(draft.End),
                 Duration = duration,
                 DurationApproximate = !draft.StartSeen,
                 Map = draft.Map,
@@ -272,7 +327,7 @@ internal static class Journal
                 Loot = draft.Loot.List(),
                 Carried = Items.Union(draft.Carried, draft.Loadout, draft.Loot),
                 Lost = lost,
-                Xp = draft.SawXpNotes ? draft.XpNotes : draft.XpLines,
+                Xp = draft.Xp,
                 Objectives = draft.Objectives,
                 Other = draft.Other,
             };
@@ -299,6 +354,16 @@ internal static class Journal
             drafts.Add(draft);
             last = draft;
             run = null;
+        }
+
+        // The run that just ended, for its results screen read after it: soon after, and before the player queued again.
+        Draft? Results(double t) => run is null && last is not null && t - last.End <= ResultsFor && pending.QueuedAt is null ? last : null;
+
+        void AddEnemy(Draft draft, string name, int count, int xp)
+        {
+            var i = draft.Enemies.FindIndex(e => string.Equals(e.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (i >= 0) draft.Enemies[i] = (draft.Enemies[i].Name, draft.Enemies[i].Count + count, draft.Enemies[i].Xp + xp);
+            else draft.Enemies.Add((name, count, xp));
         }
 
         // A queue that never turned into a run: the player backed out.
@@ -379,12 +444,17 @@ internal static class Journal
                 case "xp":
                 case "lost":
                 {
-                    var target = run ?? (last is not null && t - last.End <= ResultsFor ? last : null);
+                    // XP is only noted from a results screen, so one showing means the run is over, even when how it
+                    // ended was missed; the outcome read next fills that in.
+                    if (note.Note == "xp" && run is not null) Close(run, RunOutcome.Unknown, t);
+                    var target = run ?? Results(t);
                     if (target is null) break;
                     if (note.Note == "xp")
                     {
-                        target.XpNotes += note.Amount;
-                        target.SawXpNotes = true;
+                        // What the line is for, without its number, even one read stuck to a word (1,100XP).
+                        var line = string.Join(' ', note.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                                                             .Select(w => new string(w.Where(char.IsLetter).ToArray())).Where(w => w.Length > 0));
+                        target.XpByLine[line] = Math.Max(target.XpByLine.GetValueOrDefault(line), note.Amount);
                     }
                     else
                     {
@@ -406,7 +476,12 @@ internal static class Journal
                     };
                     if (run is null)
                     {
-                        if (last is not null && t - last.End < ResultsFor) break;
+                        // The same ending read again, or how a run closed by its results screen ended.
+                        if (Results(t) is { } ended)
+                        {
+                            if (ended.Outcome == RunOutcome.Unknown) ended.Outcome = outcome;
+                            break;
+                        }
                         run = Open(t, startSeen: false);
                     }
                     Close(run, outcome, t);
@@ -415,30 +490,39 @@ internal static class Journal
                 default:
                     if (run is null)
                     {
-                        // Its results, read just after it ended.
-                        if (last is not null && t - last.End < 20 && note.Note is "enemy" or "player_kill" or "objective") break;
+                        // Its results, read after it ended. A tally there (KILLS 212) is the run's; a line naming one
+                        // (DESTROYED ARC 1,100) is the same kills again, not a new run.
+                        if (note.Note is "enemy" or "player_kill" or "objective" && Results(t) is { } ended)
+                        {
+                            if (note.Amount > 0 && note.Note != "objective")
+                            {
+                                var key = note.Note == "enemy" ? $"enemy|{(value.Length > 0 ? value : "Enemy")}" : "player_kill|";
+                                ended.Tallies[key] = Math.Max(ended.Tallies.GetValueOrDefault(key), note.Amount);
+                            }
+                            break;
+                        }
                         run = Open(t, startSeen: false);
                     }
                     run.End = t;
                     switch (note.Note)
                     {
-                        case "enemy":
-                            var name = value.Length > 0 ? value : "Enemy";
-                            var i = run.Enemies.FindIndex(e => string.Equals(e.Name, name, StringComparison.OrdinalIgnoreCase));
-                            if (i >= 0) run.Enemies[i] = (run.Enemies[i].Name, run.Enemies[i].Count + count, run.Enemies[i].Xp + note.Xp);
-                            else run.Enemies.Add((name, count, note.Xp));
-                            break;
+                        case "enemy": AddEnemy(run, value.Length > 0 ? value : "Enemy", count, note.Xp); break;
                         case "player_kill": run.PlayerKills += count; break;
                         case "downed": run.Downs++; break;
                         case "loot": run.Loot.Add(value, count); break;
-                        case "objective": run.Objectives.Add(value.Length > 0 ? value : note.Text); break;
+                        case "objective":
+                            var objective = value.Length > 0 ? value : note.Text.Trim();
+                            if (objective.Length > 0) run.Objectives.Add(objective);
+                            break;
                         default:
                             run.Other.Add(value.Length > 0 ? $"{Label(note.Note)}: {value}" : Label(note.Note));
                             break;
                     }
                     break;
             }
-            if (note.Xp > 0 && run is not null && note.Note != "xp") run.XpLines += note.Xp;
+            // XP on a line: the run's, or the one that just ended, when it's on its results ("EXTRACTED +1,200 XP").
+            if (note.Xp > 0 && note.Note != "xp" && (run ?? Results(t)) is { } earner)
+                earner.XpLines += note.Xp;
         }
 
         if (run is not null) Close(run, RunOutcome.Unknown, run.End);

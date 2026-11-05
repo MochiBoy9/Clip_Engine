@@ -164,7 +164,9 @@ lines = true
 when = BACKPACK
 exclude = SORT
 )");
-  notes = FindNotes(inventory, R({"BACKPACK 12/20", "Metal Parts x3", "Bandage 2", "Sort", "3", "a b"}));
+  // A tooltip's description isn't an item.
+  notes = FindNotes(inventory, R({"BACKPACK 12/20", "Metal Parts x3", "Bandage 2", "Sort", "3", "a b",
+                                  "Can be recycled into metal parts and rubber"}));
   CHECK(notes.size() == 2);
   CHECK(notes.size() == 2 && notes[0].value == "Metal Parts" && notes[0].amount == 3);
   CHECK(notes.size() == 2 && notes[1].value == "Bandage" && notes[1].amount == 2);
@@ -321,7 +323,19 @@ void TestShipped(const char* path) {
   if (rule("xp")) {
     auto notes = FindNotes(*rule("xp"), R({"SCAVENGED 2,450", "DESTROYED ARC 1,100", "SAFE RETURN BONUS 1,500"}));
     CHECK(notes.size() == 3 && notes[0].amount == 2450 && notes[2].amount == 1500);
+    // Assists and the total are lines of their own, not the Destroyed ARC line.
+    notes = FindNotes(*rule("xp"), R({"DESTROYED ARC (ASSIST) 300", "KNOCKED OUT RAIDER 1,000", "TOTAL XP EARNED 5,200"}));
+    CHECK(notes.size() == 3 && notes[0].amount == 300 && notes[1].amount == 1000 && notes[2].amount == 5200);
   }
+  if (rule("enemy")) CHECK(FindNotes(*rule("enemy"), R({"DESTROYED ARC (ASSIST) 300"})).empty());
+  if (rule("player_kill")) CHECK(FindNotes(*rule("player_kill"), R({"KNOCKED OUT RAIDER +1,000"})).size() == 1);
+  // The results screen's Safe Return Bonus says the raid ended in extraction, even when the banner was missed.
+  int extractedRules = 0;
+  for (const auto& j : arc) {
+    if (j.note == "extracted" && !FindNotes(j, R({"SAFE RETURN BONUS 1,500"})).empty()) ++extractedRules;
+    if (j.note == "extracted") CHECK(FindNotes(j, R({"TEAMMATE HAS EXTRACTED"})).empty());
+  }
+  CHECK(extractedRules == 2);
 
   const auto tarkov = rules.JournalsForGame("escape_from_tarkov");
   int outcomes = 0;

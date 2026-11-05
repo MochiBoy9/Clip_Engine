@@ -108,7 +108,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ClipsPage = new ClipsPage(this);
         GamesPage = new GamesPage(this);
         Records = new RecordsViewModel(this);
-        Journal = new JournalViewModel(this) { LogPlayerKills = LogJournalPlayerKills };
+        Journal = new JournalViewModel(this) { LogPlayerKills = LogJournalPlayerKills, OpenClip = OpenJournalClip };
         _currentPage = Home;
 
         SaveClipCommand = new RelayCommand(SaveClip, () => IsRecording);
@@ -1022,19 +1022,30 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         var files = _files;
         var logged = new Dictionary<string, int>(DesktopSettings.JournalPlayerKills);
+        // Refreshes overlap (a kill logged twice quickly, a clip saved mid-game); only the latest one's books are shown,
+        // so an older one finishing last can't put back what was there before.
+        var generation = ++_recordsGeneration;
         if (!IsLive)
         {
             Records.SetBook(PlayerRecords.Build(SampleTimelines, files));
-            Journal.SetBook(Services.Journal.Build(SampleTimelines, logged));
+            Journal.SetBook(Services.Journal.Build(SampleTimelines, logged, files));
             return;
         }
         var (book, journal) = await Task.Run(() =>
         {
             var timelines = Timeline.LoadAll(Timeline.Folder);
-            return (PlayerRecords.Build(timelines, files), Services.Journal.Build(timelines, logged));
+            return (PlayerRecords.Build(timelines, files), Services.Journal.Build(timelines, logged, files));
         });
+        if (generation != _recordsGeneration) return;
         Records.SetBook(book);
         Journal.SetBook(journal);
+    }
+
+    private int _recordsGeneration;
+
+    private void OpenJournalClip(ClipFile file)
+    {
+        if (Clips.FirstOrDefault(c => string.Equals(c.Path, file.Path, StringComparison.OrdinalIgnoreCase)) is { } clip) OpenPlayer(clip);
     }
 
     // The player logged a kill on a run that the screen didn't show, or took away a misread one.

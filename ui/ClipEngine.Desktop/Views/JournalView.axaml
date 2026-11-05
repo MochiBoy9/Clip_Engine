@@ -135,6 +135,46 @@
         </views:Plate>
       </Grid>
 
+      <!-- What comes and goes: the items found and lost most, across every run -->
+      <Grid ColumnDefinitions="*,22,*" IsVisible="{Binding HasItems}">
+        <views:Plate Classes="card" Padding="24,22">
+          <StackPanel Spacing="18">
+            <TextBlock Classes="eyebrow" Text="FOUND MOST" />
+            <TextBlock Classes="caption" Text="Nothing picked up yet." IsVisible="{Binding !HasMostFound}" />
+            <ItemsControl ItemsSource="{Binding MostFound}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:JournalEnemyRow">
+                  <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" Margin="0,0,0,14">
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Column="1" Text="{Binding Count}" FontWeight="Bold" />
+                    <Border Grid.Row="1" Grid.ColumnSpan="2" Height="3" Margin="0,6,0,0" HorizontalAlignment="Left"
+                            Width="{Binding Bar}" Background="{DynamicResource AccentBrush}" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </views:Plate>
+        <views:Plate Grid.Column="2" Classes="card" Padding="24,22">
+          <StackPanel Spacing="18">
+            <TextBlock Classes="eyebrow" Text="LOST MOST" />
+            <TextBlock Classes="caption" Text="Nothing lost yet. Keep it that way." IsVisible="{Binding !HasMostLost}" />
+            <ItemsControl ItemsSource="{Binding MostLost}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:JournalEnemyRow">
+                  <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" Margin="0,0,0,14">
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Column="1" Text="{Binding Count}" FontWeight="Bold" />
+                    <Border Grid.Row="1" Grid.ColumnSpan="2" Height="3" Margin="0,6,0,0" HorizontalAlignment="Left"
+                            Width="{Binding Bar}" Background="{DynamicResource AccentBrush}" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </views:Plate>
+      </Grid>
+
       <!-- Every run, newest first, as a story -->
       <StackPanel Spacing="14" IsVisible="{Binding HasJournal}">
         <TextBlock Classes="eyebrow" Text="{Binding RunsTitle}" />
@@ -194,13 +234,19 @@
                                Margin="0,0,0,6" IsVisible="{Binding HasLost}" />
                   </Grid>
 
-                  <!-- Player kills, which the player can log by hand -->
-                  <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding Entered}" ToolTip.Tip="{Binding PlayerKillsTip}">
-                    <TextBlock Classes="caption" Text="{Binding PlayerKillsLabel}" VerticalAlignment="Center" />
-                    <Button Classes="secondary" Padding="9,1" Command="{Binding RemoveKillCommand}" Content="−" />
-                    <TextBlock Text="{Binding PlayerKills}" FontWeight="Bold" VerticalAlignment="Center" MinWidth="16" TextAlignment="Center" />
-                    <Button Classes="secondary" Padding="9,1" Command="{Binding AddKillCommand}" Content="+" />
-                  </StackPanel>
+                  <!-- Player kills, which the player can log by hand, and the clips saved during the run -->
+                  <Grid ColumnDefinitions="Auto,*,Auto" IsVisible="{Binding Entered}">
+                    <StackPanel Orientation="Horizontal" Spacing="10" ToolTip.Tip="{Binding PlayerKillsTip}">
+                      <TextBlock Classes="caption" Text="{Binding PlayerKillsLabel}" VerticalAlignment="Center" />
+                      <Button Classes="secondary" Padding="9,1" Command="{Binding RemoveKillCommand}" Content="−" />
+                      <TextBlock Text="{Binding PlayerKills}" FontWeight="Bold" VerticalAlignment="Center" MinWidth="16" TextAlignment="Center" />
+                      <Button Classes="secondary" Padding="9,1" Command="{Binding AddKillCommand}" Content="+" />
+                    </StackPanel>
+                    <Button Grid.Column="2" Classes="secondary" Padding="12,3" Command="{Binding WatchClipsCommand}" IsVisible="{Binding HasClips}"
+                            ToolTip.Tip="Watch the clips saved during this run">
+                      <TextBlock Text="{Binding ClipsLabel, StringFormat='Watch {0}'}" />
+                    </Button>
+                  </Grid>
                 </StackPanel>
               </views:Plate>
             </DataTemplate>
