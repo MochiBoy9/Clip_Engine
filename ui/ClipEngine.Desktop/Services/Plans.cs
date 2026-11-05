@@ -44,12 +44,43 @@ internal static class PlanConfig
     public const string UltraCheckoutUrl = "https://buy.polar.sh/polar_cl_Bjr9r9ZyxK5Hca0xqYuvaTtzfJynMI1NepwwG4CrrUp";
     public const string ManageUrl = "https://polar.sh/clip-engine/portal";
 
+    // The Donation product's checkout link: one-time, pay what you want. Empty: the donate buttons say it's coming soon.
+    public const string DonateUrl = "";
+
     public static string CheckoutUrl(Plan plan) => plan switch
     {
         Plan.Pro => ProCheckoutUrl,
         Plan.Ultra => UltraCheckoutUrl,
         _ => "",
     };
+
+    // The donation checkout with an amount filled in (Polar's amount is in cents); 0 leaves it to the donor.
+    public static string DonateLink(decimal dollars) => DonateUrl.Length == 0 ? ""
+        : dollars <= 0 ? DonateUrl
+        : DonateUrl + (DonateUrl.Contains('?') ? "&" : "?") + string.Create(CultureInfo.InvariantCulture, $"amount={(long)(dollars * 100)}");
+}
+
+// What donating gives (server/src/plans.js, DONATION_DEFAULTS): the Supporter badge, a little more cloud storage for
+// each dollar given, up to a cap, and from $5 in all, a name in the credits.
+internal static class Donations
+{
+    public const int GbPerDollar = 1;
+    public const int MaxGb = 25;
+    public const decimal CreditsFrom = 5m;
+
+    // The amounts the plan card offers; any other amount can be typed on Polar's page.
+    public static IReadOnlyList<decimal> Amounts { get; } = [3m, 5m, 10m, 25m];
+
+    public static IReadOnlyList<string> Perks { get; } =
+    [
+        "A Supporter badge",
+        $"{GbPerDollar} GB more cloud storage for every dollar, up to {MaxGb} GB, for good",
+        $"Your name in the credits from ${CreditsFrom:0} in all",
+    ];
+
+    public static string Money(long cents) => cents % 100 == 0
+        ? string.Create(CultureInfo.InvariantCulture, $"${cents / 100}")
+        : string.Create(CultureInfo.InvariantCulture, $"${cents / 100m:0.00}");
 }
 
 // The highest resolution to record at. 0 is the most the plan allows.
@@ -101,6 +132,11 @@ internal sealed class LicenseState
     public bool CreditsAllowed { get; set; }
     public string Reason { get; set; } = "";
 
+    // Whether whoever owns the key donated (on its own, a donation's key is a Free plan with the Supporter role), and
+    // how much in all, in cents, when the service could tell.
+    public bool Supporter { get; set; }
+    public long? Donated { get; set; }
+
     [JsonIgnore] public bool HasKey => Key.Length > 0;
 
     public static LicenseState Load(string file)
@@ -141,6 +177,8 @@ internal sealed class LicenseState
             Perks = Perks,
             CreditsAllowed = CreditsAllowed,
             Reason = Reason,
+            Supporter = Supporter,
+            Donated = Donated,
         };
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
         File.WriteAllText(file, JsonSerializer.Serialize(stored, PlanJson.Default.LicenseState));
@@ -159,6 +197,8 @@ internal sealed class LicenseState
         Perks = null;
         CreditsAllowed = false;
         Reason = "";
+        Supporter = false;
+        Donated = null;
     }
 }
 
@@ -190,7 +230,7 @@ internal sealed record LicenseCheck(LicenseOutcome Outcome, string Message, Plan
                                     DateTimeOffset? Expires = null, bool IsSpecial = false, int? Lines = null,
                                     IReadOnlyList<string>? Themes = null, long ExtraStorage = 0, string? Role = null,
                                     string? RoleLabel = null, IReadOnlyList<string>? Perks = null, bool CreditsAllowed = false,
-                                    string Reason = "");
+                                    string Reason = "", bool Supporter = false, long? Donated = null);
 
 // What a special key can let its holder do besides the plan (server/src/plans.js, PERKS).
 internal static class PerkIds
@@ -199,9 +239,11 @@ internal static class PerkIds
     public const string BugReports = "bugs";
 }
 
-// The names in the credits: subscribers, then people the developer thanked with a special role.
+// The names in the credits: subscribers, supporters who donated $5 or more, then people the developer thanked with a
+// special role.
 internal sealed record Credits(IReadOnlyList<string> Ultra, IReadOnlyList<string> Pro)
 {
+    public IReadOnlyList<string> Supporter { get; init; } = [];
     public IReadOnlyList<string> Exclusive { get; init; } = [];
     public IReadOnlyList<string> Creator { get; init; } = [];
     public IReadOnlyList<string> Special { get; init; } = [];
@@ -236,23 +278,30 @@ internal sealed class LicenseClient(string server, HttpClient? http = null)
             }
             var plan = Plans.FromId(reply?["plan"]?.GetValue<string>());
             var special = reply?["grant"] is JsonValue g && g.TryGetValue<bool>(out var isGrant) && isGrant;
-            if (plan == Plan.Free && !special) return new(LicenseOutcome.Rejected, "This key isn't for a Clip Engine plan.");
+            var supporter = reply?["supporter"] is JsonValue sv && sv.TryGetValue<bool>(out var isSupporter) && isSupporter;
+            if (plan == Plan.Free && !special && !supporter) return new(LicenseOutcome.Rejected, "This key isn't for a Clip Engine plan.");
             DateTimeOffset? expires = reply?["expires"] is JsonValue e && e.TryGetValue<long>(out var ms)
                 ? DateTimeOffset.FromUnixTimeMilliseconds(ms)
                 : null;
-            if (!special) return new(LicenseOutcome.Valid, "", plan, reply?["display"]?.GetValue<string>() ?? "", expires);
+            long? donated = reply?["donated"] is JsonValue dv && dv.TryGetValue<long>(out var cents) ? cents : null;
+            var credited = reply?["credits"] is JsonValue c && c.TryGetValue<bool>(out var credited0) && credited0;
+            var extra = reply?["extraStorage"] is JsonValue xs && xs.TryGetValue<long>(out var bytes) ? bytes : 0;
+            // A subscription or a donation (Polar): the plan, and a donor's storage bonus, role and credits.
+            if (!special && supporter)
+            {
+                return new LicenseCheck(LicenseOutcome.Valid, "", plan, reply?["display"]?.GetValue<string>() ?? "", expires, false, null, null,
+                                        extra, Text(reply?["role"]), Text(reply?["roleLabel"]), [], credited, "", true, donated);
+            }
+            if (!special) return new(LicenseOutcome.Valid, "", plan, reply?["display"]?.GetValue<string>() ?? "", expires, CreditsAllowed: credited);
             int? lines = reply?["lines"] is JsonValue l && l.TryGetValue<int>(out var n) && n != Plans.For(plan).Lines ? n : null;
             var themes = reply?["themes"] is JsonArray t
                 ? t.Select(x => x?.GetValue<string>() ?? "").Where(x => x.Length > 0).ToList()
                 : null;
-            var extra = reply?["extraStorage"] is JsonValue x && x.TryGetValue<long>(out var bytes) ? bytes : 0;
             var perks = reply?["perks"] is JsonArray p
                 ? p.Select(x => x is JsonValue v && v.TryGetValue<string>(out var s) ? s : "").Where(x => x.Length > 0).ToList()
                 : [];
             return new(LicenseOutcome.Valid, "", plan, reply?["display"]?.GetValue<string>() ?? "", expires, true, lines, themes, extra,
-                       Text(reply?["role"]), Text(reply?["roleLabel"]), perks,
-                       reply?["credits"] is JsonValue c && c.TryGetValue<bool>(out var credited) && credited,
-                       Text(reply?["reason"]) ?? "");
+                       Text(reply?["role"]), Text(reply?["roleLabel"]), perks, credited, Text(reply?["reason"]) ?? "", supporter, donated);
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException)
         {
@@ -272,6 +321,7 @@ internal sealed class LicenseClient(string server, HttpClient? http = null)
                 (n as JsonArray ?? []).Select(x => x?.GetValue<string>() ?? "").Where(x => x.Length > 0).ToList();
             return new(Names(reply?["ultra"]), Names(reply?["pro"]))
             {
+                Supporter = Names(reply?["supporter"]),
                 Exclusive = Names(reply?["exclusive"]),
                 Creator = Names(reply?["creator"]),
                 Special = Names(reply?["special"]),

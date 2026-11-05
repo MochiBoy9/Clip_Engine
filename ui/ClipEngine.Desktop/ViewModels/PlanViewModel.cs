@@ -8,7 +8,8 @@ namespace ClipEngine.Desktop.ViewModels;
 // The plan card in Settings: Free, Pro and Ultra, the box a subscription's license key goes in, the colour themes a
 // plan unlocks, the subscriber's name in the credits and the names of everyone who backs Clip Engine. A special key
 // can add a role (Content Creator, Special, Exclusive), a place in the credits, and a direct line to the developer
-// or bug reports that go straight to them.
+// or bug reports that go straight to them. Donations, any amount, help keep Clip Engine going and make the donor a
+// Supporter: a badge, a little more cloud storage and, from $5, a name in the credits.
 public sealed partial class PlanViewModel : ObservableObject
 {
     private readonly string? _file;
@@ -45,6 +46,7 @@ public sealed partial class PlanViewModel : ObservableObject
         Themes = AccentThemes.All.Append(AccentThemes.Custom(CustomAccent)).Select(t => new ThemeOption(t, Select)).ToList();
         LoadWheel();
         Offers = Plans.All.Where(p => p.Plan != Plan.Free).Select(p => new PlanOffer(p, this)).ToList();
+        DonateOptions = Donations.Amounts.Select(a => new DonateOption(a)).Append(new DonateOption(0)).ToList();
         UpdateThemes();
 
         ActivateCommand = new RelayCommand(() => _ = ActivateAsync(), () => KeyInput.Trim().Length > 0 && !IsBusy);
@@ -84,12 +86,17 @@ public sealed partial class PlanViewModel : ObservableObject
     internal string? LicenseKey => _state.HasKey ? _state.Key : null;
 
     public bool IsPaid => _plan != Plan.Free;
-    // People who paid are thanked in the credits; a special key's holder only when the developer let it in.
-    public bool CanBeCredited => IsSpecial ? _state.CreditsAllowed : IsPaid;
+    // People who paid are thanked in the credits: subscribers, and supporters from $5 in all (the service decides). A
+    // special key's holder only when the developer let it in.
+    public bool CanBeCredited => IsSpecial ? _state.CreditsAllowed : IsPaid || (IsSupporter && _state.CreditsAllowed);
     public bool IsUltra => _plan == Plan.Ultra;
 
-    // A special key's title, such as Content Creator: the badge shows it in place of the plan.
-    public string? RoleLabel => IsSpecial && _state.RoleLabel is { Length: > 0 } label ? label : null;
+    // Whoever owns the key donated: with a donation's own key, they're a Supporter on Free; a subscriber keeps their plan.
+    public bool IsSupporter => _active && _state.Supporter;
+
+    // A special key's title, such as Content Creator, or Supporter for a donation's key: the badge shows it in place of
+    // the plan.
+    public string? RoleLabel => (IsSpecial || IsSupporter) && _state.RoleLabel is { Length: > 0 } label ? label : null;
     public bool HasRole => RoleLabel is not null;
     public string Badge => (RoleLabel ?? _plan.ToString()).ToUpperInvariant();
     public bool ShowBadge => IsPaid || HasRole;
@@ -105,7 +112,8 @@ public sealed partial class PlanViewModel : ObservableObject
     // The highest recording resolution: the plan's, or what a special key sets.
     internal int MaxLines => IsSpecial && _state.Lines is { } lines ? lines : Info.Lines;
 
-    internal long ExtraStorage => IsSpecial ? _state.ExtraStorage : 0;
+    // More cloud storage from a special key or a donation.
+    internal long ExtraStorage => IsSpecial || IsSupporter ? _state.ExtraStorage : 0;
 
     // A special key with its own list of themes gives those (and the default); otherwise the plan decides.
     internal bool IsUnlocked(AccentTheme theme) =>
@@ -149,10 +157,14 @@ public sealed partial class PlanViewModel : ObservableObject
     public string Detail => _plan switch
     {
         Plan.Free when IsSpecial => $"Your special key gives {SpecialText}{UntilText}{KeyText}.",
+        Plan.Free when IsSupporter => $"Thank you for {DonationText}. It keeps Clip Engine going, and adds {Gb(ExtraStorage)} to your cloud library{KeyText}.",
         _ when HasRole => $"{Info.Label} features: {Resolutions.Name(MaxLines)} recording, {StorageText} in the cloud{UntilText}{KeyText}.",
         Plan.Free => "Every recording feature is yours. Pro and Ultra add higher resolutions, more cloud storage and a few thank-yous, and keep Clip Engine going.",
+        _ when IsSupporter => $"{Resolutions.Name(MaxLines)} recording, {StorageText} in the cloud{KeyText}. Thank you for backing Clip Engine, and for {DonationText}.",
         _ => $"{Resolutions.Name(MaxLines)} recording, {StorageText} in the cloud{UntilText}{KeyText}. Thank you for backing Clip Engine.",
     };
+
+    private string DonationText => _state.Donated is { } cents && cents > 0 ? $"your {Donations.Money(cents)} in donations" : "your donation";
 
     private string KeyText => _state.Display.Length > 0 ? $", key {_state.Display}" : "";
 
@@ -183,6 +195,29 @@ public sealed partial class PlanViewModel : ObservableObject
     private string UntilText => IsSpecial && _state.Expires is { } end
         ? $", until {end.ToLocalTime():MMM d, yyyy}"
         : "";
+
+    // ---- donations ----
+
+    public IReadOnlyList<DonateOption> DonateOptions { get; }
+    public IReadOnlyList<string> DonationPerks => Donations.Perks;
+    public bool CanDonate => PlanConfig.DonateUrl.Length > 0;
+
+    public string DonateCaption => IsSupporter
+        ? "Thank you for donating. Every bit more helps keep Clip Engine developed and maintained, and adds to your thank-yous."
+        : "Donate any amount, once, to keep Clip Engine developed and maintained. It's never needed: every recording feature stays free.";
+
+    // How far a supporter is from the credits, when the service could tell.
+    public string? DonateStatus => !IsSupporter ? null
+        : CanBeCredited ? null
+        : _state.Donated is { } cents && cents < (long)(Donations.CreditsFrom * 100)
+            ? $"You've given {Donations.Money(cents)} so far. From {Donations.Money((long)(Donations.CreditsFrom * 100))} in all, your name can go in the credits."
+            : null;
+
+    public bool HasDonateStatus => DonateStatus is not null;
+
+    public string DonateHint => CanDonate
+        ? "Polar emails you a key. Paste it below, or if you subscribe with the same email, the thank-yous join your plan on their own."
+        : "Donations open soon.";
 
     public string? StatusText
     {
@@ -247,12 +282,14 @@ public sealed partial class PlanViewModel : ObservableObject
     public bool HasMessage => _message is not null;
     public bool MessageIsError { get => _messageIsError; private set => Set(ref _messageIsError, value); }
 
-    // Ultra first, then Pro and the names kept with the app, then the people thanked with a role.
+    // Ultra first, then Pro and the names kept with the app, then supporters who donated, then the people thanked with
+    // a role.
     public IReadOnlyList<CreditName> Credits =>
         _credits.Ultra.Select(n => new CreditName(n, true))
             .Concat(_credits.Pro.Concat(_fileCredits).Distinct(StringComparer.OrdinalIgnoreCase)
                         .Where(n => !_credits.Ultra.Contains(n, StringComparer.OrdinalIgnoreCase))
                         .Select(n => new CreditName(n, false)))
+            .Concat(_credits.Supporter.Select(n => new CreditName(n, false, "Supporter")))
             .Concat(_credits.Exclusive.Select(n => new CreditName(n, false, "Exclusive")))
             .Concat(_credits.Creator.Select(n => new CreditName(n, false, "Content Creator")))
             .Concat(_credits.Special.Select(n => new CreditName(n, false, "Special")))
@@ -270,6 +307,24 @@ public sealed partial class PlanViewModel : ObservableObject
         _state.CreditName = _creditInput = "Enterro";
         _credits = credits;
         SetPlan(LicenseRules.Effective(_state, DateTimeOffset.UtcNow));
+    }
+
+    // The preview tool: a supporter who donated, on Free or on top of a plan.
+    internal void ShowSampleSupporter(Plan plan, long donatedCents, Credits credits)
+    {
+        _state.Key = "preview";
+        _state.Display = "****-D0N8";
+        _state.Plan = plan;
+        _state.LastOk = _state.LastChecked = DateTimeOffset.UtcNow;
+        _state.Supporter = true;
+        _state.Donated = donatedCents;
+        _state.ExtraStorage = Math.Min(Donations.MaxGb, Math.Max(1, donatedCents / 100 * Donations.GbPerDollar)) * (1L << 30);
+        _state.Role = plan == Plan.Free ? "supporter" : null;
+        _state.RoleLabel = plan == Plan.Free ? "Supporter" : null;
+        _state.CreditsAllowed = plan != Plan.Free || donatedCents >= (long)(Donations.CreditsFrom * 100);
+        _state.CreditName = _creditInput = "Enterro";
+        _credits = credits;
+        SetPlan(LicenseRules.Effective(_state, DateTimeOffset.UtcNow), force: true);
     }
 
     // The preview tool: a special key's messages without the service.
@@ -316,6 +371,7 @@ public sealed partial class PlanViewModel : ObservableObject
         Message = check.IsSpecial
             ? check.RoleLabel is { Length: > 0 } role ? $"Your {role} key is on. Welcome!"
             : check.Plan == Plan.Free ? "Your special key is on." : $"{Plans.For(check.Plan).Label} is on from your special key."
+            : check.Plan == Plan.Free && check.Supporter ? "You're a Supporter. Thank you for helping keep Clip Engine going!"
             : $"{Plans.For(check.Plan).Label} is on. Thank you!";
         SetPlan(check.Plan, force: true);
         _ = LoadContactAsync();
@@ -353,6 +409,8 @@ public sealed partial class PlanViewModel : ObservableObject
         _state.Perks = check.Perks?.ToList();
         _state.CreditsAllowed = check.CreditsAllowed;
         _state.Reason = check.Reason;
+        _state.Supporter = check.Supporter;
+        _state.Donated = check.Donated;
         _state.LastChecked = _state.LastOk = DateTimeOffset.UtcNow;
         Save();
     }
@@ -588,6 +646,22 @@ public sealed class ContactMessageView
     public string? Reply { get; }
     public bool HasReply => Reply is not null;
     public string Status => HasReply ? "Answered" : "Waiting for an answer";
+}
+
+// One of the donate buttons: an amount filled in on Polar's page, or 0 for any amount.
+public sealed class DonateOption
+{
+    internal DonateOption(decimal dollars)
+    {
+        Dollars = dollars;
+        Label = dollars > 0 ? Donations.Money((long)(dollars * 100)) : "Any amount";
+        DonateCommand = new RelayCommand(() => Shell.Open(PlanConfig.DonateLink(dollars)), () => PlanConfig.DonateUrl.Length > 0);
+    }
+
+    internal decimal Dollars { get; }
+    public string Label { get; }
+    public bool IsAny => Dollars <= 0;
+    public RelayCommand DonateCommand { get; }
 }
 
 // Pro or Ultra as the plan card offers it: price, what it adds and a button to subscribe.

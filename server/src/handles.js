@@ -1,7 +1,7 @@
 // The service's one directory, a single Durable Object: which account each public profile name
 // (@handle) belongs to, so two accounts can't take the same one; who's online and what they're
-// playing, which friends see; which cloud account each subscription is on; the names subscribers
-// asked to have in the credits; and the special keys made in the key maker. Only the Worker and
+// playing, which friends see; which cloud account each subscription is on; the names subscribers and
+// supporters asked to have in the credits; and the special keys made in the key maker. Only the Worker and
 // the libraries talk to it. It also keeps the messages and bug reports special-key holders send the
 // operator, and the operator's answers.
 
@@ -251,7 +251,8 @@ export class Handles {
     }
 
     if (path === "/credits" && request.method === "GET") {
-      this.sql.exec("DELETE FROM credits WHERE seen < ?", now - CREDIT_KEEP_MS);
+      // A subscriber's name goes once their app stops checking in; a donation doesn't run out, so a supporter's stays.
+      this.sql.exec("DELETE FROM credits WHERE seen < ? AND plan != 'supporter'", now - CREDIT_KEEP_MS);
       const rows = this.sql.exec("SELECT name, plan FROM credits ORDER BY since").toArray();
       return json(Object.fromEntries(CREDIT_GROUPS.map((group) => [group, rows.filter((r) => r.plan === group).map((r) => r.name)])));
     }

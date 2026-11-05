@@ -32,9 +32,10 @@
 //   POST /v1/contact/list           this key's messages with the operator's answers { key, device }
 //
 // Plans (src/plans.js):
-//   GET  /v1/plans                  Free, Pro and Ultra: price, storage and resolution
-//   POST /v1/license                check a Polar or special key { key, device, credit? } and list or unlist its name in the credits
-//   GET  /v1/credits                the names in the credits: subscribers, and special keys the operator lets in
+//   GET  /v1/plans                  Free, Pro and Ultra: price, storage and resolution; and what donations give
+//   POST /v1/license                check a Polar or special key { key, device, credit? } and list or unlist its name in the credits.
+//                                   A donation's key, or any key of someone who donated, also answers supporter and donated (cents)
+//   GET  /v1/credits                the names in the credits: subscribers, supporters from $5, and special keys the operator lets in
 //
 // Inviting friends (one Durable Object, src/referrals.js):
 //   POST /v1/referrals              this PC's invite code and its secret        { pc, device, name? }
@@ -63,7 +64,7 @@ import { pageCsp } from "./look.js";
 import { CLIP_CODE_LENGTH, Library } from "./library.js";
 import { formatInvite } from "./codes.js";
 import { clipOembed, clipPage, invitePage, notFoundPage, profilePage, referralPage } from "./pages.js";
-import { checkLicense, creditGroup, normalizeGrant, PLANS, planJson } from "./plans.js";
+import { checkLicense, creditGroup, donationSettings, normalizeGrant, PLANS, planJson } from "./plans.js";
 import { isMediaPointer, serveMedia } from "./media.js";
 import { normalizeReferral, Referrals } from "./referrals.js";
 import { Squad } from "./squad.js";
@@ -333,21 +334,30 @@ async function route(request, env) {
 
     // ---- plans ----
     if (path === "/v1/plans" && method === "GET") {
-      return json({ plans: Object.keys(PLANS).map((name) => planJson(env, name)), open: Boolean(env.POLAR_ORGANIZATION_ID) });
+      const donations = donationSettings(env);
+      return json({
+        plans: Object.keys(PLANS).map((name) => planJson(env, name)),
+        open: Boolean(env.POLAR_ORGANIZATION_ID),
+        donations: { open: Boolean(env.POLAR_ORGANIZATION_ID && env.POLAR_DONATION_BENEFIT_ID), ...donations },
+      });
     }
     if (path === "/v1/license" && method === "POST") {
       const body = await readBody(request);
       const check = await checkLicense(env, body?.key, typeof body?.device === "string" ? body.device : "");
       if (!check.ok) return json({ error: check.error, rejected: check.rejected }, check.rejected ? 403 : 503);
-      // The credits thank people who pay. A special key (made in the key maker, not bought) is listed only when
-      // the operator ticked "in the credits" for it, under its role.
+      // The credits thank people who pay: subscribers, and supporters whose donations come to $5 or more (under
+      // their plan if they subscribe too). A special key (made in the key maker, not bought) is listed only when the
+      // operator ticked "in the credits" for it, under its role.
       const credit = typeof body?.credit === "string" ? body.credit : "";
+      const credited = check.grant ? Boolean(check.credits) : check.plan !== "free" || Boolean(check.donation?.credits);
+      const group = check.grant ? creditGroup(check) : check.plan !== "free" ? check.plan : "supporter";
       if (check.grant && !check.credits) {
         await directory(env, url, "/credits/remove", { license: check.license });
-      } else if (check.grant && body?.credit !== undefined) {
-        await directory(env, url, "/credits/set", { license: check.license, name: credit, plan: creditGroup(check) });
-      } else if (!check.grant && body?.credit !== undefined && check.plan !== "free") {
-        await directory(env, url, "/credits/set", { license: check.license, name: credit, plan: check.plan });
+      } else if (!credited && check.donation && check.donation.cents !== null) {
+        // Refunded below $5: the name comes off. (When the amount couldn't be looked up, it's left as it was.)
+        await directory(env, url, "/credits/remove", { license: check.license });
+      } else if (credited && body?.credit !== undefined) {
+        await directory(env, url, "/credits/set", { license: check.license, name: credit, plan: group });
       }
       return json({
         ...planJson(env, check.plan, check.features, check.role),
@@ -355,8 +365,10 @@ async function route(request, env) {
         expires: check.expires,
         grant: Boolean(check.grant),
         perks: check.perks ?? [],
-        credits: check.grant ? Boolean(check.credits) : check.plan !== "free",
+        credits: credited,
         reason: check.reason ?? "",
+        supporter: Boolean(check.donation),
+        donated: check.donation?.cents ?? null,
       });
     }
     if ((path === "/v1/contact" || path === "/v1/contact/list") && method === "POST") {
