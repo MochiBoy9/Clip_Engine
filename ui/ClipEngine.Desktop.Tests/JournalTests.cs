@@ -184,7 +184,8 @@ public class JournalTests
             {"t": 700.00, "match": 0, "note": "enemy", "value": "Arc", "text": "DESTROYED ARC 1 100"}
             {"t": 701.00, "match": 0, "note": "xp", "amount": 340, "text": "SCAVENGED 340"}
             {"t": 702.00, "match": 0, "note": "xp", "amount": 2450, "text": "SCAVENGED 2 450"}
-            {"t": 702.00, "match": 0, "note": "xp", "amount": 1100, "text": "DESTROYED ARC 1 100"}
+            {"t": 702.00, "match": 0, "note": "xp", "amount": 100, "text": "DESTROYED ARC 100XP"}
+            {"t": 702.00, "match": 0, "note": "xp", "amount": 1100, "text": "DESTROYED ARC 1 100XP"}
             {"t": 702.50, "match": 0, "note": "extracted", "text": "SAFE RETURN BONUS 1 500"}
             {"t": 703.00, "match": 0, "note": "xp", "amount": 1500, "text": "SAFE RETURN BONUS 1 500"}
             {"t": 760.00, "match": 0, "note": "enemy", "value": "Arc", "text": "DESTROYED ARC 1 100"}
@@ -225,9 +226,12 @@ public class JournalTests
             {"session": "2026-11-04T19:00:00", "game": "Helldivers 2", "version": 1}
             {"t": 10.00, "match": 0, "note": "deploy", "text": "DEPLOYING"}
             {"t": 1500.00, "match": 0, "note": "extracted", "text": "MISSION COMPLETE"}
+            {"t": 1503.00, "match": 0, "note": "enemy", "amount": 100, "text": "KILLS 100"}
             {"t": 1560.00, "match": 0, "note": "enemy", "amount": 212, "text": "KILLS 212"}
+            {"t": 1680.00, "match": 0, "note": "enemy", "amount": 212, "text": "KILLS 212"}
             """);
         var run = Assert.Single(Journal.Build([timeline]).Games[0].Runs);
+        // Counting up as it opens, then read again: the tally is 212, once.
         Assert.Equal((RunOutcome.Extracted, 212), (run.Outcome, run.EnemyCount));
     }
 

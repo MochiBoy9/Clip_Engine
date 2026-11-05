@@ -279,6 +279,8 @@ internal static class Journal
         // a screen read again, or counting up as it opens, is the same line.
         public readonly Dictionary<string, int> XpByLine = new(StringComparer.OrdinalIgnoreCase);
         public int XpLines;
+        // Kill tallies on its results (enemy|Enemy, player_kill|), at the most a read showed, as for XP.
+        public readonly Dictionary<string, int> Tallies = new(StringComparer.OrdinalIgnoreCase);
         public int Xp => XpByLine.Count == 0 ? XpLines
             : XpByLine.Where(x => x.Key.Contains("TOTAL", StringComparison.OrdinalIgnoreCase)).Select(x => x.Value).DefaultIfEmpty().Max() is > 0 and var total
                 ? total : XpByLine.Values.Sum();
@@ -295,6 +297,11 @@ internal static class Journal
         JournalRun Finish(Draft draft)
         {
             var id = $"{timeline.Game}|{timeline.Session}|{draft.Start.ToString("0", CultureInfo.InvariantCulture)}";
+            foreach (var (key, tally) in draft.Tallies)
+            {
+                if (key.StartsWith("enemy|", StringComparison.Ordinal)) AddEnemy(draft, key["enemy|".Length..], tally, 0);
+                else draft.PlayerKills += tally;
+            }
             var outcome = draft.Outcome ?? RunOutcome.Unknown;
             var seconds = draft.End - draft.Start;
             TimeSpan? duration = outcome != RunOutcome.NotEntered && seconds >= ShortestTimed ? TimeSpan.FromSeconds(seconds) : null;
@@ -444,7 +451,9 @@ internal static class Journal
                     if (target is null) break;
                     if (note.Note == "xp")
                     {
-                        var line = string.Join(' ', note.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(w => w.Any(char.IsLetter)));
+                        // What the line is for, without its number, even one read stuck to a word (1,100XP).
+                        var line = string.Join(' ', note.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                                                             .Select(w => new string(w.Where(char.IsLetter).ToArray())).Where(w => w.Length > 0));
                         target.XpByLine[line] = Math.Max(target.XpByLine.GetValueOrDefault(line), note.Amount);
                     }
                     else
@@ -485,8 +494,11 @@ internal static class Journal
                         // (DESTROYED ARC 1,100) is the same kills again, not a new run.
                         if (note.Note is "enemy" or "player_kill" or "objective" && Results(t) is { } ended)
                         {
-                            if (note.Amount > 0 && note.Note == "enemy") AddEnemy(ended, value.Length > 0 ? value : "Enemy", note.Amount, note.Xp);
-                            if (note.Amount > 0 && note.Note == "player_kill") ended.PlayerKills += note.Amount;
+                            if (note.Amount > 0 && note.Note != "objective")
+                            {
+                                var key = note.Note == "enemy" ? $"enemy|{(value.Length > 0 ? value : "Enemy")}" : "player_kill|";
+                                ended.Tallies[key] = Math.Max(ended.Tallies.GetValueOrDefault(key), note.Amount);
+                            }
                             break;
                         }
                         run = Open(t, startSeen: false);
