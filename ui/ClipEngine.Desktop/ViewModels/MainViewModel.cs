@@ -67,6 +67,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ];
         _selectedNav = Nav[0];
 
+        // Nothing of Clip Engine on this PC yet: a new install, which can count for a friend's invite.
+        var freshInstall = live && !File.Exists(AppPaths.EngineSettingsFile) && !File.Exists(AppPaths.DesktopSettingsFile)
+                           && !File.Exists(AppPaths.LicenseFile);
         var engineSettings = live ? EngineSettings.Load(AppPaths.EngineSettingsFile) : new EngineSettings();
         DesktopSettings = live ? DesktopSettings.Load() : new DesktopSettings();
         Plan = new PlanViewModel(live ? AppPaths.LicenseFile : null, DesktopSettings, () => Online.ServerUrl(DesktopSettings));
@@ -89,6 +92,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             EngineCommand = live ? SendEngineCommand : null,
         };
         Settings.SidePanelHotkeyChanged += _ => Raise(nameof(SidePanelHotkey));
+        Settings.StatsOverlayChanged += () => StatsOverlayChanged?.Invoke();
         Settings.StorageRulesChanged += OnStorageRulesChanged;
         Settings.CleanUpNowRequested += () => _ = CleanUpAsync();
         _showMatches = DesktopSettings.ShowMatches;
@@ -157,6 +161,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Squad = new SquadViewModel(this, DesktopSettings);
         Squad.SetClipWindow(engineSettings.ClipBeforeSeconds, engineSettings.ClipAfterSeconds);
         Cloud = new CloudViewModel(this, DesktopSettings);
+        Invite = new InviteViewModel(DesktopSettings, () => Online.ServerUrl(DesktopSettings), Plan, live ? freshInstall : null,
+                                     copy: (text, done) => Cloud.CopyAsync(text, done),
+                                     notify: text => AddActivity(ActivityKind.Info, text),
+                                     save: live ? SaveDesktopSettingsNow : null);
         Friends = new FriendsViewModel(this, DesktopSettings);
 
         if (!live) return;
@@ -197,6 +205,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public SettingsViewModel Settings { get; }
     public PlanViewModel Plan { get; }
     public FriendsViewModel Friends { get; }
+    public InviteViewModel Invite { get; }
     public UpdatesViewModel Updates { get; }
     internal DesktopSettings DesktopSettings { get; }
 
@@ -241,6 +250,16 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     // A short notice to show over the game, like "Clip saved · 2 kills".
     internal event Action<string>? GameNoticeRequested;
 
+    // The stats overlay should come up or go away (see StatsOverlayWanted).
+    internal event Action? StatsOverlayChanged;
+
+    // Up while a game is recorded and in front, when it's turned on. A recording of the desktop has
+    // no game to measure.
+    internal bool StatsOverlayWanted =>
+        DesktopSettings.StatsOverlay.On && IsRecording && _recording!.Label != "Desktop" && !_gameAway;
+
+    public StatsOverlayViewModel StatsOverlay { get; } = new();
+
     public NavItem SelectedNav
     {
         get => _selectedNav;
@@ -276,6 +295,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     internal void PausePlayback()
     {
         if (CurrentPage is PlayerViewModel player) player.Pause();
+        if (CurrentPage is EditorViewModel editor) editor.Pause();
         if (CurrentPage is SquadPlayerViewModel squad) squad.Pause();
     }
 
@@ -297,15 +317,41 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             ShowPage(Squad);
             Squad.PrefillInvite(Uri.UnescapeDataString(code));
         }
+        else if (parts is ["invite", var invite, ..])
+        {
+            ShowPage(Friends);
+            Invite.PrefillCode(Uri.UnescapeDataString(invite));
+        }
     }
 
     internal PlayerViewModel OpenPlayer(ClipItemViewModel clip)
     {
-        var returnTo = CurrentPage is PlayerViewModel open ? open.ReturnTo : CurrentPage;
+        // A clip opened from the player or the editor goes back to where they were opened from.
+        var returnTo = CurrentPage switch
+        {
+            PlayerViewModel open => open.ReturnTo,
+            EditorViewModel { ReturnTo: PlayerViewModel open } => open.ReturnTo,
+            EditorViewModel editor => editor.ReturnTo,
+            var page => page,
+        };
         var player = new PlayerViewModel(this, clip, returnTo);
         ShowPage(player);
         ShowMainWindowRequested?.Invoke();
         return player;
+    }
+
+    // The video editor on a clip, coming back to `returnTo`. With keepFrom and keepTo it starts on
+    // just that part, as picked with Trim in the player; otherwise on the clip's last edit, if any.
+    internal EditorViewModel? OpenEditor(ClipItemViewModel clip, object returnTo, double? keepFrom = null, double? keepTo = null)
+    {
+        if ((clip.File.Duration?.TotalSeconds ?? clip.File.Metadata?.Seconds ?? 0) < Services.Editing.EditTimeline.MinSegment * 2)
+        {
+            ShowToast("This clip is too short to edit.", isError: true);
+            return null;
+        }
+        var editor = new EditorViewModel(this, clip, returnTo, keepFrom, keepTo);
+        ShowPage(editor);
+        return editor;
     }
 
     // Detection Studio, for making or fixing the rules that spot moments in a game.
@@ -1119,6 +1165,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         RaiseLongRecording();
         SaveClipCommand.NotifyCanExecuteChanged();
         ToggleLongRecordingCommand.NotifyCanExecuteChanged();
+        StatsOverlayChanged?.Invoke();
+    }
+
+    // The overlay's hotkey: on or off, saved, with a notice over the game saying which.
+    internal void ToggleStatsOverlay()
+    {
+        Settings.StatsOverlayOn = !DesktopSettings.StatsOverlay.On;
+        if (IsRecording) GameNoticeRequested?.Invoke(DesktopSettings.StatsOverlay.On ? "Stats overlay on" : "Stats overlay off");
     }
 
     private static StreamGeometry Icon(string key) =>

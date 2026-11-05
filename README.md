@@ -36,8 +36,9 @@ You need Windows 10 (version 1903 or newer) or Windows 11, and a graphics card w
 - **Friends.** Add friends by username or friend code, see who's online, what they're playing and for how long, get a notice when they come on, and right-click to join their squad.
 - **Share anywhere.** One click puts a short link on your clipboard. It plays in any browser, with the moments marked, and shows a preview in Discord. A small copy that fits Discord's upload limit is a click away too.
 - **Your profile.** Public clips show on your page, pinned ones first, under the same username your friends know you by.
-- **Trim, star and tidy.** Trim a clip in the player with no quality lost, star favourites, and have old clips cleaned up by age or size, favourites always kept.
+- **Trim, edit, star and tidy.** Trim a clip in the player with no quality lost, or open it in the editor to split it into parts, cut what you don't need, put parts in another order and export a new clip with its moments kept. Star favourites, and have old clips cleaned up by age or size, favourites always kept.
 - **Detection Studio.** Add any game, or fine-tune how one is read: draw a box where the game shows a kill, type the words, and test it on your own clips.
+- **FPS and PC stats.** Turn on the stats overlay (Alt+Shift+F) for a slim strip in a corner of the game: frame rate, 1% lows, CPU, GPU and its temperature, video memory and RAM, turning yellow then red when something holds the game back. It reads what Windows already measures, never touches the game (so anti-cheat has nothing to object to), and never shows up in your clips. The FPS counter needs Windows' permission once; Settings asks for it.
 - **Light on your game.** Encodes on the GPU at your monitor's resolution and refresh rate, and records only the game, so nothing else on your PC ends up in a clip.
 - **Discord status.** Shows the game, the match time and your kills while you play.
 
@@ -83,9 +84,11 @@ Clip Engine is free. Subscriptions add more for people who want it:
 
 Subscribe from the [website](https://mochiboy9.github.io/Clip_Engine/#plans) and paste the key you're emailed into **Settings > Plan**.
 
+Or get Pro free: invite friends from the **Friends** page. When three of them install Clip Engine on their own PC and start it, you get a month of Pro. Each friend has to be on a PC and an internet connection of their own, so a second PC at home doesn't count.
+
 ## Privacy
 
-Clips stay on your PC unless you share them. Voice clips are off until you turn them on, and are heard by Windows' speech recognition on your PC, not sent anywhere. The cloud library, squads and friends need a free cloud account, which asks for no email. Online, the service keeps only what those features need: the clips you upload, your username, your friends and squads, and whether you're online. See the [privacy notice](website/privacy.html).
+Clips stay on your PC unless you share them. The first time Clip Engine starts on a PC it tells the online service so, with a hashed id for the PC, so friends who invited you get credit. Voice clips are off until you turn them on, and are heard by Windows' speech recognition on your PC, not sent anywhere. The cloud library, squads and friends need a free cloud account, which asks for no email. Online, the service keeps only what those features need: the clips you upload, your username, your friends and squads, and whether you're online. See the [privacy notice](website/privacy.html).
 
 ## Help and feedback
 

@@ -253,6 +253,24 @@ internal static unsafe partial class Win32
         SetProcessInformation(GetCurrentProcess(), ProcessPowerThrottling, ref state, (uint)Marshal.SizeOf<PowerThrottlingState>());
     }
 
+    [LibraryImport("user32.dll")]
+    private static partial uint GetWindowThreadProcessId(nint hwnd, out uint processId);
+
+    [LibraryImport("user32.dll", EntryPoint = "FindWindowExW", StringMarshalling = StringMarshalling.Utf16)]
+    private static partial nint FindWindowEx(nint parent, nint after, string? className, string? title);
+
+    // The process of the window in front: the game, when one is playing. 0 when there's none.
+    public static int ForegroundProcessId()
+    {
+        var hwnd = GetForegroundWindow();
+        if (hwnd == 0) return 0;
+        GetWindowThreadProcessId(hwnd, out var id);
+        // Store (UWP) apps sit in a frame window of Windows' own; the app draws in the window inside it.
+        var inner = FindWindowEx(hwnd, 0, "Windows.UI.Core.CoreWindow", null);
+        if (inner != 0 && GetWindowThreadProcessId(inner, out var innerId) != 0 && innerId != 0) id = innerId;
+        return (int)id;
+    }
+
     // The middle of the window in front, in screen pixels: where the game is when one is playing.
     public static (int X, int Y)? ForegroundCenter()
     {
