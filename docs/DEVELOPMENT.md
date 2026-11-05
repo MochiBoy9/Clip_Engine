@@ -111,6 +111,11 @@ These live in `wrangler.toml` under `[vars]`:
 | `POLAR_ORGANIZATION_ID` | empty | Your Polar organization (Settings > General). Until it's set, license keys are refused with "Subscriptions aren't open yet." |
 | `POLAR_PRO_BENEFIT_ID` | empty | The License Keys benefit on the Pro product |
 | `POLAR_ULTRA_BENEFIT_ID` | empty | The License Keys benefit on the Ultra product |
+| `REFERRAL_FRIENDS` | 3 | Friends who must install Clip Engine from someone's invite for one reward |
+| `REFERRAL_REWARD_DAYS` | 30 | Days of Pro each reward gives, counted from when its key is first used |
+| `REFERRAL_MAX_REWARDS` | 1 | Rewards one person can earn; with 2, six friends give two months |
+| `REFERRAL_CLAIM_DAYS` | 7 | How long after installing a friend can still add an invite code, and how long an opened invite link is remembered |
+| `REFERRAL_IP_CHECK` | true | `false` lets friends on the inviter's own network, or several on one network, count |
 
 ### Costs and protection
 
@@ -140,6 +145,16 @@ The operator's key maker (kept privately, never in this repository) makes specia
 
 Keys made before roles keep working: their days become minutes the first time the directory starts.
 
+
+### Inviting friends
+
+`src/referrals.js`, one `Referrals` Durable Object (migration `v2`). The app's side is `Services/Referrals.cs` and the Invite friends card on the Friends page (`ViewModels/InviteViewModel.cs`).
+
+- **Invite code.** **Get my invite link** calls `POST /v1/referrals` with the PC's id and gets an 8-character code, its link (`/r/<code>`) and a secret, kept encrypted in `desktop.json`. Asking again from the same PC gives the same code and a new secret. The app looks at its friends every 3 hours (`GET /v1/referrals/<code>`, Bearer secret).
+- **Counting a friend.** On its first start on a PC the app calls `POST /v1/referrals/activate` once, with `fresh: true` when nothing of Clip Engine (`clip_engine.ini`, `desktop.json`, `license.json`) was there yet. A friend who opened an invite link in the last 7 days from the same address is credited without typing anything; otherwise they can type the code on the Friends page for 7 days.
+- **Checks.** The PC's id is a SHA-256 of Windows' `MachineGuid` (the app's own random id when it can't be read), so wiping Clip Engine's files doesn't make a PC new. A PC is recorded the first time it's seen and only counts once, ever, for one code, and only when the app said it was a new install. It doesn't count from a PC the inviter used, from an address the inviter used (hashed with a salt kept in the object), or from an address another of the inviter's friends already counted from. A typed code is under `AUTH_LIMIT` like sign-ins.
+- **Reward.** Each `REFERRAL_FRIENDS` counted friends, up to `REFERRAL_MAX_REWARDS`, the service makes a special key in the directory (`/grant/create`: Pro, `REFERRAL_REWARD_DAYS`, 2 PCs, noted "Invited N friends (invite XXXX-XXXX)"), so it shows in the key maker with the others and can be turned off there. The app puts it on at once when the PC has no working key; with a subscription it stays on the card to use later.
+- **Limits.** A determined cheat with VPNs and virtual machines can still fake friends; the checks hold that to one PC per network per invite.
 
 ## Releasing
 

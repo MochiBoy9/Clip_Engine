@@ -73,6 +73,9 @@ internal sealed class DesktopSettings
     public Squad.SquadSettings Squad { get; set; } = new();
     public Cloud.CloudSettings Cloud { get; set; } = new();
 
+    // Inviting friends: this PC's invite code, and whether it was a new install for a friend's invite.
+    public ReferralSettings Referral { get; set; } = new();
+
     public static DesktopSettings Load()
     {
         try

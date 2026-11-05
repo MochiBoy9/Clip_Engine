@@ -80,9 +80,11 @@ Clip Engine is free. Subscriptions add more for people who want it:
 
 Subscribe from the [website](https://mochiboy9.github.io/Clip_Engine/#plans) and paste the key you're emailed into **Settings > Plan**.
 
+Or get Pro free: invite friends from the **Friends** page. When three of them install Clip Engine on their own PC and start it, you get a month of Pro. Each friend has to be on a PC and an internet connection of their own, so a second PC at home doesn't count.
+
 ## Privacy
 
-Clips stay on your PC unless you share them. The cloud library, squads and friends need a free cloud account, which asks for no email. Online, the service keeps only what those features need: the clips you upload, your username, your friends and squads, and whether you're online. See the [privacy notice](website/privacy.html).
+Clips stay on your PC unless you share them. The first time Clip Engine starts on a PC it tells the online service so, with a hashed id for the PC, so friends who invited you get credit. The cloud library, squads and friends need a free cloud account, which asks for no email. Online, the service keeps only what those features need: the clips you upload, your username, your friends and squads, and whether you're online. See the [privacy notice](website/privacy.html).
 
 ## Help and feedback
 

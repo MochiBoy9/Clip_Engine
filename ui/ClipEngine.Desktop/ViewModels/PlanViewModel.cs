@@ -292,6 +292,14 @@ public sealed class PlanViewModel : ObservableObject
         }
     }
 
+    // A key from somewhere other than the key box, like the month of Pro that inviting friends earns. True when it's on.
+    internal async Task<bool> UseKeyAsync(string key)
+    {
+        KeyInput = key;
+        await ActivateAsync();
+        return _state.HasKey && _state.Key == key.Trim();
+    }
+
     // A key the service said yes to goes on this PC.
     internal void Accept(string key, LicenseCheck check)
     {
