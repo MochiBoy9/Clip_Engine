@@ -280,6 +280,14 @@ th.us { color: var(--accent); }
 .tier li { padding-left: 16px; position: relative; color: var(--muted); }
 .tier li::before { content: ""; position: absolute; left: 0; top: 0.55em; width: 6px; height: 6px; background: var(--accent); }
 .tier .btn { align-self: flex-start; }
+.donate { margin: 0 0 14px; }
+.donate .price { font-size: 26px; }
+.donate-lead { margin: 0; color: var(--muted); max-width: 70ch; }
+.donate ul { flex: none; margin: 0; }
+.donate-amounts { display: flex; flex-wrap: wrap; gap: 8px; }
+.donate-amounts .btn { align-self: auto; }
+.donate-amounts .btn[aria-disabled="true"] { opacity: 0.45; pointer-events: none; }
+.donate .fine { margin: 0; }
 .credits h3 { margin: 26px 0 10px; font-size: 16px; }
 .credit-list { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 8px; }
 .credit-list li { padding: 4px 10px; border: 1px solid var(--line-strong); font-size: 13px; }
