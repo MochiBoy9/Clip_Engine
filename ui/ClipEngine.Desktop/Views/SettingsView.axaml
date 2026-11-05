@@ -663,6 +663,98 @@
         </views:Plate>
         <views:Plate Classes="card" Padding="26,24" Margin="0,0,0,22">
           <StackPanel>
+            <TextBlock Classes="eyebrow" Margin="0,0,0,18" Text="STATS OVERLAY" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
+                <PathIcon Data="{StaticResource IconBolt}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="FPS and PC stats over the game" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" TextWrapping="Wrap"
+                           Text="A slim strip in a corner while you play: frame rate, 1% lows, CPU, GPU and memory. It reads what Windows already measures, never touches the game, updates once a second and never shows up in your clips." />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <ToggleSwitch IsChecked="{Binding StatsOverlayOn}" OnContent="{x:Null}" OffContent="{x:Null}" />
+              </Panel>
+            </Grid>
+            <Border Classes="inset" Padding="14,12" Margin="48,14,0,0" IsVisible="{Binding FrameTimingNeedsPermission}">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Spacing="2" Margin="0,0,16,0" VerticalAlignment="Center">
+                  <TextBlock Text="FPS needs Windows' permission" FontWeight="SemiBold" FontSize="13" />
+                  <TextBlock Classes="caption" TextWrapping="Wrap"
+                             Text="Windows shares games' frame timing only with administrators and its Performance Log Users group. Allow adds this account to that group once, with Windows' own prompt. The other stats work without it." />
+                  <TextBlock Classes="caption" Foreground="{StaticResource WarnBrush}" Text="{Binding FrameTimingProblem}"
+                             IsVisible="{Binding HasFrameTimingProblem}" TextWrapping="Wrap" />
+                </StackPanel>
+                <Button Grid.Column="1" Classes="secondary" Content="Allow" Command="{Binding AllowFrameTimingCommand}" VerticalAlignment="Center" />
+              </Grid>
+            </Border>
+            <Border Classes="inset" Padding="14,12" Margin="48,14,0,0" IsVisible="{Binding FrameTimingNeedsSignIn}">
+              <TextBlock Classes="caption" TextWrapping="Wrap"
+                         Text="Allowed. Sign out of Windows and back in (or restart) and the FPS counter starts reading." />
+            </Border>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+            <Grid ColumnDefinitions="Auto,*" IsEnabled="{Binding StatsOverlayOn}">
+              <Border Classes="tile" VerticalAlignment="Top" Margin="0,0,16,0">
+                <PathIcon Data="{StaticResource IconTarget}" />
+              </Border>
+              <StackPanel Grid.Column="1" Spacing="10">
+                <StackPanel Spacing="2">
+                  <TextBlock Text="What it shows" FontWeight="SemiBold" FontSize="14" />
+                  <TextBlock Classes="caption" Text="Numbers turn yellow, then red, when something is holding the game back." TextWrapping="Wrap" />
+                </StackPanel>
+                <WrapPanel>
+                  <ToggleButton Classes="chip" Content="FPS" IsChecked="{Binding StatsFps}" Margin="0,0,8,8" />
+                  <ToggleButton Classes="chip" Content="1% low" IsChecked="{Binding StatsLows}" Margin="0,0,8,8" />
+                  <ToggleButton Classes="chip" Content="CPU" IsChecked="{Binding StatsCpu}" Margin="0,0,8,8" />
+                  <ToggleButton Classes="chip" Content="GPU" IsChecked="{Binding StatsGpu}" Margin="0,0,8,8" />
+                  <ToggleButton Classes="chip" Content="GPU temperature" IsChecked="{Binding StatsGpuTemp}" Margin="0,0,8,8" />
+                  <ToggleButton Classes="chip" Content="Video memory" IsChecked="{Binding StatsVram}" Margin="0,0,8,8" />
+                  <ToggleButton Classes="chip" Content="RAM" IsChecked="{Binding StatsRam}" Margin="0,0,8,8" />
+                </WrapPanel>
+              </StackPanel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,8,0,16" />
+            <Grid ColumnDefinitions="Auto,*" IsEnabled="{Binding StatsOverlayOn}">
+              <Border Classes="tile" VerticalAlignment="Top" Margin="0,0,16,0">
+                <PathIcon Data="{StaticResource IconMonitor}" />
+              </Border>
+              <StackPanel Grid.Column="1" Spacing="10">
+                <StackPanel Spacing="2">
+                  <TextBlock Text="Corner" FontWeight="SemiBold" FontSize="14" />
+                  <TextBlock Classes="caption" Text="Where it sits on the screen the game is on." TextWrapping="Wrap" />
+                </StackPanel>
+                <Border Classes="segments" HorizontalAlignment="Left">
+                  <StackPanel Orientation="Horizontal">
+                    <RadioButton Classes="segment" GroupName="statsCorner" Content="Top left" IsChecked="{Binding StatsTopLeft}" />
+                    <RadioButton Classes="segment" GroupName="statsCorner" Content="Top right" IsChecked="{Binding StatsTopRight}" />
+                    <RadioButton Classes="segment" GroupName="statsCorner" Content="Bottom left" IsChecked="{Binding StatsBottomLeft}" />
+                    <RadioButton Classes="segment" GroupName="statsCorner" Content="Bottom right" IsChecked="{Binding StatsBottomRight}" />
+                  </StackPanel>
+                </Border>
+              </StackPanel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
+                <PathIcon Data="{StaticResource IconKeyboard}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Overlay hotkey" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="Turns the overlay on and off mid-game." TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <TextBox Width="160" Text="{Binding StatsOverlayHotkey, UpdateSourceTrigger=LostFocus}"
+                         HorizontalContentAlignment="Center" FontWeight="SemiBold" />
+              </Panel>
+            </Grid>
+            <TextBlock Classes="caption" Foreground="{StaticResource WarnBrush}" Text="{Binding StatsOverlayHotkeyProblem}"
+                       IsVisible="{Binding StatsOverlayHotkeyProblem, Converter={x:Static ObjectConverters.IsNotNull}}"
+                       Margin="48,6,0,0" />
+          </StackPanel>
+        </views:Plate>
+        <views:Plate Classes="card" Padding="26,24" Margin="0,0,0,22">
+          <StackPanel>
             <TextBlock Classes="eyebrow" Margin="0,0,0,18" Text="SIDE PANEL AND SHARING" />
             <Grid ColumnDefinitions="Auto,*,Auto">
               <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">

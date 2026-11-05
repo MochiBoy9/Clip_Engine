@@ -88,6 +88,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             Updates = Updates,
         };
         Settings.SidePanelHotkeyChanged += _ => Raise(nameof(SidePanelHotkey));
+        Settings.StatsOverlayChanged += () => StatsOverlayChanged?.Invoke();
         Settings.StorageRulesChanged += OnStorageRulesChanged;
         Settings.CleanUpNowRequested += () => _ = CleanUpAsync();
         _showMatches = DesktopSettings.ShowMatches;
@@ -239,6 +240,16 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     internal event Action? ShowMainWindowRequested;
     // A short notice to show over the game, like "Clip saved · 2 kills".
     internal event Action<string>? GameNoticeRequested;
+
+    // The stats overlay should come up or go away (see StatsOverlayWanted).
+    internal event Action? StatsOverlayChanged;
+
+    // Up while a game is recorded and in front, when it's turned on. A recording of the desktop has
+    // no game to measure.
+    internal bool StatsOverlayWanted =>
+        DesktopSettings.StatsOverlay.On && IsRecording && _recording!.Label != "Desktop" && !_gameAway;
+
+    public StatsOverlayViewModel StatsOverlay { get; } = new();
 
     public NavItem SelectedNav
     {
@@ -1118,6 +1129,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         RaiseLongRecording();
         SaveClipCommand.NotifyCanExecuteChanged();
         ToggleLongRecordingCommand.NotifyCanExecuteChanged();
+        StatsOverlayChanged?.Invoke();
+    }
+
+    // The overlay's hotkey: on or off, saved, with a notice over the game saying which.
+    internal void ToggleStatsOverlay()
+    {
+        Settings.StatsOverlayOn = !DesktopSettings.StatsOverlay.On;
+        if (IsRecording) GameNoticeRequested?.Invoke(DesktopSettings.StatsOverlay.On ? "Stats overlay on" : "Stats overlay off");
     }
 
     private static StreamGeometry Icon(string key) =>

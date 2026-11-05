@@ -1,0 +1,59 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:ClipEngine.Desktop.ViewModels"
+        xmlns:views="using:ClipEngine.Desktop.Views"
+        x:Class="ClipEngine.Desktop.Views.StatsOverlayWindow"
+        x:DataType="vm:StatsOverlayViewModel"
+        Title="Clip Engine stats"
+        SizeToContent="WidthAndHeight"
+        SystemDecorations="None"
+        CanResize="False"
+        ShowInTaskbar="False"
+        Topmost="True"
+        ShowActivated="False"
+        Focusable="False"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent, None">
+  <Window.Styles>
+    <Style Selector="TextBlock.statLabel">
+      <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+      <Setter Property="FontSize" Value="9" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="LetterSpacing" Value="1.2" />
+      <Setter Property="Foreground" Value="{StaticResource TextTertiary}" />
+    </Style>
+    <Style Selector="TextBlock.statValue">
+      <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+    </Style>
+    <Style Selector="TextBlock.statValue.warn">
+      <Setter Property="Foreground" Value="{StaticResource WarnBrush}" />
+    </Style>
+    <Style Selector="TextBlock.statValue.bad">
+      <Setter Property="Foreground" Value="{StaticResource RecordBrush}" />
+    </Style>
+  </Window.Styles>
+  <!-- FPS and how hard the PC is working, in a corner over the game. Left out of recordings, and never
+       takes clicks or focus from the game. Each reading has a fixed width so the strip doesn't jump. -->
+  <views:Plate Margin="10" HorizontalAlignment="Left" VerticalAlignment="Top" Cut="7" BorderBrush="{StaticResource BorderStrongBrush}"
+               Marker="{DynamicResource AccentBrush}"
+               Padding="12,7,12,7" Background="{StaticResource OverlayBrush}" IsHitTestVisible="False">
+    <ItemsControl ItemsSource="{Binding Items}">
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate>
+          <StackPanel Orientation="Horizontal" Spacing="12" />
+        </ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="vm:StatItemViewModel">
+          <StackPanel MinWidth="46" Spacing="1">
+            <TextBlock Classes="statLabel" Text="{Binding Label}" />
+            <TextBlock Classes="statValue" Classes.warn="{Binding IsWarn}" Classes.bad="{Binding IsBad}" Text="{Binding Value}" />
+          </StackPanel>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+  </views:Plate>
+</Window>
