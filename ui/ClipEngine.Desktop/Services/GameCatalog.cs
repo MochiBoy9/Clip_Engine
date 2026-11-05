@@ -4,7 +4,7 @@ namespace ClipEngine.Desktop.Services;
 // assets/detection.ini). Games not listed here are read off the screen.
 internal static class GameCatalog
 {
-    public enum Method { Screen, Killfeed, GameApi, ConsoleLog, Hotkey }
+    public enum Method { Screen, Killfeed, GameApi, ConsoleLog, Hotkey, Journal }
 
     private static readonly Dictionary<string, Method> Methods = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -21,6 +21,11 @@ internal static class GameCatalog
         ["Halo Infinite"] = Method.Killfeed,
         ["Paladins"] = Method.Killfeed,
         ["Splitgate"] = Method.Killfeed,
+        ["ARC Raiders"] = Method.Journal,
+        ["Escape from Tarkov"] = Method.Journal,
+        ["Hunt: Showdown 1896"] = Method.Journal,
+        ["Helldivers 2"] = Method.Journal,
+        ["Deep Rock Galactic"] = Method.Journal,
         ["Roblox"] = Method.Hotkey,
         ["Minecraft"] = Method.Hotkey,
     };
@@ -33,6 +38,7 @@ internal static class GameCatalog
         Method.ConsoleLog => "Reads the game's console log",
         Method.Killfeed => "Reads the killfeed",
         Method.Hotkey => "Records, clips on the hotkey",
+        Method.Journal => "Keeps a journal of each run",
         _ => "Reads the screen",
     };
 }

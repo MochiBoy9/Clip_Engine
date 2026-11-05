@@ -59,6 +59,11 @@ internal static partial class GameLibrary
             ["Battlefield 4"] = ["bf4.exe", "bf4_x86.exe"],
             ["Paladins"] = ["Paladins.exe"],
             ["Splitgate"] = ["PortalWars2-Win64-Shipping.exe", "PortalWars-Win64-Shipping.exe"],
+            ["ARC Raiders"] = ["PioneerGame.exe"],
+            ["Escape from Tarkov"] = ["EscapeFromTarkov.exe"],
+            ["Helldivers 2"] = ["helldivers2.exe"],
+            ["Deep Rock Galactic"] = ["FSD-Win64-Shipping.exe"],
+            ["Hunt: Showdown 1896"] = ["HuntGame.exe"],
             ["Roblox"] = ["RobloxPlayerBeta.exe"],
             ["Minecraft"] = ["Minecraft.Windows.exe"],
         };
@@ -89,6 +94,10 @@ internal static partial class GameLibrary
             ["Battlefield 4"] = 1238860,
             ["Paladins"] = 444090,
             ["Splitgate"] = 2918300,
+            ["ARC Raiders"] = 1808500,
+            ["Hunt: Showdown 1896"] = 594650,
+            ["Helldivers 2"] = 553850,
+            ["Deep Rock Galactic"] = 548430,
         };
 
     // Other names stores list a game under, compared after Normalize.
@@ -104,6 +113,8 @@ internal static partial class GameLibrary
         ["Battlefield 1"] = ["Battlefield 1 Revolution"],
         ["Battlefield 4"] = ["Battlefield 4 Premium Edition"],
         ["Splitgate"] = ["Splitgate 2", "Splitgate: Arena Reloaded", "Splitgate Arena Reloaded"],
+        ["Hunt: Showdown 1896"] = ["Hunt Showdown", "Hunt: Showdown"],
+        ["Helldivers 2"] = ["HELLDIVERS 2"],
         ["Roblox"] = ["Roblox Player"],
         ["Minecraft"] = ["Minecraft for Windows", "Minecraft Bedrock"],
     };

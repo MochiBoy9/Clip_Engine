@@ -248,6 +248,19 @@
               </Panel>
             </Grid>
             <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
+                <PathIcon Data="{StaticResource IconJournal}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Keep a journal of each run" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="In ARC Raiders, Escape from Tarkov, Hunt: Showdown 1896, Helldivers 2 and Deep Rock Galactic: the map, enemies destroyed, loot, and whether you made it out. See it on the Journal page." TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <ToggleSwitch IsChecked="{Binding Journal}" OnContent="{x:Null}" OffContent="{x:Null}" />
+              </Panel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <StackPanel IsEnabled="{Binding AutoClip}">
             <Grid ColumnDefinitions="Auto,*,Auto">
               <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
