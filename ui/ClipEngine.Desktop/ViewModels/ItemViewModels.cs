@@ -78,6 +78,7 @@ public sealed class ClipItemViewModel : ObservableObject
     public string Summary => File.Metadata?.Title ?? "";
     public bool HasSummary => Summary.Length > 0;
     public bool IsAutomatic => File.Metadata?.IsAutomatic == true;
+    public bool IsVoice => File.Metadata?.IsVoice == true;
     public string Caption => HasSummary ? $"{Summary} · {Size}" : Size;
     internal IReadOnlyList<ClipEvent> Events => File.Metadata?.Events ?? [];
     public string When => Format.When(File.Created);

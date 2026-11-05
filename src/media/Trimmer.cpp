@@ -20,7 +20,7 @@ ReplayBuffer::Clip ReadRange(const std::filesystem::path& input, int64_t start, 
   winrt::com_ptr<IMFSourceReader> reader;
   winrt::check_hresult(MFCreateSourceReaderFromURL(input.c_str(), nullptr, reader.put()));
 
-  // Same stream layout as clips written from the replay buffer: video, then up to two audio tracks.
+  // Same stream layout as clips written from the replay buffer: video, then every audio track in order.
   ReplayBuffer::Clip clip;
   std::array<DWORD, kStreamCount> sourceOf;
   sourceOf.fill(MAXDWORD);
@@ -39,8 +39,8 @@ ReplayBuffer::Clip ReadRange(const std::filesystem::path& input, int64_t start, 
     if (major == MFMediaType_Video && sourceOf[kVideoStream] == MAXDWORD) {
       stream = kVideoStream;
       hevc = subtype == MFVideoFormat_HEVC;
-    } else if (major == MFMediaType_Audio && audioTracks < 2) {
-      stream = kGameAudioStream + audioTracks++;
+    } else if (major == MFMediaType_Audio && kMixAudioStream + audioTracks < kStreamCount) {
+      stream = kMixAudioStream + audioTracks++;
     }
     if (stream < 0) continue;
     sourceOf[stream] = i;

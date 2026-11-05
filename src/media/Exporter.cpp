@@ -73,10 +73,13 @@ SourceInfo Inspect(IMFSourceReader* reader) {
       if (SUCCEEDED(MFGetAttributeRatio(type.get(), MF_MT_FRAME_RATE, &num, &den)) && num > 0 && den > 0) {
         info.fps = static_cast<double>(num) / den;
       }
-    } else if (major == MFMediaType_Audio && info.audioStreams.size() < 2) {
+    } else if (major == MFMediaType_Audio) {
       info.audioStreams.push_back(i);
     }
   }
+  // A clip with three or more audio tracks has them all mixed on the first one (the rest are each
+  // source on its own), so that one is all it takes. Older clips had game audio and the mic, mixed here.
+  if (info.audioStreams.size() > 2) info.audioStreams.resize(1);
   if (info.videoStream == MAXDWORD || info.width == 0 || info.height == 0) {
     throw winrt::hresult_error(MF_E_INVALIDMEDIATYPE, L"The file has no video");
   }
@@ -377,8 +380,12 @@ int RunMontage(const MontageOptions& options) {
     plan.height = std::min<UINT32>(options.maxHeight, first.height) & ~1u;
     plan.width = static_cast<UINT32>(static_cast<double>(first.width) * plan.height / first.height + 0.5) & ~1u;
     plan.fps = static_cast<UINT32>(std::clamp(first.fps + 0.5, 1.0, static_cast<double>(options.maxFps)));
-    plan.videoBitrate = static_cast<UINT32>(std::clamp(options.mbps, 2.0, 80.0) * 1e6);
-    log::Info("Making a {:.0f}s highlight from {} views, {}x{} at {} fps", total, options.parts.size(), plan.width, plan.height, plan.fps);
+    // Unless asked for, the bitrate follows the picture: enough for fast motion at 60 fps.
+    const double mbps = options.mbps > 0 ? options.mbps
+                        : plan.height <= 720 ? 8.0 : plan.height <= 1080 ? 16.0 : plan.height <= 1440 ? 28.0 : 45.0;
+    plan.videoBitrate = static_cast<UINT32>(std::clamp(mbps, 2.0, 80.0) * 1e6);
+    log::Info("Making a {:.0f}s video from {} parts, {}x{} at {} fps, {:.0f} Mbps", total, options.parts.size(), plan.width, plan.height,
+              plan.fps, plan.videoBitrate / 1e6);
 
     std::error_code ec;
     auto partial = options.output;
@@ -471,6 +478,7 @@ int RunMontage(const MontageOptions& options) {
     }
     ClipMetadata merged = MontageMetadata(specs, metadata);
     merged.squadMoment = options.squadMoment;
+    if (!options.trigger.empty()) merged.trigger = options.trigger;
     const std::string json = ToJson(merged);
     AppendMetadataBox(partial, json);
     auto sidecar = options.output;

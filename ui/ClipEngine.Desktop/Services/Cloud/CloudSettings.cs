@@ -10,7 +10,7 @@ internal sealed class CloudSettings
     public string Name { get; set; } = "";
     public string Handle { get; set; } = "";
 
-    // New uploads: "unlisted" (anyone with the link), "public" (also on your profile) or "private".
+    // New uploads: "unlisted" (anyone with the link), "public" (also on your profile and in the hub) or "private".
     public string DefaultVisibility { get; set; } = "unlisted";
 
     // Starred clips go up to the cloud by themselves.

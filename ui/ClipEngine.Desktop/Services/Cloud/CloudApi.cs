@@ -7,7 +7,8 @@ using ClipEngine.Desktop.Services.Squad;
 namespace ClipEngine.Desktop.Services.Cloud;
 
 internal sealed record CloudAccount(string Id, string Name, string? Handle, string Plan, string PlanLabel, long Used, long Limit, int Clips,
-                                    string? PlanKey = null, string FriendCode = "", DateTimeOffset? HandleChangeAt = null)
+                                    string? PlanKey = null, string FriendCode = "", DateTimeOffset? HandleChangeAt = null,
+                                    string? RoleLabel = null, string? BadgeLabel = null, bool HideBadge = false)
 {
     public static CloudAccount From(JsonNode? n) => new(
         n?["id"]?.GetValue<string>() ?? "",
@@ -20,7 +21,10 @@ internal sealed record CloudAccount(string Id, string Name, string? Handle, stri
         n?["clips"]?.GetValue<int>() ?? 0,
         n?["planKey"]?.GetValue<string>(),
         n?["friendCode"]?.GetValue<string>() ?? "",
-        n?["handleChangeAt"] is JsonValue at && at.TryGetValue<long>(out var ms) && ms > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(ms) : null);
+        n?["handleChangeAt"] is JsonValue at && at.TryGetValue<long>(out var ms) && ms > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(ms) : null,
+        n?["roleLabel"] is JsonValue role && role.TryGetValue<string>(out var label) && label.Length > 0 ? label : null,
+        n?["badge"]?["label"] is JsonValue badge && badge.TryGetValue<string>(out var badgeLabel) && badgeLabel.Length > 0 ? badgeLabel : null,
+        n?["hideBadge"] is JsonValue hide && hide.TryGetValue<bool>(out var hidden) && hidden);
 }
 
 internal sealed record CloudClip(string Id, string Code, string? LocalId, string Title, string Game, long Recorded, double Seconds,
@@ -52,6 +56,9 @@ internal sealed class CloudApi(string server, HttpClient? http = null)
 
     public string ShareLink(string code) => $"{Server}/c/{code}";
     public string ProfileLink(string handle) => $"{Server}/u/{handle}";
+    // The hub's sign-in page with a code from this PC, which signs the browser in by itself. The code is after the #,
+    // so it never reaches a server log.
+    public string HubSignInLink(string code) => $"{Server}/hub/signin#code={Uri.EscapeDataString(code)}";
 
     // Names a clip on this PC so uploading it again finds the copy already in the cloud.
     public static string LocalId(string path, long bytes) => $"{Path.GetFileName(path)}|{bytes}";
@@ -78,6 +85,10 @@ internal sealed class CloudApi(string server, HttpClient? http = null)
         if (handle is not null) body["handle"] = handle;
         return CloudAccount.From(await SendAsync(HttpMethod.Patch, $"/v1/accounts/{account}/account", token, body));
     }
+
+    // Hides the Pro, Ultra or role badge from the profile, clips and the hub, or shows it again.
+    public async Task<CloudAccount> SetBadgeHiddenAsync(string account, string token, bool hidden) =>
+        CloudAccount.From(await SendAsync(HttpMethod.Patch, $"/v1/accounts/{account}/account", token, new JsonObject { ["hideBadge"] = hidden }));
 
     // Puts a subscription's license key on the account, which sets its storage to the key's plan.
     public async Task<CloudAccount> SetPlanAsync(string account, string token, string key) =>

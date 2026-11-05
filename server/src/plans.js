@@ -43,14 +43,45 @@ export function cleanKey(value) {
 
 // ---- special keys ----
 //
-// Keys the operator makes in the key maker (/admin): "CEK-XXXX-XXXX-XXXX". Each one gives a plan
-// and, if set, extra cloud storage, the colour themes it unlocks and the highest resolution, for a
-// number of days from when it's first used, or for good. They're kept in the directory object
-// (src/handles.js) and work without Polar.
+// Keys the operator makes in the key maker: "CEK-XXXX-XXXX-XXXX". Each one gives a plan and, if set, a
+// role (a title such as Content Creator), extra cloud storage, the colour themes it unlocks, the highest
+// resolution, perks (a direct line to the developer, bug reports straight to them), a place in the
+// credits, and a reason for giving it. It lasts a number of minutes from when it's first used, until a
+// set date, or for good. They're kept in the directory object (src/handles.js) and work without Polar.
 
 export const THEME_IDS = ["hazard", "aurora", "ember", "mint", "sakura", "ocean", "volt", "chrome", "arc", "redline"];
 export const LINES = [480, 720, 1080, 1440, 2160];
 const GRANT_LENGTH = 12;
+
+// Titles a special key can give on top of its plan. The plan still sets storage, resolution and themes.
+export const ROLES = {
+  creator: { label: "Content Creator" },
+  special: { label: "Special" },
+  exclusive: { label: "Exclusive" },
+};
+
+// What a special key can let its holder do besides the plan.
+//   contact  a direct line: messages the operator reads and answers in the key maker
+//   bugs     bug reports that go straight to the operator's inbox
+export const PERKS = ["contact", "bugs"];
+
+// The groups in the credits, in the order they're shown: subscribers first, then the roles.
+export const CREDIT_GROUPS = ["ultra", "pro", "exclusive", "creator", "special"];
+
+export function roleLabel(role) {
+  return ROLES[role]?.label ?? null;
+}
+
+// The badge an account shows on its profile, its clips and the hub: its role if a special key gave one,
+// otherwise Pro or Ultra. Free has none. Anyone with a badge can hide it.
+export function badgeFor(plan, role) {
+  if (ROLES[role]) return { kind: role, label: ROLES[role].label };
+  if (plan === "pro" || plan === "ultra") return { kind: plan, label: PLANS[plan].label };
+  return null;
+}
+
+const MAX_MINUTES = 36_500 * 1440;
+const LATEST_END = Date.UTC(2200, 0, 1);
 
 export function normalizeGrant(value) {
   if (typeof value !== "string") return null;
@@ -68,17 +99,33 @@ export function newGrantCode() {
   return randomCode(GRANT_LENGTH);
 }
 
-// What a special key gives, checked: the operator's form or a PATCH of one.
+// What a special key gives, checked: the operator's form or a PATCH of one. The length is minutes (or,
+// as before, days), counted from first use; endsAt is a fixed end, in ms since 1970. Either can be null.
 export function cleanGrant(body, base = {}) {
   const out = { ...base };
   if (body.plan !== undefined) {
     if (!PLANS[body.plan]) return { error: "Plan must be free, pro or ultra." };
     out.plan = body.plan;
   }
-  if (body.days !== undefined) {
-    if (body.days === null || body.days === 0) out.days = null;
-    else if (Number.isInteger(body.days) && body.days > 0 && body.days <= 36_500) out.days = body.days;
+  if (body.role !== undefined) {
+    if (body.role === null || body.role === "") out.role = null;
+    else if (ROLES[body.role]) out.role = body.role;
+    else return { error: `Role is none or one of: ${Object.keys(ROLES).join(", ")}.` };
+  }
+  if (body.days !== undefined && body.minutes === undefined) {
+    if (body.days === null || body.days === 0) out.minutes = null;
+    else if (Number.isInteger(body.days) && body.days > 0 && body.days <= 36_500) out.minutes = body.days * 1440;
     else return { error: "Days must be a whole number from 1 to 36500, or none for no end." };
+  }
+  if (body.minutes !== undefined) {
+    if (body.minutes === null || body.minutes === 0) out.minutes = null;
+    else if (Number.isInteger(body.minutes) && body.minutes > 0 && body.minutes <= MAX_MINUTES) out.minutes = body.minutes;
+    else return { error: "The length must be from 1 minute to 100 years, or none for no end." };
+  }
+  if (body.endsAt !== undefined) {
+    if (body.endsAt === null || body.endsAt === 0) out.endsAt = null;
+    else if (Number.isInteger(body.endsAt) && body.endsAt > 0 && body.endsAt < LATEST_END) out.endsAt = body.endsAt;
+    else return { error: "The end date must be a time in ms, or none." };
   }
   if (body.extraStorageGb !== undefined) {
     const gb = Number(body.extraStorageGb);
@@ -98,9 +145,22 @@ export function cleanGrant(body, base = {}) {
     if (Number.isInteger(body.maxDevices) && body.maxDevices >= 1 && body.maxDevices <= 100) out.maxDevices = body.maxDevices;
     else return { error: "PCs per key is 1 to 100." };
   }
+  if (body.perks !== undefined) {
+    if (Array.isArray(body.perks) && body.perks.every((p) => PERKS.includes(p))) out.perks = PERKS.filter((p) => body.perks.includes(p));
+    else return { error: `Perks are a list of: ${PERKS.join(", ")}.` };
+  }
+  if (body.credits !== undefined) out.credits = Boolean(body.credits);
+  if (body.reason !== undefined) out.reason = String(body.reason ?? "").trim().slice(0, 300);
+  if (body.showReason !== undefined) out.showReason = Boolean(body.showReason);
   if (body.note !== undefined) out.note = String(body.note ?? "").slice(0, 200);
   if (body.revoked !== undefined) out.revoked = Boolean(body.revoked);
   return { grant: out };
+}
+
+// The group a credited special key's name goes in: its role, or its plan.
+export function creditGroup(check) {
+  if (check.role && CREDIT_GROUPS.includes(check.role)) return check.role;
+  return check.plan === "ultra" || check.plan === "pro" ? check.plan : "special";
 }
 
 async function checkGrant(env, code, device) {
@@ -116,7 +176,8 @@ async function checkGrant(env, code, device) {
 // Checks a key: a special key from the key maker, or a Polar license key. Answers { ok: true, plan,
 // license, display, expires, features } for a key that gives a plan now, { ok: false, rejected: true,
 // error } for one that doesn't, and { ok: false, rejected: false, error } when it couldn't be checked.
-// features: { extraMb, themes (null = the plan's), lines (null = the plan's) }.
+// features: { extraMb, themes (null = the plan's), lines (null = the plan's) }. A special key also has
+// role, perks, credits (whether its name may be in the credits) and reason (only if it's shown to them).
 export async function checkLicense(env, value, device) {
   const grant = normalizeGrant(value);
   if (grant) return checkGrant(env, grant, device);
@@ -171,11 +232,13 @@ export async function checkLicense(env, value, device) {
     display: typeof info.display_key === "string" ? info.display_key.slice(0, 64) : "",
     expires,
     features: { extraMb: 0, themes: null, lines: null },
+    role: null,
+    perks: [],
   };
 }
 
 // The plan's details as the app shows them, with a special key's changes.
-export function planJson(env, name, features) {
+export function planJson(env, name, features, role = null) {
   const plan = PLANS[name] ?? PLANS.free;
   const extra = (features?.extraMb ?? 0) * 1024 * 1024;
   return {
@@ -186,5 +249,7 @@ export function planJson(env, name, features) {
     extraStorage: extra,
     lines: features?.lines ?? plan.lines,
     themes: features?.themes ?? null,
+    role: ROLES[role] ? role : null,
+    roleLabel: roleLabel(role),
   };
 }

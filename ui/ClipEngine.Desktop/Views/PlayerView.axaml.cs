@@ -67,6 +67,7 @@ public partial class PlayerView : UserControl
             Key.OemPeriod or Key.Down => _vm.NextMarkerCommand,
             Key.I => _vm.SetTrimStartCommand,
             Key.O => _vm.SetTrimEndCommand,
+            Key.E => _vm.EditCommand,
             Key.M when _vm.IsChecking => _vm.Accuracy.MarkCommand,
             >= Key.D1 and <= Key.D7 when _vm.IsChecking => PickMarkType(e.Key - Key.D1),
             Key.Escape when _vm.IsTrimming => _vm.CancelTrimCommand,

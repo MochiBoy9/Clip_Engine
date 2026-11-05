@@ -6,7 +6,9 @@ using ClipEngine.Desktop.Services;
 namespace ClipEngine.Desktop.ViewModels;
 
 // The plan card in Settings: Free, Pro and Ultra, the box a subscription's license key goes in, the colour themes a
-// plan unlocks, the subscriber's name in the credits and the names of everyone who backs Clip Engine.
+// plan unlocks, the subscriber's name in the credits and the names of everyone who backs Clip Engine. A special key
+// can add a role (Content Creator, Special, Exclusive), a place in the credits, and a direct line to the developer
+// or bug reports that go straight to them.
 public sealed class PlanViewModel : ObservableObject
 {
     private readonly string? _file;
@@ -23,6 +25,11 @@ public sealed class PlanViewModel : ObservableObject
     private string? _message;
     private bool _messageIsError;
     private bool _busy;
+    private string _contactInput = "";
+    private string? _contactMessage;
+    private bool _contactIsError;
+    private bool _contactBusy;
+    private IReadOnlyList<ContactMessageView> _contactMessages = [];
 
     // file is null in the preview tool and tests, which never save; server gives the online service's address.
     internal PlanViewModel(string? file, DesktopSettings? desktop, Func<string> server, IReadOnlyList<string>? credits = null)
@@ -43,14 +50,21 @@ public sealed class PlanViewModel : ObservableObject
         RemoveCommand = new RelayCommand(Remove, () => _state.HasKey);
         ManageCommand = new RelayCommand(() => Shell.Open(PlanConfig.ManageUrl), () => HasManage);
         SaveCreditCommand = new RelayCommand(() => _ = SaveCreditAsync(), () => CanBeCredited && !IsBusy);
+        SendMessageCommand = new RelayCommand(() => _ = SendContactAsync(ContactClient.Message), () => CanSend(HasDirectLine));
+        SendBugCommand = new RelayCommand(() => _ = SendContactAsync(ContactClient.Bug), () => CanSend(HasBugReports));
 
         if (file is not null)
         {
             _recheck = new DispatcherTimer { Interval = TimeSpan.FromHours(1) };
-            _recheck.Tick += (_, _) => _ = RecheckAsync();
+            _recheck.Tick += (_, _) =>
+            {
+                _ = RecheckAsync();
+                _ = LoadContactAsync();
+            };
             _recheck.Start();
             _ = RecheckAsync();
             _ = LoadServerCreditsAsync();
+            _ = LoadContactAsync();
         }
     }
 
@@ -58,6 +72,8 @@ public sealed class PlanViewModel : ObservableObject
     public RelayCommand RemoveCommand { get; }
     public RelayCommand ManageCommand { get; }
     public RelayCommand SaveCreditCommand { get; }
+    public RelayCommand SendMessageCommand { get; }
+    public RelayCommand SendBugCommand { get; }
 
     // The plan or a special key's features changed: themes, the recording resolution and the cloud library follow it.
     public event Action<Plan>? PlanChanged;
@@ -68,10 +84,19 @@ public sealed class PlanViewModel : ObservableObject
     internal string? LicenseKey => _state.HasKey ? _state.Key : null;
 
     public bool IsPaid => _plan != Plan.Free;
-    // Only people who paid are thanked in the credits: a special key never puts a name there.
-    public bool CanBeCredited => IsPaid && !IsSpecial;
+    // People who paid are thanked in the credits; a special key's holder only when the developer let it in.
+    public bool CanBeCredited => IsSpecial ? _state.CreditsAllowed : IsPaid;
     public bool IsUltra => _plan == Plan.Ultra;
-    public string Badge => _plan.ToString().ToUpperInvariant();
+
+    // A special key's title, such as Content Creator: the badge shows it in place of the plan.
+    public string? RoleLabel => IsSpecial && _state.RoleLabel is { Length: > 0 } label ? label : null;
+    public bool HasRole => RoleLabel is not null;
+    public string Badge => (RoleLabel ?? _plan.ToString()).ToUpperInvariant();
+    public bool ShowBadge => IsPaid || HasRole;
+
+    // Why the developer gave the key, when they chose to share it.
+    public string? Reason => IsSpecial && _state.Reason.Length > 0 ? $"Given for: {_state.Reason}" : null;
+    public bool HasReason => Reason is not null;
 
     // Whether the key on this PC gives anything now, a plan or a special key's features.
     internal bool IsActive => _active;
@@ -108,7 +133,7 @@ public sealed class PlanViewModel : ObservableObject
         _ => "Pro unlocks the first seven, and Ultra all ten.",
     };
 
-    public string Title => _plan switch
+    public string Title => HasRole ? $"Clip Engine {RoleLabel}" : _plan switch
     {
         Plan.Ultra => "Clip Engine Ultra",
         Plan.Pro => "Clip Engine Pro",
@@ -118,6 +143,7 @@ public sealed class PlanViewModel : ObservableObject
     public string Detail => _plan switch
     {
         Plan.Free when IsSpecial => $"Your special key gives {SpecialText}{UntilText}{KeyText}.",
+        _ when HasRole => $"{Info.Label} features: {Resolutions.Name(MaxLines)} recording, {StorageText} in the cloud{UntilText}{KeyText}.",
         Plan.Free => "Every recording feature is yours. Pro and Ultra add higher resolutions, more cloud storage and a few thank-yous, and keep Clip Engine going.",
         _ => $"{Resolutions.Name(MaxLines)} recording, {StorageText} in the cloud{UntilText}{KeyText}. Thank you for backing Clip Engine.",
     };
@@ -169,7 +195,8 @@ public sealed class PlanViewModel : ObservableObject
 
     public bool HasStatus => StatusText is not null;
     public bool ShowKeyBox => !_state.HasKey || !_active;
-    public bool HasManage => IsPaid && PlanConfig.ManageUrl.Length > 0;
+    // The subscription portal; a special key has no subscription to manage.
+    public bool HasManage => IsPaid && !IsSpecial && PlanConfig.ManageUrl.Length > 0;
 
     public bool IsBusy
     {
@@ -214,12 +241,15 @@ public sealed class PlanViewModel : ObservableObject
     public bool HasMessage => _message is not null;
     public bool MessageIsError { get => _messageIsError; private set => Set(ref _messageIsError, value); }
 
-    // Ultra first, then Pro, then the names kept with the app.
+    // Ultra first, then Pro and the names kept with the app, then the people thanked with a role.
     public IReadOnlyList<CreditName> Credits =>
         _credits.Ultra.Select(n => new CreditName(n, true))
             .Concat(_credits.Pro.Concat(_fileCredits).Distinct(StringComparer.OrdinalIgnoreCase)
                         .Where(n => !_credits.Ultra.Contains(n, StringComparer.OrdinalIgnoreCase))
                         .Select(n => new CreditName(n, false)))
+            .Concat(_credits.Exclusive.Select(n => new CreditName(n, false, "Exclusive")))
+            .Concat(_credits.Creator.Select(n => new CreditName(n, false, "Content Creator")))
+            .Concat(_credits.Special.Select(n => new CreditName(n, false, "Special")))
             .ToList();
 
     public bool HasCredits => Credits.Count > 0;
@@ -235,6 +265,9 @@ public sealed class PlanViewModel : ObservableObject
         _credits = credits;
         SetPlan(LicenseRules.Effective(_state, DateTimeOffset.UtcNow));
     }
+
+    // The preview tool: a special key's messages without the service.
+    internal void ShowSampleMessages(IReadOnlyList<ContactMessage> messages) => ShowContact(messages);
 
     internal async Task ActivateAsync()
     {
@@ -259,6 +292,14 @@ public sealed class PlanViewModel : ObservableObject
         }
     }
 
+    // A key from somewhere other than the key box, like the month of Pro that inviting friends earns. True when it's on.
+    internal async Task<bool> UseKeyAsync(string key)
+    {
+        KeyInput = key;
+        await ActivateAsync();
+        return _state.HasKey && _state.Key == key.Trim();
+    }
+
     // A key the service said yes to goes on this PC.
     internal void Accept(string key, LicenseCheck check)
     {
@@ -267,9 +308,11 @@ public sealed class PlanViewModel : ObservableObject
         KeyInput = "";
         MessageIsError = false;
         Message = check.IsSpecial
-            ? check.Plan == Plan.Free ? "Your special key is on." : $"{Plans.For(check.Plan).Label} is on from your special key."
+            ? check.RoleLabel is { Length: > 0 } role ? $"Your {role} key is on. Welcome!"
+            : check.Plan == Plan.Free ? "Your special key is on." : $"{Plans.For(check.Plan).Label} is on from your special key."
             : $"{Plans.For(check.Plan).Label} is on. Thank you!";
         SetPlan(check.Plan, force: true);
+        _ = LoadContactAsync();
     }
 
     // Checks the key again twice a day: a renewed subscription carries on, a cancelled one goes back to Free.
@@ -299,6 +342,11 @@ public sealed class PlanViewModel : ObservableObject
         _state.Lines = check.Lines;
         _state.Themes = check.Themes?.ToList();
         _state.ExtraStorage = check.ExtraStorage;
+        _state.Role = check.Role;
+        _state.RoleLabel = check.RoleLabel;
+        _state.Perks = check.Perks?.ToList();
+        _state.CreditsAllowed = check.CreditsAllowed;
+        _state.Reason = check.Reason;
         _state.LastChecked = _state.LastOk = DateTimeOffset.UtcNow;
         Save();
     }
@@ -308,7 +356,90 @@ public sealed class PlanViewModel : ObservableObject
         _state.Clear();
         Save();
         Message = null;
+        _contactMessages = [];
+        ContactMessage = null;
         SetPlan(Plan.Free, force: true);
+    }
+
+    // ---- the direct line and bug reports ----
+
+    public bool HasDirectLine => IsSpecial && _state.Perks?.Contains(PerkIds.DirectLine) == true;
+    public bool HasBugReports => IsSpecial && _state.Perks?.Contains(PerkIds.BugReports) == true;
+    public bool HasContact => HasDirectLine || HasBugReports;
+
+    public string ContactTitle => HasDirectLine && HasBugReports ? "Talk to the developer"
+        : HasDirectLine ? "Direct line to the developer" : "Report a bug";
+
+    public string ContactCaption => HasDirectLine && HasBugReports
+        ? "Your key comes with a direct line. Send a message or a bug report and it goes straight to the developer, who answers here."
+        : HasDirectLine
+            ? "Your key comes with a direct line. Your message goes straight to the developer, who answers here."
+            : "Your key sends bug reports straight to the developer. Say what happened and what you expected; answers show up here.";
+
+    public string ContactInput
+    {
+        get => _contactInput;
+        set
+        {
+            if (!Set(ref _contactInput, value ?? "")) return;
+            SendMessageCommand.NotifyCanExecuteChanged();
+            SendBugCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    public string? ContactMessage { get => _contactMessage; private set { if (Set(ref _contactMessage, value)) Raise(nameof(HasContactMessage)); } }
+    public bool HasContactMessage => _contactMessage is not null;
+    public bool ContactIsError { get => _contactIsError; private set => Set(ref _contactIsError, value); }
+
+    public IReadOnlyList<ContactMessageView> ContactMessages => _contactMessages;
+    public bool HasContactMessages => _contactMessages.Count > 0;
+
+    private bool CanSend(bool perk) => perk && !_contactBusy && ContactInput.Trim().Length > 0;
+
+    internal async Task SendContactAsync(string kind)
+    {
+        var text = ContactInput.Trim();
+        if (text.Length == 0 || !_state.HasKey) return;
+        SetContactBusy(true);
+        try
+        {
+            var name = _state.CreditName.Length > 0 ? _state.CreditName : _desktop?.Squad.PlayerName ?? "";
+            var result = await new ContactClient(_server()).SendAsync(_state.Key, Device(), kind, text, name);
+            ContactIsError = !result.Ok;
+            if (result.Ok)
+            {
+                ContactInput = "";
+                ContactMessage = kind == ContactClient.Bug ? "Bug report sent. Thank you!" : "Sent. The developer's answer shows up here.";
+                ShowContact(result.Messages);
+            }
+            else ContactMessage = result.Message;
+        }
+        finally
+        {
+            SetContactBusy(false);
+        }
+    }
+
+    // The messages sent from this key, with any answers. Checked when the app starts and the key changes.
+    internal async Task LoadContactAsync()
+    {
+        if (!HasContact || !_state.HasKey) return;
+        var result = await new ContactClient(_server()).ListAsync(_state.Key, Device());
+        if (result.Ok) ShowContact(result.Messages);
+    }
+
+    private void ShowContact(IReadOnlyList<ContactMessage> messages)
+    {
+        _contactMessages = messages.Select(m => new ContactMessageView(m)).ToList();
+        Raise(nameof(ContactMessages));
+        Raise(nameof(HasContactMessages));
+    }
+
+    private void SetContactBusy(bool busy)
+    {
+        _contactBusy = busy;
+        SendMessageCommand.NotifyCanExecuteChanged();
+        SendBugCommand.NotifyCanExecuteChanged();
     }
 
     // This PC's id, which a special key counts against its limit of PCs.
@@ -373,6 +504,8 @@ public sealed class PlanViewModel : ObservableObject
         RemoveCommand.NotifyCanExecuteChanged();
         ManageCommand.NotifyCanExecuteChanged();
         SaveCreditCommand.NotifyCanExecuteChanged();
+        SendMessageCommand.NotifyCanExecuteChanged();
+        SendBugCommand.NotifyCanExecuteChanged();
         foreach (var offer in Offers) offer.Refresh();
         UpdateThemes();
         ThemeChanged?.Invoke(Theme);
@@ -429,7 +562,30 @@ public sealed class PlanViewModel : ObservableObject
     }
 }
 
-public sealed record CreditName(string Name, bool Ultra);
+// Tag: the role someone was thanked with (Content Creator, Special, Exclusive), or null for a subscriber.
+public sealed record CreditName(string Name, bool Ultra, string? Tag = null)
+{
+    public bool HasTag => Tag is not null;
+}
+
+// One message or bug report sent to the developer, as the plan card lists it.
+public sealed class ContactMessageView
+{
+    internal ContactMessageView(ContactMessage message)
+    {
+        Kind = message.Kind == ContactClient.Bug ? "BUG REPORT" : "MESSAGE";
+        Text = message.Text;
+        Sent = message.Sent.ToLocalTime().ToString("MMM d, h:mm tt", System.Globalization.CultureInfo.CurrentCulture);
+        Reply = message.Reply;
+    }
+
+    public string Kind { get; }
+    public string Text { get; }
+    public string Sent { get; }
+    public string? Reply { get; }
+    public bool HasReply => Reply is not null;
+    public string Status => HasReply ? "Answered" : "Waiting for an answer";
+}
 
 // Pro or Ultra as the plan card offers it: price, what it adds and a button to subscribe.
 public sealed class PlanOffer : ObservableObject

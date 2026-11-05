@@ -28,24 +28,57 @@ function setText(name, text) {
 for (const [name, url] of Object.entries(LINKS)) {
   if (url && name !== "repo" && name !== "service") setLink(name, url);
 }
+// The hub, where players' public clips are, is part of the online service.
+if (LINKS.service) setLink("hub", `${LINKS.service}/hub`);
+
+// The menu on phones: the button opens the section links under the bar, and picking one (or Escape) closes it.
+const menu = document.querySelector(".menu-toggle");
+const header = document.querySelector(".nav");
+if (menu && header) {
+  const close = () => {
+    header.classList.remove("open");
+    menu.setAttribute("aria-expanded", "false");
+  };
+  menu.addEventListener("click", () => {
+    const open = !header.classList.contains("open");
+    header.classList.toggle("open", open);
+    menu.setAttribute("aria-expanded", String(open));
+  });
+  for (const link of header.querySelectorAll("nav a")) link.addEventListener("click", close);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") close();
+  });
+}
 for (const name of ["pro", "ultra"]) {
   if (!LINKS[name]) continue;
   for (const el of document.querySelectorAll(`[data-link="${name}"]`)) el.textContent = "Subscribe";
 }
 
-// Subscribers who asked to be thanked, Ultra first.
+// Subscribers who asked to be thanked, Ultra first, then the content creators and others the developer
+// thanked with a special role.
+const CREDIT_ROLES = { exclusive: "Exclusive", creator: "Content Creator", special: "Special" };
 if (LINKS.service) {
   fetch(`${LINKS.service}/v1/credits`)
     .then((r) => (r.ok ? r.json() : null))
     .then((credits) => {
-      const names = [...(credits?.ultra ?? []).map((n) => [n, true]), ...(credits?.pro ?? []).map((n) => [n, false])];
+      const names = [
+        ...(credits?.ultra ?? []).map((n) => [n, "ultra"]),
+        ...(credits?.pro ?? []).map((n) => [n, ""]),
+        ...Object.keys(CREDIT_ROLES).flatMap((role) => (credits?.[role] ?? []).map((n) => [n, role])),
+      ];
       const box = document.querySelector("[data-credits]");
       const list = document.querySelector("[data-credit-list]");
       if (!box || !list || names.length === 0) return;
-      for (const [name, ultra] of names) {
+      for (const [name, group] of names) {
         const li = document.createElement("li");
         li.textContent = name;
-        if (ultra) li.className = "ultra";
+        if (group === "ultra") li.className = "ultra";
+        if (CREDIT_ROLES[group]) {
+          li.className = "role";
+          const tag = document.createElement("span");
+          tag.textContent = CREDIT_ROLES[group];
+          li.append(tag);
+        }
         list.append(li);
       }
       box.hidden = false;

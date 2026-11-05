@@ -44,6 +44,7 @@ public sealed class CloudViewModel : ObservableObject
         CopyProfileCommand = new RelayCommand(() => _ = CopyAsync(ProfileLink, "Profile link copied"));
         OpenProfileCommand = new RelayCommand(() => { if (HasProfile) Shell.Open(ProfileLink); });
         MakeLinkCodeCommand = new RelayCommand(() => _ = MakeLinkCodeAsync(), () => !IsBusy);
+        OpenHubCommand = new RelayCommand(() => _ = OpenHubAsync(), () => !IsBusy);
         RefreshCommand = new RelayCommand(() => _ = RefreshAsync());
 
         main.Plan.PlanChanged += plan => _ = SyncPlanAsync();
@@ -63,6 +64,7 @@ public sealed class CloudViewModel : ObservableObject
     public RelayCommand CopyProfileCommand { get; }
     public RelayCommand OpenProfileCommand { get; }
     public RelayCommand MakeLinkCodeCommand { get; }
+    public RelayCommand OpenHubCommand { get; }
     public RelayCommand RefreshCommand { get; }
 
     public bool SignedIn => Settings.SignedIn;
@@ -78,6 +80,7 @@ public sealed class CloudViewModel : ObservableObject
             SignInCommand.NotifyCanExecuteChanged();
             SaveProfileCommand.NotifyCanExecuteChanged();
             MakeLinkCodeCommand.NotifyCanExecuteChanged();
+            OpenHubCommand.NotifyCanExecuteChanged();
         }
     }
 
@@ -106,7 +109,8 @@ public sealed class CloudViewModel : ObservableObject
     public bool NeedsServer => Online.ServerUrl(_desktop).Length == 0;
 
     public string AccountName => _account?.Name ?? Settings.Name;
-    public string PlanLabel => _account is null ? "" : $"{_account.PlanLabel} plan";
+    public string PlanLabel => _account is null ? ""
+        : _account.RoleLabel is { } role ? $"{role} · {_account.PlanLabel} plan" : $"{_account.PlanLabel} plan";
     public string StorageText => _account is { Limit: > 0 } a ? $"{Format.Bytes(a.Used)} of {Format.Bytes(a.Limit)} used" : "";
     public double StorageFraction => _account is { Limit: > 0 } a ? Math.Clamp((double)a.Used / a.Limit, 0, 1) * 100 : 0;
     public string ClipsText => _account is null ? "" : _account.Clips == 1 ? "1 clip in the cloud" : $"{_account.Clips} clips in the cloud";
@@ -127,10 +131,41 @@ public sealed class CloudViewModel : ObservableObject
 
     public string DefaultCaption => Settings.DefaultVisibility switch
     {
-        "public" => "Anyone with the link can watch, and the clip is listed on your profile.",
+        "public" => "Anyone with the link can watch, and the clip is listed on your profile and in the hub.",
         "private" => "Kept in the cloud as a backup. Its link plays for no one.",
         _ => "Anyone with the link can watch. It isn't listed anywhere.",
     };
+
+    // A Pro, Ultra or role badge shows next to your name on your profile, your clips and the hub, unless you hide it.
+    public bool HasBadge => _account?.BadgeLabel is not null;
+    public string BadgeText => _account?.BadgeLabel is { } label ? $"Show my {label} badge" : "";
+
+    public bool ShowBadge
+    {
+        get => _account is { HideBadge: false };
+        set
+        {
+            if (_api is not { } api || _account is not { } account || account.HideBadge == !value) return;
+            _account = account with { HideBadge = !value };
+            Raise();
+            _ = SetBadgeAsync(api, !value);
+        }
+    }
+
+    private async Task SetBadgeAsync(CloudApi api, bool hidden)
+    {
+        try
+        {
+            _account = await api.SetBadgeHiddenAsync(Settings.AccountId, _token, hidden);
+            _main.ShowToast(hidden ? "Your badge is hidden" : "Your badge shows again");
+        }
+        catch (Exception e) when (e is SquadException or HttpRequestException or TaskCanceledException)
+        {
+            if (_account is { } a) _account = a with { HideBadge = !hidden };
+            Fail(e.Message);
+        }
+        Raise(nameof(ShowBadge));
+    }
 
     public bool SyncStarred
     {
@@ -331,6 +366,17 @@ public sealed class CloudViewModel : ObservableObject
         });
     }
 
+    // Opens the hub in the browser, already signed in with a one-time code made here.
+    private async Task OpenHubAsync()
+    {
+        if (_api is not { } api) return;
+        await RunAsync(async _ =>
+        {
+            var code = await api.LinkCodeAsync(Settings.AccountId, _token);
+            Shell.Open(api.HubSignInLink(code));
+        });
+    }
+
     private async Task RunAsync(Func<CloudApi, Task> work)
     {
         var server = Online.ServerUrl(_desktop);
@@ -395,6 +441,9 @@ public sealed class CloudViewModel : ObservableObject
         Raise(nameof(ProfileLink));
         Raise(nameof(HasProfile));
         Raise(nameof(HandleLimitText));
+        Raise(nameof(HasBadge));
+        Raise(nameof(BadgeText));
+        Raise(nameof(ShowBadge));
         Raise(nameof(HasClips));
         Raise(nameof(HasNoClips));
     }

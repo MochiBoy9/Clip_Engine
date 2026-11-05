@@ -48,9 +48,43 @@ UINT AutoBitrate(UINT width, UINT height, UINT fps) {
   return static_cast<UINT>(std::clamp(bits, 8e6, 150e6));
 }
 
+// The mix is made this far behind real time, after every source's audio has arrived: the apps'
+// tracks are themselves mixed 60 ms behind.
+constexpr int64_t kMixLatency = 150 * kHnsPerMs;
+// The replay buffer gets at most this share of the PC's memory.
+constexpr double kBufferMemoryShare = 0.4;
+// What an audio track costs in the buffer: 192 kbps AAC.
+constexpr UINT kAudioBitrate = 192'000;
+
+constexpr int StreamOf(AudioTrack track) {
+  switch (track) {
+    case AudioTrack::Game: return kGameAudioStream;
+    case AudioTrack::Mic: return kMicAudioStream;
+    case AudioTrack::Discord: return kDiscordAudioStream;
+    case AudioTrack::Apps: return kAppsAudioStream;
+  }
+  return kGameAudioStream;
+}
+
+// The apps with sound right now that go on a track of this kind, leaving out the game's own processes.
+std::vector<AudioApp> AppsFor(AppAudioKind kind, DWORD game) {
+  auto apps = AppsWithAudio();
+  if (apps.empty()) return apps;
+  const auto parents = ParentProcesses();
+  std::erase_if(apps, [&](const AudioApp& app) {
+    return ClassifyAudioApp(app.exe) != kind || IsInProcessTree(app.processId, game, parents) ||
+           app.processId == GetCurrentProcessId();
+  });
+  std::vector<uint32_t> pids;
+  for (const auto& app : apps) pids.push_back(app.processId);
+  const auto roots = TreeRoots(pids, parents);
+  std::erase_if(apps, [&](const AudioApp& app) { return std::ranges::find(roots, app.processId) == roots.end(); });
+  return apps;
+}
+
 }  // namespace
 
-RecordingSession::RecordingSession(const Config& config, HMONITOR monitor, std::string label,
+RecordingSession::RecordingSession(const Config& config, HMONITOR monitor, std::string label, bool isGame,
                                    std::vector<DetectionRule> rules, std::vector<ScoreboardRule> scoreboards,
                                    std::vector<std::string> playerNames, int detectionSampleMs, double hudScale,
                                    std::vector<JournalRule> journals)
@@ -85,8 +119,8 @@ RecordingSession::RecordingSession(const Config& config, HMONITOR monitor, std::
   log::Info("Recording {}: {}x{} at {} fps, {} {} Mbps on {}", label_, video.width, video.height, fps_,
             video.hevc ? "HEVC" : "H.264", video.bitrate / 1'000'000, video_->Name());
 
-  if (config.gameAudio) StartAudio(AudioCapture::Source::GameAudio, kGameAudioStream, gameAudioEncoder_, gameAudio_);
-  if (config.micAudio) StartAudio(AudioCapture::Source::Microphone, kMicAudioStream, micAudioEncoder_, micAudio_);
+  LimitBufferMemory(config, video.bitrate);
+  StartAudio(config, isGame);
 
   if (!rules.empty() || !scoreboards.empty() || !journals.empty()) {
     try {
@@ -106,7 +140,7 @@ RecordingSession::RecordingSession(const Config& config, HMONITOR monitor, std::
             newNotes_.push_back(note);
           });
       if (detector_->Listens()) {
-        if (gameAudio_) listener_ = detector_.get();
+        if (gameAudio_ || systemAudio_) listener_ = detector_.get();
         else log::Info("Game audio is off in Settings, so the game's sounds aren't listened for");
       }
     } catch (const winrt::hresult_error& e) {
@@ -120,15 +154,55 @@ RecordingSession::RecordingSession(const Config& config, HMONITOR monitor, std::
 RecordingSession::~RecordingSession() {
   stop_ = true;
   if (pacer_.joinable()) pacer_.join();
-  // The audio thread hands sounds to the detector, so it stops first.
+  // The audio threads hand sounds to the detector, voice commands, the mix and the encoders, so
+  // they stop first, then the mix.
   listener_ = nullptr;
   micAudio_.reset();
+  systemAudio_.reset();
   gameAudio_.reset();
+  discordAudio_.reset();
+  appsAudio_.reset();
+  mixClock_.reset();
+  voice_.reset();
   detector_.reset();
-  micAudioEncoder_.reset();
-  gameAudioEncoder_.reset();
+  mixEncoder_.reset();
+  for (auto& track : tracks_) track.encoder.reset();
   capture_.reset();
   video_.reset();
+}
+
+void RecordingSession::SetGameProcess(DWORD processId) {
+  if (gameProcess_.exchange(processId) != processId && gameAudio_) gameAudio_->Refresh();
+  if (detector_) detector_->SetGameProcess(processId);
+}
+
+void RecordingSession::SetAudioLevels(const AudioLevels& levels) {
+  for (AudioTrack track : kAudioTracks) tracks_[static_cast<size_t>(track)].gain = levels.Gain(track);
+}
+
+std::vector<int> RecordingSession::TakeVoiceClips() {
+  std::lock_guard lock(voiceMutex_);
+  return std::exchange(voiceClips_, {});
+}
+
+void RecordingSession::LimitBufferMemory(const Config& config, UINT videoBitrate) {
+  MEMORYSTATUSEX memory{};
+  memory.dwLength = sizeof(memory);
+  if (!GlobalMemoryStatusEx(&memory) || memory.ullTotalPhys == 0) return;
+  const auto limit = static_cast<size_t>(static_cast<double>(memory.ullTotalPhys) * kBufferMemoryShare);
+  buffer_.SetMaxBytes(limit);
+
+  const double bytesPerSecond = (videoBitrate + 5.0 * kAudioBitrate) / 8;  // at most five audio tracks
+  const double needed = bytesPerSecond * config.bufferSeconds;
+  constexpr double kGb = 1024.0 * 1024 * 1024;
+  if (needed > static_cast<double>(limit)) {
+    log::Warn("A {} minute replay at {} Mbps needs about {:.1f} GB of memory, more than the {:.1f} GB this PC can "
+              "spare, so it keeps about {:.0f} minutes. A lower resolution or bitrate keeps more.",
+              config.bufferSeconds / 60, videoBitrate / 1'000'000, needed / kGb, static_cast<double>(limit) / kGb,
+              static_cast<double>(limit) / bytesPerSecond / 60);
+  } else if (config.bufferSeconds > 600) {
+    log::Info("The {} minute replay takes about {:.1f} GB of memory", config.bufferSeconds / 60, needed / kGb);
+  }
 }
 
 bool RecordingSession::Healthy() const { return !capture_->SizeChanged() && !video_->Failed(); }
@@ -164,34 +238,126 @@ std::vector<GameEvent> RecordingSession::EventsBetween(int64_t start, int64_t en
   return result;
 }
 
-void RecordingSession::StartAudio(AudioCapture::Source source, int stream, std::unique_ptr<AacEncoder>& encoder,
-                                  std::unique_ptr<AudioCapture>& capture) {
+void RecordingSession::StartAudio(const Config& config, bool isGame) {
+  // Windows 10 version 2004 and later can record one app's audio. Before that, the game's track
+  // has everything heard, and Discord and other apps can't be told apart from it.
+  const bool separate = (config.gameAudio || config.discordAudio || config.appsAudio) && AppAudioCapture::Supported();
+  auto& game = tracks_[static_cast<size_t>(AudioTrack::Game)];
+  auto& mic = tracks_[static_cast<size_t>(AudioTrack::Mic)];
+  auto& discord = tracks_[static_cast<size_t>(AudioTrack::Discord)];
+  auto& apps = tracks_[static_cast<size_t>(AudioTrack::Apps)];
+  game.recorded = config.gameAudio && (isGame || !separate);
+  mic.recorded = config.micAudio;
+  discord.recorded = separate && config.discordAudio;
+  apps.recorded = separate && config.appsAudio;
+  if (!separate && (config.discordAudio || config.appsAudio)) {
+    log::Info("This version of Windows can't record Discord and other apps on tracks of their own, so they're "
+              "in the game audio track{}", config.gameAudio ? "" : ", which is off");
+  }
+  SetAudioLevels(config.levels);
+
+  // Each source's encoder, then the mix's when there's more than one source.
+  int recorded = 0;
+  for (AudioTrack which : kAudioTracks) {
+    auto& track = tracks_[static_cast<size_t>(which)];
+    if (!track.recorded) continue;
+    try {
+      track.encoder = std::make_unique<AacEncoder>(StreamOf(which), buffer_);
+      ++recorded;
+    } catch (const winrt::hresult_error& e) {
+      log::Warn("Recording without the {} track: {}", AudioTrackName(which), Describe(e));
+      track.recorded = false;
+    }
+  }
+  if (recorded > 1) {
+    try {
+      mixEncoder_ = std::make_unique<AacEncoder>(kMixAudioStream, buffer_);
+      audioTracks_.push_back("all");
+    } catch (const winrt::hresult_error& e) {
+      log::Warn("Recording without the track of all audio mixed: {}", Describe(e));
+    }
+  }
+  for (AudioTrack which : kAudioTracks) {
+    if (!tracks_[static_cast<size_t>(which)].recorded) continue;
+    audioTracks_.push_back(which == AudioTrack::Game && !separate ? "system" : std::string(AudioTrackName(which)));
+  }
+
+  auto sink = [this](AudioTrack which) {
+    return [this, which](const int16_t* pcm, uint32_t frames, int64_t pts) { OnAudio(which, pcm, frames, pts); };
+  };
   try {
-    encoder = std::make_unique<AacEncoder>(stream, buffer_);
-    AacEncoder* target = encoder.get();
-    // Game audio is everything the PC plays, so while the game isn't in front it's silenced
-    // with the picture. The mic carries on: it's the player's own voice.
-    const bool followFocus = source == AudioCapture::Source::GameAudio;
-    capture = std::make_unique<AudioCapture>(source, [this, target, followFocus, silence = std::vector<int16_t>()](
-                                                         const int16_t* pcm, uint32_t frames, int64_t pts) mutable {
-      try {
-        if (followFocus && away_) {
-          silence.assign(size_t{frames} * AudioCapture::kChannels, 0);
-          pcm = silence.data();
-        }
-        target->Push(pcm, frames, pts);
-        if (followFocus) {
-          if (EventDetector* detector = listener_) detector->Hear(pcm, frames, pts);
-        }
-      } catch (const winrt::hresult_error& e) {
-        log::Error("Audio encoding failed: {}", Describe(e));
-      }
-    });
+    if (game.recorded && separate) {
+      gameAudio_ = std::make_unique<AppAudioCapture>(
+          "game",
+          [this]() -> std::vector<AudioApp> {
+            const DWORD pid = gameProcess_;
+            if (pid == 0) return {};
+            return {AudioApp{pid, label_}};
+          },
+          sink(AudioTrack::Game));
+    } else if (game.recorded) {
+      systemAudio_ = std::make_unique<AudioCapture>(AudioCapture::Source::GameAudio, sink(AudioTrack::Game));
+    }
+    if (discord.recorded) {
+      discordAudio_ = std::make_unique<AppAudioCapture>(
+          "Discord", [this] { return AppsFor(AppAudioKind::VoiceChat, gameProcess_); }, sink(AudioTrack::Discord));
+    }
+    if (apps.recorded) {
+      appsAudio_ = std::make_unique<AppAudioCapture>(
+          "other apps", [this] { return AppsFor(AppAudioKind::Other, gameProcess_); }, sink(AudioTrack::Apps));
+    }
+
+    // Voice commands listen to the mic even when its track is off or muted.
+    if (config.voiceClips) {
+      const int usual = config.voiceClipSeconds > 0 ? config.voiceClipSeconds : config.clipSeconds;
+      voice_ = std::make_unique<VoiceCommands>(config.voicePhrases, config.voiceSensitivity,
+                                               [this, usual](const VoicePhrase& phrase) {
+                                                 std::lock_guard lock(voiceMutex_);
+                                                 voiceClips_.push_back(phrase.seconds > 0 ? phrase.seconds : usual);
+                                               });
+    }
+    if (mic.recorded || voice_) {
+      micAudio_ = std::make_unique<AudioCapture>(AudioCapture::Source::Microphone, sink(AudioTrack::Mic));
+    }
   } catch (const winrt::hresult_error& e) {
-    log::Warn("Recording without {}: {}",
-              source == AudioCapture::Source::GameAudio ? "game audio" : "microphone", Describe(e));
-    capture.reset();
-    encoder.reset();
+    log::Warn("Recording with some audio missing: {}", Describe(e));
+  }
+
+  if (mixEncoder_) {
+    mixClock_ = std::make_unique<MixClock>(mixer_, kMixLatency, [this](const int16_t* pcm, uint32_t frames, int64_t pts) {
+      mixEncoder_->Push(pcm, frames, pts);
+    });
+  }
+}
+
+void RecordingSession::OnAudio(AudioTrack which, const int16_t* pcm, uint32_t frames, int64_t pts) {
+  auto& track = tracks_[static_cast<size_t>(which)];
+  // Game audio and other apps go quiet with the picture while the game isn't in front, so
+  // nothing from another window ends up in a clip. The mic and voice chat carry on: they're the
+  // players' own voices.
+  const bool followsFocus = which == AudioTrack::Game || which == AudioTrack::Apps;
+  const bool quiet = followsFocus && away_;
+  try {
+    if (which == AudioTrack::Mic && voice_) voice_->Hear(pcm, frames);
+    if (which == AudioTrack::Game) {
+      if (EventDetector* detector = listener_) {
+        if (quiet) {
+          awaySilence_.assign(size_t{frames} * AudioCapture::kChannels, 0);
+          detector->Hear(awaySilence_.data(), frames, pts);
+        } else {
+          detector->Hear(pcm, frames, pts);
+        }
+      }
+    }
+    if (!track.recorded) return;
+    const float gain = quiet ? 0.0f : track.gain.load();
+    track.scaled.assign(pcm, pcm + size_t{frames} * AudioCapture::kChannels);
+    ApplyGain(track.scaled.data(), frames, AudioCapture::kChannels, track.lastGain, gain);
+    track.lastGain = gain;
+    if (track.encoder) track.encoder->Push(track.scaled.data(), frames, pts);
+    if (mixEncoder_) mixer_.Push(static_cast<int>(which), track.scaled.data(), frames, pts);
+  } catch (const winrt::hresult_error& e) {
+    log::Error("Audio encoding failed: {}", Describe(e));
   }
 }
 
