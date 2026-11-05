@@ -160,6 +160,55 @@ public class JournalTests
     }
 
     [Fact]
+    public void XpOnTheResultsLineCountsForTheRunThatEnded()
+    {
+        var timeline = Parse("""
+            {"session": "2026-11-02T18:00:00", "game": "Deep Rock Galactic", "version": 1}
+            {"t": 10.00, "match": 0, "note": "deploy", "text": "DROPPING"}
+            {"t": 60.00, "match": 0, "note": "enemy", "value": "Glyphid", "xp": 10, "text": "GLYPHID +10 XP"}
+            {"t": 600.00, "match": 0, "note": "extracted", "xp": 900, "text": "MISSION COMPLETE +900 XP"}
+            {"t": 605.00, "match": 0, "note": "objective", "xp": 200, "text": "SECONDARY +200 XP"}
+            """);
+        var run = Assert.Single(Journal.Build([timeline]).Games[0].Runs);
+        Assert.Equal(1110, run.Xp);
+    }
+
+    [Fact]
+    public void TiesRunsToTheirClipsAndTalliesItems()
+    {
+        var day = new DateTime(2026, 11, 1, 20, 0, 0);
+        ClipFile Clip(string name, int seconds) => new($@"C:\clips\{name}.mp4", "ARC Raiders", day.AddSeconds(seconds), 1, null);
+        var clips = new[] { Clip("lobby", 30), Clip("wasp", 125), Clip("leaper", 205), Clip("hornet", 1105), Clip("late", 1800) };
+        var game = Journal.Build([Parse(ArcRaiders)], clips: clips).Games[0];
+        Assert.Equal(new[] { "wasp", "leaper" }, game.Runs[2].Clips.Select(c => Path.GetFileNameWithoutExtension(c.Path)));
+        Assert.Equal(new[] { "hornet" }, game.Runs[1].Clips.Select(c => Path.GetFileNameWithoutExtension(c.Path)));
+        Assert.Equal(new JournalItem("Bandage", 3), game.MostLost[0]);
+        Assert.Equal(new[] { new JournalItem("Metal Parts", 2) }, game.MostFound);
+    }
+
+    [Fact]
+    public void AMapsExtractionRateIsOutOfTheRunsThatEnded()
+    {
+        var timeline = Parse("""
+            {"session": "2026-11-02T18:00:00", "game": "ARC Raiders", "version": 1}
+            {"t": 10.00, "match": 0, "note": "map", "value": "Spaceport", "text": "SPACEPORT"}
+            {"t": 20.00, "match": 0, "note": "deploy", "text": "DEPLOYING"}
+            {"t": 300.00, "match": 0, "note": "died", "text": "YOU DIED"}
+            {"t": 600.00, "match": 0, "note": "map", "value": "Spaceport", "text": "SPACEPORT"}
+            {"t": 620.00, "match": 0, "note": "deploy", "text": "DEPLOYING"}
+            {"t": 900.00, "match": 0, "note": "extracted", "text": "EXTRACTED"}
+            {"t": 1000.00, "match": 0, "note": "map", "value": "Spaceport", "text": "SPACEPORT"}
+            {"t": 1020.00, "match": 0, "note": "deploy", "text": "DEPLOYING"}
+            {"t": 1100.00, "match": 0, "note": "enemy", "value": "Wasp", "text": "WASP"}
+            """);
+        var game = Journal.Build([timeline]).Games[0];
+        var map = Assert.Single(game.Maps);
+        Assert.Equal((3, 1, 2), (map.Runs, map.Extracted, map.Ended));  // the last raid's end wasn't recorded
+        Assert.Equal(0.5, map.ExtractionRate);
+        Assert.Contains("Your first time making it out of Spaceport, after 1 try.", game.Runs[1].Highlights);
+    }
+
+    [Fact]
     public void ATimelineWithoutNotesHasNoRuns()
     {
         var timeline = Parse("""
