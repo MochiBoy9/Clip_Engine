@@ -211,6 +211,40 @@ AccentThemes.ApplyAccent(ember);
 vm.ShowPage(vm.Home);
 Save(window, "10-theme-ember.png");
 
+// Supporter looks: Pro's thirteen colours, then Ultra's colour wheel and an adaptive theme, with a button under the
+// pointer and the backdrop's scan part of the way down the page.
+vm.Plan.Remove();
+vm.Plan.ShowSample(Plan.Pro, new Credits([], ["Kai the Clipper", "Rook"]));
+vm.Plan.Themes.Single(t => t.Name == "Cobalt").IsSelected = true;
+window.Height = 1600;
+Capture(Page.Settings, "30-pro-colours.png");
+vm.Plan.ShowSample(Plan.Ultra, new Credits(["Mira", "Enterro"], ["Kai the Clipper", "Rook"]));
+(vm.Plan.WheelHue, vm.Plan.WheelSaturation, vm.Plan.WheelBrightness) = (275, 0.66, 1);
+Capture(Page.Settings, "31-ultra-wheel.png");
+window.Height = 900;
+vm.ShowPage(vm.Home);
+Settle();
+var backdrop = window.GetVisualDescendants().OfType<AdaptiveBackdrop>().First();
+backdrop.ShowScan(0.42);
+// Hover shown at its end state: the preview's clock doesn't run transitions.
+foreach (var button in window.GetVisualDescendants().OfType<Avalonia.Controls.Button>().Where(b => b.Classes.Contains("accent")).Take(1))
+{
+    button.Transitions = null;
+    foreach (var part in button.GetVisualDescendants().OfType<Plate>()) part.Transitions = null;
+    ((Avalonia.Controls.IPseudoClasses)button.Classes).Add(":pointerover");
+}
+Save(window, "32-adaptive-home.png");
+vm.Plan.Themes.Single(t => t.Name == "Hazard").IsSelected = true;
+vm.SelectedNav = vm.Nav.First(n => n.Page == Page.Clips);
+Settle();
+foreach (var card in window.GetVisualDescendants().OfType<Plate>().Where(p => p.Classes.Contains("clipCard")).Skip(1).Take(1))
+{
+    card.Transitions = null;
+    ((Avalonia.Controls.IPseudoClasses)card.Classes).Add(":pointerover");
+}
+Save(window, "33-adaptive-hazard-clips.png");
+vm.Plan.AdaptiveOn = false;
+
 // A frame of the sample game with a kill message in its feed, as a clip would show it.
 static Bitmap SampleFrame()
 {
