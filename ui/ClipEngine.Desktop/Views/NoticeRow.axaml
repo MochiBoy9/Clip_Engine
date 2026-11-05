@@ -1,0 +1,25 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ClipEngine.Desktop.ViewModels"
+             x:Class="ClipEngine.Desktop.Views.NoticeRow"
+             x:DataType="vm:NoticeItem">
+  <!-- One notification in a list: the bell's, Home's recent events and the side panel's. Clicking it goes to what it's about. -->
+  <Button Classes="marker" Command="{Binding OpenCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+          Padding="8,8" Margin="0,0,0,2">
+    <Grid ColumnDefinitions="Auto,*">
+      <Border Classes="tile small" Classes.neutral="{Binding !IsUnread}" VerticalAlignment="Top" Margin="0,0,12,0">
+        <PathIcon Data="{Binding Icon}" />
+      </Border>
+      <StackPanel Grid.Column="1" Spacing="2">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis" />
+          <Ellipse Grid.Column="1" Width="6" Height="6" Fill="{DynamicResource AccentBrush}" IsVisible="{Binding IsUnread}"
+                   VerticalAlignment="Center" Margin="8,0,0,0" />
+        </Grid>
+        <TextBlock Text="{Binding Text}" FontSize="12" TextWrapping="Wrap" Foreground="{StaticResource TextSecondary}"
+                   IsVisible="{Binding HasText}" />
+        <TextBlock Classes="caption" Text="{Binding Time}" />
+      </StackPanel>
+    </Grid>
+  </Button>
+</UserControl>

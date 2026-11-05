@@ -64,7 +64,7 @@ POLAR_ORGANIZATION_ID = "74bd753b-92a2-432a-8e9d-4cf073398ec3"
 POLAR_PRO_BENEFIT_ID = "0d0f448a-f4ca-4c6d-ad34-d097ad5310c7"
 POLAR_ULTRA_BENEFIT_ID = "d87f2807-053f-4842-ab0e-59905d6d91f1"
 # Donations: a one-time, pay-what-you-want Polar product with a License Keys benefit. Until the benefit id is set,
-# donation keys are refused. How much someone gave is read with POLAR_ACCESS_TOKEN (orders:read), a secret:
+# donation keys are refused. How much someone gave, and when a subscription renews, are read with POLAR_ACCESS_TOKEN (orders:read, subscriptions:read), a secret:
 # npx wrangler secret put POLAR_ACCESS_TOKEN
 POLAR_DONATION_PRODUCT_ID = ""
 POLAR_DONATION_BENEFIT_ID = ""

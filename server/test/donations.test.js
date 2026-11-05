@@ -18,6 +18,7 @@ function fakePolar(keys, orders) {
       return new Response(JSON.stringify({ id: `lk_${body.key}`, display_key: `****-${body.key.slice(-4)}`, expires_at: null, ...key }));
     }
     const u = new URL(url);
+    if (u.pathname === "/v1/subscriptions/") return new Response(JSON.stringify({ items: [], pagination: { max_page: 1 } }));
     assert.equal(u.pathname, "/v1/orders/");
     polar.orderCalls++;
     if (polar.ordersDown) return new Response("{}", { status: 502 });

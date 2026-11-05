@@ -52,6 +52,14 @@ public partial class MainWindow : Window, IAppDialogs
         // The backdrop's light follows the pointer anywhere over the window, even over buttons that handle it.
         AddHandler(PointerMovedEvent, (_, e) => Backdrop.Follow(e.GetPosition(Backdrop)), RoutingStrategies.Tunnel, true);
         PointerExited += (_, _) => Backdrop.HideLight();
+        // A click beside the notifications list closes it; the pointer over the pop-ups keeps them up while they're read.
+        NoticeDismiss.PointerPressed += (_, e) =>
+        {
+            if (DataContext is MainViewModel vm) vm.Notifications.IsOpen = false;
+            e.Handled = true;
+        };
+        PopUpStack.AddHandler(PointerMovedEvent, (_, _) => (DataContext as MainViewModel)?.Notifications.KeepPopUps(),
+                              RoutingStrategies.Tunnel, true);
     }
 
     // The accent, and with an adaptive theme its gradients, livelier buttons (Theme/Adaptive.axaml, under the window's

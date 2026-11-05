@@ -42,14 +42,17 @@ internal sealed class DesktopSettings
     public int DeleteAfterDays { get; set; }
     public int MaxLibraryGb { get; set; }
 
-    // A small "Clip saved" notice over the game.
+    // Pop-ups show over the game too, in its corner, while one is recorded.
     public bool GameNotifications { get; set; } = true;
 
-    // And one for each moment as it happens: kills, multi-kills, revives, a new personal best.
-    public bool MomentNotices { get; set; } = true;
+    // Which pop-ups show (friend requests, clips saved, moments, the subscription renewing...), or none at all.
+    public NoticeSettings Notices { get; set; } = new();
 
-    // And one when a friend comes online or starts playing something.
-    public bool FriendNotices { get; set; } = true;
+    // Older versions had switches of their own for moments and friends. Read once and moved into Notices.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? MomentNotices { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? FriendNotices { get; set; }
 
     // The FPS and hardware readout over the game.
     public StatsOverlaySettings StatsOverlay { get; set; } = new();
@@ -94,14 +97,27 @@ internal sealed class DesktopSettings
         {
             if (File.Exists(AppPaths.DesktopSettingsFile))
             {
-                return JsonSerializer.Deserialize(File.ReadAllText(AppPaths.DesktopSettingsFile),
-                                                  DesktopSettingsJson.Default.DesktopSettings) ?? new();
+                var settings = JsonSerializer.Deserialize(File.ReadAllText(AppPaths.DesktopSettingsFile),
+                                                          DesktopSettingsJson.Default.DesktopSettings) ?? new();
+                settings.MoveOldNoticeSwitches();
+                return settings;
             }
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
         {
         }
         return new();
+    }
+
+    // The old moment and friend switches become those kinds' filters.
+    internal void MoveOldNoticeSwitches()
+    {
+        Notices ??= new();
+        Notices.Muted ??= [];
+        Notices.AnnouncedRequests ??= [];
+        if (MomentNotices == false) Notices.Set(NoticeKind.Moment, false);
+        if (FriendNotices == false) Notices.Set(NoticeKind.Friends, false);
+        MomentNotices = FriendNotices = null;
     }
 
     public void Save()

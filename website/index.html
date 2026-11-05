@@ -224,6 +224,10 @@
       <div class="mark"><b>06</b>Plans<span class="barcode" aria-hidden="true"></span></div>
       <h2>Free to clip. Pro and Ultra to go bigger.</h2>
       <p class="lead">Every recording, detection, squad and sharing feature is free. A subscription adds higher resolutions, more cloud storage and a few thank-yous, and keeps Clip Engine growing. Cancel any time; your clips stay yours.</p>
+      <div class="checkout-notice" role="note">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 5h20v14H2V5Zm2 2v.5l8 5 8-5V7H4Zm16 2.85-8 5-8-5V17h16V9.85Z" /></svg>
+        <p><strong>Use your own email at checkout.</strong> Polar sends your license key to the email you enter when you pay. Type it carefully: if it's an address you can't open, the key never reaches you and the plan can't be turned on in the app.</p>
+      </div>
       <div class="grid three">
         <div class="plate tier"><div class="plate-in">
           <h3>Free</h3>
@@ -279,7 +283,7 @@
         </div>
         <p class="fine" data-donate-note>Donations open soon.</p>
       </div></div>
-      <p class="fine">Payments, sales tax and VAT are handled by Polar, our merchant of record. Your license key arrives by email; paste it in Settings &gt; Plan. A donation's key works the same way, and if you also subscribe with the same email, its thank-yous join your plan on their own.</p>
+      <p class="fine">Payments, sales tax and VAT are handled by Polar, our merchant of record. Your license key arrives by email; paste it in Settings &gt; Plan. A donation's key works the same way, and if you also subscribe with the same email, its thank-yous join your plan on their own. Your email, payment details and receipts stay with Polar and are kept private: Clip Engine never sees your card and doesn't keep your email.</p>
       <div class="credits" data-credits hidden>
         <h3>Thanks to our supporters</h3>
         <ul class="credit-list" data-credit-list></ul>
@@ -310,6 +314,18 @@
     </div>
   </footer>
 
+  <!-- Shown before going to Polar's checkout -->
+  <dialog class="checkout-dialog" data-checkout-dialog aria-labelledby="checkout-title">
+    <form method="dialog" class="plate"><div class="plate-in">
+      <h3 id="checkout-title">Before you go to checkout</h3>
+      <p><strong>Enter an email you can open.</strong> Polar emails your license key there as soon as you've paid. Without it, there's no key to paste into Settings &gt; Plan, and the plan won't work.</p>
+      <p class="fine">Your email and payment details are held by Polar, our merchant of record, and kept private. Clip Engine never sees your card and doesn't keep your email; the app only sends Polar your key to check it.</p>
+      <div class="dialog-actions">
+        <button class="btn" value="go" data-checkout-go>Continue to checkout</button>
+        <button class="btn ghost" value="cancel">Not now</button>
+      </div>
+    </div></form>
+  </dialog>
   <script src="site.js"></script>
 </body>
 </html>

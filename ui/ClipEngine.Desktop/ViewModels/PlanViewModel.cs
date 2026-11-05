@@ -61,11 +61,11 @@ public sealed partial class PlanViewModel : ObservableObject
             _recheck = new DispatcherTimer { Interval = TimeSpan.FromHours(1) };
             _recheck.Tick += (_, _) =>
             {
-                _ = RecheckAsync();
+                _ = RecheckAndTellAsync();
                 _ = LoadContactAsync();
             };
             _recheck.Start();
-            _ = RecheckAsync();
+            _ = RecheckAndTellAsync();
             _ = LoadServerCreditsAsync();
             _ = LoadContactAsync();
         }
@@ -80,6 +80,16 @@ public sealed partial class PlanViewModel : ObservableObject
 
     // The plan or a special key's features changed: themes, the recording resolution and the cloud library follow it.
     public event Action<Plan>? PlanChanged;
+
+    // The key was looked at again (every hour, checked with the service twice a day), for the renewal notice.
+    internal event Action? Checked;
+
+    // A plan that was on went back to Free at a check, with the reason the service gave.
+    internal event Action<string>? Lapsed;
+
+    // When a subscription bought on Polar renews next, or ends once it's cancelled (RenewalEnding).
+    internal DateTimeOffset? Renews => _active && IsPaid && !IsSpecial ? _state.Renews : null;
+    internal bool RenewalEnding => _state.Ending;
 
     public Plan Plan => _plan;
     internal PlanInfo Info => Plans.For(_plan);
@@ -191,9 +201,10 @@ public sealed partial class PlanViewModel : ObservableObject
         }
     }
 
-    // A special key's end date. Subscriptions renew, so theirs isn't shown.
+    // A special key's end date, or when a subscription renews next (or ends, once it's cancelled).
     private string UntilText => IsSpecial && _state.Expires is { } end
         ? $", until {end.ToLocalTime():MMM d, yyyy}"
+        : Renews is { } next ? $", {(RenewalEnding ? "ends" : "renews")} {next.ToLocalTime():MMM d, yyyy}"
         : "";
 
     // ---- donations ----
@@ -377,6 +388,12 @@ public sealed partial class PlanViewModel : ObservableObject
         _ = LoadContactAsync();
     }
 
+    private async Task RecheckAndTellAsync()
+    {
+        await RecheckAsync();
+        Checked?.Invoke();
+    }
+
     // Checks the key again twice a day: a renewed subscription carries on, a cancelled one goes back to Free.
     internal async Task RecheckAsync(bool force = false)
     {
@@ -386,6 +403,7 @@ public sealed partial class PlanViewModel : ObservableObject
         if (check.Outcome == LicenseOutcome.Valid) Apply(check);
         else if (check.Outcome == LicenseOutcome.Rejected)
         {
+            if (_active && (IsPaid || IsSpecial || IsSupporter)) Lapsed?.Invoke(check.Message);
             _state.Plan = Plan.Free;
             _state.LastOk = null;
             MessageIsError = true;
@@ -411,6 +429,8 @@ public sealed partial class PlanViewModel : ObservableObject
         _state.Reason = check.Reason;
         _state.Supporter = check.Supporter;
         _state.Donated = check.Donated;
+        _state.Renews = check.Renews;
+        _state.Ending = check.Ending;
         _state.LastChecked = _state.LastOk = DateTimeOffset.UtcNow;
         Save();
     }

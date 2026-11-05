@@ -77,6 +77,15 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
 
+          <TextBlock Classes="eyebrow" Text="NOTIFICATIONS" IsVisible="{Binding Notifications.HasHistory}" Margin="2,0,0,0" />
+          <ItemsControl ItemsSource="{Binding Notifications.Latest}" IsVisible="{Binding Notifications.HasHistory}" Margin="-6,0,0,10">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:NoticeItem">
+                <views:NoticeRow />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
           <TextBlock Classes="eyebrow" Text="LATEST CLIPS" Margin="2,0,0,0" />
           <TextBlock Classes="caption" Text="Clips you save show up here." IsVisible="{Binding HasNoClips}" Margin="2,0,0,0" />
           <ItemsControl ItemsSource="{Binding RecentClips}">

@@ -74,6 +74,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                            && !File.Exists(AppPaths.LicenseFile);
         var engineSettings = live ? EngineSettings.Load(AppPaths.EngineSettingsFile) : new EngineSettings();
         DesktopSettings = live ? DesktopSettings.Load() : new DesktopSettings();
+        Notifications = new NotificationsViewModel(DesktopSettings, live ? AppPaths.NotificationsFile : null, () => SaveDesktopSettingsSoon());
+        Notifications.Opened += OpenNotice;
         Plan = new PlanViewModel(live ? AppPaths.LicenseFile : null, DesktopSettings, () => Online.ServerUrl(DesktopSettings));
         Updates = new UpdatesViewModel(DesktopSettings, live)
         {
@@ -86,11 +88,16 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             },
         };
         Updates.UpdateFound += release =>
-            AddActivity(ActivityKind.Info, $"Clip Engine {release.Version} is out. Install it from Settings > Updates.");
+            Notify(NoticeKind.Update, $"Clip Engine {release.Version} is out", "Install it from Settings > Updates.", "updates",
+                   $"Clip Engine {release.Version} is out. Install it from Settings > Updates.");
+        Plan.Checked += CheckRenewal;
+        Plan.Lapsed += reason => Notify(NoticeKind.Subscription, "Your plan is back to Free", reason, "plan",
+                                        $"Your plan went back to Free: {reason}", ActivityKind.Warning);
         Settings = new SettingsViewModel(engineSettings, DesktopSettings, live ? RestartEngineAsync : null)
         {
             Plan = Plan,
             Updates = Updates,
+            Notifications = Notifications,
             EngineCommand = live ? SendEngineCommand : null,
         };
         Settings.SidePanelHotkeyChanged += _ => Raise(nameof(SidePanelHotkey));
@@ -134,6 +141,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             if (p is "add") studio.StartAddGameCommand.Execute(null);
         });
         GoToCommand = new RelayCommand(p => { if (p is Page page) SelectedNav = Nav.First(n => n.Page == page); });
+        OpenNoticeSettingsCommand = new RelayCommand(() =>
+        {
+            Notifications.IsOpen = false;
+            GoToCommand.Execute(Page.Settings);
+        });
 
         _toastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
         _toastTimer.Tick += (_, _) =>
@@ -202,6 +214,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         };
         _engine.Start();
         Updates.OnStarted();
+        CheckRenewal();
     }
 
     public IReadOnlyList<NavItem> Nav { get; }
@@ -217,6 +230,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public FriendsViewModel Friends { get; }
     public InviteViewModel Invite { get; }
     public UpdatesViewModel Updates { get; }
+    public NotificationsViewModel Notifications { get; }
     internal DesktopSettings DesktopSettings { get; }
 
     public ObservableCollection<ActivityItem> Activity { get; } = [];
@@ -248,6 +262,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public RelayCommand ToggleSidePanelCommand { get; }
     public RelayCommand ShowMainWindowCommand { get; }
     public RelayCommand GoToCommand { get; }
+    public RelayCommand OpenNoticeSettingsCommand { get; }
 
     // False in the preview tool, which has no engine and no video window.
     internal bool IsLive { get; }
@@ -257,8 +272,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     internal event Action? SidePanelToggleRequested;
     internal event Action? ShowMainWindowRequested;
-    // A short notice to show over the game, like "Clip saved · 2 kills".
+    // A short notice to show over the game, like "Kill · 2 this match".
     internal event Action<string>? GameNoticeRequested;
+
+    // A notification's title and text, for the notice in the screen's corner while Clip Engine's window isn't in front.
+    internal event Action<string, string>? NoticeRequested;
 
     // The stats overlay should come up or go away (see StatsOverlayWanted).
     internal event Action? StatsOverlayChanged;
@@ -793,8 +811,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 ShowToast(l.Reason is null ? "Saving the long recording…" : $"Long recording stopped: {l.Reason}", l.Reason is not null);
                 break;
             case LongRecordingSaved l:
-                AddActivity(ActivityKind.Clip, $"Saved a {Format.Duration(TimeSpan.FromSeconds(l.Seconds))} long recording ({Format.Bytes((long)(l.Megabytes * 1024 * 1024))})");
-                ShowToast($"Long recording saved · {Format.Duration(TimeSpan.FromSeconds(l.Seconds))}");
+                Notify(NoticeKind.Clip, "Long recording saved",
+                       $"{Format.Duration(TimeSpan.FromSeconds(l.Seconds))} · {Format.Bytes((long)(l.Megabytes * 1024 * 1024))}", ClipTarget(l.Path),
+                       $"Saved a {Format.Duration(TimeSpan.FromSeconds(l.Seconds))} long recording ({Format.Bytes((long)(l.Megabytes * 1024 * 1024))})",
+                       ActivityKind.Clip);
                 _ = RefreshClipsAsync();
                 break;
             case ScoreboardRead b:
@@ -810,22 +830,22 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 _ = RefreshClipsAsync();
                 break;
             case ClipSaved s:
-                AddActivity(ActivityKind.Clip, $"Saved a {s.Seconds:0} s clip ({s.Megabytes:0.0} MB)");
-                ShowToast($"Clip saved · {s.Seconds:0} s · {s.Megabytes:0.0} MB");
-                if (DesktopSettings.GameNotifications && IsRecording)
-                {
-                    var summary = ClipMetadataFile.ReadSidecar(s.Path)?.Title;
-                    GameNoticeRequested?.Invoke(string.IsNullOrEmpty(summary) ? $"Clip saved · {s.Seconds:0} s" : $"Clip saved · {summary}");
-                }
+            {
+                var summary = ClipMetadataFile.ReadSidecar(s.Path)?.Title;
+                var game = _recording?.Label is { } label && label != "Desktop" ? $"{label} · " : "";
+                Notify(NoticeKind.Clip, "Clip saved",
+                       string.IsNullOrEmpty(summary) ? $"{game}{s.Seconds:0} s · {s.Megabytes:0.0} MB" : $"{game}{summary} · {s.Seconds:0} s",
+                       ClipTarget(s.Path), $"Saved a {s.Seconds:0} s clip ({s.Megabytes:0.0} MB)", ActivityKind.Clip);
                 _ = RefreshClipsAsync();
                 break;
+            }
             case MomentDetected m:
                 AddActivity(ActivityKind.Moment, $"{EventKinds.Label(m.Type)} in {m.Game}");
                 // The best before this match, read before the moment counts toward it.
                 var best = Records.BestKills(m.Game);
                 Records.AddLiveMoment(m.Game, m.Type);
                 var notice = _notices.OnMoment(m.Type, DateTime.UtcNow, Records.LiveKillCount, best);
-                if (notice is not null && DesktopSettings.GameNotifications && DesktopSettings.MomentNotices && IsRecording)
+                if (notice is not null && DesktopSettings.GameNotifications && Notifications.Allows(NoticeKind.Moment) && IsRecording)
                     GameNoticeRequested?.Invoke(notice);
                 break;
         }
@@ -933,11 +953,79 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (running) UpdateShownGames();
     }
 
-    // A friend came online or started a game: over the game, if notices are on.
-    internal void ShowFriendNotice(string text)
+    // A notable event: kept in the notifications history (the bell in the sidebar, and Home's recent events) and,
+    // unless its kind is turned off, a pop-up in the window's corner. While the window isn't in front it's the notice
+    // in the screen's corner instead, which follows "Pop-ups over the game" while a game is recorded. activity: a line
+    // for the activity feed too, or null for none.
+    internal void Notify(NoticeKind kind, string title, string text, string? target = null, string? activity = null,
+                         ActivityKind activityKind = ActivityKind.Info)
     {
-        if (DesktopSettings.GameNotifications) GameNoticeRequested?.Invoke(text);
+        if (activity is not null) AddActivity(activityKind, activity);
+        var item = Notifications.Add(kind, title, text, target);
+        if (!Notifications.Allows(kind)) return;
+        Notifications.PopUp(item);
+        if (!IsRecording || DesktopSettings.GameNotifications) NoticeRequested?.Invoke(title, text);
     }
+
+    private static string ClipTarget(string path) => "clip:" + path;
+
+    // Clicking a notification goes to what it's about.
+    private void OpenNotice(NoticeItem notice)
+    {
+        switch (notice.Target)
+        {
+            case { } t when t.StartsWith("clip:", StringComparison.Ordinal):
+                var path = t["clip:".Length..];
+                if (Clips.FirstOrDefault(c => string.Equals(c.Path, path, StringComparison.OrdinalIgnoreCase)) is { } clip) OpenPlayer(clip);
+                else if (File.Exists(path)) Shell.ShowInFolder(path);
+                else ShowToast("That clip isn't in your library anymore.", isError: true);
+                break;
+            case "friends":
+                GoToCommand.Execute(Page.Friends);
+                break;
+            case "squad":
+                GoToCommand.Execute(Page.Squad);
+                break;
+            case "cloud":
+                GoToCommand.Execute(Page.Cloud);
+                break;
+            case "plan" or "updates":
+                GoToCommand.Execute(Page.Settings);
+                break;
+        }
+        ShowMainWindowRequested?.Invoke();
+    }
+
+    // A few days before a subscription renews, or ends after it was cancelled, once for each date.
+    private void CheckRenewal()
+    {
+        if (Plan.Renews is not { } renews) return;
+        var notice = RenewalNotice.For(renews, Plan.RenewalEnding, Plan.Info.Label, DateTimeOffset.Now, DesktopSettings.Notices.RenewalNoticed);
+        if (notice is not { } n) return;
+        DesktopSettings.Notices.RenewalNoticed = renews.ToUnixTimeMilliseconds();
+        SaveDesktopSettingsSoon();
+        Notify(NoticeKind.Subscription, n.Title, n.Text, "plan", n.Text);
+    }
+
+    // Home's recent events show everything that happened, or just the notifications.
+    public bool ActivityShowsNotices
+    {
+        get => _activityShowsNotices;
+        set
+        {
+            if (!Set(ref _activityShowsNotices, value)) return;
+            Raise(nameof(ActivityShowsAll));
+            if (value) Notifications.MarkAllRead();
+        }
+    }
+
+    public bool ActivityShowsAll
+    {
+        get => !_activityShowsNotices;
+        set => ActivityShowsNotices = !value;
+    }
+
+    private bool _activityShowsNotices;
 
     internal void AddActivity(ActivityKind kind, string text, DateTime? time = null)
     {

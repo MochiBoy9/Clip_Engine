@@ -84,6 +84,8 @@ internal sealed class SquadSync : IDisposable
     public event Action? LibraryChanged;
     // A line for the activity feed, like "Saving your view of Kai's kill".
     public event Action<string>? Activity;
+    // Someone joined or left the squad, said the way a notification says it.
+    public event Action<string>? MembersChanged;
     // A view to upload: the moment id and the clip on this PC.
     public event Action<LocalView>? UploadWanted;
     // The squad turned this PC away.
@@ -243,6 +245,7 @@ internal sealed class SquadSync : IDisposable
                     var name = m["name"]?.GetValue<string>() ?? "";
                     _members[joined] = new(joined, name, false, false, "");
                     Activity?.Invoke($"{name} joined your squad");
+                    MembersChanged?.Invoke($"{name} joined your squad");
                     RaiseChanged();
                 }
                 break;
@@ -259,6 +262,7 @@ internal sealed class SquadSync : IDisposable
                     if (m["owner"]?.GetValue<string>() is { } owner && _members.TryGetValue(owner, out var next))
                         _members[owner] = next with { Owner = true };
                     Activity?.Invoke($"{gone.Name} left your squad");
+                    MembersChanged?.Invoke($"{gone.Name} left your squad");
                     RaiseChanged();
                 }
                 break;

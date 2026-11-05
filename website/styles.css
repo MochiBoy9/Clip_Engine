@@ -288,6 +288,22 @@ th.us { color: var(--accent); }
 .donate-amounts .btn { align-self: auto; }
 .donate-amounts .btn[aria-disabled="true"] { opacity: 0.45; pointer-events: none; }
 .donate .fine { margin: 0; }
+/* The reminder to use your own email at checkout, over the plans and again in a box before going to Polar */
+.checkout-notice {
+  display: flex; gap: 14px; align-items: flex-start; margin: 22px 0 0; padding: 14px 18px; max-width: 820px;
+  background: var(--accent-soft); border-left: 3px solid var(--accent);
+}
+.checkout-notice svg { width: 22px; height: 22px; flex: none; fill: var(--accent); margin-top: 1px; }
+.checkout-notice p { margin: 0; color: var(--muted); }
+.checkout-notice strong { color: var(--text); }
+.checkout-dialog { padding: 0; border: 0; background: transparent; color: var(--text); max-width: min(520px, calc(100vw - 32px)); }
+.checkout-dialog::backdrop { background: rgba(5, 6, 8, 0.72); }
+.checkout-dialog .plate { margin: 0; }
+.checkout-dialog .plate-in { display: grid; gap: 12px; }
+.checkout-dialog h3 { margin: 0; font-size: 20px; }
+.checkout-dialog p { margin: 0; color: var(--muted); }
+.checkout-dialog p strong { color: var(--text); }
+.dialog-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
 .credits h3 { margin: 26px 0 10px; font-size: 16px; }
 .credit-list { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 8px; }
 .credit-list li { padding: 4px 10px; border: 1px solid var(--line-strong); font-size: 13px; }

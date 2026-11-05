@@ -567,7 +567,8 @@ public sealed class CloudViewModel : ObservableObject
                     ThumbnailFile.Delete(thumb);
                 }
             }
-            _main.AddActivity(ActivityKind.Clip, $"Uploaded a {clip.Game} clip to the cloud");
+            _main.Notify(NoticeKind.Clip, "Uploaded to the cloud", $"Your {clip.Game} clip is in your cloud library", "cloud",
+                         $"Uploaded a {clip.Game} clip to the cloud", ActivityKind.Clip);
         }
         Settings.Uploaded[localId] = cloud.Code;
         _main.SaveDesktopSettingsSoon();
