@@ -56,6 +56,8 @@ export class FakeBucket {
     this.objects = new Map();
     this.reads = 0;
     this.writes = 0;
+    this.uploads = new Map();
+    this.uploadCount = 0;
   }
   async put(key, body, options) {
     this.writes++;
@@ -82,6 +84,53 @@ export class FakeBucket {
   }
   async delete(keys) {
     for (const key of Array.isArray(keys) ? keys : [keys]) this.objects.delete(key);
+  }
+  // R2's multipart uploads: parts kept by upload until complete() joins them, in the order given.
+  async createMultipartUpload(key, options) {
+    const uploadId = `upload-${++this.uploadCount}`;
+    this.uploads.set(uploadId, { key, options, parts: new Map() });
+    return this.resumeMultipartUpload(key, uploadId);
+  }
+  resumeMultipartUpload(key, uploadId) {
+    const bucket = this;
+    const find = () => {
+      const upload = bucket.uploads.get(uploadId);
+      if (!upload || upload.key !== key) throw new Error("NoSuchUpload");
+      return upload;
+    };
+    return {
+      key,
+      uploadId,
+      async uploadPart(partNumber, body) {
+        const upload = find();
+        const bytes = new Uint8Array(await new Response(body).arrayBuffer());
+        const etag = `etag-${partNumber}-${bytes.length}`;
+        upload.parts.set(partNumber, { bytes, etag });
+        return { partNumber, etag };
+      },
+      async complete(parts) {
+        const upload = find();
+        const chunks = parts.map((p) => {
+          const part = upload.parts.get(p.partNumber);
+          if (!part || part.etag !== p.etag) throw new Error("InvalidPart");
+          return part.bytes;
+        });
+        const bytes = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+        let at = 0;
+        for (const c of chunks) {
+          bytes.set(c, at);
+          at += c.length;
+        }
+        bucket.uploads.delete(uploadId);
+        bucket.writes++;
+        bucket.objects.set(key, { bytes, options: upload.options });
+        return { key, size: bytes.length };
+      },
+      async abort() {
+        find();
+        bucket.uploads.delete(uploadId);
+      },
+    };
   }
 }
 

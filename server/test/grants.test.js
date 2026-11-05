@@ -78,7 +78,7 @@ test("special keys give a plan and features for their time, from first use", asy
   assert.equal(changed.expires, null);
   const pro = await (await license(env, key)).json();
   assert.equal(pro.plan, "pro");
-  assert.equal(pro.lines, 1440);
+  assert.equal(pro.lines, 2160, "Pro puts clips in the cloud at up to 4K");
   assert.equal(pro.themes, null);
   assert.equal(pro.expires, null);
 

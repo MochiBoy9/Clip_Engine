@@ -470,17 +470,38 @@ public sealed class CloudViewModel : ObservableObject
             await CopyAsync(link, "Link copied. It plays in any browser.");
             return;
         }
+        if (TooLongText(clip) is { } tooLong)
+        {
+            _main.ShowToast(tooLong, isError: true);
+            return;
+        }
         Queue(clip, copy: true);
     }
 
     internal void OnFavoriteChanged(ClipItemViewModel clip)
     {
-        if (SignedIn && Settings.SyncStarred && clip.IsFavorite && LinkFor(clip) is null) Queue(clip, copy: false);
+        if (SignedIn && Settings.SyncStarred && clip.IsFavorite && LinkFor(clip) is null && TooLongText(clip) is null) Queue(clip, copy: false);
     }
 
     private void QueueStarred()
     {
-        foreach (var clip in _main.Clips.Where(c => c.IsFavorite && LinkFor(c) is null)) Queue(clip, copy: false);
+        foreach (var clip in _main.Clips.Where(c => c.IsFavorite && LinkFor(c) is null && TooLongText(c) is null)) Queue(clip, copy: false);
+    }
+
+    private static double SecondsOf(ClipItemViewModel clip) => clip.File.Duration?.TotalSeconds ?? clip.File.Metadata?.Seconds ?? 0;
+
+    // Why the cloud library's plan won't take a clip this long, or null when it will: Free takes clips up to 40
+    // seconds, Pro 10 minutes and Ultra 30 (server/src/plans.js).
+    internal string? TooLongText(ClipItemViewModel clip)
+    {
+        var account = _account;
+        var max = account?.MaxSeconds ?? CloudAccount.FreeMaxSeconds;
+        if (SecondsOf(clip) <= max + 1) return null;
+        var label = account?.PlanLabel ?? "Free";
+        var limit = max >= 60 ? $"{max / 60} minutes" : $"{max} seconds";
+        return Plans.FromId(account?.Plan) == Plan.Ultra
+            ? $"Your {label} plan puts clips of up to {limit} in the cloud. Trim this one in the editor to upload it."
+            : $"Your {label} plan puts clips of up to {limit} in the cloud. Trim this one in the editor, or Pro and Ultra take longer ones.";
     }
 
     private void Queue(ClipItemViewModel clip, bool copy)
@@ -529,7 +550,15 @@ public sealed class CloudViewModel : ObservableObject
     private async Task<string> UploadAsync(CloudApi api, ClipItemViewModel clip)
     {
         var metadata = clip.File.Metadata;
-        var seconds = clip.File.Duration?.TotalSeconds ?? metadata?.Seconds ?? 0;
+        var seconds = SecondsOf(clip);
+        if (TooLongText(clip) is { } tooLong) throw new ShareFailedException(tooLong);
+        // What the account's plan takes: Free clips go up at 1080p and up to 100 MB, Pro and Ultra in 4K and bigger.
+        var lines = _account?.Lines ?? 1080;
+        var limit = (int)Math.Max(8, (_account?.MaxClip ?? CloudAccount.FreeMaxClip) / (1L << 20) * 9 / 10);
+        // The size of the picture that goes up: the clip's own, or scaled down to the plan's.
+        var size = Mp4Info.ReadVideoSize(clip.Path);
+        var (width, height) = size is { } s && s.Height > lines ? ((int)Math.Round(s.Width * (double)lines / s.Height) & ~1, lines)
+                            : size ?? (0, 0);
         var recorded = metadata?.UtcStart is > 0 ? metadata.UtcStart : new DateTimeOffset(clip.File.Created).ToUnixTimeMilliseconds();
         var localId = CloudApi.LocalId(clip.Path, clip.File.Bytes);
         var markers = new JsonArray();
@@ -541,18 +570,23 @@ public sealed class CloudViewModel : ObservableObject
             ["game"] = clip.Game,
             ["recorded"] = recorded,
             ["seconds"] = Math.Max(seconds, 0.1),
+            ["width"] = width,
+            ["height"] = height,
             ["visibility"] = Settings.DefaultVisibility,
             ["markers"] = markers,
         };
         var cloud = await api.AddClipAsync(Settings.AccountId, _token, body);
         if (!cloud.Uploaded)
         {
-            var limit = Math.Clamp(Settings.UploadLimitMb, 8, 98);
-            UploadStatus = $"Making a copy of {clip.Title} under {limit} MB…";
+            var making = size is { } source && source.Height > lines
+                ? $"Making a {Resolutions.Name(lines)} copy of {clip.Title} for your {_account?.PlanLabel ?? "Free"} cloud library…"
+                : $"Making a copy of {clip.Title} under {limit} MB…";
+            UploadStatus = making;
             var (copy, _) = await ClipSharing.MakeShareCopyAsync(clip.Path, limit,
-                new Progress<int>(p => UploadStatus = $"Making a copy of {clip.Title} under {limit} MB… {p}%"));
+                new Progress<int>(p => UploadStatus = $"{making} {p}%"), maxLines: lines);
             UploadStatus = $"Uploading {clip.Title}…";
-            await api.UploadAsync(Settings.AccountId, _token, cloud.Id, "video", copy, "video/mp4");
+            await api.UploadVideoAsync(Settings.AccountId, _token, cloud.Id, copy,
+                new Progress<int>(p => UploadStatus = $"Uploading {clip.Title}… {p}%"));
             if (await ThumbnailFile.MakeAsync(clip.Path, 640) is { } thumb)
             {
                 try

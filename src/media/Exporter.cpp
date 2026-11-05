@@ -87,12 +87,17 @@ SourceInfo Inspect(IMFSourceReader* reader) {
   return info;
 }
 
-// The biggest picture that still looks clean at the bitrate that fits.
-Plan PlanFor(const SourceInfo& source, UINT32 videoBitrate, unsigned maxFps) {
+// The biggest picture that still looks clean at the bitrate that fits, at most maxHeight.
+Plan PlanFor(const SourceInfo& source, UINT32 videoBitrate, unsigned maxFps, unsigned maxHeight) {
   Plan plan;
   plan.videoBitrate = videoBitrate;
-  UINT32 height = videoBitrate >= 5'000'000 ? 1080 : videoBitrate >= 2'200'000 ? 720 : videoBitrate >= 1'000'000 ? 540 : 480;
-  height = std::min(height, source.height);
+  UINT32 height = videoBitrate >= 24'000'000 ? 2160
+                  : videoBitrate >= 12'000'000 ? 1440
+                  : videoBitrate >= 5'000'000 ? 1080
+                  : videoBitrate >= 2'200'000 ? 720
+                  : videoBitrate >= 1'000'000 ? 540
+                  : 480;
+  height = std::min({height, static_cast<UINT32>(std::max(maxHeight, 360u)), source.height});
   plan.height = height & ~1u;
   plan.width = static_cast<UINT32>(static_cast<double>(source.width) * plan.height / source.height + 0.5) & ~1u;
   const double fpsCap = videoBitrate < 1'500'000 ? 30.0 : static_cast<double>(maxFps);
@@ -519,7 +524,7 @@ int RunExport(const ExportOptions& options) {
 
     for (int attempt = 1; attempt <= 3; ++attempt) {
       const auto videoBitrate = static_cast<UINT32>(std::clamp(budgetBits / seconds, 150'000.0, 40'000'000.0));
-      const Plan plan = PlanFor(source, videoBitrate, options.maxFps);
+      const Plan plan = PlanFor(source, videoBitrate, options.maxFps, options.maxHeight);
       log::Info("Exporting {}x{} at {} fps, {:.1f} Mbps", plan.width, plan.height, plan.fps, plan.videoBitrate / 1e6);
       std::filesystem::remove(options.output, ec);
       Encode(options.input, options.output, source, plan, audio);

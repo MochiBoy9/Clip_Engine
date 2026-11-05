@@ -8,8 +8,8 @@ internal sealed class DesktopSettings
 {
     public bool CloseToTray { get; set; } = true;
 
-    // The recording resolution picked in Settings, in lines; 0 is the most the plan allows. The engine gets the
-    // smaller of this and the plan's (Resolutions.Effective).
+    // The recording resolution picked in Settings, in lines; 0 is the most there is, 4K. Every plan has them all
+    // (Resolutions.Effective).
     public int Resolution { get; set; }
 
     // Friends see the squad invite next to your name, so they can join.

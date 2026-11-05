@@ -18,17 +18,26 @@
 
 import { randomCode } from "./codes.js";
 
-// What each plan gets. Storage is the cloud library's; lines is the highest recording resolution.
+// Every plan records at any resolution up to 4K on the PC, and clips there can be any length. What a plan sets is the
+// cloud library: storageMb is how much it keeps, lines the highest resolution a clip goes up at, clipMb the biggest
+// clip and clipSeconds the longest. Free clips go up at 1080p, up to 100 MB and 40 seconds; 4K, bigger and longer
+// clips need Pro (10 minutes) or Ultra (30 minutes).
+export const RECORD_LINES = 2160;
 export const PLANS = {
-  free: { label: "Free", price: 0, storageMb: 2048, lines: 1080 },
-  pro: { label: "Pro", price: 2.99, storageMb: 102_400, lines: 1440 },
-  ultra: { label: "Ultra", price: 4.99, storageMb: 256_000, lines: 2160 },
+  free: { label: "Free", price: 0, storageMb: 2048, lines: 1080, clipMb: 100, clipSeconds: 40 },
+  pro: { label: "Pro", price: 2.99, storageMb: 102_400, lines: 2160, clipMb: 1024, clipSeconds: 600 },
+  ultra: { label: "Ultra", price: 4.99, storageMb: 256_000, lines: 2160, clipMb: 4096, clipSeconds: 1800 },
 };
 
 // Accounts made before Pro and Ultra had "plus", which was Pro's storage.
 export function planName(name) {
   if (name === "plus") return "pro";
   return PLANS[name] ? name : "free";
+}
+
+// The biggest clip the plan's cloud library takes, in bytes.
+export function clipBytes(name) {
+  return (PLANS[name] ?? PLANS.free).clipMb * 1024 * 1024;
 }
 
 export function storageBytes(env, name) {
@@ -51,7 +60,7 @@ export function cleanKey(value) {
 //
 // Keys the operator makes in the key maker: "CEK-XXXX-XXXX-XXXX". Each one gives a plan and, if set, a
 // role (a title such as Content Creator), extra cloud storage, the colour themes it unlocks, the highest
-// resolution, perks (a direct line to the developer, bug reports straight to them), a place in the
+// resolution clips go up to the cloud at, perks (a direct line to the developer, bug reports straight to them), a place in the
 // credits, and a reason for giving it. It lasts a number of minutes from when it's first used, until a
 // set date, or for good. They're kept in the directory object (src/handles.js) and work without Polar.
 
@@ -62,7 +71,7 @@ export const THEME_IDS = ["hazard", "aurora", "ember", "mint", "sakura", "ocean"
 export const LINES = [480, 720, 1080, 1440, 2160];
 const GRANT_LENGTH = 12;
 
-// Titles a special key can give on top of its plan. The plan still sets storage, resolution and themes.
+// Titles a special key can give on top of its plan. The plan still sets storage, cloud resolution and themes.
 // Supporter is also what a donation's key gives on its own (see donations below).
 export const ROLES = {
   creator: { label: "Content Creator" },
@@ -380,6 +389,9 @@ export function planJson(env, name, features, role = null) {
     storage: storageBytes(env, name) + extra,
     extraStorage: extra,
     lines: features?.lines ?? plan.lines,
+    clipBytes: clipBytes(name),
+    clipSeconds: plan.clipSeconds,
+    recordLines: RECORD_LINES,
     themes: features?.themes ?? null,
     role: ROLES[role] ? role : null,
     roleLabel: roleLabel(role),

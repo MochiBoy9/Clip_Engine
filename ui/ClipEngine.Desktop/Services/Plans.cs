@@ -9,23 +9,25 @@ namespace ClipEngine.Desktop.Services;
 
 public enum Plan { Free, Pro, Ultra }
 
-// What each plan gets. The service has the same table (server/src/plans.js) and is what sets the cloud storage.
-internal sealed record PlanInfo(Plan Plan, string Id, string Label, decimal Price, int StorageGb, int Lines, IReadOnlyList<string> Perks)
+// What each plan gets. Every plan records at any resolution up to 4K; a plan sets the cloud library: its storage, the
+// highest resolution clips go up at (CloudLines), the biggest clip it takes (ClipMb) and the longest (ClipSeconds). The
+// service has the same table (server/src/plans.js) and is what enforces it. Clips on the PC can be any length.
+internal sealed record PlanInfo(Plan Plan, string Id, string Label, decimal Price, int StorageGb, int CloudLines, int ClipMb,
+                                int ClipSeconds, IReadOnlyList<string> Perks)
 {
     public string PriceText => Price == 0 ? "Free" : string.Create(CultureInfo.InvariantCulture, $"${Price:0.00}/mo");
-    public string LinesText => Resolutions.Name(Lines);
 }
 
 internal static class Plans
 {
-    public static readonly PlanInfo Free = new(Plan.Free, "free", "Free", 0, 2, 1080,
-        ["Every recording, detection and squad feature", "Records up to 1080p", "2 GB cloud library"]);
+    public static readonly PlanInfo Free = new(Plan.Free, "free", "Free", 0, 2, 1080, 100, 40,
+        ["Every recording, detection and squad feature", "Records up to 4K", "2 GB cloud library: clips up to 1080p, 100 MB and 40 seconds"]);
 
-    public static readonly PlanInfo Pro = new(Plan.Pro, "pro", "Pro", 2.99m, 100, 1440,
-        ["Records up to 1440p", "100 GB cloud library", "Thirteen colour themes", "Pro badge and your name in the credits"]);
+    public static readonly PlanInfo Pro = new(Plan.Pro, "pro", "Pro", 2.99m, 100, 2160, 1024, 600,
+        ["4K clips in the cloud, up to 1 GB and 10 minutes each", "100 GB cloud library", "Thirteen colour themes", "Pro badge and your name in the credits"]);
 
-    public static readonly PlanInfo Ultra = new(Plan.Ultra, "ultra", "Ultra", 4.99m, 250, 2160,
-        ["Everything in Pro", "Records up to 4K", "250 GB cloud library",
+    public static readonly PlanInfo Ultra = new(Plan.Ultra, "ultra", "Ultra", 4.99m, 250, 2160, 4096, 1800,
+        ["Everything in Pro", "4K clips in the cloud, up to 4 GB and 30 minutes each", "250 GB cloud library",
          "Every colour: three more themes and a colour wheel", "Adaptive themes with gradients and motion",
          "Ultra badge and top billing in the credits"]);
 
@@ -83,17 +85,15 @@ internal static class Donations
         : string.Create(CultureInfo.InvariantCulture, $"${cents / 100m:0.00}");
 }
 
-// The highest resolution to record at. 0 is the most the plan allows.
+// The highest resolution to record at. Every plan records up to 4K; 0 is the most there is, 4K or the monitor's own
+// size if that's smaller.
 internal static class Resolutions
 {
+    public const int Max = 2160;
+
     public static readonly IReadOnlyList<int> Choices = [0, 2160, 1440, 1080, 720, 480];
 
-    public static int Effective(int choice, Plan plan) => Effective(choice, Plans.For(plan).Lines);
-
-    // cap: the most the plan allows, or what a special key sets.
-    public static int Effective(int choice, int cap) => choice <= 0 ? cap : Math.Min(choice, cap);
-
-    public static Plan Needs(int lines) => lines > Plans.Pro.Lines ? Plan.Ultra : lines > Plans.Free.Lines ? Plan.Pro : Plan.Free;
+    public static int Effective(int choice) => choice <= 0 ? Max : Math.Min(choice, Max);
 
     public static string Name(int lines) => lines switch
     {
@@ -122,8 +122,8 @@ internal sealed class LicenseState
     public string CreditName { get; set; } = "";
     public bool InCredits { get; set; } = true;
 
-    // What a special key from the key maker changes: the highest resolution, the colour themes (null = the
-    // plan's) and extra cloud storage in bytes.
+    // What a special key from the key maker changes: the highest resolution clips go up to the cloud at, the colour
+    // themes (null = the plan's) and extra cloud storage in bytes.
     public bool IsSpecial { get; set; }
     public int? Lines { get; set; }
     public List<string>? Themes { get; set; }
@@ -312,7 +312,7 @@ internal sealed class LicenseClient(string server, HttpClient? http = null)
                 return new(LicenseOutcome.Valid, "", plan, reply?["display"]?.GetValue<string>() ?? "", expires, CreditsAllowed: credited,
                            Renews: renews, Ending: ending);
             }
-            int? lines = reply?["lines"] is JsonValue l && l.TryGetValue<int>(out var n) && n != Plans.For(plan).Lines ? n : null;
+            int? lines = reply?["lines"] is JsonValue l && l.TryGetValue<int>(out var n) && n != Plans.For(plan).CloudLines ? n : null;
             var themes = reply?["themes"] is JsonArray t
                 ? t.Select(x => x?.GetValue<string>() ?? "").Where(x => x.Length > 0).ToList()
                 : null;

@@ -120,8 +120,96 @@ test("plans set how much a library keeps, and only the operator sets them", asyn
   assert.equal((await call(env, `${me.base}/admin/plan`, { method: "POST", token: me.token, body: { plan: "pro" } })).status, 404);
   const pro = await (await call(env, "/v1/admin/plan", { method: "POST", token: "operator-secret", body: { account: me.id, plan: "pro" } })).json();
   assert.equal(pro.plan, "pro");
-  assert.equal(pro.lines, 1440);
+  assert.equal(pro.lines, 2160);
+  assert.equal(pro.maxClip, 1024 * 1024 * 1024);
   assert.equal((await call(env, `${me.base}/clips/${clip.id}/video`, { method: "PUT", token: me.token, body: new Uint8Array(700 * 1024) })).status, 200);
+});
+
+test("every plan records 4K, but 4K and big clips go to the cloud with Pro or Ultra", async () => {
+  const MB = 1024 * 1024;
+  const env = fakeEnv({ ADMIN_TOKEN: "operator-secret", UPLOAD_PART_BYTES: String(5 * MB) });
+  const me = await account(env);
+  const add = async (body) => (await call(env, `${me.base}/clips`, { method: "POST", token: me.token, body: { seconds: 10, ...body } })).json();
+  const put = (clip, bytes, headers) =>
+    call(env, `${me.base}/clips/${clip.id}/video`, { method: "PUT", token: me.token, body: new Uint8Array(bytes), headers });
+  const start = (clip, size) => call(env, `${me.base}/clips/${clip.id}/video/parts`, { method: "POST", token: me.token, body: { size } });
+
+  const free = await (await call(env, `${me.base}/account`, { token: me.token })).json();
+  assert.equal(free.lines, 1080);
+  assert.equal(free.maxClip, 100 * MB);
+  assert.equal(free.maxSeconds, 40);
+
+  // Free: clips up to 40 seconds; Pro up to 10 minutes and Ultra 30.
+  const long = await call(env, `${me.base}/clips`, { method: "POST", token: me.token, body: { seconds: 45, width: 1920, height: 1080 } });
+  assert.equal(long.status, 403);
+  assert.match((await long.json()).error, /up to 40 seconds in the cloud\. Trim this one, or Pro and Ultra take longer ones/);
+  assert.equal((await put(await add({ seconds: 40.4, width: 1920, height: 1080 }), 1000)).status, 200);
+
+  // Free: a 1080p clip goes up; a 4K one doesn't, and nor does one over 100 MB.
+  assert.equal((await put(await add({ width: 1920, height: 1080 }), 1000)).status, 200);
+  const uhd = await add({ width: 3840, height: 2160, localId: "uhd.mp4|5000" });
+  const refused = await put(uhd, 1000);
+  assert.equal(refused.status, 403);
+  assert.match((await refused.json()).error, /Free plan puts clips in the cloud at up to 1080p\. Pro and Ultra take 4K/);
+  const big = await start(await add({ width: 1920, height: 1080 }), 150 * MB);
+  assert.equal(big.status, 413);
+  assert.match((await big.json()).error, /up to 100 MB in the cloud\. Pro and Ultra take bigger ones/);
+  // The app sends the same clip again as a 1080p copy: the clip takes the copy's size, and it goes up.
+  const again = await add({ width: 1920, height: 1080, localId: "uhd.mp4|5000" });
+  assert.equal(again.id, uhd.id);
+  assert.equal(again.height, 1080);
+  assert.equal((await put(again, 1000)).status, 200);
+
+  // Pro: 4K, longer clips, and clips over 100 MB in parts.
+  await call(env, "/v1/admin/plan", { method: "POST", token: "operator-secret", body: { account: me.id, plan: "pro" } });
+  const tenMinutes = await add({ seconds: 600, width: 3840, height: 2160 });
+  assert.equal((await put(tenMinutes, 1000)).status, 200);
+  assert.equal((await call(env, `${me.base}/clips`, { method: "POST", token: me.token, body: { seconds: 900 } })).status, 403);
+  await call(env, "/v1/admin/plan", { method: "POST", token: "operator-secret", body: { account: me.id, plan: "ultra" } });
+  assert.equal((await put(await add({ seconds: 1800 }), 1000)).status, 200);
+  const hour = await call(env, `${me.base}/clips`, { method: "POST", token: me.token, body: { seconds: 3600 } });
+  assert.match((await hour.json()).error, /Ultra plan takes clips of up to 30 minutes in the cloud\. Trim this one to upload it/);
+  await call(env, "/v1/admin/plan", { method: "POST", token: "operator-secret", body: { account: me.id, plan: "pro" } });
+  assert.equal((await put(await add({ width: 3840, height: 2160 }), 1000)).status, 200);
+  const whole = await put(await add({ width: 3840, height: 2160 }), 1000, { "content-length": String(150 * MB) });
+  assert.equal(whole.status, 413, "a Worker can't take a body over 100 MB in one go");
+  assert.match((await whole.json()).error, /go up in parts/);
+  assert.equal((await start(await add({ width: 3840, height: 2160 }), 2 * 1024 * MB)).status, 413, "over Pro's 1 GB");
+
+  const clip = await add({ width: 3840, height: 2160 });
+  const size = 12 * MB + 123;
+  const plan = await (await start(clip, size)).json();
+  assert.deepEqual(plan, { partBytes: 5 * MB, parts: 3 });
+  const bytes = new Uint8Array(size).map((_, i) => i % 251);
+  const part = (n, body) => call(env, `${me.base}/clips/${clip.id}/video/parts/${n}`, { method: "PUT", token: me.token, body });
+  assert.equal((await part(1, bytes.slice(0, 1000))).status, 400, "every part but the last is partBytes");
+  assert.equal((await part(4, bytes.slice(0, 123))).status, 400);
+  assert.equal((await part(3, bytes.slice(10 * MB))).status, 200);
+  assert.equal((await part(1, bytes.slice(0, 5 * MB))).status, 200);
+  const early = await call(env, `${me.base}/clips/${clip.id}/video/parts/done`, { method: "POST", token: me.token });
+  assert.equal(early.status, 409);
+  assert.equal((await part(2, bytes.slice(5 * MB, 10 * MB))).status, 200);
+  const done = await call(env, `${me.base}/clips/${clip.id}/video/parts/done`, { method: "POST", token: me.token });
+  assert.equal(done.status, 200);
+  const finished = await done.json();
+  assert.equal(finished.uploaded, true);
+  assert.equal(finished.size, size);
+  assert.deepEqual(env.CLIPS.objects.get(`library/${me.id}/${clip.id}.mp4`).bytes, bytes);
+  assert.equal(env.CLIPS.uploads.size, 0);
+
+  // Removing a clip part way through drops its parts.
+  const dropped = await add({ width: 3840, height: 2160 });
+  assert.equal((await start(dropped, 12 * MB)).status, 200);
+  assert.equal(env.CLIPS.uploads.size, 1);
+  assert.equal((await call(env, `${me.base}/clips/${dropped.id}`, { method: "DELETE", token: me.token })).status, 200);
+  assert.equal(env.CLIPS.uploads.size, 0);
+
+  // Back on Free, a 4K clip that's part way up isn't finished.
+  const late = await add({ width: 3840, height: 2160 });
+  await start(late, 6 * MB);
+  await call(env, "/v1/admin/plan", { method: "POST", token: "operator-secret", body: { account: me.id, plan: "free" } });
+  const tooLate = await call(env, `${me.base}/clips/${late.id}/video/parts/done`, { method: "POST", token: me.token });
+  assert.ok([403, 409].includes(tooLate.status));
 });
 
 test("signing a second PC in with a one-time code", async () => {

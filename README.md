@@ -85,8 +85,9 @@ Clip Engine is free. Subscriptions add more for people who want it:
 
 | | Free | Pro ($2.99 a month) | Ultra ($4.99 a month) |
 | --- | --- | --- | --- |
-| Recording | Up to 1080p | Up to 1440p | Up to 4K |
+| Recording | Up to 4K | Up to 4K | Up to 4K |
 | Cloud library | 2 GB | 100 GB | 250 GB |
+| Clips in the cloud | Up to 1080p, 100 MB and 40 seconds | 4K, up to 1 GB and 10 minutes | 4K, up to 4 GB and 30 minutes |
 | Username changes | Once a month | Once a week | Once a week |
 | Extras | | Thirteen colour themes, a badge, a name in the credits | Every colour on a colour wheel, adaptive themes with gradients and motion, a badge, a name at the top of the credits |
 

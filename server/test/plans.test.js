@@ -57,11 +57,15 @@ test("a license key says which plan it pays for", async () => {
   assert.equal(pro.status, 200);
   const info = await pro.json();
   assert.equal(info.plan, "pro");
-  assert.equal(info.lines, 1440);
+  assert.equal(info.lines, 2160);
+  assert.equal(info.clipBytes, 1024 * 1024 * 1024);
+  assert.equal(info.recordLines, 2160);
   assert.equal(info.storage, 102_400 * 1024 * 1024);
   assert.equal((await call(env, "/v1/license", { method: "POST", body: { key: "OLD-KEY-0001" } })).status, 403);
   const plans = await (await call(env, "/v1/plans")).json();
-  assert.deepEqual(plans.plans.map((p) => [p.plan, p.price, p.lines]), [["free", 0, 1080], ["pro", 2.99, 1440], ["ultra", 4.99, 2160]]);
+  // Every plan records up to 4K; the plan sets the resolution and size of clips in the cloud.
+  assert.deepEqual(plans.plans.map((p) => [p.plan, p.price, p.lines, p.clipBytes / 1024 / 1024, p.clipSeconds, p.recordLines]),
+    [["free", 0, 1080, 100, 40, 2160], ["pro", 2.99, 2160, 1024, 600, 2160], ["ultra", 4.99, 2160, 4096, 1800, 2160]]);
   assert.equal(plans.open, true);
 });
 

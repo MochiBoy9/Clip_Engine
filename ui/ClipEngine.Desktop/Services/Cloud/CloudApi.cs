@@ -8,8 +8,14 @@ namespace ClipEngine.Desktop.Services.Cloud;
 
 internal sealed record CloudAccount(string Id, string Name, string? Handle, string Plan, string PlanLabel, long Used, long Limit, int Clips,
                                     string? PlanKey = null, string FriendCode = "", DateTimeOffset? HandleChangeAt = null,
-                                    string? RoleLabel = null, string? BadgeLabel = null, bool HideBadge = false)
+                                    string? RoleLabel = null, string? BadgeLabel = null, bool HideBadge = false,
+                                    int Lines = 1080, long MaxClip = CloudAccount.FreeMaxClip, int MaxSeconds = CloudAccount.FreeMaxSeconds)
 {
+    // Free's cloud library: clips up to 1080p, 100 MB and 40 seconds. Pro and Ultra take 4K, bigger and longer ones
+    // (server/src/plans.js).
+    public const long FreeMaxClip = 100L << 20;
+    public const int FreeMaxSeconds = 40;
+
     public static CloudAccount From(JsonNode? n) => new(
         n?["id"]?.GetValue<string>() ?? "",
         n?["name"]?.GetValue<string>() ?? "",
@@ -24,7 +30,10 @@ internal sealed record CloudAccount(string Id, string Name, string? Handle, stri
         n?["handleChangeAt"] is JsonValue at && at.TryGetValue<long>(out var ms) && ms > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(ms) : null,
         n?["roleLabel"] is JsonValue role && role.TryGetValue<string>(out var label) && label.Length > 0 ? label : null,
         n?["badge"]?["label"] is JsonValue badge && badge.TryGetValue<string>(out var badgeLabel) && badgeLabel.Length > 0 ? badgeLabel : null,
-        n?["hideBadge"] is JsonValue hide && hide.TryGetValue<bool>(out var hidden) && hidden);
+        n?["hideBadge"] is JsonValue hide && hide.TryGetValue<bool>(out var hidden) && hidden,
+        n?["lines"] is JsonValue l && l.TryGetValue<int>(out var lines) && lines > 0 ? lines : 1080,
+        n?["maxClip"] is JsonValue mc && mc.TryGetValue<long>(out var maxClip) && maxClip > 0 ? maxClip : FreeMaxClip,
+        n?["maxSeconds"] is JsonValue ms2 && ms2.TryGetValue<int>(out var maxSeconds) && maxSeconds > 0 ? maxSeconds : FreeMaxSeconds);
 }
 
 internal sealed record CloudClip(string Id, string Code, string? LocalId, string Title, string Game, long Recorded, double Seconds,
@@ -111,6 +120,56 @@ internal sealed class CloudApi(string server, HttpClient? http = null)
 
     public Task DeleteClipAsync(string account, string token, string clip) =>
         SendAsync(HttpMethod.Delete, $"/v1/accounts/{account}/clips/{clip}", token, null);
+
+    // The most one request takes: a Worker's body limit is 100 MB, so a bigger clip goes up in parts.
+    public const long SingleUploadBytes = 95L << 20;
+
+    // A clip's video, in one go or, when it's bigger than one request takes, in parts.
+    public async Task UploadVideoAsync(string account, string token, string clip, string file, IProgress<int>? progress = null,
+                                       CancellationToken cancel = default)
+    {
+        var size = new FileInfo(file).Length;
+        if (size <= SingleUploadBytes)
+        {
+            await UploadAsync(account, token, clip, "video", file, "video/mp4", cancel);
+            return;
+        }
+        var start = await SendAsync(HttpMethod.Post, $"/v1/accounts/{account}/clips/{clip}/video/parts", token,
+                                    new JsonObject { ["size"] = size });
+        var partBytes = start?["partBytes"]?.GetValue<long>() ?? 0;
+        var parts = start?["parts"]?.GetValue<int>() ?? 0;
+        if (partBytes <= 0 || parts <= 0) throw new SquadException("The online service didn't say how to send the clip.");
+        await using var stream = File.OpenRead(file);
+        var buffer = new byte[partBytes];
+        for (var n = 1; n <= parts; n++)
+        {
+            var length = (int)Math.Min(partBytes, size - partBytes * (n - 1));
+            stream.Position = partBytes * (n - 1);
+            await stream.ReadExactlyAsync(buffer.AsMemory(0, length), cancel);
+            for (var attempt = 1; ; attempt++)
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Put, $"{Server}/v1/accounts/{account}/clips/{clip}/video/parts/{n}")
+                {
+                    Content = new ByteArrayContent(buffer, 0, length),
+                };
+                request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                try
+                {
+                    using var response = await _http.SendAsync(request, cancel);
+                    // A part that didn't go through is sent again, twice at most; a refusal isn't.
+                    if ((int)response.StatusCode >= 500 && attempt < 3) continue;
+                    await ThrowIfFailed(response);
+                    break;
+                }
+                catch (HttpRequestException) when (attempt < 3)
+                {
+                }
+            }
+            progress?.Report(n * 100 / parts);
+        }
+        await SendAsync(HttpMethod.Post, $"/v1/accounts/{account}/clips/{clip}/video/parts/done", token, new JsonObject());
+    }
 
     public async Task UploadAsync(string account, string token, string clip, string kind, string file, string contentType,
                                   CancellationToken cancel = default)

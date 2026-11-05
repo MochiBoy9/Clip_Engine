@@ -139,11 +139,6 @@
               </StackPanel>
               <Panel Grid.Column="2" VerticalAlignment="Center">
                 <ComboBox Width="210" ItemsSource="{Binding ResolutionOptions}" SelectedItem="{Binding Resolution}">
-                  <ComboBox.Styles>
-                    <Style Selector="ComboBoxItem" x:DataType="vm:ResolutionOption">
-                      <Setter Property="IsEnabled" Value="{Binding IsAvailable}" />
-                    </Style>
-                  </ComboBox.Styles>
                   <ComboBox.ItemTemplate>
                     <DataTemplate x:DataType="vm:ResolutionOption">
                       <TextBlock Text="{Binding Label}" />
