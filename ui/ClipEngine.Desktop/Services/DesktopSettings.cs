@@ -79,6 +79,9 @@ internal sealed class DesktopSettings
     // This PC's id with the online service, so joining a squad again from it keeps your place.
     public string DeviceId { get; set; } = "";
 
+    // Player kills logged by hand on the Journal page, by run, for fights the screen didn't show.
+    public Dictionary<string, int> JournalPlayerKills { get; set; } = [];
+
     public Squad.SquadSettings Squad { get; set; } = new();
     public Cloud.CloudSettings Cloud { get; set; } = new();
 

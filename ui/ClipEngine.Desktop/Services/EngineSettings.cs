@@ -36,6 +36,8 @@ internal sealed class EngineSettings
     public bool Detection { get; set; } = true;
     public string ReadingQuality { get; set; } = "medium";
     public bool AutoClip { get; set; } = true;
+    // Keep the journal of each run in games built around runs (src/detect/Journal.h).
+    public bool Journal { get; set; } = true;
     public List<string> AutoClipEvents { get; set; } = [.. AllEvents];
     public int ClipBeforeSeconds { get; set; } = 10;
     public int ClipAfterSeconds { get; set; } = 5;
@@ -104,6 +106,7 @@ internal sealed class EngineSettings
                     if (ReadingQualities.Contains(value.ToLowerInvariant())) settings.ReadingQuality = value.ToLowerInvariant();
                     break;
                 case "auto_clip": settings.AutoClip = ParseBool(value, settings.AutoClip); break;
+                case "journal": settings.Journal = ParseBool(value, settings.Journal); break;
                 case "auto_clip_events":
                     settings.AutoClipEvents = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                                                    .Select(e => e.ToLowerInvariant()).Where(AllEvents.Contains).ToList();
@@ -143,6 +146,7 @@ internal sealed class EngineSettings
             ["detection"] = Format(Detection),
             ["reading_quality"] = ReadingQuality,
             ["auto_clip"] = Format(AutoClip),
+            ["journal"] = Format(Journal),
             ["auto_clip_events"] = string.Join(", ", AllEvents.Where(AutoClipEvents.Contains)),
             ["clip_before_seconds"] = Format(ClipBeforeSeconds),
             ["clip_after_seconds"] = Format(ClipAfterSeconds),

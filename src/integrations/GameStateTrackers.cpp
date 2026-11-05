@@ -2,6 +2,9 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
+#include <map>
+#include <optional>
 #include <format>
 
 namespace clip {
@@ -428,6 +431,111 @@ std::vector<ApiEvent> Tf2ConsoleTracker::Update(std::string_view raw) {
   }
   board_ = {{"kills", kills_}, {"deaths", deaths_}};
   return events;
+}
+
+// ---------------------------------------------------------------------- Hunt: Showdown 1896
+
+namespace {
+
+// Every <Attr name="..." value="..."/> in the file, in order.
+std::vector<std::pair<std::string, std::string>> ReadAttributes(std::string_view xml) {
+  std::vector<std::pair<std::string, std::string>> attributes;
+  auto quoted = [&](size_t from, std::string_view key, size_t end) -> std::optional<std::string> {
+    const auto at = xml.find(key, from);
+    if (at == std::string_view::npos || at > end) return std::nullopt;
+    const auto open = at + key.size();
+    const auto close = xml.find('"', open);
+    if (close == std::string_view::npos || close > end) return std::nullopt;
+    return std::string(xml.substr(open, close - open));
+  };
+  for (size_t at = xml.find("<Attr"); at != std::string_view::npos; at = xml.find("<Attr", at + 5)) {
+    const auto end = xml.find('>', at);
+    if (end == std::string_view::npos) break;
+    auto name = quoted(at, "name=\"", end);
+    auto value = quoted(at, "value=\"", end);
+    if (name && value) attributes.emplace_back(std::move(*name), std::move(*value));
+  }
+  return attributes;
+}
+
+bool EndsWith(std::string_view s, std::string_view end) { return s.size() >= end.size() && s.substr(s.size() - end.size()) == end; }
+
+int ToInt(const std::string& s) {
+  int value = 0;
+  const auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), value);
+  return ec == std::errc() ? value : 0;
+}
+
+}  // namespace
+
+std::vector<JournalNote> HuntMissionTracker::Update(std::string_view xml) {
+  const auto attributes = ReadAttributes(xml);
+  std::map<std::string, std::string> bag;
+  std::string fingerprint;
+  for (const auto& [name, value] : attributes) {
+    if (!name.starts_with("MissionBag") && !name.starts_with("MissionAccolade")) continue;
+    bag[name] = value;
+    fingerprint += name + '=' + value + ';';
+  }
+  if (fingerprint.empty() || fingerprint == last_) return {};
+  last_ = fingerprint;
+  if (std::exchange(first_, false)) return {};
+
+  auto get = [&](const std::string& name) {
+    const auto it = bag.find(name);
+    return it == bag.end() ? std::string() : it->second;
+  };
+  auto isTrue = [&](const std::string& name) { return Lower(get(name)) == "true"; };
+
+  // Hunters downed or killed by the player, over every team in the match.
+  int hunters = 0;
+  for (const auto& [name, value] : bag) {
+    if (name.starts_with("MissionBagPlayer_") && (EndsWith(name, "_killedbyme") || EndsWith(name, "_downedbyme"))) {
+      hunters += ToInt(value);
+    }
+  }
+
+  // The accolades: what each one counts, how many, and the XP it gave.
+  int monsters = 0, bosses = 0, bounties = 0, xp = 0;
+  bool anyAccolade = false;
+  for (const auto& [name, value] : bag) {
+    if (!name.starts_with("MissionAccoladeEntry_") || !EndsWith(name, "_category")) continue;
+    const std::string prefix = name.substr(0, name.size() - std::string_view("_category").size());
+    const std::string category = Lower(value);
+    const int hits = std::max(1, ToInt(get(prefix + "_hits")));
+    anyAccolade = true;
+    xp += ToInt(get(prefix + "_xp"));
+    if (category.find("boss") != std::string::npos) bosses += hits;
+    else if (category.find("monster") != std::string::npos) monsters += hits;
+    if (category.find("bounty") != std::string::npos && category.find("extract") != std::string::npos) bounties += hits;
+  }
+  // Older files list the same things as MissionBagEntry_<n>_category with an _amount.
+  if (!anyAccolade) {
+    for (const auto& [name, value] : bag) {
+      if (!name.starts_with("MissionBagEntry_") || !EndsWith(name, "_category")) continue;
+      const std::string prefix = name.substr(0, name.size() - std::string_view("_category").size());
+      const std::string category = Lower(value);
+      const int amount = std::max(1, ToInt(get(prefix + "_amount")));
+      if (category.find("boss") != std::string::npos) bosses += amount;
+      else if (category.find("monster") != std::string::npos) monsters += amount;
+      if (category.find("bounty") != std::string::npos && category.find("extract") != std::string::npos) bounties += amount;
+    }
+  }
+
+  std::vector<JournalNote> notes;
+  auto add = [&](std::string note, std::string value, int amount, std::string text) {
+    notes.push_back({std::move(note), std::move(value), amount, 0, std::move(text)});
+  };
+  const std::string mode = isTrue("MissionBagIsQuickPlay") ? "Quickplay" : "Bounty Hunt";
+  add("deploy", mode, 0, "Match summary in attributes.xml");
+  if (monsters > 0) add("enemy", "Monster", monsters, std::format("{} monsters killed", monsters));
+  if (bosses > 0) add("enemy", "Boss", bosses, std::format("{} bosses banished", bosses));
+  if (hunters > 0) add("player_kill", "Hunters", hunters, std::format("{} hunters downed or killed", hunters));
+  if (bounties > 0) add("objective", "Bounty extracted", bounties, std::format("{} bounty tokens extracted", bounties));
+  if (xp > 0) add("xp", "", xp, std::format("{} XP", xp));
+  if (isTrue("MissionBagIsHunterDead")) add("died", "", 0, "Hunter died");
+  else add("extracted", "", 0, "Hunter extracted");
+  return notes;
 }
 
 }  // namespace clip

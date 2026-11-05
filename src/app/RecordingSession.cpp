@@ -86,7 +86,8 @@ std::vector<AudioApp> AppsFor(AppAudioKind kind, DWORD game) {
 
 RecordingSession::RecordingSession(const Config& config, HMONITOR monitor, std::string label, bool isGame,
                                    std::vector<DetectionRule> rules, std::vector<ScoreboardRule> scoreboards,
-                                   std::vector<std::string> playerNames, int detectionSampleMs, double hudScale)
+                                   std::vector<std::string> playerNames, int detectionSampleMs, double hudScale,
+                                   std::vector<JournalRule> journals)
     : label_(std::move(label)),
       monitor_(monitor),
       buffer_(int64_t{config.bufferSeconds} * kHnsPerSecond),
@@ -121,7 +122,7 @@ RecordingSession::RecordingSession(const Config& config, HMONITOR monitor, std::
   LimitBufferMemory(config, video.bitrate);
   StartAudio(config, isGame);
 
-  if (!rules.empty() || !scoreboards.empty()) {
+  if (!rules.empty() || !scoreboards.empty() || !journals.empty()) {
     try {
       detector_ = std::make_unique<EventDetector>(
           gpu_, *capture_, std::move(rules), std::move(scoreboards), std::move(playerNames), detectionSampleMs,
@@ -132,6 +133,11 @@ RecordingSession::RecordingSession(const Config& config, HMONITOR monitor, std::
           [this](const Scoreboard& board) {
             std::lock_guard lock(eventsMutex_);
             newScoreboards_.push_back(board);
+          },
+          std::move(journals),
+          [this](const JournalNote& note) {
+            std::lock_guard lock(eventsMutex_);
+            newNotes_.push_back(note);
           });
       if (detector_->Listens()) {
         if (gameAudio_ || systemAudio_) listener_ = detector_.get();
@@ -216,6 +222,11 @@ std::vector<GameEvent> RecordingSession::TakeNewEvents() {
 std::vector<Scoreboard> RecordingSession::TakeScoreboards() {
   std::lock_guard lock(eventsMutex_);
   return std::exchange(newScoreboards_, {});
+}
+
+std::vector<JournalNote> RecordingSession::TakeJournalNotes() {
+  std::lock_guard lock(eventsMutex_);
+  return std::exchange(newNotes_, {});
 }
 
 std::vector<GameEvent> RecordingSession::EventsBetween(int64_t start, int64_t end) const {

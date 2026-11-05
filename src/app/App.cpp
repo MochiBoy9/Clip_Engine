@@ -172,6 +172,7 @@ int App::Run() {
     HandleVoiceClips();
     HandleCommands();
     PumpScoreboards();
+    PumpJournal();
     SaveReadyAutoClips(false);
     SaveReadySquadClips(false);
     if (NowHns() >= nextPoll) {
@@ -213,6 +214,7 @@ void App::Poll() {
   if (!session_ && monitor && NowHns() >= retryAt_) {
     std::vector<DetectionRule> rules;
     std::vector<ScoreboardRule> scoreboards;
+    std::vector<JournalRule> journals;
     std::vector<std::string> playerNames;
     double hudScale = 1;
     if (config_.detection && !gameId.empty()) {
@@ -220,16 +222,18 @@ void App::Poll() {
       playerNames = ReadPlayerNames(config_.file);
       rules = rules_.ForGame(gameId, playerNames, &needingName);
       scoreboards = rules_.ScoreboardsForGame(gameId);
+      if (config_.journal) journals = rules_.JournalsForGame(gameId);
       hudScale = ReadHudScale(config_.file, gameId);
       if (!needingName.empty()) log::Warn("Add your {} name on the Games page to catch your kills in its killfeed", label);
       if (rules.empty() && game->profile->api == GameApi::None) log::Info("No detection rules for {}, so only the hotkey saves clips", label);
+      if (!journals.empty()) log::Info("Keeping the {} journal: maps, runs, enemies, loot and how each run ended", label);
     }
     try {
       // The audio levels are read again, since the app may have changed them since the engine started.
       config_.levels = ReadAudioLevels(config_.file);
       session_ = std::make_unique<RecordingSession>(config_, monitor, label, game.has_value(), std::move(rules),
                                                     std::move(scoreboards), std::move(playerNames), rules_.sampleMs,
-                                                    hudScale);
+                                                    hudScale, std::move(journals));
       sessionGameId_ = gameId;
       sessionId_ = LocalTimestamp();
       ApplyGameClipHotkeys();
@@ -268,7 +272,8 @@ void App::SyncIntegration(const DetectedGame* game) {
   if (!integration_) return;
   integrationGame_ = game->profile;
   integrationProcess_ = game->processId;
-  log::Info("Reading {}'s own game events for kills, deaths and match results", game->profile->name);
+  if (game->profile->api == GameApi::HuntMissionFile) log::Info("Reading {}'s match summaries for its journal", game->profile->name);
+  else log::Info("Reading {}'s own game events for kills, deaths and match results", game->profile->name);
 }
 
 void App::PumpIntegrationEvents() {
@@ -307,6 +312,23 @@ void App::PumpScoreboards() {
   }
 }
 
+void App::PumpJournal() {
+  std::vector<JournalNote> notes;
+  if (session_) notes = session_->TakeJournalNotes();
+  if (integration_) {
+    auto more = integration_->TakeNotes();
+    if (session_ && session_->Label() == integrationGame_->name) notes.insert(notes.end(), more.begin(), more.end());
+  }
+  if (notes.empty() || !session_) return;
+  std::ranges::stable_sort(notes, {}, &JournalNote::time);
+  for (const auto& note : notes) {
+    // The app's journal page follows these to stay up to date while the game runs.
+    log::Info("Journal {} in {}: {}{}", note.note, session_->Label(), note.value.empty() ? note.text : note.value,
+              note.amount != 0 ? std::format(" ({})", note.amount) : "");
+    if (timeline_) timeline_->Write(TimelineNote(SessionSeconds(note.time), MatchAt(note.time), note));
+  }
+}
+
 double App::SessionSeconds(int64_t time) const { return static_cast<double>(time - sessionStart_) / kHnsPerSecond; }
 
 int App::MatchAt(int64_t time) const {
@@ -319,6 +341,7 @@ void App::StopSession() {
   PumpIntegrationEvents();
   HandleEvents();
   PumpScoreboards();
+  PumpJournal();
   SaveReadyAutoClips(true);
   SaveReadySquadClips(true);
   // The long recording reads from this session's buffer, so it ends with it.

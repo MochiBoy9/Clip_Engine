@@ -27,6 +27,7 @@ public sealed class SettingsViewModel : ObservableObject
     private bool _detection;
     private string _readingQuality = "medium";
     private bool _autoClip;
+    private bool _journal;
     private double _clipBeforeSeconds;
     private double _clipAfterSeconds;
     private string _sidePanelHotkey;
@@ -340,6 +341,7 @@ public sealed class SettingsViewModel : ObservableObject
         _ => "Reads small text bigger and sharper than Low, at little extra cost. Recommended.",
     };
     public bool AutoClip { get => _autoClip; set => Change(ref _autoClip, value); }
+    public bool Journal { get => _journal; set => Change(ref _journal, value); }
     public IReadOnlyList<EventToggle> AutoClipEvents { get; }
 
     public double ClipBeforeSeconds
@@ -589,6 +591,7 @@ public sealed class SettingsViewModel : ObservableObject
         Detection = Detection,
         ReadingQuality = _readingQuality,
         AutoClip = AutoClip,
+        Journal = Journal,
         AutoClipEvents = AutoClipEvents.Where(e => e.IsOn).Select(e => e.Name).ToList(),
         ClipBeforeSeconds = (int)ClipBeforeSeconds,
         ClipAfterSeconds = (int)ClipAfterSeconds,
@@ -649,6 +652,7 @@ public sealed class SettingsViewModel : ObservableObject
         _detection = s.Detection;
         _readingQuality = EngineSettings.ReadingQualities.Contains(s.ReadingQuality) ? s.ReadingQuality : "medium";
         _autoClip = s.AutoClip;
+        _journal = s.Journal;
         _clipBeforeSeconds = Math.Clamp(s.ClipBeforeSeconds, 0, 60);
         _clipAfterSeconds = Math.Clamp(s.ClipAfterSeconds, 0, 30);
         foreach (var toggle in AutoClipEvents) toggle.Load(s.AutoClipEvents.Contains(toggle.Name));

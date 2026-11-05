@@ -275,7 +275,8 @@ int RunScanCommand(int argc, wchar_t** argv) {
     log::Error("Scan failed: Media Foundation is unavailable");
     return 1;
   }
-  const int result = RunScanCommand(argv[2], forGame, quality, hudScale.value_or(ReadHudScale(settings, game)));
+  const int result = RunScanCommand(argv[2], forGame, quality, hudScale.value_or(ReadHudScale(settings, game)),
+                                    rules.JournalsForGame(game));
   MFShutdown();
   return result;
 }

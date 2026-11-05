@@ -61,6 +61,8 @@ class App {
   void CheckLongRecording();
   // Writes changes to the player's totals, from the game's API or its scoreboard, to the timeline.
   void PumpScoreboards();
+  // Writes the journal notes from the screen and the game's own files into the timeline.
+  void PumpJournal();
   double SessionSeconds(int64_t time) const;
   // Which match of the recording a moment belongs to: the match starts detected by then.
   int MatchAt(int64_t time) const;

@@ -54,6 +54,11 @@ public sealed class StudioViewModel : ObservableObject
         new("splitgate", "Splitgate", false, ["PortalWars2-Win64-Shipping.exe", "PortalWars-Win64-Shipping.exe"]),
         // Kills and deaths come from its console log; these killfeed rules fill in until it arrives.
         new("team_fortress_2", "Team Fortress 2", false, ["tf_win64.exe", "tf.exe"]),
+        // How their runs end is read off the screen; the rest goes into their journal.
+        new("arc_raiders", "ARC Raiders", false, ["PioneerGame.exe"]),
+        new("escape_from_tarkov", "Escape from Tarkov", false, ["EscapeFromTarkov.exe"]),
+        new("helldivers_2", "Helldivers 2", false, ["helldivers2.exe"]),
+        new("deep_rock_galactic", "Deep Rock Galactic", false, ["FSD-Win64-Shipping.exe"]),
         new("roblox", "Roblox", false, ["RobloxPlayerBeta.exe"]),
         new("minecraft", "Minecraft", false, ["Minecraft.Windows.exe"]),
     ];

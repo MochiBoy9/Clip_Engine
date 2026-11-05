@@ -58,6 +58,21 @@ std::vector<GameEvent> GameIntegration::TakeEvents() {
   return std::exchange(events_, {});
 }
 
+std::vector<JournalNote> GameIntegration::TakeNotes() {
+  std::lock_guard lock(mutex_);
+  return std::exchange(notes_, {});
+}
+
+void GameIntegration::Note(std::vector<JournalNote> notes) {
+  if (notes.empty()) return;
+  const int64_t now = NowHns();
+  std::lock_guard lock(mutex_);
+  for (auto& note : notes) {
+    note.time = now;
+    notes_.push_back(std::move(note));
+  }
+}
+
 std::optional<Scoreboard> GameIntegration::TakeScoreboard() {
   std::lock_guard lock(mutex_);
   return std::exchange(newBoard_, std::nullopt);
@@ -474,6 +489,53 @@ class Tf2ConsoleIntegration final : public GameIntegration {
   Tf2ConsoleTracker tracker_;
 };
 
+// ---------------------------------------------------------------------- Hunt: Showdown 1896
+
+// Looks every few seconds at the file where Hunt writes each match's summary, and writes a
+// new one down in the journal. The game rewrites it at the end of each match; looking at its
+// time and size costs nothing.
+class HuntMissionIntegration final : public GameIntegration {
+ public:
+  explicit HuntMissionIntegration(std::vector<std::filesystem::path> files)
+      : GameIntegration("Hunt: Showdown 1896"), files_(std::move(files)) {
+    Start();
+  }
+  ~HuntMissionIntegration() override { Stop(); }
+
+ private:
+  void Run() override {
+    bool told = false;
+    while (true) {
+      for (const auto& file : files_) {
+        std::error_code ec;
+        const auto time = std::filesystem::last_write_time(file, ec);
+        if (ec) continue;
+        const auto size = std::filesystem::file_size(file, ec);
+        if (ec || (time == seenTime_ && size == seenSize_)) break;
+        std::ifstream in(file, std::ios::binary);
+        std::string xml((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        // Caught mid-write: try again next look.
+        if (xml.find("</Attributes>") == std::string::npos && xml.size() > 64) break;
+        seenTime_ = time;
+        seenSize_ = size;
+        if (!told) {
+          log::Info("Following Hunt: Showdown 1896's match summaries in {} for its journal", file.string());
+          told = true;
+          Connected();
+        }
+        Note(tracker_.Update(xml));
+        break;
+      }
+      if (!Wait(3000)) return;
+    }
+  }
+
+  std::vector<std::filesystem::path> files_;
+  std::filesystem::file_time_type seenTime_{};
+  uintmax_t seenSize_ = 0;
+  HuntMissionTracker tracker_;
+};
+
 }  // namespace
 
 std::unique_ptr<GameIntegration> StartGameIntegration(const DetectedGame& game,
@@ -514,6 +576,16 @@ std::unique_ptr<GameIntegration> StartGameIntegration(const DetectedGame& game,
       if (exe.empty()) return nullptr;
       EnableTf2ConsoleLog(exe);
       return std::make_unique<Tf2ConsoleIntegration>(Tf2ConsoleLogs(exe), playerNames);
+    }
+    case GameApi::HuntMissionFile: {
+      if (exe.empty()) return nullptr;
+      // HuntGame.exe is in bin\win_x64 under the game's folder.
+      const std::filesystem::path folder = std::filesystem::path(exe).parent_path();
+      std::vector<std::filesystem::path> files;
+      for (const auto& root : {folder.parent_path().parent_path(), folder.parent_path(), folder}) {
+        files.push_back(root / "user" / "profiles" / "default" / "attributes.xml");
+      }
+      return std::make_unique<HuntMissionIntegration>(std::move(files));
     }
     default:
       return nullptr;

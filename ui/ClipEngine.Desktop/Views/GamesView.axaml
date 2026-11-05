@@ -7,7 +7,7 @@
   <ScrollViewer>
     <StackPanel Margin="0,0,40,40" Spacing="22">
       <StackPanel Spacing="4">
-        <views:SectionMark Index="06" Label="Game registry" />
+        <views:SectionMark Index="07" Label="Game registry" />
         <TextBlock Classes="h1" Text="Games" />
         <TextBlock Classes="caption" Text="Clip Engine starts recording as soon as one of these opens, on the monitor it's on." />
       </StackPanel>

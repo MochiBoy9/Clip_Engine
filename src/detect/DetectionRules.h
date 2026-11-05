@@ -1,6 +1,7 @@
 #pragma once
 
 #include "detect/GameEvent.h"
+#include "detect/Journal.h"
 #include "detect/Scoreboard.h"
 #include "detect/ScreenRegion.h"
 #include "detect/TextMatcher.h"
@@ -98,6 +99,8 @@ struct DetectionRules {
   std::vector<CustomGame> games;
   std::vector<DetectionRule> rules;
   std::vector<ScoreboardRule> scoreboards;
+  // [<game>.journal.<note>] sections, for the journal of each run (see Journal.h).
+  std::vector<JournalRule> journals;
   std::vector<std::string> warnings;
 
   // The game's rules, with {player} filled in from playerNames. Rules that need a name are left
@@ -105,17 +108,21 @@ struct DetectionRules {
   std::vector<DetectionRule> ForGame(const std::string& game, const std::vector<std::string>& playerNames = {},
                                      std::vector<std::string>* needingName = nullptr) const;
   std::vector<ScoreboardRule> ScoreboardsForGame(const std::string& game) const;
+  std::vector<JournalRule> JournalsForGame(const std::string& game) const;
 };
 
 // Reads detection.ini. Sections are named [<game id>.<event>] or [<game id>.<event>.<anything>],
-// [<game id>.scoreboard] says where the game's scoreboard is, and [game.<id>] adds a game.
+// [<game id>.scoreboard] says where the game's scoreboard is, [<game id>.journal.<note>] (or
+// [<game id>.journal.<note>.<anything>]) is a journal rule, and [game.<id>] adds a game.
 DetectionRules ParseDetectionRules(std::istream& in);
 
 // The rules that ship with the app, with the user's own detection.ini laid over them. A game
 // the user's file has rules for (editedGames) uses those instead of the shipped ones, and a
 // game whose scoreboard it describes uses that scoreboard; every other game keeps the shipped
-// rules, so fixes in an update still reach it. Games added in either file are all kept, the
-// user's winning, and so is the user's [detection] sample_ms.
+// rules, so fixes in an update still reach it. Journal rules work the same way on their own: a
+// game the user's file has journal rules for uses those, and every other game the shipped ones,
+// whatever happened to its other rules. Games added in either file are all kept, the user's
+// winning, and so is the user's [detection] sample_ms.
 DetectionRules MergeDetectionRules(DetectionRules shipped, DetectionRules user);
 
 // "A | B" as phrases, as the words and exclude settings are read. Phrases mentioning {player} are left out.
