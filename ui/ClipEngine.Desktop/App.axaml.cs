@@ -40,6 +40,7 @@ public partial class App : Application
             _viewModel.ShowMainWindowRequested += ShowWindow;
             _viewModel.SidePanelToggleRequested += ToggleSidePanel;
             _viewModel.GameNoticeRequested += ShowGameNotice;
+            _viewModel.NoticeRequested += ShowNotice;
             _viewModel.Settings.SidePanelHotkeyChanged += RegisterHotkey;
             _viewModel.Settings.StatsOverlayHotkeyChanged += RegisterStatsHotkey;
             _viewModel.StatsOverlayChanged += UpdateStatsOverlay;
@@ -174,6 +175,15 @@ public partial class App : Application
         if (_window is { IsActive: true }) return;
         _notice ??= new GameNoticeWindow();
         _notice.Show(text);
+    }
+
+    // A notification while Clip Engine's window isn't in front: the same notice, in the corner of the screen in use
+    // (over the game while one is played). In front, the window's own pop-up shows it.
+    private void ShowNotice(string title, string text)
+    {
+        if (_window is { IsActive: true }) return;
+        _notice ??= new GameNoticeWindow();
+        _notice.Show(title, text);
     }
 
     private void ShowWindow()

@@ -197,6 +197,28 @@ window.GetVisualDescendants().OfType<Avalonia.Controls.ScrollViewer>().First(v =
 Save(window, "16-studio-fine-tune.png");
 studio.ShowFineTune = false;
 
+// Notifications: pop-ups in the window's corner, the list from the bell in the sidebar, Home's recent events showing just
+// them, and the switches for which ones pop up.
+SampleNotices.Fill(vm);
+vm.ShowPage(vm.Home);
+Save(window, "24-notification-pop-ups.png");
+vm.Notifications.ClearPopUps();
+vm.Notifications.IsOpen = true;
+Save(window, "25-notifications.png");
+vm.Notifications.IsOpen = false;
+vm.ActivityShowsNotices = true;
+Save(window, "26-recent-notifications.png");
+vm.ActivityShowsNotices = false;
+vm.SelectedNav = vm.Nav.First(n => n.Page == Page.Settings);
+Settle();
+var noticeHeading = window.GetVisualDescendants().OfType<SettingsView>().First()
+                          .GetVisualDescendants().OfType<Avalonia.Controls.TextBlock>().First(t => t.Text == "NOTIFICATIONS");
+var noticeScroll = noticeHeading.GetVisualAncestors().OfType<Avalonia.Controls.ScrollViewer>().First();
+if (noticeHeading.TranslatePoint(new Point(0, 0), (Visual)noticeScroll.Content!) is { } noticeAt)
+    noticeScroll.Offset = new Vector(0, noticeAt.Y - 60);
+Save(window, "27-notification-settings.png");
+SampleNotices.Unread(vm);
+
 // The side panel as it sits on the edge of the screen.
 var panel = new SidePanelWindow { DataContext = vm, Width = 344, Height = 900 };
 panel.Show();
@@ -557,6 +579,33 @@ internal sealed class PreviewChannel : ISquadChannel
     public void Send(System.Text.Json.Nodes.JsonObject message) { }
     public void Receive(string json) => Received?.Invoke((System.Text.Json.Nodes.JsonObject)System.Text.Json.Nodes.JsonNode.Parse(json)!);
     public void Dispose() { }
+}
+
+internal static class SampleNotices
+{
+    public static void Fill(MainViewModel vm)
+    {
+        var n = vm.Notifications;
+        var now = DateTimeOffset.Now;
+        n.Add(NoticeKind.Update, "Clip Engine 1.1.0 is out", "Install it from Settings > Updates.", "updates", now.AddDays(-1)).IsUnread = false;
+        n.Add(NoticeKind.Squad, "Squad", "Mira joined your squad", "squad", now.AddHours(-3)).IsUnread = false;
+        n.Add(NoticeKind.Friends, "Friends", "@kai came online · playing The Finals", "friends", now.AddMinutes(-42)).IsUnread = false;
+        var clip = n.Add(NoticeKind.Clip, "Clip saved", "The Finals · 3 kills, 1 assist, 1 revive · 30 s", "clip:" + vm.Clips[0].Path,
+                         now.AddMinutes(-4));
+        var renews = n.Add(NoticeKind.Subscription, "Subscription renews soon",
+                           "Your Pro subscription renews tomorrow. Change it with Manage in Settings > Plan.", "plan", now.AddMinutes(-2));
+        var request = n.Add(NoticeKind.FriendRequest, "Friend request", "@nova wants to be friends", "friends", now.AddMinutes(-1));
+        n.PopUp(clip);
+        n.PopUp(renews);
+        n.PopUp(request);
+    }
+
+    // The newest two unread again, for the bell's count in the screenshots after.
+    public static void Unread(MainViewModel vm)
+    {
+        foreach (var item in vm.Notifications.History.Take(2)) item.IsUnread = true;
+        vm.Notifications.Recount();
+    }
 }
 
 internal static class SampleSquad

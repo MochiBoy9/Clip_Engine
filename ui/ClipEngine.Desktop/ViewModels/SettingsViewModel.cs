@@ -173,6 +173,9 @@ public sealed class SettingsViewModel : ObservableObject
     // The updates card under it.
     public UpdatesViewModel? Updates { get; init; }
 
+    // Settings > Notifications: which pop-ups show, or none.
+    public NotificationsViewModel? Notifications { get; init; }
+
     public event Action<string>? SidePanelHotkeyChanged;
     public event Action<string>? StatsOverlayHotkeyChanged;
     // Turned on or off, or what it shows or where changed.
@@ -512,30 +515,6 @@ public sealed class SettingsViewModel : ObservableObject
         Raise(nameof(StatsBottomLeft));
         Raise(nameof(StatsBottomRight));
         StatsOverlayChanged?.Invoke();
-    }
-
-    public bool GameNotifications
-    {
-        get => _desktop.GameNotifications;
-        set
-        {
-            if (_desktop.GameNotifications == value) return;
-            _desktop.GameNotifications = value;
-            TrySaveDesktop();
-            Raise();
-        }
-    }
-
-    public bool MomentNotices
-    {
-        get => _desktop.MomentNotices;
-        set
-        {
-            if (_desktop.MomentNotices == value) return;
-            _desktop.MomentNotices = value;
-            TrySaveDesktop();
-            Raise();
-        }
     }
 
     public bool GameArtOnline

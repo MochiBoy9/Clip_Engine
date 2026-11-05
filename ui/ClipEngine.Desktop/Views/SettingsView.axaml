@@ -881,34 +881,6 @@
             <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <Grid ColumnDefinitions="Auto,*,Auto">
               <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
-                <PathIcon Data="{StaticResource IconCheck}" />
-              </Border>
-              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
-                <TextBlock Text="Notice over the game" FontWeight="SemiBold" FontSize="14" />
-                <TextBlock Classes="caption" Text="A small &quot;Clip saved&quot; in the corner while you play. It never shows up in your clips."
-                           TextWrapping="Wrap" />
-              </StackPanel>
-              <Panel Grid.Column="2" VerticalAlignment="Center">
-                <ToggleSwitch IsChecked="{Binding GameNotifications}" OnContent="{x:Null}" OffContent="{x:Null}" />
-              </Panel>
-            </Grid>
-            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
-            <Grid ColumnDefinitions="Auto,*,Auto" IsEnabled="{Binding GameNotifications}">
-              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
-                <PathIcon Data="{StaticResource IconBolt}" />
-              </Border>
-              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
-                <TextBlock Text="Moments over the game" FontWeight="SemiBold" FontSize="14" />
-                <TextBlock Classes="caption" TextWrapping="Wrap"
-                           Text="The same notice for each kill, multi-kill, revive and assist as it's spotted, the match's line when it ends, and a new personal best." />
-              </StackPanel>
-              <Panel Grid.Column="2" VerticalAlignment="Center">
-                <ToggleSwitch IsChecked="{Binding MomentNotices}" OnContent="{x:Null}" OffContent="{x:Null}" />
-              </Panel>
-            </Grid>
-            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
-            <Grid ColumnDefinitions="Auto,*,Auto">
-              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconGames}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
@@ -920,6 +892,58 @@
                 <ToggleSwitch IsChecked="{Binding GameArtOnline}" OnContent="{x:Null}" OffContent="{x:Null}" />
               </Panel>
             </Grid>
+          </StackPanel>
+        </views:Plate>
+        <!-- Notifications: which pop-ups show, where, or none at all. The history keeps everything either way. -->
+        <views:Plate Classes="card" Padding="26,24" Margin="0,0,0,22" IsVisible="{Binding Notifications, Converter={x:Static ObjectConverters.IsNotNull}}">
+          <StackPanel>
+            <TextBlock Classes="eyebrow" Margin="0,0,0,18" Text="NOTIFICATIONS" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
+                <PathIcon Data="{StaticResource IconBell}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Pop-ups" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" TextWrapping="Wrap"
+                           Text="A card in the corner when something happens. Off turns every pop-up off; the bell in the sidebar and Home's recent events still list them." />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <ToggleSwitch IsChecked="{Binding Notifications.On}" OnContent="{x:Null}" OffContent="{x:Null}" />
+              </Panel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+            <Grid ColumnDefinitions="Auto,*,Auto" IsEnabled="{Binding Notifications.On}">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
+                <PathIcon Data="{StaticResource IconCheck}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Over the game too" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="While you play, pop-ups show in the game's corner. They never show up in your clips."
+                           TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <ToggleSwitch IsChecked="{Binding Notifications.OverGame}" OnContent="{x:Null}" OffContent="{x:Null}" />
+              </Panel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+            <TextBlock Classes="caption" Text="SHOW POP-UPS FOR" FontWeight="Bold" LetterSpacing="1.2" Margin="0,0,0,10" />
+            <ItemsControl ItemsSource="{Binding Notifications.Filters}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:NoticeFilter">
+                  <StackPanel IsEnabled="{Binding IsEnabled}">
+                    <Border Height="1" Background="{StaticResource Divider}" Margin="0,10" IsVisible="{Binding IsNotFirst}" />
+                    <Grid ColumnDefinitions="*,Auto">
+                      <StackPanel VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                        <TextBlock Text="{Binding Label}" FontWeight="SemiBold" FontSize="13" />
+                        <TextBlock Classes="caption" Text="{Binding Caption}" TextWrapping="Wrap" />
+                      </StackPanel>
+                      <ToggleSwitch Grid.Column="1" IsChecked="{Binding IsOn}" OnContent="{x:Null}" OffContent="{x:Null}"
+                                    VerticalAlignment="Center" />
+                    </Grid>
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
           </StackPanel>
         </views:Plate>
         <views:Plate Classes="card" Padding="26,24" Margin="0,0,0,22">

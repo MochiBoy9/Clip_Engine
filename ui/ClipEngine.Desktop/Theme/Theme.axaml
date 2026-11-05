@@ -830,6 +830,22 @@
     </Setter>
   </Style>
 
+  <!-- A notification pop-up slides in from the right as it arrives -->
+  <Style Selector="views|Plate.popUp">
+    <Style.Animations>
+      <Animation Duration="0:0:0.24" Easing="CubicEaseOut" FillMode="Forward">
+        <KeyFrame Cue="0%">
+          <Setter Property="Opacity" Value="0" />
+          <Setter Property="TranslateTransform.X" Value="28" />
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+          <Setter Property="Opacity" Value="1" />
+          <Setter Property="TranslateTransform.X" Value="0" />
+        </KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+
   <!-- The toast rises in from the bottom each time it shows -->
   <Style Selector="views|Plate.toast[IsVisible=True]">
     <Style.Animations>

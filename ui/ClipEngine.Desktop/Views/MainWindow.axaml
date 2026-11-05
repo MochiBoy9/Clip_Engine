@@ -44,6 +44,17 @@
 
           <!-- Engine status and the side panel, always in reach -->
           <StackPanel DockPanel.Dock="Bottom" Spacing="12" Margin="0,0,0,14" HorizontalAlignment="Center">
+            <!-- Notifications: the bell opens their history, with a count of the new ones -->
+            <Panel Width="40" Height="40" HorizontalAlignment="Center">
+              <Button Name="Bell" Classes="icon" Width="40" Height="40" Command="{Binding Notifications.TogglePanelCommand}"
+                      ToolTip.Tip="{Binding Notifications.BellTip}">
+                <PathIcon Data="{StaticResource IconBell}" />
+              </Button>
+              <Border Classes="pill accent" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-5,-7,0" Padding="4,0"
+                      MinWidth="17" IsHitTestVisible="False" IsVisible="{Binding Notifications.HasUnread}">
+                <TextBlock Text="{Binding Notifications.UnreadText}" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" />
+              </Border>
+            </Panel>
             <Button Classes="icon" Width="40" Height="40" HorizontalAlignment="Center" Command="{Binding ToggleSidePanelCommand}"
                     ToolTip.Tip="{Binding SidePanelHotkey, StringFormat='Side panel over your game ({0})'}">
               <PathIcon Data="{StaticResource IconPanel}" />
@@ -131,6 +142,79 @@
         </TransitioningContentControl>
       </Grid>
     </Grid>
+
+    <!-- Pop-ups: notifications in the top-right corner for a few seconds; the pointer over them keeps them up -->
+    <ItemsControl Name="PopUpStack" ItemsSource="{Binding Notifications.PopUps}" HorizontalAlignment="Right" VerticalAlignment="Top"
+                  Width="360" Margin="0,54,28,0">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="vm:NoticeItem">
+          <Panel Margin="0,0,0,10">
+            <views:Plate Classes="popUp" Cut="8" Padding="0" Background="{StaticResource OverlayBrush}"
+                         BorderBrush="{DynamicResource AccentBrush}">
+              <Button Classes="marker" Margin="0" Padding="12,11,38,12" HorizontalAlignment="Stretch"
+                      HorizontalContentAlignment="Stretch" Command="{Binding OpenCommand}">
+                <Grid ColumnDefinitions="Auto,*">
+                  <Border Classes="tile small" VerticalAlignment="Top" Margin="0,2,12,0">
+                    <PathIcon Data="{Binding Icon}" />
+                  </Border>
+                  <StackPanel Grid.Column="1" Spacing="2">
+                    <TextBlock Text="{Binding KindLabel}" FontSize="10" FontWeight="Bold" LetterSpacing="1.2"
+                               Foreground="{DynamicResource AccentBrush}" />
+                    <TextBlock Text="{Binding Title}" FontFamily="{StaticResource DisplayFont}" FontWeight="SemiBold" FontSize="14"
+                               TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Text}" FontSize="12" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap"
+                               MaxLines="3" TextTrimming="CharacterEllipsis" IsVisible="{Binding HasText}" />
+                  </StackPanel>
+                </Grid>
+              </Button>
+            </views:Plate>
+            <Button Classes="icon" Width="24" Height="24" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,8,0"
+                    Command="{Binding DismissCommand}" ToolTip.Tip="Dismiss">
+              <PathIcon Data="{StaticResource IconClose}" Width="9" Height="9" />
+            </Button>
+          </Panel>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
+    <!-- The notifications history, from the bell in the sidebar. A click outside closes it. -->
+    <Panel IsVisible="{Binding Notifications.IsOpen}">
+      <Border Name="NoticeDismiss" Background="Transparent" />
+      <views:Plate Classes="card noticePanel" Width="380" MaxHeight="580" HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                   Margin="86,0,0,14" Padding="18,16,14,14" Background="{StaticResource OverlayBrush}"
+                   BorderBrush="{StaticResource BorderStrongBrush}">
+        <DockPanel>
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="4,0,0,12">
+            <TextBlock Classes="eyebrow" Text="NOTIFICATIONS" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Classes="secondary" Padding="10,4" FontSize="12" Content="Mark all read" Margin="0,0,6,0"
+                    Command="{Binding Notifications.MarkAllReadCommand}" />
+            <Button Grid.Column="2" Classes="icon" Width="28" Height="28" Command="{Binding Notifications.TogglePanelCommand}"
+                    ToolTip.Tip="Close">
+              <PathIcon Data="{StaticResource IconClose}" Width="11" Height="11" />
+            </Button>
+          </Grid>
+          <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Margin="4,10,0,0">
+            <Button Classes="secondary" Padding="10,4" FontSize="12" Content="Choose what pops up" HorizontalAlignment="Left"
+                    Command="{Binding OpenNoticeSettingsCommand}" />
+            <Button Grid.Column="1" Classes="secondary" Padding="10,4" FontSize="12" Content="Clear"
+                    Command="{Binding Notifications.ClearCommand}" />
+          </Grid>
+          <Panel>
+            <TextBlock Classes="caption" TextWrapping="Wrap" Margin="4,6" IsVisible="{Binding Notifications.HasNoHistory}"
+                       Text="Nothing yet. Friend requests, clips you save, your subscription renewing and other news show up here." />
+            <ScrollViewer IsVisible="{Binding Notifications.HasHistory}">
+              <ItemsControl ItemsSource="{Binding Notifications.History}" Margin="0,0,8,0">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:NoticeItem">
+                    <views:NoticeRow />
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </Panel>
+        </DockPanel>
+      </views:Plate>
+    </Panel>
 
     <!-- Toast -->
     <views:Plate Classes="toast" IsVisible="{Binding HasToast}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Cut="8"

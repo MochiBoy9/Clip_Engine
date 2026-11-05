@@ -468,6 +468,7 @@ public sealed class SquadViewModel : ObservableObject, IDisposable
         sync.Changed += RaiseSquad;
         sync.LibraryChanged += RefreshLibrarySoon;
         sync.Activity += text => _main.AddActivity(ActivityKind.Info, text);
+        sync.MembersChanged += text => _main.Notify(NoticeKind.Squad, "Squad", text, "squad");
         sync.UploadWanted += QueueUpload;
         sync.Rejected += OnRejected;
         _sync = sync;

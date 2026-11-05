@@ -20,8 +20,12 @@
       <Border Classes="tile small">
         <PathIcon Data="{StaticResource IconCheck}" />
       </Border>
-      <TextBlock Name="Message" VerticalAlignment="Center" FontFamily="{StaticResource DisplayFont}" FontWeight="SemiBold" FontSize="14"
-                 MaxWidth="360" TextTrimming="CharacterEllipsis" />
+      <StackPanel VerticalAlignment="Center" Spacing="1">
+        <TextBlock Name="Message" FontFamily="{StaticResource DisplayFont}" FontWeight="SemiBold" FontSize="14"
+                   MaxWidth="360" TextTrimming="CharacterEllipsis" />
+        <TextBlock Name="Detail" FontSize="12" Foreground="{StaticResource TextSecondary}" MaxWidth="360" TextWrapping="Wrap"
+                   MaxLines="2" TextTrimming="CharacterEllipsis" IsVisible="False" />
+      </StackPanel>
     </StackPanel>
   </views:Plate>
 </Window>

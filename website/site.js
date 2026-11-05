@@ -69,6 +69,33 @@ for (const name of ["pro", "ultra"]) {
   for (const el of document.querySelectorAll(`[data-link="${name}"]`)) el.textContent = "Subscribe";
 }
 
+// Before Polar's checkout, a reminder that the license key goes to the email entered there. Continue goes on to the
+// checkout; without <dialog> support the link just goes.
+const checkoutDialog = document.querySelector("[data-checkout-dialog]");
+let checkoutUrl = "";
+function askBeforeCheckout(el) {
+  el.addEventListener("click", (e) => {
+    if (!checkoutDialog || typeof checkoutDialog.showModal !== "function" || !el.href || el.getAttribute("aria-disabled") === "true") return;
+    e.preventDefault();
+    checkoutUrl = el.href;
+    checkoutDialog.showModal();
+  });
+}
+for (const name of ["pro", "ultra"]) {
+  if (!LINKS[name]) continue;
+  for (const el of document.querySelectorAll(`[data-link="${name}"]`)) askBeforeCheckout(el);
+}
+if (LINKS.donate) for (const el of document.querySelectorAll("[data-donate]")) askBeforeCheckout(el);
+if (checkoutDialog) {
+  checkoutDialog.querySelector("[data-checkout-go]")?.addEventListener("click", () => {
+    if (checkoutUrl) window.location.assign(checkoutUrl);
+  });
+  // A click on the backdrop, outside the box, closes it.
+  checkoutDialog.addEventListener("click", (e) => {
+    if (e.target === checkoutDialog) checkoutDialog.close("cancel");
+  });
+}
+
 // Subscribers who asked to be thanked, Ultra first, then supporters who donated $5 or more, then the content
 // creators and others the developer thanked with a special role.
 const CREDIT_ROLES = { supporter: "Supporter", exclusive: "Exclusive", creator: "Content Creator", special: "Special" };

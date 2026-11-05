@@ -363,6 +363,8 @@ async function route(request, env) {
         ...planJson(env, check.plan, check.features, check.role),
         display: check.display,
         expires: check.expires,
+        renews: check.renewal?.renews ?? null,
+        ending: Boolean(check.renewal?.ending),
         grant: Boolean(check.grant),
         perks: check.perks ?? [],
         credits: credited,

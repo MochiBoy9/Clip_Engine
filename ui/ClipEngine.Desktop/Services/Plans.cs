@@ -111,6 +111,11 @@ internal sealed class LicenseState
     public Plan Plan { get; set; }
     public DateTimeOffset? Expires { get; set; }
     public DateTimeOffset? LastChecked { get; set; }
+
+    // When a subscription next renews, or ends when it was cancelled (Ending), as Polar said at the last check. Only the
+    // date is kept, for the notice a few days before.
+    public DateTimeOffset? Renews { get; set; }
+    public bool Ending { get; set; }
     public DateTimeOffset? LastOk { get; set; }
 
     // The name to show in the credits, and whether to.
@@ -165,6 +170,8 @@ internal sealed class LicenseState
             Plan = Plan,
             Expires = Expires,
             LastChecked = LastChecked,
+            Renews = Renews,
+            Ending = Ending,
             LastOk = LastOk,
             CreditName = CreditName,
             InCredits = InCredits,
@@ -188,7 +195,8 @@ internal sealed class LicenseState
     {
         Key = Display = "";
         Plan = Plan.Free;
-        Expires = LastChecked = LastOk = null;
+        Expires = LastChecked = LastOk = Renews = null;
+        Ending = false;
         IsSpecial = false;
         Lines = null;
         Themes = null;
@@ -230,7 +238,8 @@ internal sealed record LicenseCheck(LicenseOutcome Outcome, string Message, Plan
                                     DateTimeOffset? Expires = null, bool IsSpecial = false, int? Lines = null,
                                     IReadOnlyList<string>? Themes = null, long ExtraStorage = 0, string? Role = null,
                                     string? RoleLabel = null, IReadOnlyList<string>? Perks = null, bool CreditsAllowed = false,
-                                    string Reason = "", bool Supporter = false, long? Donated = null);
+                                    string Reason = "", bool Supporter = false, long? Donated = null,
+                                    DateTimeOffset? Renews = null, bool Ending = false);
 
 // What a special key can let its holder do besides the plan (server/src/plans.js, PERKS).
 internal static class PerkIds
@@ -283,6 +292,11 @@ internal sealed class LicenseClient(string server, HttpClient? http = null)
             DateTimeOffset? expires = reply?["expires"] is JsonValue e && e.TryGetValue<long>(out var ms)
                 ? DateTimeOffset.FromUnixTimeMilliseconds(ms)
                 : null;
+            // A subscription's next renewal, or its end once it's cancelled (server/src/plans.js, subscriptionRenewal).
+            DateTimeOffset? renews = reply?["renews"] is JsonValue r && r.TryGetValue<long>(out var renewMs)
+                ? DateTimeOffset.FromUnixTimeMilliseconds(renewMs)
+                : null;
+            var ending = reply?["ending"] is JsonValue en && en.TryGetValue<bool>(out var isEnding) && isEnding;
             long? donated = reply?["donated"] is JsonValue dv && dv.TryGetValue<long>(out var cents) ? cents : null;
             var credited = reply?["credits"] is JsonValue c && c.TryGetValue<bool>(out var credited0) && credited0;
             var extra = reply?["extraStorage"] is JsonValue xs && xs.TryGetValue<long>(out var bytes) ? bytes : 0;
@@ -290,9 +304,14 @@ internal sealed class LicenseClient(string server, HttpClient? http = null)
             if (!special && supporter)
             {
                 return new LicenseCheck(LicenseOutcome.Valid, "", plan, reply?["display"]?.GetValue<string>() ?? "", expires, false, null, null,
-                                        extra, Text(reply?["role"]), Text(reply?["roleLabel"]), [], credited, "", true, donated);
+                                        extra, Text(reply?["role"]), Text(reply?["roleLabel"]), [], credited, "", true, donated,
+                                        renews, ending);
             }
-            if (!special) return new(LicenseOutcome.Valid, "", plan, reply?["display"]?.GetValue<string>() ?? "", expires, CreditsAllowed: credited);
+            if (!special)
+            {
+                return new(LicenseOutcome.Valid, "", plan, reply?["display"]?.GetValue<string>() ?? "", expires, CreditsAllowed: credited,
+                           Renews: renews, Ending: ending);
+            }
             int? lines = reply?["lines"] is JsonValue l && l.TryGetValue<int>(out var n) && n != Plans.For(plan).Lines ? n : null;
             var themes = reply?["themes"] is JsonArray t
                 ? t.Select(x => x?.GetValue<string>() ?? "").Where(x => x.Length > 0).ToList()

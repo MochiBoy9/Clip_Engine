@@ -246,6 +246,8 @@ export async function checkLicense(env, value, device) {
     return { ok: false, rejected: true, error: "This donation hasn't gone through, or was refunded. Try again once Polar emails your receipt." };
   }
   const donation = donationKey || cents > 0 ? donationPerks(env, cents) : null;
+  // A subscription's next renewal date, so the app can say a few days before. Asked of Polar each check; not kept here.
+  const renewal = plan === "free" ? null : await subscriptionRenewal(env, info.customer_id ?? info.customer?.id);
   return {
     ok: true,
     plan,
@@ -257,7 +259,44 @@ export async function checkLicense(env, value, device) {
     role: donation && plan === "free" ? "supporter" : null,
     perks: [],
     donation,
+    renewal,
   };
+}
+
+// ---- renewals ----
+//
+// When a customer's subscription renews next, or ends if they cancelled it: { renews (Unix ms), ending }, or null when
+// there's none or it can't be told (no POLAR_ACCESS_TOKEN with subscriptions:read, or Polar didn't answer). Only the
+// date and whether it's ending are passed on to the app; nothing about the customer is stored.
+export async function subscriptionRenewal(env, customer) {
+  const token = env?.POLAR_ACCESS_TOKEN;
+  if (!token || typeof customer !== "string" || !customer) return null;
+  const api = (env.POLAR_API ?? "https://api.polar.sh").replace(/\/$/, "");
+  const send = env.POLAR_FETCH ?? fetch;
+  const query = new URLSearchParams({ customer_id: customer, active: "true", limit: "20" });
+  if (env.POLAR_ORGANIZATION_ID) query.set("organization_id", env.POLAR_ORGANIZATION_ID);
+  let list;
+  try {
+    const response = await send(`${api}/v1/subscriptions/?${query}`, {
+      headers: { authorization: `Bearer ${token}`, accept: "application/json" },
+    });
+    if (!response.ok) return null;
+    list = await response.json();
+  } catch {
+    return null;
+  }
+  const now = Date.now();
+  let next = null;
+  for (const sub of list?.items ?? []) {
+    if (sub.customer_id && sub.customer_id !== customer) continue;
+    if (!["active", "trialing"].includes(sub.status)) continue;
+    const ending = Boolean(sub.cancel_at_period_end) || Boolean(sub.ends_at);
+    const at = Date.parse((ending && sub.ends_at) || sub.current_period_end || "");
+    if (!Number.isFinite(at) || at <= now) continue;
+    // A subscription that carries on wins over one that's ending; among the same, the soonest.
+    if (!next || (next.ending && !ending) || (next.ending === ending && at < next.renews)) next = { renews: at, ending };
+  }
+  return next;
 }
 
 // ---- donations ----
