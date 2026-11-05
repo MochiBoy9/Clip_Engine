@@ -562,7 +562,7 @@
                        Classes.error="{Binding MessageIsError}" />
             <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <TextBlock Text="Colour theme" FontWeight="SemiBold" FontSize="14" />
-            <TextBlock Classes="caption" Text="{Binding ThemeCaption}" Margin="0,2,0,10" />
+            <TextBlock Classes="caption" Text="{Binding ThemeCaption}" TextWrapping="Wrap" Margin="0,2,0,10" />
             <ItemsControl ItemsSource="{Binding Themes}">
               <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>

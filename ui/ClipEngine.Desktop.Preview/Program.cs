@@ -211,10 +211,10 @@ vm.Plan.Remove();
 vm.Plan.ShowSample(Plan.Pro, new Credits([], ["Kai the Clipper", "Rook"]));
 vm.Plan.Themes.Single(t => t.Name == "Cobalt").IsSelected = true;
 window.Height = 1600;
-Capture(Page.Settings, "23-pro-colours.png");
+Capture(Page.Settings, "30-pro-colours.png");
 vm.Plan.ShowSample(Plan.Ultra, new Credits(["Mira", "Enterro"], ["Kai the Clipper", "Rook"]));
 (vm.Plan.WheelHue, vm.Plan.WheelSaturation, vm.Plan.WheelBrightness) = (275, 0.66, 1);
-Capture(Page.Settings, "24-ultra-wheel.png");
+Capture(Page.Settings, "31-ultra-wheel.png");
 window.Height = 900;
 vm.ShowPage(vm.Home);
 Settle();
@@ -227,7 +227,7 @@ foreach (var button in window.GetVisualDescendants().OfType<Avalonia.Controls.Bu
     foreach (var part in button.GetVisualDescendants().OfType<Plate>()) part.Transitions = null;
     ((Avalonia.Controls.IPseudoClasses)button.Classes).Add(":pointerover");
 }
-Save(window, "25-adaptive-home.png");
+Save(window, "32-adaptive-home.png");
 vm.Plan.Themes.Single(t => t.Name == "Hazard").IsSelected = true;
 vm.SelectedNav = vm.Nav.First(n => n.Page == Page.Clips);
 Settle();
@@ -236,7 +236,7 @@ foreach (var card in window.GetVisualDescendants().OfType<Plate>().Where(p => p.
     card.Transitions = null;
     ((Avalonia.Controls.IPseudoClasses)card.Classes).Add(":pointerover");
 }
-Save(window, "26-adaptive-hazard-clips.png");
+Save(window, "33-adaptive-hazard-clips.png");
 vm.Plan.AdaptiveOn = false;
 
 // A frame of the sample game with a kill message in its feed, as a clip would show it.

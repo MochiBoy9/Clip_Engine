@@ -137,7 +137,4 @@
   <Style Selector=".adaptive RadioButton.segment:checked /template/ Border#PART_Segment">
     <Setter Property="BorderBrush" Value="{DynamicResource AccentGradientBrush}" />
   </Style>
-  <Style Selector=".adaptive ToggleSwitch:checked /template/ Border#SwitchKnobBounds">
-    <Setter Property="Background" Value="{DynamicResource AccentGradientBrush}" />
-  </Style>
 </Styles>

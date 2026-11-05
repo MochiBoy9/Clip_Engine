@@ -45,6 +45,13 @@ internal static class AdaptiveLook
             (AccentThemes.Mix(accent, Colors.White, 0.16), 0), (AccentThemes.Mix(accent, Colors.White, 0.16), 0.25),
             (AccentThemes.Mix(partner, Colors.White, 0.1), 1));
 
+        // Switches that are on: the gradient while adaptive, otherwise Fluent's own fill from the accent.
+        foreach (var key in new[] { "ToggleSwitchFillOn", "ToggleSwitchFillOnPointerOver" })
+        {
+            if (look.Adaptive) app.Resources[key] = app.Resources["AccentGradientBrush"];
+            else app.Resources.Remove(key);
+        }
+
         // Panel edges and brackets: the accent fading out along the edge.
         app.Resources["AccentEdgeBrush"] = Linear(new RelativePoint(0, 0, RelativeUnit.Relative), new RelativePoint(1, 1, RelativeUnit.Relative),
             (accent, 0), (WithAlpha(partner, 0x66), 0.5), (WithAlpha(partner, 0x00), 1));
