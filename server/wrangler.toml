@@ -23,6 +23,11 @@ class_name = "Handles"
 name = "REFERRALS"
 class_name = "Referrals"
 
+# Bug reports, change requests, design questions and ideas from anyone (src/bugs.js).
+[[durable_objects.bindings]]
+name = "BUGS"
+class_name = "BugBoard"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Squad", "Library", "Handles"]
@@ -30,6 +35,10 @@ new_sqlite_classes = ["Squad", "Library", "Handles"]
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["Referrals"]
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["BugBoard"]
 
 # Every uploaded clip: squad views under <squad>/ and cloud library clips under library/<account>/.
 [[r2_buckets]]
@@ -49,6 +58,8 @@ namespace_id = "1102"
 simple = { limit = 300, period = 60 }
 
 [vars]
+# Where the "Sync bug reports" workflow copies reports to, for the link on a report's page.
+BUGS_REPO = "MochiBoy9/Clip_Engine"
 MAX_MEMBERS = "8"
 # Uploaded clips each squad can keep, in MB; the oldest unstarred ones go first when it's full.
 SQUAD_STORAGE_MB = "5120"

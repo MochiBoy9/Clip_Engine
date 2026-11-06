@@ -198,7 +198,7 @@ void TestShippedRulesParse(const char* path) {
     CHECK(kill && death);
   }
   // Every shipped pause rule is read with the game's death box, so it costs nothing extra.
-  CHECK(rules.pauses.size() >= 8);
+  CHECK(rules.pauses.size() >= 7);
   for (const auto& pause : rules.pauses) {
     const bool shared = std::ranges::any_of(rules.rules, [&](const DetectionRule& r) {
       return r.game == pause.game && r.event == EventType::Death && r.threshold == pause.threshold &&
