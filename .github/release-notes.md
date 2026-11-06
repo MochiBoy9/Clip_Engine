@@ -1,9 +1,9 @@
-## Clip Engine 0.13.1
+## Clip Engine 1.0.3
 
-An installer, and shared clips that say where they came from.
+4K recording for everyone.
 
-- **A real installer.** Download `Clip_Engine-Setup.exe`, run it, and Clip Engine is in your Start menu, with an optional desktop shortcut and an uninstaller in Apps & features. It installs for your Windows account only, so there's no admin prompt, and your clips and settings are kept if you uninstall. The portable zip is still there if you prefer it.
-- **Shared links name Clip Engine in Discord.** A cloud link's preview now says the clip was made with Clip Engine, with a link to get it, and the web player has a Download button under the video.
-- **Fixes.** Opening a link in Discord no longer counts as a view of the clip, and a broken profile or invite address shows a not-found page instead of an error.
+- **Record in 4K on every plan.** Free, Pro and Ultra can all record at any resolution up to 4K, and clips on your PC can be any length. Pick **Best (up to 4K)** in Settings.
+- **What goes to the cloud depends on your plan.** Free uploads clips up to 1080p, 100 MB and 40 seconds, with 2 GB of cloud storage. Pro uploads in 4K, up to 1 GB and 10 minutes per clip, with 100 GB. Ultra uploads in 4K, up to 4 GB and 30 minutes per clip, with 250 GB. Clip Engine makes a copy at your plan's size when it uploads, so your 4K clip stays on your PC. A clip that's too long tells you so and suggests trimming it.
+- **Bigger uploads.** Large clips now go up in parts, so Pro and Ultra clips of several gigabytes upload reliably.
 
 New here? Download `Clip_Engine-Setup.exe` and run it. If you already have Clip Engine, update from Settings.

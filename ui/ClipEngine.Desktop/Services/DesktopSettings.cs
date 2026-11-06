@@ -8,8 +8,8 @@ internal sealed class DesktopSettings
 {
     public bool CloseToTray { get; set; } = true;
 
-    // The recording resolution picked in Settings, in lines; 0 is the most the plan allows. The engine gets the
-    // smaller of this and the plan's (Resolutions.Effective).
+    // The recording resolution picked in Settings, in lines; 0 is the most there is, 4K. Every plan has them all
+    // (Resolutions.Effective).
     public int Resolution { get; set; }
 
     // Friends see the squad invite next to your name, so they can join.
@@ -17,6 +17,12 @@ internal sealed class DesktopSettings
 
     // The colour theme, from AccentThemes. Only supporters can pick one other than the default.
     public string AccentTheme { get; set; } = "hazard";
+
+    // Ultra: the colour picked on the colour wheel (used while AccentTheme is "wheel"), and adaptive themes, with or
+    // without the background moving now and then.
+    public string CustomAccent { get; set; } = "#FFC21A";
+    public bool AdaptiveTheme { get; set; } = true;
+    public bool BackgroundMotion { get; set; } = true;
 
     // The side panel that docks to the edge of the screen.
     public string SidePanelEdge { get; set; } = "right";
@@ -28,19 +34,28 @@ internal sealed class DesktopSettings
     // The clip player's volume, 0 to 100.
     public int PlayerVolume { get; set; } = 80;
 
+    // The editor's export quality, from EditExport.Qualities: "Original", "1080p" or "720p".
+    public string EditExportQuality { get; set; } = "Original";
+
     // Storage cleanup: delete clips older than this many days, and the oldest clips once the
     // library is over this many GB. 0 turns a rule off; both are off until the user picks one.
     public int DeleteAfterDays { get; set; }
     public int MaxLibraryGb { get; set; }
 
-    // A small "Clip saved" notice over the game.
+    // Pop-ups show over the game too, in its corner, while one is recorded.
     public bool GameNotifications { get; set; } = true;
 
-    // And one for each moment as it happens: kills, multi-kills, revives, a new personal best.
-    public bool MomentNotices { get; set; } = true;
+    // Which pop-ups show (friend requests, clips saved, moments, the subscription renewing...), or none at all.
+    public NoticeSettings Notices { get; set; } = new();
 
-    // And one when a friend comes online or starts playing something.
-    public bool FriendNotices { get; set; } = true;
+    // Older versions had switches of their own for moments and friends. Read once and moved into Notices.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? MomentNotices { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? FriendNotices { get; set; }
+
+    // The FPS and hardware readout over the game.
+    public StatsOverlaySettings StatsOverlay { get; set; } = new();
 
     // Clips page: show matches instead of single clips.
     public bool ShowMatches { get; set; }
@@ -67,8 +82,14 @@ internal sealed class DesktopSettings
     // This PC's id with the online service, so joining a squad again from it keeps your place.
     public string DeviceId { get; set; } = "";
 
+    // Player kills logged by hand on the Journal page, by run, for fights the screen didn't show.
+    public Dictionary<string, int> JournalPlayerKills { get; set; } = [];
+
     public Squad.SquadSettings Squad { get; set; } = new();
     public Cloud.CloudSettings Cloud { get; set; } = new();
+
+    // Inviting friends: this PC's invite code, and whether it was a new install for a friend's invite.
+    public ReferralSettings Referral { get; set; } = new();
 
     public static DesktopSettings Load()
     {
@@ -76,8 +97,10 @@ internal sealed class DesktopSettings
         {
             if (File.Exists(AppPaths.DesktopSettingsFile))
             {
-                return JsonSerializer.Deserialize(File.ReadAllText(AppPaths.DesktopSettingsFile),
-                                                  DesktopSettingsJson.Default.DesktopSettings) ?? new();
+                var settings = JsonSerializer.Deserialize(File.ReadAllText(AppPaths.DesktopSettingsFile),
+                                                          DesktopSettingsJson.Default.DesktopSettings) ?? new();
+                settings.MoveOldNoticeSwitches();
+                return settings;
             }
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
@@ -86,11 +109,40 @@ internal sealed class DesktopSettings
         return new();
     }
 
+    // The old moment and friend switches become those kinds' filters.
+    internal void MoveOldNoticeSwitches()
+    {
+        Notices ??= new();
+        Notices.Muted ??= [];
+        Notices.AnnouncedRequests ??= [];
+        if (MomentNotices == false) Notices.Set(NoticeKind.Moment, false);
+        if (FriendNotices == false) Notices.Set(NoticeKind.Friends, false);
+        MomentNotices = FriendNotices = null;
+    }
+
     public void Save()
     {
         Directory.CreateDirectory(AppPaths.DataDir);
         File.WriteAllText(AppPaths.DesktopSettingsFile, JsonSerializer.Serialize(this, DesktopSettingsJson.Default.DesktopSettings));
     }
+}
+
+// The stats overlay: whether it's up, which corner it sits in, its hotkey and what it shows.
+internal sealed class StatsOverlaySettings
+{
+    public bool On { get; set; }
+    public string Corner { get; set; } = "top-left";
+    public string Hotkey { get; set; } = "Alt+Shift+F";
+    public bool Fps { get; set; } = true;
+    public bool Lows { get; set; } = true;
+    public bool Cpu { get; set; } = true;
+    public bool Gpu { get; set; } = true;
+    public bool GpuTemp { get; set; } = true;
+    public bool Vram { get; set; }
+    public bool Ram { get; set; } = true;
+
+    [JsonIgnore]
+    public Stats.StatsChoice Choice => new(Fps, Lows, Cpu, Gpu, GpuTemp, Vram, Ram);
 }
 
 [JsonSourceGenerationOptions(WriteIndented = true)]

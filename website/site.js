@@ -3,6 +3,8 @@ const LINKS = {
   // Polar checkout links for Pro and Ultra (Products > Checkout links). Empty: the buttons say "Coming soon".
   pro: "https://buy.polar.sh/polar_cl_1Od5CaTH339XapxgyZW8RjFstHRfWZbdkvncB4J3E2h",
   ultra: "https://buy.polar.sh/polar_cl_Bjr9r9ZyxK5Hca0xqYuvaTtzfJynMI1NepwwG4CrrUp",
+  // The Donation product's checkout link (one-time, pay what you want). Empty: the donate buttons say it's coming soon.
+  donate: "",
   // Clip Engine's online service, for the names in the credits.
   service: "https://clip-engine.clip-engine.workers.dev",
   // Where releases are published: this repository's GitHub Releases.
@@ -26,26 +28,99 @@ function setText(name, text) {
 }
 
 for (const [name, url] of Object.entries(LINKS)) {
-  if (url && name !== "repo" && name !== "service") setLink(name, url);
+  if (url && name !== "repo" && name !== "service" && name !== "donate") setLink(name, url);
+}
+
+// Donate buttons: Polar's page with the amount filled in (in cents), or left to the donor.
+for (const el of document.querySelectorAll("[data-donate]")) {
+  const cents = Math.round(Number(el.dataset.donate) * 100);
+  if (!LINKS.donate) {
+    el.setAttribute("aria-disabled", "true");
+    continue;
+  }
+  el.href = cents > 0 ? `${LINKS.donate}${LINKS.donate.includes("?") ? "&" : "?"}amount=${cents}` : LINKS.donate;
+  el.target = "_blank";
+  el.rel = "noopener";
+}
+if (LINKS.donate) setText("donate-note", "Polar emails you a key for the app. Thank you!");
+// The hub, where players' public clips are, is part of the online service.
+if (LINKS.service) setLink("hub", `${LINKS.service}/hub`);
+
+// The menu on phones: the button opens the section links under the bar, and picking one (or Escape) closes it.
+const menu = document.querySelector(".menu-toggle");
+const header = document.querySelector(".nav");
+if (menu && header) {
+  const close = () => {
+    header.classList.remove("open");
+    menu.setAttribute("aria-expanded", "false");
+  };
+  menu.addEventListener("click", () => {
+    const open = !header.classList.contains("open");
+    header.classList.toggle("open", open);
+    menu.setAttribute("aria-expanded", String(open));
+  });
+  for (const link of header.querySelectorAll("nav a")) link.addEventListener("click", close);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") close();
+  });
 }
 for (const name of ["pro", "ultra"]) {
   if (!LINKS[name]) continue;
   for (const el of document.querySelectorAll(`[data-link="${name}"]`)) el.textContent = "Subscribe";
 }
 
-// Subscribers who asked to be thanked, Ultra first.
+// Before Polar's checkout, a reminder that the license key goes to the email entered there. Continue goes on to the
+// checkout; without <dialog> support the link just goes.
+const checkoutDialog = document.querySelector("[data-checkout-dialog]");
+let checkoutUrl = "";
+function askBeforeCheckout(el) {
+  el.addEventListener("click", (e) => {
+    if (!checkoutDialog || typeof checkoutDialog.showModal !== "function" || !el.href || el.getAttribute("aria-disabled") === "true") return;
+    e.preventDefault();
+    checkoutUrl = el.href;
+    checkoutDialog.showModal();
+  });
+}
+for (const name of ["pro", "ultra"]) {
+  if (!LINKS[name]) continue;
+  for (const el of document.querySelectorAll(`[data-link="${name}"]`)) askBeforeCheckout(el);
+}
+if (LINKS.donate) for (const el of document.querySelectorAll("[data-donate]")) askBeforeCheckout(el);
+if (checkoutDialog) {
+  checkoutDialog.querySelector("[data-checkout-go]")?.addEventListener("click", () => {
+    if (checkoutUrl) window.location.assign(checkoutUrl);
+  });
+  // A click on the backdrop, outside the box, closes it.
+  checkoutDialog.addEventListener("click", (e) => {
+    if (e.target === checkoutDialog) checkoutDialog.close("cancel");
+  });
+}
+
+// Subscribers who asked to be thanked, Ultra first, then supporters who donated $5 or more, then the content
+// creators and others the developer thanked with a special role.
+const CREDIT_ROLES = { supporter: "Supporter", exclusive: "Exclusive", creator: "Content Creator", special: "Special" };
 if (LINKS.service) {
   fetch(`${LINKS.service}/v1/credits`)
     .then((r) => (r.ok ? r.json() : null))
     .then((credits) => {
-      const names = [...(credits?.ultra ?? []).map((n) => [n, true]), ...(credits?.pro ?? []).map((n) => [n, false])];
+      const names = [
+        ...(credits?.ultra ?? []).map((n) => [n, "ultra"]),
+        ...(credits?.pro ?? []).map((n) => [n, ""]),
+        ...Object.keys(CREDIT_ROLES).flatMap((role) => (credits?.[role] ?? []).map((n) => [n, role])),
+      ];
       const box = document.querySelector("[data-credits]");
       const list = document.querySelector("[data-credit-list]");
       if (!box || !list || names.length === 0) return;
-      for (const [name, ultra] of names) {
+      for (const [name, group] of names) {
         const li = document.createElement("li");
         li.textContent = name;
-        if (ultra) li.className = "ultra";
+        if (group === "ultra") li.className = "ultra";
+        if (CREDIT_ROLES[group]) {
+          li.className = "role";
+          const tag = document.createElement("span");
+          tag.textContent = CREDIT_ROLES[group];
+          li.append(tag);
+        }
         list.append(li);
       }
       box.hidden = false;
@@ -142,6 +217,100 @@ refreshDownloads();
 setInterval(() => {
   if (!document.hidden) refreshDownloads();
 }, 5 * 60 * 1000);
+
+// Motion (styles.css, under html.motion): panels that light where the pointer is, and sections that draw in as they
+// scroll into view. On unless the visitor's system asks for reduced motion; the Motion button turns it on or off,
+// remembered.
+const MOTION_KEY = "clip-engine-motion";
+const root = document.documentElement;
+const reducedMotion = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+const motionToggle = document.querySelector(".motion-toggle");
+
+function savedMotion() {
+  try {
+    return localStorage.getItem(MOTION_KEY);
+  } catch {
+    return null;
+  }
+}
+
+const motionOn = () => root.classList.contains("motion");
+
+// Sections draw in once each: the observer marks a piece seen, then lets go of it so hover takes over again.
+const revealTargets = [...document.querySelectorAll(".section .mark, .section .plate:not(.frame), .section .figure, .games")];
+const revealer = "IntersectionObserver" in window
+  ? new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        const el = entry.target;
+        revealer.unobserve(el);
+        el.classList.add("seen");
+        setTimeout(() => el.classList.remove("reveal", "seen"), 900 + (parseInt(el.style.getPropertyValue("--d")) || 0));
+      }
+    }, { rootMargin: "0px 0px -8% 0px" })
+  : null;
+
+function setMotion(on, remember) {
+  root.classList.toggle("motion", on);
+  if (motionToggle) motionToggle.setAttribute("aria-pressed", String(on));
+  if (remember) {
+    try {
+      localStorage.setItem(MOTION_KEY, on ? "on" : "off");
+    } catch {
+      // Private window or storage blocked: it holds for this visit.
+    }
+  }
+  if (!revealer) return;
+  for (const el of revealTargets) {
+    revealer.unobserve(el);
+    el.classList.remove("reveal", "seen");
+    if (!on) continue;
+    // Panels side by side rise one after another.
+    const siblings = el.parentElement ? [...el.parentElement.children] : [];
+    el.style.setProperty("--d", `${Math.min(siblings.indexOf(el), 5) * 70}ms`);
+    el.classList.add("reveal");
+    revealer.observe(el);
+  }
+}
+
+if (motionToggle) {
+  motionToggle.hidden = false;
+  motionToggle.addEventListener("click", () => setMotion(!motionOn(), true));
+}
+const saved = savedMotion();
+setMotion(saved ? saved === "on" : !(reducedMotion && reducedMotion.matches), false);
+// Changing the system setting while the page is open follows it, unless the visitor chose here.
+if (reducedMotion && reducedMotion.addEventListener) {
+  reducedMotion.addEventListener("change", (e) => {
+    if (!savedMotion()) setMotion(!e.matches, false);
+  });
+}
+
+// The panel under the pointer lights where it is, moved once a frame at most.
+let pointer = null;
+let pointerFrame = 0;
+let litPlate = null;
+window.addEventListener("pointermove", (e) => {
+  if (!motionOn()) return;
+  pointer = e;
+  if (!pointerFrame) {
+    pointerFrame = requestAnimationFrame(() => {
+      pointerFrame = 0;
+      const p = pointer;
+      const plate = p.target instanceof Element ? p.target.closest(".plate") : null;
+      if (litPlate && litPlate !== plate) {
+        litPlate.style.removeProperty("--px");
+        litPlate.style.removeProperty("--py");
+      }
+      litPlate = plate;
+      if (plate) {
+        const box = plate.getBoundingClientRect();
+        plate.style.setProperty("--px", `${p.clientX - box.left}px`);
+        plate.style.setProperty("--py", `${p.clientY - box.top}px`);
+      }
+    });
+  }
+}, { passive: true });
 
 // Copy buttons: copy the field they name, and say so.
 for (const button of document.querySelectorAll("[data-copy]")) {

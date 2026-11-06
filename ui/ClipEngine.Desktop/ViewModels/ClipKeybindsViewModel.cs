@@ -242,7 +242,7 @@ public sealed class GameClipKeysViewModel : ObservableObject
             {
             }
         }
-        Keys.MaxSeconds = Math.Clamp(_settings.BufferSeconds, 10, 600);
+        Keys.MaxSeconds = Math.Clamp(_settings.BufferSeconds, 10, ReplayMemory.MaxSeconds);
         _saved = own ?? [];
         _savedUseOwn = _useOwn = own is not null;
         Keys.Load(own ?? []);

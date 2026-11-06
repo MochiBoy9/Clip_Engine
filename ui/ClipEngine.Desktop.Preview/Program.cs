@@ -8,6 +8,7 @@ using ClipEngine.Desktop;
 using ClipEngine.Desktop.Services;
 using ClipEngine.Desktop.Services.Cloud;
 using ClipEngine.Desktop.Services.Squad;
+using ClipEngine.Desktop.Services.Stats;
 using SquadView = ClipEngine.Desktop.Services.Squad.SquadView;
 using ClipEngine.Desktop.ViewModels;
 using ClipEngine.Desktop.Views;
@@ -58,6 +59,9 @@ Capture(Page.Clips, "2-clips.png");
 Capture(Page.Games, "3-games.png");
 Capture(Page.Settings, "4-settings.png");
 Capture(Page.Records, "11-records.png");
+window.Height = 1700;
+Capture(Page.Journal, "23-journal.png");
+window.Height = 900;
 
 // A squad of four, two playing with you, and the moments in its shared library.
 SampleSquad.Fill(vm);
@@ -80,14 +84,70 @@ friends.ShowSample("A1B2-C3D4",
     friends.SampleFriend("VEX00000", "Vex", "vexed", true, "", null, TimeSpan.FromMinutes(7)),
 ],
 [friends.SampleRequest("N0VA0000", "Nova", "nova")]);
+vm.Invite.ShowSample();
 Capture(Page.Friends, "20-friends.png");
 
 // Ultra: its badge, themes, 4K and the credits.
 vm.Plan.ShowSample(Plan.Ultra, new Credits(["Mira", "Enterro"], ["Kai the Clipper", "Rook", "Vex"]));
 window.Height = 1300;
 Capture(Page.Settings, "21-plans.png");
+// A Content Creator key from the key maker: its badge, the reason, the credits and the direct line.
+vm.Plan.ShowSample(Plan.Ultra, new Credits(["Mira"], ["Kai the Clipper", "Rook"]) { Creator = ["Enterro"], Exclusive = ["Nova"] });
+vm.Plan.Accept("preview", new LicenseCheck(LicenseOutcome.Valid, "", Plan.Ultra, "CEK-7Q4K…M9XW", DateTimeOffset.UtcNow.AddDays(90), true,
+    Role: "creator", RoleLabel: "Content Creator", Perks: ["contact", "bugs"], CreditsAllowed: true, Reason: "Streams Clip Engine every week"));
+vm.Plan.ShowSampleMessages(
+[
+    new ContactMessage(2, "bug", "The side panel flickers when a game goes fullscreen.", DateTimeOffset.UtcNow.AddHours(-3), null, null),
+    new ContactMessage(1, "message", "Could clips upload straight to YouTube?", DateTimeOffset.UtcNow.AddDays(-1),
+                       "Yes! It's planned for the next update.", DateTimeOffset.UtcNow.AddHours(-20)),
+]);
+window.Height = 1700;
+Capture(Page.Settings, "22-creator-key.png");
+// A supporter who donated $8 on Free: the Supporter badge, the storage it adds, the donate box and the credits.
+vm.Plan.Remove();
+vm.Plan.ShowSampleSupporter(Plan.Free, 800, new Credits(["Mira"], ["Kai the Clipper"]) { Supporter = ["Enterro", "Rook"] });
+window.Height = 1500;
+Capture(Page.Settings, "23-supporter.png");
+vm.Plan.Remove();
 window.Height = 900;
 vm.Plan.ShowSample(Plan.Free, new Credits([], []));
+
+// The stats overlay's settings, on a PC that hasn't allowed frame timing yet, and the overlay over a game.
+vm.Settings.OnFrameTimingChecked(FrameTiming.NeedsPermission);
+vm.Settings.StatsOverlayOn = true;
+vm.SelectedNav = vm.Nav.First(n => n.Page == Page.Settings);
+Settle();
+var statsHeading = window.GetVisualDescendants().OfType<Avalonia.Controls.TextBlock>().First(t => t.Text == "STATS OVERLAY");
+var settingsScroll = statsHeading.GetVisualAncestors().OfType<Avalonia.Controls.ScrollViewer>().First();
+if (statsHeading.TranslatePoint(new Point(0, 0), (Visual)settingsScroll.Content!) is { } headingAt)
+    settingsScroll.Offset = new Vector(0, headingAt.Y - 60);
+Save(window, "22-stats-settings.png");
+vm.StatsOverlay.Show(new GameStats
+{
+    Frames = FrameTiming.Reading, Fps = 162.4, OnePercentLow = 118.7, CpuPercent = 34, GpuPercent = 91, GpuCelsius = 71,
+    VramUsed = (long)(7.4 * (1L << 30)), VramTotal = 12L << 30, RamUsed = (long)(14.2 * (1L << 30)), RamTotal = 32L << 30,
+}, vm.DesktopSettings.StatsOverlay.Choice);
+var statsOverlay = new StatsOverlayWindow
+{
+    DataContext = vm.StatsOverlay,
+    SizeToContent = Avalonia.Controls.SizeToContent.Manual,
+    Width = 1280,
+    Height = 720,
+    Background = new ImageBrush(SampleFrame()) { Stretch = Stretch.UniformToFill },
+};
+statsOverlay.Show();
+Save(statsOverlay, "23-stats-overlay.png");
+
+// The audio tracks with Discord muted and the mic turned down, voice clips on, and a half-hour replay.
+vm.Settings.MicTrack.Load(true, 80, false);
+vm.Settings.DiscordTrack.Load(true, 100, true);
+vm.Settings.AppsTrack.Load(true, 45, false);
+vm.Settings.BufferSeconds = 1800;
+vm.Settings.VoiceClips = true;
+vm.Settings.VoicePhrasesText = "clip that, save the last minute 60";
+window.Height = 2400;
+Capture(Page.Settings, "22-audio-voice.png");
+window.Height = 900;
 
 // The player, opened on the newest clip partway through.
 vm.SelectedNav = vm.Nav.First(n => n.Page == Page.Clips);
@@ -98,6 +158,10 @@ Save(window, "5-player.png");
 // Trimming that clip down to its best moments.
 vm.OpenPlayer(vm.Clips[0]).ShowTrim(4.5, 27.5);
 Save(window, "7-trim.png");
+
+// The editor on that clip: cut into parts, one cut out, the second part picked.
+vm.OpenEditor(vm.Clips[0], vm.OpenPlayer(vm.Clips[0]))!.ShowSample();
+Save(window, "22-editor.png");
 
 vm.OpenPlayer(vm.Clips[0]).ShowCheck();
 Save(window, "13-check-detection.png");
@@ -133,6 +197,28 @@ window.GetVisualDescendants().OfType<Avalonia.Controls.ScrollViewer>().First(v =
 Save(window, "16-studio-fine-tune.png");
 studio.ShowFineTune = false;
 
+// Notifications: pop-ups in the window's corner, the list from the bell in the sidebar, Home's recent events showing just
+// them, and the switches for which ones pop up.
+SampleNotices.Fill(vm);
+vm.ShowPage(vm.Home);
+Save(window, "24-notification-pop-ups.png");
+vm.Notifications.ClearPopUps();
+vm.Notifications.IsOpen = true;
+Save(window, "25-notifications.png");
+vm.Notifications.IsOpen = false;
+vm.ActivityShowsNotices = true;
+Save(window, "26-recent-notifications.png");
+vm.ActivityShowsNotices = false;
+vm.SelectedNav = vm.Nav.First(n => n.Page == Page.Settings);
+Settle();
+var noticeHeading = window.GetVisualDescendants().OfType<SettingsView>().First()
+                          .GetVisualDescendants().OfType<Avalonia.Controls.TextBlock>().First(t => t.Text == "NOTIFICATIONS");
+var noticeScroll = noticeHeading.GetVisualAncestors().OfType<Avalonia.Controls.ScrollViewer>().First();
+if (noticeHeading.TranslatePoint(new Point(0, 0), (Visual)noticeScroll.Content!) is { } noticeAt)
+    noticeScroll.Offset = new Vector(0, noticeAt.Y - 60);
+Save(window, "27-notification-settings.png");
+SampleNotices.Unread(vm);
+
 // The side panel as it sits on the edge of the screen.
 var panel = new SidePanelWindow { DataContext = vm, Width = 344, Height = 900 };
 panel.Show();
@@ -149,6 +235,42 @@ var ember = AccentThemes.Find("ember");
 AccentThemes.ApplyAccent(ember);
 vm.ShowPage(vm.Home);
 Save(window, "10-theme-ember.png");
+
+// Supporter looks: Pro's thirteen colours, then Ultra's colour wheel and an adaptive theme, with a button under the
+// pointer and the backdrop's scan part of the way down the page.
+vm.Plan.Remove();
+vm.Plan.ShowSample(Plan.Pro, new Credits([], ["Kai the Clipper", "Rook"]));
+vm.Plan.Themes.Single(t => t.Name == "Cobalt").IsSelected = true;
+window.Height = 1600;
+Capture(Page.Settings, "30-pro-colours.png");
+vm.Plan.ShowSample(Plan.Ultra, new Credits(["Mira", "Enterro"], ["Kai the Clipper", "Rook"]));
+(vm.Plan.WheelHue, vm.Plan.WheelSaturation, vm.Plan.WheelBrightness) = (275, 0.66, 1);
+Capture(Page.Settings, "31-ultra-wheel.png");
+window.Height = 900;
+vm.ShowPage(vm.Home);
+Settle();
+var backdrop = window.GetVisualDescendants().OfType<AdaptiveBackdrop>().First();
+backdrop.ShowScan(0.42);
+// The light under the pointer, resting in the gutter between the recent clips and the activity.
+backdrop.ShowLight(new Point(835, 360));
+// Hover shown at its end state: the preview's clock doesn't run transitions.
+foreach (var button in window.GetVisualDescendants().OfType<Avalonia.Controls.Button>().Where(b => b.Classes.Contains("accent")).Take(1))
+{
+    button.Transitions = null;
+    foreach (var part in button.GetVisualDescendants().OfType<Plate>()) part.Transitions = null;
+    ((Avalonia.Controls.IPseudoClasses)button.Classes).Add(":pointerover");
+}
+Save(window, "32-adaptive-home.png");
+vm.Plan.Themes.Single(t => t.Name == "Hazard").IsSelected = true;
+vm.SelectedNav = vm.Nav.First(n => n.Page == Page.Clips);
+Settle();
+foreach (var card in window.GetVisualDescendants().OfType<Plate>().Where(p => p.Classes.Contains("clipCard")).Skip(1).Take(1))
+{
+    card.Transitions = null;
+    ((Avalonia.Controls.IPseudoClasses)card.Classes).Add(":pointerover");
+}
+Save(window, "33-adaptive-hazard-clips.png");
+vm.Plan.AdaptiveOn = false;
 
 // A frame of the sample game with a kill message in its feed, as a clip would show it.
 static Bitmap SampleFrame()
@@ -236,8 +358,9 @@ internal static class Sample
         vm.SampleTimelines = Timelines(now);
         vm.SetSupportedGames(["The Finals", "Overwatch", "Battlefield 6", "Counter-Strike 2", "Dota 2", "League of Legends",
                               "Rocket League", "Valorant", "Fortnite", "Apex Legends", "PUBG", "Marvel Rivals",
-                              "Rainbow Six Siege", "Call of Duty", "ARC Raiders", "Delta Force", "Deadlock",
-                              "Halo Infinite", "Destiny 2", "Team Fortress 2", "Escape from Tarkov", "Roblox", "Minecraft"]);
+                              "Team Fortress 2", "Rainbow Six Siege", "Call of Duty", "Delta Force", "Deadlock",
+                              "Halo Infinite", "Halo MCC", "Battlefield 2042", "Battlefield V", "Battlefield 1",
+                              "Battlefield 4", "Paladins", "Splitgate", "Roblox", "Minecraft"]);
         SampleGameArt(vm);
 
         var clips = new (string Game, string Thumb, double MinutesAgo, int Seconds, long Mb)[]
@@ -324,7 +447,69 @@ internal static class Sample
             }
             if (Timeline.Parse(lines) is { } timeline) timelines.Add(timeline);
         }
+        timelines.AddRange(JournalTimelines(now));
         return timelines;
+    }
+
+    // A week of ARC Raiders and a night of Hunt: Showdown 1896, as journal notes, for the Journal page.
+    private static IEnumerable<Timeline> JournalTimelines(DateTime now)
+    {
+        var random = new Random(11);
+        string Note(double t, string note, string value = "", int amount = 0, int xp = 0) =>
+            $$"""{"t": {{t:0.00}}, "match": 0, "note": "{{note}}", "value": "{{value}}", "amount": {{amount}}, "xp": {{xp}}, "text": ""}""";
+        var maps = new[] { "Dam Battlegrounds", "Buried City", "Spaceport", "The Blue Gate", "Stella Montis" };
+        var arc = new (string Name, int Xp)[] { ("Wasp", 50), ("Hornet", 75), ("Tick", 25), ("Snitch", 50), ("Leaper", 400), ("Rocketeer", 500) };
+        var kit = new[] { "Ferro", "Stitcher", "Bandage", "Light Shield", "Adrenaline Shot", "Light Ammo" };
+        var finds = new[] { "Metal Parts", "ARC Alloy", "Rubber Parts", "Battery", "ARC Powercell", "Plastic Parts", "Fabric" };
+        for (var day = 1; day <= 7; day += 1 + random.Next(2))
+        {
+            var start = now.Date.AddDays(-day).AddHours(19);
+            var lines = new List<string> { $$"""{"session": "{{start:yyyy-MM-dd'T'HH:mm:ss}}", "game": "ARC Raiders", "version": 1}""" };
+            double t = 20;
+            for (var raid = 0; raid < 2 + random.Next(3); raid++)
+            {
+                lines.Add(Note(t, "map", maps[random.Next(maps.Length)]));
+                if (random.Next(4) == 0) lines.Add(Note(t + 2, "condition", random.Next(2) == 0 ? "Night Raid" : "Electromagnetic Storm"));
+                foreach (var item in kit.OrderBy(_ => random.Next()).Take(3))
+                    lines.Add(Note(t + 5, "inventory", item, item is "Bandage" or "Light Ammo" ? 2 + random.Next(4) : 1));
+                lines.Add(Note(t + 10, "queue"));
+                if (random.Next(6) == 0)
+                {
+                    t += 25 * 60;  // backed out of the queue
+                    continue;
+                }
+                t += 40;
+                lines.Add(Note(t, "deploy"));
+                var length = 5 * 60 + random.Next(25 * 60);
+                var end = t + length;
+                for (var at = t + 30 + random.Next(120); at < end; at += 40 + random.Next(200))
+                {
+                    if (random.Next(3) == 0) lines.Add(Note(at, "loot", finds[random.Next(finds.Length)], 1 + random.Next(3)));
+                    else
+                    {
+                        var (name, xp) = arc[random.Next(random.Next(4) == 0 ? arc.Length : 4)];
+                        lines.Add(Note(at, "enemy", name, xp: xp));
+                    }
+                }
+                if (random.Next(5) == 0) lines.Add(Note(end - 30, "player_kill"));
+                var died = random.Next(3) == 0;
+                lines.Add(Note(end, died ? "died" : "extracted"));
+                lines.Add(Note(end + 15, "xp", amount: 1500 + random.Next(6000)));
+                t = end + 120;
+            }
+            if (Timeline.Parse(lines) is { } timeline) yield return timeline;
+        }
+
+        var hunt = now.Date.AddDays(-2).AddHours(22);
+        var hunts = new List<string> { $$"""{"session": "{{hunt:yyyy-MM-dd'T'HH:mm:ss}}", "game": "Hunt: Showdown 1896", "version": 1}""" };
+        hunts.Add(Note(1800, "deploy", "Bounty Hunt"));
+        hunts.Add(Note(1800, "enemy", "Monster", 14));
+        hunts.Add(Note(1800, "enemy", "Boss", 1));
+        hunts.Add(Note(1800, "player_kill", amount: 3));
+        hunts.Add(Note(1800, "objective", "Bounty extracted"));
+        hunts.Add(Note(1800, "xp", amount: 3150));
+        hunts.Add(Note(1800, "extracted"));
+        if (Timeline.Parse(hunts) is { } huntLine) yield return huntLine;
     }
 
     // How the newest clip's kills were found, as the engine saves it: the killfeed counted each
@@ -396,6 +581,33 @@ internal sealed class PreviewChannel : ISquadChannel
     public void Dispose() { }
 }
 
+internal static class SampleNotices
+{
+    public static void Fill(MainViewModel vm)
+    {
+        var n = vm.Notifications;
+        var now = DateTimeOffset.Now;
+        n.Add(NoticeKind.Update, "Clip Engine 1.1.0 is out", "Install it from Settings > Updates.", "updates", now.AddDays(-1)).IsUnread = false;
+        n.Add(NoticeKind.Squad, "Squad", "Mira joined your squad", "squad", now.AddHours(-3)).IsUnread = false;
+        n.Add(NoticeKind.Friends, "Friends", "@kai came online · playing The Finals", "friends", now.AddMinutes(-42)).IsUnread = false;
+        var clip = n.Add(NoticeKind.Clip, "Clip saved", "The Finals · 3 kills, 1 assist, 1 revive · 30 s", "clip:" + vm.Clips[0].Path,
+                         now.AddMinutes(-4));
+        var renews = n.Add(NoticeKind.Subscription, "Subscription renews soon",
+                           "Your Pro subscription renews tomorrow. Change it with Manage in Settings > Plan.", "plan", now.AddMinutes(-2));
+        var request = n.Add(NoticeKind.FriendRequest, "Friend request", "@nova wants to be friends", "friends", now.AddMinutes(-1));
+        n.PopUp(clip);
+        n.PopUp(renews);
+        n.PopUp(request);
+    }
+
+    // The newest two unread again, for the bell's count in the screenshots after.
+    public static void Unread(MainViewModel vm)
+    {
+        foreach (var item in vm.Notifications.History.Take(2)) item.IsUnread = true;
+        vm.Notifications.Recount();
+    }
+}
+
 internal static class SampleSquad
 {
     private const string Server = "https://clip-engine.example.workers.dev";
@@ -454,7 +666,7 @@ internal static class SampleSquad
     public static void FillCloud(MainViewModel vm)
     {
         var hour = 3_600_000L;
-        vm.Cloud.ShowSample(Server, new CloudAccount("A1B2C3D4", "Enterro", "enterro", "free", "Free", 671_088_640, 2_147_483_648, 4),
+        vm.Cloud.ShowSample(Server, new CloudAccount("A1B2C3D4", "Enterro", "enterro", "pro", "Pro", 671_088_640, 107_374_182_400, 4, BadgeLabel: "Pro"),
         [
             new CloudClip("q7k2mx", "A1B2C3D4q7k2mx", null, "3 kills, 1 revive", "The Finals", Now - hour / 10, 30, 41_943_040, true, true, "public", true, 128),
             new CloudClip("b4nt9w", "A1B2C3D4b4nt9w", null, "Squad highlight: Kai's triple kill", "The Finals", Now - hour / 2, 18, 22_020_096, true, true, "public", false, 46),

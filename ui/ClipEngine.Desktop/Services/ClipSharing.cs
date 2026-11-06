@@ -10,24 +10,31 @@ internal static class ClipSharing
     // Share copies are kept for a week so they can be pasted again, then cleaned up.
     private static readonly TimeSpan KeepShared = TimeSpan.FromDays(7);
 
-    // Runs clip_engine.exe --export (src/media/Exporter.cpp) and returns the copy's path.
-    // A clip that already fits is shared as it is.
+    // Runs clip_engine.exe --export (src/media/Exporter.cpp) and returns the copy's path. A clip that already fits is
+    // shared as it is. maxLines, when set, is the tallest picture the copy may have (the cloud's for the plan, 1080 on
+    // Free): a taller clip is copied even when it fits. Unset, a copy is at most 1080p, as sharing always was.
     public static async Task<(string Path, double Megabytes)> MakeShareCopyAsync(string clip, int limitMb,
                                                                                  IProgress<int> progress,
-                                                                                 CancellationToken cancel = default)
+                                                                                 CancellationToken cancel = default,
+                                                                                 int maxLines = 0)
     {
         var bytes = new FileInfo(clip).Length;
-        if (bytes <= limitMb * 1_000_000L * 0.98) return (clip, bytes / 1e6);
+        var tooTall = maxLines > 0 && Mp4Info.ReadVideoSize(clip) is { } size && size.Height > maxLines;
+        if (bytes <= limitMb * 1_000_000L * 0.98 && !tooTall) return (clip, bytes / 1e6);
         if (!OperatingSystem.IsWindows() || !File.Exists(AppPaths.EngineExe))
             throw new ShareFailedException("Making a smaller copy needs clip_engine.exe next to the app.");
 
         Directory.CreateDirectory(SharedDir);
         CleanUp();
-        var output = Path.Combine(SharedDir, $"{Path.GetFileNameWithoutExtension(clip)}_{limitMb}MB.mp4");
+        var output = Path.Combine(SharedDir, maxLines > 0
+            ? $"{Path.GetFileNameWithoutExtension(clip)}_{limitMb}MB_{maxLines}p.mp4"
+            : $"{Path.GetFileNameWithoutExtension(clip)}_{limitMb}MB.mp4");
 
+        List<string> args = ["--export", clip, output, "--max-mb", limitMb.ToString(System.Globalization.CultureInfo.InvariantCulture)];
+        if (maxLines > 0) args.AddRange(["--max-height", maxLines.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
         Exported? exported = null;
         var (exitCode, failure) = await EngineCommand.RunAsync(
-            ["--export", clip, output, "--max-mb", limitMb.ToString(System.Globalization.CultureInfo.InvariantCulture)],
+            args,
             e =>
             {
                 switch (e)

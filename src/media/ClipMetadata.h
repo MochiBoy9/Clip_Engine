@@ -22,7 +22,7 @@ struct ClipMetadata {
   };
 
   std::string game;
-  std::string trigger;  // "hotkey" or "auto"
+  std::string trigger;  // "hotkey", "voice", "auto", "squad" or "long"
   double seconds = 0;
   std::vector<Marker> markers;
 
@@ -39,6 +39,11 @@ struct ClipMetadata {
   // shows, for the squad library; empty for a clip that isn't part of one.
   int64_t utcStartMs = 0;
   std::string squadMoment;
+
+  // The clip's audio tracks in order, by what each has: "all" (every source mixed, the one
+  // players play), "game", "system" (everything heard), "mic", "discord" and "apps". Empty for
+  // clips from before 0.15, which have game audio and then the mic.
+  std::vector<std::string> audioTracks;
 };
 
 std::string ToJson(const ClipMetadata& metadata);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "detect/GameEvent.h"
+#include "detect/Journal.h"
 #include "game/GameDetector.h"
 #include "integrations/GameStateTrackers.h"
 
@@ -15,8 +16,8 @@
 namespace clip {
 
 // Moments from a game's own live API, for games that have one: Counter-Strike 2 and Dota 2
-// (Game State Integration), League of Legends (Live Client Data API) and Rocket League (Stats
-// API). These are exact, where reading the screen is a best guess, and they work whatever the
+// (Game State Integration), League of Legends (Live Client Data API), Rocket League (Stats
+// API) and Team Fortress 2 (its console log). These are exact, where reading the screen is a best guess, and they work whatever the
 // HUD looks like. Everything runs on a background thread at low priority.
 class GameIntegration {
  public:
@@ -29,6 +30,14 @@ class GameIntegration {
   std::vector<GameEvent> TakeEvents();
   // The player's totals for the match, when they changed since the last call.
   std::optional<Scoreboard> TakeScoreboard();
+  // Journal notes from the game's own files, since the last call.
+  std::vector<JournalNote> TakeNotes();
+
+  // Whether the game is talking to us yet.
+  bool Live() const { return connected_; }
+  // The kinds of moments this reports exactly once it's live, so the same ones read off the
+  // screen (kept for when it isn't) can be dropped instead of counted twice.
+  virtual std::vector<EventType> Covers() const { return {}; }
 
  protected:
   explicit GameIntegration(std::string gameName) : gameName_(std::move(gameName)) {}
@@ -47,6 +56,8 @@ class GameIntegration {
   void Report(const Stats& board);
   // Logs once that the game is talking to us.
   void Connected();
+  // Writes down journal notes, timed now.
+  void Note(std::vector<JournalNote> notes);
 
   const std::string gameName_;
   std::atomic<bool> stop_{false};
@@ -55,13 +66,17 @@ class GameIntegration {
   std::mutex mutex_;
   std::condition_variable wake_;
   std::vector<GameEvent> events_;
+  std::vector<JournalNote> notes_;
   Stats board_;
   std::optional<Scoreboard> newBoard_;
-  bool connected_ = false;
+  std::atomic<bool> connected_{false};
   std::thread thread_;
 };
 
 // Starts the API reader for a running game, or returns null for games without one.
-std::unique_ptr<GameIntegration> StartGameIntegration(const DetectedGame& game);
+// playerNames: the player's in-game names, for games whose events name players rather than
+// saying which one is you.
+std::unique_ptr<GameIntegration> StartGameIntegration(const DetectedGame& game,
+                                                      const std::vector<std::string>& playerNames = {});
 
 }  // namespace clip

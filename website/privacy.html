@@ -38,6 +38,7 @@
 
     <h2>What is sent over the internet</h2>
     <p>Nothing about you or your clips, unless you join a squad, sign in to the cloud library or add a Pro or Ultra license key. Clip Engine doesn't need an account or an internet connection to record.</p>
+    <p>The one exception is a short note the first time Clip Engine starts on a PC, so a friend who invited you gets credit for it (see <a href="#invites">Inviting friends</a>).</p>
     <p>To show a game's picture that isn't already on your PC, Clip Engine asks the Steam store for it once, by the game's name, and keeps it. Turn off <strong>Game pictures from Steam</strong> in Settings to use only the pictures on your PC.</p>
 
     <h2>Squads</h2>
@@ -51,14 +52,26 @@
     <p>Only your squad's members see these. Unstarred views are removed after [30] days. When you leave a squad, your uploaded views are deleted.</p>
 
     <h2>Cloud library</h2>
-    <p>When you're signed in, the service keeps the name and handle you pick and the clips you upload, with their titles and moments. Unlisted clips play for anyone with the link. Public clips are also listed on your profile. Private clips are kept as a backup, and their links play for no one. When you remove a clip, its file is deleted.</p>
+    <p>A cloud account is your email with a password, or your Google account. The service keeps your email (to sign you in and send you a link to confirm it, reset your password or confirm a new one; never shown to anyone or used for anything else), a salted hash of your password, and, if you use Google, your Google account's id. For each device signed in to your account it keeps whether it's the app or a browser, the browser's or app's name and version as it sends them, the country it signed in from (not its address) and when it was last used, and it keeps the same for the first device ever used on the account. Only you see these, on the hub, where you can sign any device out. Account emails are sent through <a href="https://resend.com/legal/privacy-policy">Resend</a>.</p>
+    <p>When you're signed in, the service keeps the name and handle you pick and the clips you upload, with their titles and moments. Unlisted clips play for anyone with the link. Public clips are also listed on your profile and in the hub. Private clips are kept as a backup, and their links play for no one. When you remove a clip, its file is deleted.</p>
     <p>The service runs on Cloudflare. See <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare's privacy policy</a>.</p>
+
+    <h2>The hub</h2>
+    <p>The hub lists the clips people set to Public, with their name, profile name and badge. Watching it needs no account and sets no cookies. If you sign in, the hub keeps a sign-in cookie in your browser for 30 days, or until you sign out, and nothing else. If you hide your Pro, Ultra or role badge, it's hidden everywhere others see your name. When you report a clip, the service keeps the clip's link, the reason and what you wrote, and not who sent it.</p>
 
     <h2>Friends</h2>
     <p>Friends are kept with your cloud account. When you add someone, they see your name and profile name. While Clip Engine is open, your friends see that you're online and which game you're recording, and, if <strong>Let friends join my squad</strong> is on, your squad's invite code. This is forgotten a few minutes after you close the app.</p>
 
+    <h2 id="invites">Inviting friends</h2>
+    <p>The first time Clip Engine starts on a PC, it tells the online service so, with an id for the PC (a one-way hash of the id Windows gives it, which can't be turned back into it) and whether Clip Engine was new there. The service also sees the internet address the note comes from. It keeps the address only as a salted hash, used to check that an invited friend isn't on the same network as the person who invited them.</p>
+    <p>If you get an invite link, the service keeps the same kind of hashed address when you open it, for a week, so the app you install from it knows who invited you. If you share your own link, the service keeps your PC's hashed id, the hashed addresses you've used, the name you pick for the invite page, and how many friends have joined. It never knows who your friends are beyond that their PC counted.</p>
+
     <h2>Pro and Ultra</h2>
     <p>Subscriptions are sold by Polar, our merchant of record, which handles your payment details and tax and emails your license key. See <a href="https://polar.sh/legal/privacy">Polar's privacy policy</a>. Clip Engine sends your key to its online service, which checks it with Polar about twice a day. If you put the key on a cloud account, the service keeps it there to give the account its storage. If you choose a name for the credits, it's shown in the app and on this website for as long as your subscription runs; turn off <strong>Name in the credits</strong> in Settings to remove it.</p>
+    <p>Your email address, payment details and receipts stay with Polar and are kept private. Clip Engine never sees your card and doesn't keep your email. When the online service checks your key, it also asks Polar when your subscription next renews (or ends, if you cancelled), and passes only that date on to the app for a reminder a few days before; it keeps nothing about it. Use your own email at checkout: it's the only place your license key is sent.</p>
+
+    <h2>Notifications</h2>
+    <p>The app's notifications (friend requests, clips saved, your subscription renewing and the rest) and their history are kept only on your PC, in <code>notifications.json</code> next to the app's settings. Clear them from the bell in the sidebar.</p>
 
     <h2>Contact</h2>
     <p>[Your name], [email address]. Ask us at any time to remove your name from the credits.</p>

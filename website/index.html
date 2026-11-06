@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Clip Engine: automatic game clips, no ads, no Overwolf</title>
-  <meta name="description" content="Clip Engine records your games and clips every kill, assist, death and revive by itself. Play with friends to save every moment from each teammate's view. Free up to 1080p, no ads, nothing stamped on your videos; Pro and Ultra go to 1440p and 4K.">
+  <meta name="description" content="Clip Engine records your games and clips every kill, assist, death and revive by itself. Play with friends to save every moment from each teammate's view. Free up to 4K, no ads, nothing stamped on your videos; Pro and Ultra keep 4K, bigger and longer clips in the cloud.">
   <meta property="og:title" content="Clip Engine">
   <meta property="og:description" content="Automatic game clips, squad views, friends and share links. Free, no ads, nothing stamped on your videos, no Overwolf.">
   <meta property="og:image" content="assets/1-home.webp">
@@ -25,12 +25,17 @@
         <span class="brand-sep" aria-hidden="true">//</span>
         <span class="brand-version" data-version-short>v0.13.0</span>
       </a>
-      <nav>
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
+        <span aria-hidden="true"></span>
+      </button>
+      <nav id="site-nav">
         <a href="#features"><span>01</span>Features</a>
         <a href="#squads"><span>02</span>Squads</a>
         <a href="#games"><span>03</span>Games</a>
         <a href="#plans"><span>04</span>Plans</a>
         <a href="#faq"><span>05</span>FAQ</a>
+        <a data-link="hub" href="#squads"><span>↗</span>Hub</a>
+        <button class="motion-toggle" type="button" aria-pressed="false" aria-label="Motion" title="Turn the page's motion on or off" hidden><i aria-hidden="true"></i><span>Motion</span></button>
         <a class="btn small" href="#download">Download</a>
       </nav>
     </div>
@@ -42,7 +47,7 @@
         <div>
           <span class="eyebrow"><i></i>Live · Windows 10 and 11</span>
           <h1>Every play,<br><em>clipped</em> before<br>you think to.</h1>
-          <p class="lead">Clip Engine watches your game and saves a clip around every kill, assist, death, revive and match end, at your monitor's refresh rate, up to 1080p free and 4K with Ultra. No ads, nothing stamped on your videos, no Overwolf.</p>
+          <p class="lead">Clip Engine watches your game and saves a clip around every kill, assist, death, revive and match end, at your monitor's refresh rate, up to 4K for free. No ads, nothing stamped on your videos, no Overwolf.</p>
           <div class="cta">
             <a class="btn" data-link="setup" href="#download">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16"/></svg>
@@ -114,7 +119,7 @@
         <article class="plate feature"><div class="plate-in">
           <span class="idx">F.02</span>
           <h3>Your monitor's real quality</h3>
-          <p>Records at your monitor's refresh rate and the resolution you pick, up to 1080p free, 1440p with Pro and 4K with Ultra, encoded on your GPU (NVIDIA, AMD or Intel) with H.264 or HEVC.</p>
+          <p>Records at your monitor's refresh rate and the resolution you pick, up to 4K on every plan, encoded on your GPU (NVIDIA, AMD or Intel) with H.264 or HEVC.</p>
         </div></article>
         <article class="plate feature"><div class="plate-in">
           <span class="idx">F.03</span>
@@ -134,7 +139,7 @@
         <article class="plate feature"><div class="plate-in">
           <span class="idx">F.06</span>
           <h3>Records that count</h3>
-          <p>Kills, K/D, streaks and personal bests from every match, read from games' own scoreboards where they have one.</p>
+          <p>Kills, K/D, streaks and personal bests from every match, read from games' own scoreboards where they have one. In ARC Raiders, Tarkov, Hunt and co-op games, a journal of every run: the map, what you took down, what you found and what you lost.</p>
         </div></article>
       </div>
       <div class="grid two shots">
@@ -159,7 +164,7 @@
             <li data-n="01"><span><b>Saved from each view</b>A kill, revive or win by anyone in the squad is saved by every linked teammate too, lined up to the same second.</span></li>
             <li data-n="02"><span><b>Watch together</b>Up to four views of the same moment side by side on one timeline, or cut into one squad highlight.</span></li>
             <li data-n="03"><span><b>A library you share</b>Everyone's views land in one place. You choose what you upload and which moments you share.</span></li>
-            <li data-n="04"><span><b>Share links and a profile</b>Short links that play in any browser, and a profile page with the clips you're proudest of.</span></li>
+            <li data-n="04"><span><b>Share links, a profile and the hub</b>Short links that play in any browser, a profile page with the clips you're proudest of, and <a data-link="hub" href="#squads">the hub</a>, where clips you make public sit next to everyone else's. Nothing goes there unless you choose to.</span></li>
           </ul>
         </div>
         <figure class="figure">
@@ -186,9 +191,10 @@
       <div class="games shots">
         <span>Counter-Strike 2</span><span>Valorant</span><span>League of Legends</span><span>Fortnite</span><span>Apex Legends</span>
         <span>Dota 2</span><span>PUBG</span><span>Marvel Rivals</span><span>Rainbow Six Siege</span><span>Call of Duty</span>
-        <span>ARC Raiders</span><span>Rocket League</span><span>Delta Force</span><span>The Finals</span><span>Overwatch</span>
-        <span>Battlefield 6</span><span>Deadlock</span><span>Halo Infinite</span><span>Destiny 2</span><span>Team Fortress 2</span>
-        <span>Escape from Tarkov</span><span>Roblox</span><span>Minecraft</span><span class="any">+ any game with F8</span>
+        <span>Rocket League</span><span>Delta Force</span><span>The Finals</span><span>Overwatch</span><span>Battlefield 6</span>
+        <span>Battlefield 2042</span><span>Battlefield V</span><span>Battlefield 1</span><span>Battlefield 4</span><span>Deadlock</span>
+        <span>Halo Infinite</span><span>Halo MCC</span><span>Team Fortress 2</span><span>Paladins</span><span>Splitgate</span>
+        <span>Roblox</span><span>Minecraft</span><span class="any">+ any game with F8</span>
       </div>
       <figure class="figure shots">
         <div class="plate frame"><div class="plate-in"><img src="assets/3-games.webp" alt="The Games page showing installed games with their art" loading="lazy" width="1440" height="900"></div></div>
@@ -199,35 +205,110 @@
     <section id="compare" class="section">
       <div class="mark"><b>05</b>Comparison<span class="barcode" aria-hidden="true"></span></div>
       <h2>How it compares</h2>
-      <div class="plate table-wrap"><div class="plate-in">
-        <table>
+      <p class="lead">The short version, next to Medal, Outplayed and the recorders that come with Windows, your graphics driver and Steam.</p>
+      <p class="fine compare-hint">Scroll the table sideways to see every app.</p>
+      <div class="plate table-wrap compare-wrap shots"><div class="plate-in" tabindex="0" role="region" aria-labelledby="compare-caption">
+        <table class="compare compare-short">
+          <caption id="compare-caption" class="cmp-sr">Clip Engine compared with Medal, Outplayed, Xbox Game Bar, the NVIDIA App, AMD Software and Steam Game Recording</caption>
           <thead>
-            <tr><th></th><th class="us">Clip Engine</th><th>Medal</th><th>Outplayed</th></tr>
+            <tr>
+              <th scope="col"><span class="cmp-sr">Feature</span></th>
+              <th scope="col" class="us">Clip Engine</th>
+              <th scope="col">Medal</th>
+              <th scope="col">Outplayed</th>
+              <th scope="col">Xbox Game Bar</th>
+              <th scope="col">NVIDIA App</th>
+              <th scope="col">AMD Software</th>
+              <th scope="col">Steam</th>
+            </tr>
           </thead>
           <tbody>
-            <tr><td>Ads in the free app</td><td class="us">None</td><td>Yes</td><td>Yes</td></tr>
-            <tr><td>Needs Overwolf</td><td class="us">No</td><td>No</td><td>Yes</td></tr>
-            <tr><td>Automatic clips, squads and sharing free</td><td class="us">Yes</td><td>Yes</td><td>Yes</td></tr>
-            <tr><td>Paid plan from</td><td class="us">$2.99 a month</td><td>Premium plan</td><td>Premium plan</td></tr>
+            <tr>
+              <th scope="row">Clips kills, deaths and wins by itself</th>
+              <td class="us">25 games, plus any you add</td>
+              <td>16 games</td>
+              <td>Games Overwolf supports</td>
+              <td class="no"><span aria-hidden="true">—</span><span class="cmp-sr">No</span></td>
+              <td>Games with NVIDIA Highlights</td>
+              <td class="no"><span aria-hidden="true">—</span><span class="cmp-sr">No</span></td>
+              <td>Marks only, in some games</td>
+            </tr>
+            <tr>
+              <th scope="row">Teammates' views of your moments, saved for you</th>
+              <td class="us">Yes</td>
+              <td class="no"><span aria-hidden="true">—</span><span class="cmp-sr">No</span></td>
+              <td class="no"><span aria-hidden="true">—</span><span class="cmp-sr">No</span></td>
+              <td class="no"><span aria-hidden="true">—</span><span class="cmp-sr">No</span></td>
+              <td class="no"><span aria-hidden="true">—</span><span class="cmp-sr">No</span></td>
+              <td class="no"><span aria-hidden="true">—</span><span class="cmp-sr">No</span></td>
+              <td class="no"><span aria-hidden="true">—</span><span class="cmp-sr">No</span></td>
+            </tr>
+            <tr>
+              <th scope="row">Share link that plays in a browser</th>
+              <td class="us">Yes</td>
+              <td>Yes</td>
+              <td>Yes, for 3 months free</td>
+              <td class="no"><span aria-hidden="true">—</span><span class="cmp-sr">No</span></td>
+              <td class="no"><span aria-hidden="true">—</span><span class="cmp-sr">No</span></td>
+              <td class="no"><span aria-hidden="true">—</span><span class="cmp-sr">No</span></td>
+              <td>Yes, for 2 days</td>
+            </tr>
+            <tr>
+              <th scope="row">Ads, or marks on your videos</th>
+              <td class="us">None</td>
+              <td>Both, unless you have Premium</td>
+              <td>Ads, unless you have Premium</td>
+              <td>None</td>
+              <td>None</td>
+              <td>None</td>
+              <td>None</td>
+            </tr>
+            <tr>
+              <th scope="row">Records on</th>
+              <td class="us">Any NVIDIA, AMD or Intel GPU</td>
+              <td>Any PC</td>
+              <td>Any PC, with Overwolf</td>
+              <td>Any PC</td>
+              <td>NVIDIA GPUs only</td>
+              <td>AMD GPUs only</td>
+              <td>Steam games</td>
+            </tr>
+            <tr>
+              <th scope="row">Free recording up to</th>
+              <td class="us">4K</td>
+              <td>4K</td>
+              <td>4K</td>
+              <td>60 fps</td>
+              <td>8K</td>
+              <td>4K</td>
+              <td>60 fps</td>
+            </tr>
           </tbody>
         </table>
       </div></div>
-      <p class="fine">Based on each product's public pages as of October 2026.</p>
+      <div class="compare-more">
+        <a class="btn ghost" href="compare.html">See the full comparison</a>
+        <p class="fine">17 features, where each app leads, and the pages we checked, in November 2026.</p>
+      </div>
     </section>
 
     <section id="plans" class="section plans">
       <div class="mark"><b>06</b>Plans<span class="barcode" aria-hidden="true"></span></div>
       <h2>Free to clip. Pro and Ultra to go bigger.</h2>
-      <p class="lead">Every recording, detection, squad and sharing feature is free. A subscription adds higher resolutions, more cloud storage and a few thank-yous, and keeps Clip Engine growing. Cancel any time; your clips stay yours.</p>
+      <p class="lead">Every recording, detection, squad and sharing feature is free. Every plan records up to 4K. A subscription keeps 4K, bigger and longer clips in the cloud, adds more cloud storage and a few thank-yous, and keeps Clip Engine growing. Cancel any time; your clips stay yours.</p>
+      <div class="checkout-notice" role="note">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 5h20v14H2V5Zm2 2v.5l8 5 8-5V7H4Zm16 2.85-8 5-8-5V17h16V9.85Z" /></svg>
+        <p><strong>Use your own email at checkout.</strong> Polar sends your license key to the email you enter when you pay. Type it carefully: if it's an address you can't open, the key never reaches you and the plan can't be turned on in the app.</p>
+      </div>
       <div class="grid three">
         <div class="plate tier"><div class="plate-in">
           <h3>Free</h3>
           <p class="price">$0</p>
           <ul>
-            <li>Automatic clips in 21 games</li>
+            <li>Automatic clips in 25 games</li>
             <li>Squads, friends and share links</li>
-            <li>Records up to 1080p</li>
-            <li>2 GB cloud library</li>
+            <li>Records up to 4K</li>
+            <li>2 GB cloud library: clips up to 1080p, 100 MB and 40 seconds</li>
           </ul>
           <a class="btn ghost" data-link="download" href="#download">Download</a>
         </div></div>
@@ -235,10 +316,10 @@
           <h3>Pro</h3>
           <p class="price">$2.99<span>/month</span></p>
           <ul>
-            <li>Records up to 1440p</li>
+            <li>4K clips in the cloud, up to 1 GB and 10 minutes each</li>
             <li>100 GB cloud library</li>
-            <li>All seven colour themes</li>
-            <li>Pro badge and your name in the credits</li>
+            <li>Thirteen colour themes</li>
+            <li>Pro badge (hide it any time) and your name in the credits</li>
           </ul>
           <a class="btn ghost" data-link="pro" href="#plans">Coming soon</a>
         </div></div>
@@ -247,15 +328,34 @@
           <p class="price">$4.99<span>/month</span></p>
           <ul>
             <li>Everything in Pro</li>
-            <li>Records up to 4K</li>
+            <li>4K clips in the cloud, up to 4 GB and 30 minutes each</li>
             <li>250 GB cloud library</li>
-            <li>Three Ultra-only colour themes</li>
-            <li>Ultra badge and top billing in the credits</li>
+            <li>Every colour: three more themes and a colour wheel</li>
+            <li>Adaptive themes with gradients and motion</li>
+            <li>Ultra badge (hide it any time) and top billing in the credits</li>
           </ul>
           <a class="btn" data-link="ultra" href="#plans">Coming soon</a>
         </div></div>
       </div>
-      <p class="fine">Payments, sales tax and VAT are handled by Polar, our merchant of record. Your license key arrives by email; paste it in Settings &gt; Plan.</p>
+      <div class="plate tier donate" id="donate"><div class="plate-in">
+        <h3>Support Clip Engine</h3>
+        <p class="price">Any amount<span>once</span></p>
+        <p class="donate-lead">Donations keep Clip Engine developed and maintained. They're never needed: every recording feature stays free. As a thank-you:</p>
+        <ul>
+          <li>A Supporter badge</li>
+          <li>1 GB more cloud storage for every dollar, up to 25 GB, for good</li>
+          <li>Your name in the credits from $5 in all</li>
+        </ul>
+        <div class="donate-amounts">
+          <a class="btn ghost" data-donate="3" href="#donate">$3</a>
+          <a class="btn ghost" data-donate="5" href="#donate">$5</a>
+          <a class="btn ghost" data-donate="10" href="#donate">$10</a>
+          <a class="btn ghost" data-donate="25" href="#donate">$25</a>
+          <a class="btn" data-donate="0" href="#donate">Any amount</a>
+        </div>
+        <p class="fine" data-donate-note>Donations open soon.</p>
+      </div></div>
+      <p class="fine">Payments, sales tax and VAT are handled by Polar, our merchant of record. Your license key arrives by email; paste it in Settings &gt; Plan. A donation's key works the same way, and if you also subscribe with the same email, its thank-yous join your plan on their own. Your email, payment details and receipts stay with Polar and are kept private: Clip Engine never sees your card and doesn't keep your email.</p>
       <div class="credits" data-credits hidden>
         <h3>Thanks to our supporters</h3>
         <ul class="credit-list" data-credit-list></ul>
@@ -268,9 +368,10 @@
       <details><summary>Can I get banned for using it?</summary><p>Clip Engine never touches the game's memory or files. It records the screen the same way Windows' own tools do.</p></details>
       <details><summary>Windows says the app is from an unknown publisher.</summary><p>Early builds aren't code-signed yet. Choose <em>More info → Run anyway</em>. Signed builds are coming before the full launch.</p></details>
       <details><summary>Installer or zip?</summary><p>The installer is the easy way: a Start menu entry, an uninstaller in Apps &amp; features, and no admin prompt. The zip is the same app for people who'd rather not install anything: unzip it anywhere, keep the files together, and delete the folder to remove it. Either one updates itself from Settings, and your clips and settings are kept if you uninstall.</p></details>
-      <details><summary>Is it really free?</summary><p>Yes. Recording, automatic clips, the player, squads, friends and sharing are free for everyone, up to 1080p. Pro ($2.99 a month) records up to 1440p with a 100 GB cloud library, and Ultra ($4.99 a month) records up to 4K with 250 GB. The free cloud library has 2 GB.</p></details>
+      <details><summary>Is it really free?</summary><p>Yes. Recording, automatic clips, the player, squads, friends and sharing are free for everyone, up to 4K. The free cloud library has 2 GB and takes clips up to 1080p, 100 MB and 40 seconds. Pro ($2.99 a month) keeps 4K clips of up to 1 GB and 10 minutes in a 100 GB cloud library, and Ultra ($4.99 a month) clips of up to 4 GB and 30 minutes in 250 GB.</p></details>
       <details><summary>Can I record smaller than my plan allows?</summary><p>Yes. Settings &gt; Resolution goes from 480p up to the most your plan records. Clip Engine never records bigger than your monitor.</p></details>
-      <details><summary>Which games are supported?</summary><p>Automatic clips work in 21 games today: Counter-Strike 2, Dota 2, League of Legends and Rocket League through their official game events, and Valorant, Fortnite, Apex Legends, PUBG, Marvel Rivals, Rainbow Six Siege, Call of Duty, ARC Raiders, Delta Force, The Finals, Overwatch, Battlefield 6, Deadlock, Halo Infinite, Destiny 2, Team Fortress 2 and Escape from Tarkov by reading the screen. Roblox and Minecraft are recorded too. The F8 replay hotkey works in any game, and Detection Studio in the app adds any game you like.</p></details>
+      <details><summary>Do my clips get posted anywhere?</summary><p>Only if you choose. Clips stay on your PC until you upload or share one. A shared clip is unlisted (only people with its link can watch) unless you set it to Public, which puts it on your profile and in the <a data-link="hub" href="#squads">hub</a>. Anyone can watch the hub without an account; to manage your own clips there, sign in with your Clip Engine account or a code from the app's Cloud page.</p></details>
+      <details><summary>Which games are supported?</summary><p>Automatic clips work in 25 games today: Counter-Strike 2, Dota 2, League of Legends and Rocket League through their official game events, Team Fortress 2 through its console log, and Valorant, Fortnite, Apex Legends, PUBG, Marvel Rivals, Rainbow Six Siege, Call of Duty, Delta Force, The Finals, Overwatch, Battlefield 6, 2042, V, 1 and 4, Deadlock, Halo Infinite, Halo: The Master Chief Collection, Paladins and Splitgate by reading the screen. Roblox and Minecraft are recorded too. The F8 replay hotkey works in any game, and Detection Studio in the app adds any game you like.</p></details>
     </section>
   </main>
 
@@ -278,6 +379,7 @@
     <div class="footer-inner">
       <p>© 2026 Clip Engine · <span data-version-short>v0.13.0</span> · Free to download and use, not open source (<a href="https://github.com/MochiBoy9/Clip_Engine/blob/main/LICENSE">license</a>)</p>
       <nav>
+        <a href="compare.html">Compare</a>
         <a href="privacy.html">Privacy</a>
         <a href="terms.html">Terms</a>
         <a data-link="support" href="#">Support</a>
@@ -285,6 +387,18 @@
     </div>
   </footer>
 
+  <!-- Shown before going to Polar's checkout -->
+  <dialog class="checkout-dialog" data-checkout-dialog aria-labelledby="checkout-title">
+    <form method="dialog" class="plate"><div class="plate-in">
+      <h3 id="checkout-title">Before you go to checkout</h3>
+      <p><strong>Enter an email you can open.</strong> Polar emails your license key there as soon as you've paid. Without it, there's no key to paste into Settings &gt; Plan, and the plan won't work.</p>
+      <p class="fine">Your email and payment details are held by Polar, our merchant of record, and kept private. Clip Engine never sees your card and doesn't keep your email; the app only sends Polar your key to check it.</p>
+      <div class="dialog-actions">
+        <button class="btn" value="go" data-checkout-go>Continue to checkout</button>
+        <button class="btn ghost" value="cancel">Not now</button>
+      </div>
+    </div></form>
+  </dialog>
   <script src="site.js"></script>
 </body>
 </html>

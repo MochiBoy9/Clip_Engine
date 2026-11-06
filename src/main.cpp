@@ -91,8 +91,9 @@ clip::DetectionRules LoadDetectionRules(const std::filesystem::path& dataDir, st
 
 }  // namespace
 
-// clip_engine.exe --export <clip.mp4> <out.mp4> [--max-mb 10]
-// Makes a small copy for sharing and exits. Runs alongside a recording engine.
+// clip_engine.exe --export <clip.mp4> <out.mp4> [--max-mb 10] [--max-height 1080]
+// Makes a small copy for sharing and exits. Runs alongside a recording engine. --max-height 2160 lets the cloud
+// library's copies for Pro and Ultra stay 4K.
 int RunExportCommand(int argc, wchar_t** argv) {
   using namespace clip;
   ExportOptions options;
@@ -100,6 +101,9 @@ int RunExportCommand(int argc, wchar_t** argv) {
   options.output = argv[3];
   for (int i = 4; i + 1 < argc; i += 2) {
     if (std::wstring_view(argv[i]) == L"--max-mb") options.maxMegabytes = std::clamp(_wtof(argv[i + 1]), 1.0, 4000.0);
+    if (std::wstring_view(argv[i]) == L"--max-height") {
+      options.maxHeight = static_cast<unsigned>(std::clamp(_wtoi(argv[i + 1]), 360, 2160));
+    }
   }
   winrt::init_apartment(winrt::apartment_type::multi_threaded);
   if (FAILED(MFStartup(MF_VERSION))) {
@@ -111,8 +115,9 @@ int RunExportCommand(int argc, wchar_t** argv) {
   return result;
 }
 
-// clip_engine.exe --montage <out.mp4> --part "<clip>|<from>|<to>" [--part ...] [--height 1080] [--moment <id>]
-// Puts parts of several clips together into one, for squad highlights, and exits.
+// clip_engine.exe --montage <out.mp4> --part "<clip>|<from>|<to>" [--part ...] [--height 1080] [--mbps 16|auto]
+//                 [--moment <id>] [--kind edit]
+// Puts parts of several clips together into one, for squad highlights and the app's editor, and exits.
 int RunMontageCommand(int argc, wchar_t** argv) {
   using namespace clip;
   MontageOptions options;
@@ -128,6 +133,11 @@ int RunMontageCommand(int argc, wchar_t** argv) {
       options.parts.push_back({std::filesystem::path(winrt::to_hstring(part->path).c_str()), part->from, part->to});
     }
     if (flag == L"--height") options.maxHeight = static_cast<unsigned>(std::clamp(_wtoi(argv[i + 1]), 360, 2160));
+    if (flag == L"--mbps") {
+      const std::wstring_view value = argv[i + 1];
+      options.mbps = value == L"auto" ? 0.0 : std::clamp(_wtof(argv[i + 1]), 2.0, 80.0);
+    }
+    if (flag == L"--kind" && std::wstring_view(argv[i + 1]) == L"edit") options.trigger = "edit";
     if (flag == L"--moment") {
       const std::string moment = winrt::to_string(argv[i + 1]);
       if (IsSquadMomentId(moment)) options.squadMoment = moment;
@@ -269,7 +279,8 @@ int RunScanCommand(int argc, wchar_t** argv) {
     log::Error("Scan failed: Media Foundation is unavailable");
     return 1;
   }
-  const int result = RunScanCommand(argv[2], forGame, quality, hudScale.value_or(ReadHudScale(settings, game)));
+  const int result = RunScanCommand(argv[2], forGame, quality, hudScale.value_or(ReadHudScale(settings, game)),
+                                    rules.JournalsForGame(game));
   MFShutdown();
   return result;
 }

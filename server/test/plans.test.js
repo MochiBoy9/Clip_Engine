@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import worker from "../src/index.js";
 import { checkLicense, planName } from "../src/plans.js";
-import { fakeEnv, request } from "./fakes.js";
+import { fakeEnv, request, signUpBody } from "./fakes.js";
 
 const call = (env, path, options) => worker.fetch(request(path, options), env);
 
@@ -30,7 +30,7 @@ function planEnv(keys) {
 }
 
 async function account(env, name = "Enterro", device = "device-0000") {
-  const b = await (await call(env, "/v1/accounts", { method: "POST", body: { name, device } })).json();
+  const b = await (await call(env, "/v1/accounts", { method: "POST", body: signUpBody(name, device) })).json();
   return { token: b.token, id: b.account.id, base: `/v1/accounts/${b.account.id}` };
 }
 
@@ -57,11 +57,15 @@ test("a license key says which plan it pays for", async () => {
   assert.equal(pro.status, 200);
   const info = await pro.json();
   assert.equal(info.plan, "pro");
-  assert.equal(info.lines, 1440);
+  assert.equal(info.lines, 2160);
+  assert.equal(info.clipBytes, 1024 * 1024 * 1024);
+  assert.equal(info.recordLines, 2160);
   assert.equal(info.storage, 102_400 * 1024 * 1024);
   assert.equal((await call(env, "/v1/license", { method: "POST", body: { key: "OLD-KEY-0001" } })).status, 403);
   const plans = await (await call(env, "/v1/plans")).json();
-  assert.deepEqual(plans.plans.map((p) => [p.plan, p.price, p.lines]), [["free", 0, 1080], ["pro", 2.99, 1440], ["ultra", 4.99, 2160]]);
+  // Every plan records up to 4K; the plan sets the resolution and size of clips in the cloud.
+  assert.deepEqual(plans.plans.map((p) => [p.plan, p.price, p.lines, p.clipBytes / 1024 / 1024, p.clipSeconds, p.recordLines]),
+    [["free", 0, 1080, 100, 40, 2160], ["pro", 2.99, 2160, 1024, 600, 2160], ["ultra", 4.99, 2160, 4096, 1800, 2160]]);
   assert.equal(plans.open, true);
 });
 
@@ -73,11 +77,11 @@ test("subscribers can have their name in the credits", async () => {
   await call(env, "/v1/license", { method: "POST", body: { key: "PRO-KEY-0001", credit: "  Kai   the  Clipper " } });
   await call(env, "/v1/license", { method: "POST", body: { key: "ULTRA-KEY-0001", credit: "Mira" } });
   await call(env, "/v1/license", { method: "POST", body: { key: "ULTRA-KEY-0001", credit: "Mira" } });
-  assert.deepEqual(await (await call(env, "/v1/credits")).json(), { ultra: ["Mira"], pro: ["Kai the Clipper"] });
+  assert.deepEqual(await (await call(env, "/v1/credits")).json(), { ultra: ["Mira"], pro: ["Kai the Clipper"], supporter: [], exclusive: [], creator: [], special: [] });
   // Checking without credit leaves it; credit "" takes it off.
   await call(env, "/v1/license", { method: "POST", body: { key: "PRO-KEY-0001" } });
   await call(env, "/v1/license", { method: "POST", body: { key: "ULTRA-KEY-0001", credit: "" } });
-  assert.deepEqual(await (await call(env, "/v1/credits")).json(), { ultra: [], pro: ["Kai the Clipper"] });
+  assert.deepEqual(await (await call(env, "/v1/credits")).json(), { ultra: [], pro: ["Kai the Clipper"], supporter: [], exclusive: [], creator: [], special: [] });
 });
 
 test("a subscription on a cloud account sets its storage, and goes back to Free when it ends", async () => {

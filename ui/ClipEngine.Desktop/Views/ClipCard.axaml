@@ -24,6 +24,13 @@
                 <TextBlock Text="AUTO" FontSize="10" FontWeight="Bold" LetterSpacing="0.8" />
               </StackPanel>
             </Border>
+            <Border Classes="pill accent" Padding="7,2"
+                    IsVisible="{Binding IsVoice}" ToolTip.Tip="Saved when you said so">
+              <StackPanel Orientation="Horizontal" Spacing="4">
+                <PathIcon Data="{StaticResource IconMic}" Width="9" Height="9" />
+                <TextBlock Text="VOICE" FontSize="10" FontWeight="Bold" LetterSpacing="0.8" />
+              </StackPanel>
+            </Border>
           </StackPanel>
           <Border Classes="pill onMedia" HorizontalAlignment="Right"
                   VerticalAlignment="Bottom" Margin="8" Padding="7,2" IsVisible="{Binding HasDuration}">

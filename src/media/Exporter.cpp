@@ -73,10 +73,13 @@ SourceInfo Inspect(IMFSourceReader* reader) {
       if (SUCCEEDED(MFGetAttributeRatio(type.get(), MF_MT_FRAME_RATE, &num, &den)) && num > 0 && den > 0) {
         info.fps = static_cast<double>(num) / den;
       }
-    } else if (major == MFMediaType_Audio && info.audioStreams.size() < 2) {
+    } else if (major == MFMediaType_Audio) {
       info.audioStreams.push_back(i);
     }
   }
+  // A clip with three or more audio tracks has them all mixed on the first one (the rest are each
+  // source on its own), so that one is all it takes. Older clips had game audio and the mic, mixed here.
+  if (info.audioStreams.size() > 2) info.audioStreams.resize(1);
   if (info.videoStream == MAXDWORD || info.width == 0 || info.height == 0) {
     throw winrt::hresult_error(MF_E_INVALIDMEDIATYPE, L"The file has no video");
   }
@@ -84,12 +87,17 @@ SourceInfo Inspect(IMFSourceReader* reader) {
   return info;
 }
 
-// The biggest picture that still looks clean at the bitrate that fits.
-Plan PlanFor(const SourceInfo& source, UINT32 videoBitrate, unsigned maxFps) {
+// The biggest picture that still looks clean at the bitrate that fits, at most maxHeight.
+Plan PlanFor(const SourceInfo& source, UINT32 videoBitrate, unsigned maxFps, unsigned maxHeight) {
   Plan plan;
   plan.videoBitrate = videoBitrate;
-  UINT32 height = videoBitrate >= 5'000'000 ? 1080 : videoBitrate >= 2'200'000 ? 720 : videoBitrate >= 1'000'000 ? 540 : 480;
-  height = std::min(height, source.height);
+  UINT32 height = videoBitrate >= 24'000'000 ? 2160
+                  : videoBitrate >= 12'000'000 ? 1440
+                  : videoBitrate >= 5'000'000 ? 1080
+                  : videoBitrate >= 2'200'000 ? 720
+                  : videoBitrate >= 1'000'000 ? 540
+                  : 480;
+  height = std::min({height, static_cast<UINT32>(std::max(maxHeight, 360u)), source.height});
   plan.height = height & ~1u;
   plan.width = static_cast<UINT32>(static_cast<double>(source.width) * plan.height / source.height + 0.5) & ~1u;
   const double fpsCap = videoBitrate < 1'500'000 ? 30.0 : static_cast<double>(maxFps);
@@ -377,8 +385,12 @@ int RunMontage(const MontageOptions& options) {
     plan.height = std::min<UINT32>(options.maxHeight, first.height) & ~1u;
     plan.width = static_cast<UINT32>(static_cast<double>(first.width) * plan.height / first.height + 0.5) & ~1u;
     plan.fps = static_cast<UINT32>(std::clamp(first.fps + 0.5, 1.0, static_cast<double>(options.maxFps)));
-    plan.videoBitrate = static_cast<UINT32>(std::clamp(options.mbps, 2.0, 80.0) * 1e6);
-    log::Info("Making a {:.0f}s highlight from {} views, {}x{} at {} fps", total, options.parts.size(), plan.width, plan.height, plan.fps);
+    // Unless asked for, the bitrate follows the picture: enough for fast motion at 60 fps.
+    const double mbps = options.mbps > 0 ? options.mbps
+                        : plan.height <= 720 ? 8.0 : plan.height <= 1080 ? 16.0 : plan.height <= 1440 ? 28.0 : 45.0;
+    plan.videoBitrate = static_cast<UINT32>(std::clamp(mbps, 2.0, 80.0) * 1e6);
+    log::Info("Making a {:.0f}s video from {} parts, {}x{} at {} fps, {:.0f} Mbps", total, options.parts.size(), plan.width, plan.height,
+              plan.fps, plan.videoBitrate / 1e6);
 
     std::error_code ec;
     auto partial = options.output;
@@ -471,6 +483,7 @@ int RunMontage(const MontageOptions& options) {
     }
     ClipMetadata merged = MontageMetadata(specs, metadata);
     merged.squadMoment = options.squadMoment;
+    if (!options.trigger.empty()) merged.trigger = options.trigger;
     const std::string json = ToJson(merged);
     AppendMetadataBox(partial, json);
     auto sidecar = options.output;
@@ -511,7 +524,7 @@ int RunExport(const ExportOptions& options) {
 
     for (int attempt = 1; attempt <= 3; ++attempt) {
       const auto videoBitrate = static_cast<UINT32>(std::clamp(budgetBits / seconds, 150'000.0, 40'000'000.0));
-      const Plan plan = PlanFor(source, videoBitrate, options.maxFps);
+      const Plan plan = PlanFor(source, videoBitrate, options.maxFps, options.maxHeight);
       log::Info("Exporting {}x{} at {} fps, {:.1f} Mbps", plan.width, plan.height, plan.fps, plan.videoBitrate / 1e6);
       std::filesystem::remove(options.output, ec);
       Encode(options.input, options.output, source, plan, audio);

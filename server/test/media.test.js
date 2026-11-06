@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import worker from "../src/index.js";
-import { fakeEnv, request } from "./fakes.js";
+import { fakeEnv, request, signUpBody } from "./fakes.js";
 
 const call = (env, path, options) => worker.fetch(request(path, options), env);
 
@@ -30,7 +30,7 @@ function fakeCache() {
 }
 
 async function sharedClip(env) {
-  const made = await (await call(env, "/v1/accounts", { method: "POST", body: { name: "Enterro", device: "device-0000" } })).json();
+  const made = await (await call(env, "/v1/accounts", { method: "POST", body: signUpBody("Enterro") })).json();
   const base = `/v1/accounts/${made.account.id}`;
   const clip = await (await call(env, `${base}/clips`, { method: "POST", token: made.token, body: { seconds: 15, visibility: "unlisted" } })).json();
   await call(env, `${base}/clips/${clip.id}/video`, { method: "PUT", token: made.token, body: new Uint8Array(1000).map((_, i) => i % 256) });

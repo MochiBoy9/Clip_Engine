@@ -2,6 +2,9 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
+#include <map>
+#include <optional>
 #include <format>
 
 namespace clip {
@@ -317,6 +320,222 @@ std::vector<ApiEvent> RocketLeagueTracker::Update(const Json& message) {
     events.push_back({EventType::MatchEnd, myTeam_ < 0 || winner < 0 ? "Match over" : winner == myTeam_ ? "Victory" : "Defeat"});
   }
   return events;
+}
+
+// ---------------------------------------------------------------------- Team Fortress 2
+
+namespace {
+
+// With con_timestamp 1 every line starts "11/04/2026 - 18:41:17: ", and server-style logs
+// put "L " before that.
+std::string_view StripTimestamp(std::string_view line) {
+  std::string_view rest = line.starts_with("L ") ? line.substr(2) : line;
+  if (rest.size() >= 23 && std::isdigit(static_cast<unsigned char>(rest[0])) && rest[2] == '/' && rest[5] == '/' &&
+      rest.substr(10, 3) == " - " && rest.substr(21, 2) == ": ") {
+    return rest.substr(23);
+  }
+  return line;
+}
+
+std::string_view TrimLine(std::string_view s) {
+  while (!s.empty() && (s.back() == '\r' || s.back() == '\n' || s.back() == ' ')) s.remove_suffix(1);
+  while (!s.empty() && s.front() == ' ') s.remove_prefix(1);
+  return s;
+}
+
+// The weapon as the console names it ("tf_projectile_rocket", "sniperrifle"), tidied up.
+std::string WeaponName(std::string_view weapon) {
+  std::string name(weapon);
+  for (std::string_view prefix : {"tf_projectile_", "tf_weapon_", "obj_"}) {
+    if (name.starts_with(prefix)) name = name.substr(prefix.size());
+  }
+  std::ranges::replace(name, '_', ' ');
+  return name;
+}
+
+}  // namespace
+
+Tf2ConsoleTracker::Tf2ConsoleTracker(std::vector<std::string> names) {
+  for (auto& name : names) {
+    if (!name.empty()) names_.push_back(Lower(std::move(name)));
+  }
+}
+
+bool Tf2ConsoleTracker::IsMe(std::string_view name) const {
+  return !name.empty() && std::ranges::find(names_, Lower(std::string(name))) != names_.end();
+}
+
+std::vector<ApiEvent> Tf2ConsoleTracker::Update(std::string_view raw) {
+  std::vector<ApiEvent> events;
+  const std::string_view line = TrimLine(StripTimestamp(TrimLine(raw)));
+  if (line.empty()) return events;
+
+  // Clip Engine's line in autoexec.cfg runs "name", which prints the player's name:
+  // "name" = "Mochi" ( def. "unnamed" )
+  if (line.starts_with("\"name\" = \"")) {
+    const auto rest = line.substr(10);
+    const auto end = rest.find('"');
+    if (end != std::string_view::npos && end > 0 && rest.substr(0, end) != "unnamed") {
+      std::string name = Lower(std::string(rest.substr(0, end)));
+      if (std::ranges::find(names_, name) == names_.end()) names_.push_back(std::move(name));
+    }
+    return events;
+  }
+  // A new server: the totals start again.
+  if (line.starts_with("Connected to ")) {
+    kills_ = deaths_ = 0;
+    board_.clear();
+    return events;
+  }
+  // Chat is printed as "<name> :  <message>", and a message could look like a kill.
+  if (names_.empty() || line.find(" :  ") != std::string_view::npos) return events;
+
+  if (line.ends_with(" suicided.")) {
+    if (IsMe(line.substr(0, line.size() - 10))) {
+      ++deaths_;
+      events.push_back({EventType::Death, "Suicide"});
+    }
+  } else if (line.ends_with(".") || line.ends_with(". (crit)")) {
+    // "<killer> killed <victim> with <weapon>." Names may hold any text, " killed " and " with "
+    // included, so the player's own name is looked for at either end first.
+    const bool crit = line.ends_with(" (crit)");
+    const std::string_view body = line.substr(0, line.size() - (crit ? 8 : 1));
+    const auto with = body.rfind(" with ");
+    if (with == std::string_view::npos) return events;
+    const std::string_view weapon = body.substr(with + 6);
+    const std::string_view who = body.substr(0, with);
+    const std::string weaponText = WeaponName(weapon) + (crit ? " (crit)" : "");
+    bool counted = false;
+    for (const auto& name : names_) {
+      if (who.size() > name.size() + 8 && Lower(std::string(who.substr(0, name.size()))) == name &&
+          who.substr(name.size(), 8) == " killed ") {
+        const std::string_view victim = who.substr(name.size() + 8);
+        if (IsMe(victim)) break;  // killed themselves with their own rocket: a suicide, printed as such too
+        ++kills_;
+        events.push_back({EventType::Kill, std::format("Killed {} with {}", victim, weaponText)});
+        counted = true;
+        break;
+      }
+      if (who.size() > name.size() + 8 && Lower(std::string(who.substr(who.size() - name.size()))) == name &&
+          who.substr(who.size() - name.size() - 8, 8) == " killed ") {
+        const std::string_view killer = who.substr(0, who.size() - name.size() - 8);
+        ++deaths_;
+        events.push_back({EventType::Death, std::format("Killed by {} with {}", killer, weaponText)});
+        counted = true;
+        break;
+      }
+    }
+    if (!counted) return events;
+  } else {
+    return events;
+  }
+  board_ = {{"kills", kills_}, {"deaths", deaths_}};
+  return events;
+}
+
+// ---------------------------------------------------------------------- Hunt: Showdown 1896
+
+namespace {
+
+// Every <Attr name="..." value="..."/> in the file, in order.
+std::vector<std::pair<std::string, std::string>> ReadAttributes(std::string_view xml) {
+  std::vector<std::pair<std::string, std::string>> attributes;
+  auto quoted = [&](size_t from, std::string_view key, size_t end) -> std::optional<std::string> {
+    const auto at = xml.find(key, from);
+    if (at == std::string_view::npos || at > end) return std::nullopt;
+    const auto open = at + key.size();
+    const auto close = xml.find('"', open);
+    if (close == std::string_view::npos || close > end) return std::nullopt;
+    return std::string(xml.substr(open, close - open));
+  };
+  for (size_t at = xml.find("<Attr"); at != std::string_view::npos; at = xml.find("<Attr", at + 5)) {
+    const auto end = xml.find('>', at);
+    if (end == std::string_view::npos) break;
+    auto name = quoted(at, "name=\"", end);
+    auto value = quoted(at, "value=\"", end);
+    if (name && value) attributes.emplace_back(std::move(*name), std::move(*value));
+  }
+  return attributes;
+}
+
+bool EndsWith(std::string_view s, std::string_view end) { return s.size() >= end.size() && s.substr(s.size() - end.size()) == end; }
+
+int ToInt(const std::string& s) {
+  int value = 0;
+  const auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), value);
+  return ec == std::errc() ? value : 0;
+}
+
+}  // namespace
+
+std::vector<JournalNote> HuntMissionTracker::Update(std::string_view xml) {
+  const auto attributes = ReadAttributes(xml);
+  std::map<std::string, std::string> bag;
+  std::string fingerprint;
+  for (const auto& [name, value] : attributes) {
+    if (!name.starts_with("MissionBag") && !name.starts_with("MissionAccolade")) continue;
+    bag[name] = value;
+    fingerprint += name + '=' + value + ';';
+  }
+  if (fingerprint.empty() || fingerprint == last_) return {};
+  last_ = fingerprint;
+  if (std::exchange(first_, false)) return {};
+
+  auto get = [&](const std::string& name) {
+    const auto it = bag.find(name);
+    return it == bag.end() ? std::string() : it->second;
+  };
+  auto isTrue = [&](const std::string& name) { return Lower(get(name)) == "true"; };
+
+  // Hunters downed or killed by the player, over every team in the match.
+  int hunters = 0;
+  for (const auto& [name, value] : bag) {
+    if (name.starts_with("MissionBagPlayer_") && (EndsWith(name, "_killedbyme") || EndsWith(name, "_downedbyme"))) {
+      hunters += ToInt(value);
+    }
+  }
+
+  // The accolades: what each one counts, how many, and the XP it gave.
+  int monsters = 0, bosses = 0, bounties = 0, xp = 0;
+  bool anyAccolade = false;
+  for (const auto& [name, value] : bag) {
+    if (!name.starts_with("MissionAccoladeEntry_") || !EndsWith(name, "_category")) continue;
+    const std::string prefix = name.substr(0, name.size() - std::string_view("_category").size());
+    const std::string category = Lower(value);
+    const int hits = std::max(1, ToInt(get(prefix + "_hits")));
+    anyAccolade = true;
+    xp += ToInt(get(prefix + "_xp"));
+    if (category.find("boss") != std::string::npos) bosses += hits;
+    else if (category.find("monster") != std::string::npos) monsters += hits;
+    if (category.find("bounty") != std::string::npos && category.find("extract") != std::string::npos) bounties += hits;
+  }
+  // Older files list the same things as MissionBagEntry_<n>_category with an _amount.
+  if (!anyAccolade) {
+    for (const auto& [name, value] : bag) {
+      if (!name.starts_with("MissionBagEntry_") || !EndsWith(name, "_category")) continue;
+      const std::string prefix = name.substr(0, name.size() - std::string_view("_category").size());
+      const std::string category = Lower(value);
+      const int amount = std::max(1, ToInt(get(prefix + "_amount")));
+      if (category.find("boss") != std::string::npos) bosses += amount;
+      else if (category.find("monster") != std::string::npos) monsters += amount;
+      if (category.find("bounty") != std::string::npos && category.find("extract") != std::string::npos) bounties += amount;
+    }
+  }
+
+  std::vector<JournalNote> notes;
+  auto add = [&](std::string note, std::string value, int amount, std::string text) {
+    notes.push_back({std::move(note), std::move(value), amount, 0, std::move(text)});
+  };
+  const std::string mode = isTrue("MissionBagIsQuickPlay") ? "Quickplay" : "Bounty Hunt";
+  add("deploy", mode, 0, "Match summary in attributes.xml");
+  if (monsters > 0) add("enemy", "Monster", monsters, std::format("{} monsters killed", monsters));
+  if (bosses > 0) add("enemy", "Boss", bosses, std::format("{} bosses banished", bosses));
+  if (hunters > 0) add("player_kill", "Hunters", hunters, std::format("{} hunters downed or killed", hunters));
+  if (bounties > 0) add("objective", "Bounty extracted", bounties, std::format("{} bounty tokens extracted", bounties));
+  if (xp > 0) add("xp", "", xp, std::format("{} XP", xp));
+  if (isTrue("MissionBagIsHunterDead")) add("died", "", 0, "Hunter died");
+  else add("extracted", "", 0, "Hunter extracted");
+  return notes;
 }
 
 }  // namespace clip

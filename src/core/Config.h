@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/AudioSettings.h"
 #include "core/Hotkeys.h"
 #include "core/Win.h"
 #include "detect/GameEvent.h"
@@ -25,14 +26,26 @@ double ReadHudScale(const std::filesystem::path& file, std::string_view gameId);
 
 struct Config {
   std::filesystem::path outputDir;  // where clips are saved; one folder per game
-  int bufferSeconds = 60;           // recent gameplay kept in memory
+  static constexpr int kMaxBufferSeconds = 1800;  // 30 minutes
+  int bufferSeconds = 60;           // recent gameplay kept in memory, up to kMaxBufferSeconds
   int clipSeconds = 30;             // length of a clip saved with the hotkey
   int fps = 0;                      // 0 = match the monitor's refresh rate
   int bitrateMbps = 0;              // 0 = pick from resolution and frame rate
   int resolution = 0;               // the most lines to record, like 1440 for 1440p; 0 = the monitor's own
   std::string codec = "auto";       // auto | h264 | hevc
+  // Which sources are recorded, each on its own track: the game, the mic, Discord (and other voice
+  // chat apps) and every other app. Turning one off needs a restart; muting is live (levels).
   bool gameAudio = true;
   bool micAudio = true;
+  bool discordAudio = true;
+  bool appsAudio = true;
+  AudioLevels levels;
+
+  // Saves a clip when the player says one of these, of its own length or voiceClipSeconds (0 = clipSeconds).
+  bool voiceClips = false;
+  std::vector<VoicePhrase> voicePhrases{{"clip that", 0}};
+  int voiceClipSeconds = 0;
+  VoiceSensitivity voiceSensitivity = VoiceSensitivity::Medium;
   Hotkey saveHotkey;
   std::string saveHotkeyText = "F8";
   // More keys that save a clip, each of its own length ("Alt+F8 15, Shift+F8 120").
@@ -51,6 +64,8 @@ struct Config {
 
   bool detection = true;          // read the screen for kills, deaths and other moments
   bool detectionDebug = false;    // log everything read off the screen, for tuning detection.ini
+  // Keep a journal of each run in games with journal rules (maps, enemies, loot, how it ended).
+  bool journal = true;
   ReadQuality readingQuality = ReadQuality::Medium;  // how hard to work at reading the screen
   bool autoClip = true;           // save a clip around each detected moment
   std::set<EventType> autoClipEvents{kAllEventTypes.begin(), kAllEventTypes.end()};

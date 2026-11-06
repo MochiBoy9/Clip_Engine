@@ -10,14 +10,11 @@ internal sealed class CloudSettings
     public string Name { get; set; } = "";
     public string Handle { get; set; } = "";
 
-    // New uploads: "unlisted" (anyone with the link), "public" (also on your profile) or "private".
+    // New uploads: "unlisted" (anyone with the link), "public" (also on your profile and in the hub) or "private".
     public string DefaultVisibility { get; set; } = "unlisted";
 
     // Starred clips go up to the cloud by themselves.
     public bool SyncStarred { get; set; }
-
-    // Uploads are copies of at most this many MB (100 is the service's limit).
-    public int UploadLimitMb { get; set; } = 90;
 
     // Clips on this PC already in the cloud: CloudApi.LocalId(clip) to the clip's short code.
     public Dictionary<string, string> Uploaded { get; set; } = [];

@@ -24,6 +24,8 @@ public sealed class FriendsViewModel : ObservableObject
     private bool _loaded;
     // Who was online, and in what game, at the last look: the next look tells you who came on.
     private Dictionary<string, FriendSeen>? _seen;
+    // The requests you'd sent at the last look, so the next one can tell you who said yes.
+    private HashSet<string>? _sentBefore;
 
     internal FriendsViewModel(MainViewModel main, DesktopSettings desktop)
     {
@@ -35,6 +37,10 @@ public sealed class FriendsViewModel : ObservableObject
         CopyUsernameCommand = new RelayCommand(() => _ = _main.Cloud.CopyAsync(MyHandleText, "Username copied"), () => MyHandleText.Length > 0);
         GoToCloudCommand = new RelayCommand(() => _main.GoToCommand.Execute(Page.Cloud));
         main.Cloud.AccountChanged += OnAccountChanged;
+        main.Notifications.KindChanged += kind =>
+        {
+            if (kind == NoticeKind.Friends) Raise(nameof(FriendNotices));
+        };
 
         if (!main.IsLive) return;
         _timer = new DispatcherTimer { Interval = Heartbeat };
@@ -52,6 +58,9 @@ public sealed class FriendsViewModel : ObservableObject
     public RelayCommand CopyCodeCommand { get; }
     public RelayCommand CopyUsernameCommand { get; }
     public RelayCommand GoToCloudCommand { get; }
+
+    // Inviting friends to Clip Engine itself, which needs no cloud account.
+    public InviteViewModel Inviting => _main.Invite;
 
     public bool SignedIn => _main.Cloud.SignedIn;
     public bool NotSignedIn => !SignedIn;
@@ -75,15 +84,13 @@ public sealed class FriendsViewModel : ObservableObject
         ? "Friends see you by this name, the same one on your cloud profile and clips. Change it on the Cloud page."
         : "Pick a username on the Cloud page so friends can find you by name.";
 
-    // A small notice when a friend comes online or starts a game.
+    // A pop-up when a friend comes online or starts a game: the same switch as in Settings > Notifications.
     public bool FriendNotices
     {
-        get => _desktop.FriendNotices;
+        get => _main.Notifications.IsKindOn(NoticeKind.Friends);
         set
         {
-            if (_desktop.FriendNotices == value) return;
-            _desktop.FriendNotices = value;
-            _main.SaveDesktopSettingsSoon();
+            _main.Notifications.SetKind(NoticeKind.Friends, value);
             Raise();
         }
     }
@@ -161,6 +168,7 @@ public sealed class FriendsViewModel : ObservableObject
         {
             _loaded = false;
             _seen = null;
+            _sentBefore = null;
             Friends.Clear();
             Received.Clear();
             Sent.Clear();
@@ -283,7 +291,32 @@ public sealed class FriendsViewModel : ObservableObject
         Announce();
         Fill(Received, reply["received"], FriendState.Received);
         Fill(Sent, reply["sent"], FriendState.Sent);
+        AnnounceRequests();
         RaiseLists();
+    }
+
+    // A friend request pops up once, even one sent while the app was closed; so does a request of yours accepted.
+    private void AnnounceRequests()
+    {
+        var notices = _desktop.Notices;
+        foreach (var name in FriendAlerts.NewRequests(notices.AnnouncedRequests, Received.Select(r => (r.Account, r.DisplayName))))
+        {
+            _main.Notify(NoticeKind.FriendRequest, "Friend request", $"{name} wants to be friends", "friends",
+                         $"{name} sent you a friend request");
+        }
+        var waiting = Received.Select(r => r.Account).ToList();
+        if (!waiting.SequenceEqual(notices.AnnouncedRequests))
+        {
+            notices.AnnouncedRequests = waiting;
+            _main.SaveDesktopSettingsSoon();
+        }
+
+        if (_sentBefore is { } before)
+        {
+            foreach (var name in FriendAlerts.Accepted(before, Friends.Select(f => (f.Account, f.DisplayName))))
+                _main.Notify(NoticeKind.FriendRequest, "Request accepted", $"{name} is your friend now", "friends", $"{name} accepted your friend request");
+        }
+        _sentBefore = Sent.Select(r => r.Account).ToHashSet();
     }
 
     private void Fill(ObservableCollection<FriendRow> list, JsonNode? rows, FriendState state)
@@ -315,11 +348,7 @@ public sealed class FriendsViewModel : ObservableObject
         var before = _seen;
         _seen = now;
         if (before is null) return;
-        foreach (var text in FriendAlerts.Changes(before, now))
-        {
-            _main.AddActivity(ActivityKind.Info, text);
-            if (FriendNotices) _main.ShowFriendNotice(text);
-        }
+        foreach (var text in FriendAlerts.Changes(before, now)) _main.Notify(NoticeKind.Friends, "Friends", text, "friends", text);
     }
 
     private void RaiseLists()
@@ -355,6 +384,17 @@ internal static class FriendAlerts
         }
         return lines;
     }
+
+    // The names of requests received that haven't been announced yet.
+    public static IReadOnlyList<string> NewRequests(IEnumerable<string> announced, IEnumerable<(string Account, string Name)> received)
+    {
+        var told = announced.ToHashSet();
+        return received.Where(r => r.Account.Length > 0 && !told.Contains(r.Account)).Select(r => r.Name).ToList();
+    }
+
+    // The names of friends whose request from you was still waiting at the last look.
+    public static IReadOnlyList<string> Accepted(IReadOnlySet<string> sentBefore, IEnumerable<(string Account, string Name)> friends) =>
+        friends.Where(f => sentBefore.Contains(f.Account)).Select(f => f.Name).ToList();
 
     // "25 min", "2 h 5 min", "just now".
     public static string Since(DateTimeOffset start, DateTimeOffset now)

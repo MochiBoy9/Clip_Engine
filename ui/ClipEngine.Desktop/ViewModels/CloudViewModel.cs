@@ -19,6 +19,13 @@ public sealed class CloudViewModel : ObservableObject
     private CloudAccount? _account;
     private string _nameInput;
     private string _codeInput = "";
+    private string _emailInput = "";
+    private string _passwordInput = "";
+    private string _signInEmail = "";
+    private string _signInPassword = "";
+    // The state this PC sent with Sign in with Google, and until when its answer is taken.
+    private string? _googleState;
+    private DateTimeOffset _googleUntil;
     private string _handleInput;
     private bool _busy;
     private string? _message;
@@ -37,6 +44,9 @@ public sealed class CloudViewModel : ObservableObject
 
         CreateCommand = new RelayCommand(() => _ = CreateAsync(), () => !IsBusy);
         SignInCommand = new RelayCommand(() => _ = SignInAsync(), () => !IsBusy);
+        SignInWithEmailCommand = new RelayCommand(() => _ = SignInWithEmailAsync(), () => !IsBusy);
+        ForgotPasswordCommand = new RelayCommand(() => _ = ForgotPasswordAsync(), () => !IsBusy);
+        GoogleCommand = new RelayCommand(StartGoogle, () => !IsBusy);
         SignOutCommand = new RelayCommand(() => ConfirmSignOut = true);
         CancelSignOutCommand = new RelayCommand(() => ConfirmSignOut = false);
         ConfirmSignOutCommand = new RelayCommand(SignOut);
@@ -44,6 +54,7 @@ public sealed class CloudViewModel : ObservableObject
         CopyProfileCommand = new RelayCommand(() => _ = CopyAsync(ProfileLink, "Profile link copied"));
         OpenProfileCommand = new RelayCommand(() => { if (HasProfile) Shell.Open(ProfileLink); });
         MakeLinkCodeCommand = new RelayCommand(() => _ = MakeLinkCodeAsync(), () => !IsBusy);
+        OpenHubCommand = new RelayCommand(() => _ = OpenHubAsync(), () => !IsBusy);
         RefreshCommand = new RelayCommand(() => _ = RefreshAsync());
 
         main.Plan.PlanChanged += plan => _ = SyncPlanAsync();
@@ -56,6 +67,9 @@ public sealed class CloudViewModel : ObservableObject
 
     public RelayCommand CreateCommand { get; }
     public RelayCommand SignInCommand { get; }
+    public RelayCommand SignInWithEmailCommand { get; }
+    public RelayCommand ForgotPasswordCommand { get; }
+    public RelayCommand GoogleCommand { get; }
     public RelayCommand SignOutCommand { get; }
     public RelayCommand CancelSignOutCommand { get; }
     public RelayCommand ConfirmSignOutCommand { get; }
@@ -63,6 +77,7 @@ public sealed class CloudViewModel : ObservableObject
     public RelayCommand CopyProfileCommand { get; }
     public RelayCommand OpenProfileCommand { get; }
     public RelayCommand MakeLinkCodeCommand { get; }
+    public RelayCommand OpenHubCommand { get; }
     public RelayCommand RefreshCommand { get; }
 
     public bool SignedIn => Settings.SignedIn;
@@ -76,8 +91,12 @@ public sealed class CloudViewModel : ObservableObject
             if (!Set(ref _busy, value)) return;
             CreateCommand.NotifyCanExecuteChanged();
             SignInCommand.NotifyCanExecuteChanged();
+            SignInWithEmailCommand.NotifyCanExecuteChanged();
+            ForgotPasswordCommand.NotifyCanExecuteChanged();
+            GoogleCommand.NotifyCanExecuteChanged();
             SaveProfileCommand.NotifyCanExecuteChanged();
             MakeLinkCodeCommand.NotifyCanExecuteChanged();
+            OpenHubCommand.NotifyCanExecuteChanged();
         }
     }
 
@@ -87,6 +106,19 @@ public sealed class CloudViewModel : ObservableObject
 
     public string NameInput { get => _nameInput; set => Set(ref _nameInput, value ?? ""); }
     public string CodeInput { get => _codeInput; set => Set(ref _codeInput, value ?? ""); }
+    public string EmailInput { get => _emailInput; set => Set(ref _emailInput, value ?? ""); }
+    public string PasswordInput { get => _passwordInput; set => Set(ref _passwordInput, value ?? ""); }
+    public string SignInEmail { get => _signInEmail; set => Set(ref _signInEmail, value ?? ""); }
+    public string SignInPassword { get => _signInPassword; set => Set(ref _signInPassword, value ?? ""); }
+
+    public string EmailText => _account switch
+    {
+        null => "",
+        { Email: null } => "No email yet. Add one on the hub so you can sign in with it.",
+        { EmailVerified: false } a => $"{a.Email}, not confirmed yet. Open the link we emailed you.",
+        { Google: true } a => $"{a.Email} · Sign in with Google is on",
+        var a => a.Email!,
+    };
     public string HandleInput { get => _handleInput; set => Set(ref _handleInput, value ?? ""); }
 
     public string ServerAddress
@@ -106,7 +138,8 @@ public sealed class CloudViewModel : ObservableObject
     public bool NeedsServer => Online.ServerUrl(_desktop).Length == 0;
 
     public string AccountName => _account?.Name ?? Settings.Name;
-    public string PlanLabel => _account is null ? "" : $"{_account.PlanLabel} plan";
+    public string PlanLabel => _account is null ? ""
+        : _account.RoleLabel is { } role ? $"{role} · {_account.PlanLabel} plan" : $"{_account.PlanLabel} plan";
     public string StorageText => _account is { Limit: > 0 } a ? $"{Format.Bytes(a.Used)} of {Format.Bytes(a.Limit)} used" : "";
     public double StorageFraction => _account is { Limit: > 0 } a ? Math.Clamp((double)a.Used / a.Limit, 0, 1) * 100 : 0;
     public string ClipsText => _account is null ? "" : _account.Clips == 1 ? "1 clip in the cloud" : $"{_account.Clips} clips in the cloud";
@@ -127,10 +160,41 @@ public sealed class CloudViewModel : ObservableObject
 
     public string DefaultCaption => Settings.DefaultVisibility switch
     {
-        "public" => "Anyone with the link can watch, and the clip is listed on your profile.",
+        "public" => "Anyone with the link can watch, and the clip is listed on your profile and in the hub.",
         "private" => "Kept in the cloud as a backup. Its link plays for no one.",
         _ => "Anyone with the link can watch. It isn't listed anywhere.",
     };
+
+    // A Pro, Ultra or role badge shows next to your name on your profile, your clips and the hub, unless you hide it.
+    public bool HasBadge => _account?.BadgeLabel is not null;
+    public string BadgeText => _account?.BadgeLabel is { } label ? $"Show my {label} badge" : "";
+
+    public bool ShowBadge
+    {
+        get => _account is { HideBadge: false };
+        set
+        {
+            if (_api is not { } api || _account is not { } account || account.HideBadge == !value) return;
+            _account = account with { HideBadge = !value };
+            Raise();
+            _ = SetBadgeAsync(api, !value);
+        }
+    }
+
+    private async Task SetBadgeAsync(CloudApi api, bool hidden)
+    {
+        try
+        {
+            _account = await api.SetBadgeHiddenAsync(Settings.AccountId, _token, hidden);
+            _main.ShowToast(hidden ? "Your badge is hidden" : "Your badge shows again");
+        }
+        catch (Exception e) when (e is SquadException or HttpRequestException or TaskCanceledException)
+        {
+            if (_account is { } a) _account = a with { HideBadge = !hidden };
+            Fail(e.Message);
+        }
+        Raise(nameof(ShowBadge));
+    }
 
     public bool SyncStarred
     {
@@ -175,6 +239,9 @@ public sealed class CloudViewModel : ObservableObject
 
     // ---- signing in ----
 
+    // The service checks these too (server/src/library.js); asking here saves a trip.
+    private const int MinPassword = 8;
+
     private async Task CreateAsync()
     {
         if (NameInput.Trim().Length is 0 or > 32)
@@ -182,11 +249,96 @@ public sealed class CloudViewModel : ObservableObject
             Fail("Pick a name of up to 32 characters. It's shown on your clips and profile.");
             return;
         }
+        if (!EmailInput.Contains('@'))
+        {
+            Fail("Type your email. It's how you sign in on other PCs and get back in if you forget your password.");
+            return;
+        }
+        if (PasswordInput.Length < MinPassword)
+        {
+            Fail($"Pick a password of at least {MinPassword} characters.");
+            return;
+        }
         await RunAsync(async api =>
         {
-            var (token, account) = await api.CreateAsync(NameInput.Trim(), Online.DeviceId(_desktop));
+            var (token, account) = await api.CreateAsync(NameInput.Trim(), EmailInput.Trim(), PasswordInput, Online.DeviceId(_desktop));
+            SignedInAs(token, account);
+            _main.ShowToast($"Check {account.Email} for a link to confirm it");
+        });
+    }
+
+    private async Task SignInWithEmailAsync()
+    {
+        if (SignInEmail.Trim().Length == 0 || SignInPassword.Length == 0)
+        {
+            Fail("Type the email and password of your Clip Engine account.");
+            return;
+        }
+        await RunAsync(async api =>
+        {
+            var (token, account) = await api.SignInWithPasswordAsync(SignInEmail.Trim(), SignInPassword, Online.DeviceId(_desktop));
             SignedInAs(token, account);
         });
+    }
+
+    private async Task ForgotPasswordAsync()
+    {
+        if (!SignInEmail.Contains('@'))
+        {
+            Fail("Type your account's email above, then press Forgot your password? again.");
+            return;
+        }
+        await RunAsync(async api =>
+        {
+            await api.ForgotPasswordAsync(SignInEmail.Trim());
+            MessageIsError = false;
+            Message = $"If {SignInEmail.Trim()} has an account, a link to reset its password is on its way. It works for 30 minutes.";
+        });
+    }
+
+    // Opens Google in the browser. The service sends the browser back to clipengine://cloud/signin/... with a one-time
+    // code and this state, and only that answer, within 10 minutes, signs this PC in.
+    private void StartGoogle()
+    {
+        var server = Online.ServerUrl(_desktop);
+        if (server.Length == 0)
+        {
+            Fail("Add the address of Clip Engine's online service first.");
+            return;
+        }
+        _googleState = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
+        _googleUntil = DateTimeOffset.UtcNow.AddMinutes(10);
+        MessageIsError = false;
+        Message = "Finish signing in with Google in your browser. Clip Engine opens again when it's done.";
+        Shell.Open((_api ?? new CloudApi(server)).GoogleSignInLink(_googleState));
+    }
+
+    // clipengine://cloud/signin/<code>?state=<state>: the code and the state, or null for any other link.
+    internal static (string Code, string State)? ReadSignInLink(Uri link)
+    {
+        var parts = (link.Host + link.AbsolutePath).Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (parts is not ["cloud", "signin", var code]) return null;
+        var state = link.Query.TrimStart('?').Split('&').Select(p => p.Split('=', 2))
+                        .FirstOrDefault(p => p.Length == 2 && p[0] == "state")?[1] ?? "";
+        return (Uri.UnescapeDataString(code), Uri.UnescapeDataString(state));
+    }
+
+    // The way back from Google. A link this PC didn't ask for (someone else's code, to sign this PC in to their
+    // account) is refused.
+    internal void CompleteGoogleSignIn(string code, string state)
+    {
+        var expected = _googleState;
+        var fresh = expected is not null && DateTimeOffset.UtcNow < _googleUntil;
+        _googleState = null;
+        if (!fresh || !System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                System.Text.Encoding.UTF8.GetBytes(state), System.Text.Encoding.UTF8.GetBytes(expected!)))
+        {
+            Fail("That sign-in link didn't come from a Google sign-in started on this PC. Press Sign in with Google here to start one.");
+            return;
+        }
+        if (SignedIn) return;
+        CodeInput = code;
+        _ = SignInAsync();
     }
 
     private async Task SignInAsync()
@@ -212,6 +364,8 @@ public sealed class CloudViewModel : ObservableObject
         Settings.Uploaded.Clear();
         _main.SaveDesktopSettingsNow();
         CodeInput = "";
+        PasswordInput = "";
+        SignInPassword = "";
         Message = null;
         Start(token);
         _main.AddActivity(ActivityKind.Info, $"Signed in to the cloud library as {account.Name}");
@@ -229,7 +383,7 @@ public sealed class CloudViewModel : ObservableObject
         _queued.Clear();
         Clips.Clear();
         LinkCode = null;
-        Message = "Signed out. Your clips stay in the cloud; sign in again with a code from another PC.";
+        Message = "Signed out. Your clips stay in the cloud; sign in again with your email and password.";
         MessageIsError = false;
         RaiseAccount();
     }
@@ -274,7 +428,7 @@ public sealed class CloudViewModel : ObservableObject
         catch (SquadException e) when (e.Status is System.Net.HttpStatusCode.Unauthorized)
         {
             SignOut();
-            Fail("This PC was signed out of the cloud library. Sign in again with a code from another PC.");
+            Fail("This PC was signed out of the cloud library. Sign in again with your email and password.");
         }
         catch (Exception e) when (e is SquadException or HttpRequestException or TaskCanceledException)
         {
@@ -282,13 +436,15 @@ public sealed class CloudViewModel : ObservableObject
         }
     }
 
-    // A subscription or special key on this PC that the cloud account doesn't have yet goes on it, for its storage.
+    // A subscription, donation or special key on this PC that the cloud account doesn't have yet goes on it, for its
+    // storage. A key with only extra storage (a donation's, or a Free special key) goes on an account without a key.
     private async Task SyncPlanAsync()
     {
         if (_api is not { } api || _account is not { } account || _main.Plan.LicenseKey is not { } key) return;
         var better = _main.Plan.IsSpecial
             ? account.PlanKey is null && (_main.Plan.ExtraStorage > 0 || Plans.FromId(account.Plan) < _main.Plan.Plan)
-            : _main.Plan.IsPaid && Plans.FromId(account.Plan) < _main.Plan.Plan;
+            : (_main.Plan.IsPaid && Plans.FromId(account.Plan) < _main.Plan.Plan)
+              || (account.PlanKey is null && _main.Plan.IsSupporter && _main.Plan.ExtraStorage > 0);
         if (!better) return;
         try
         {
@@ -328,6 +484,17 @@ public sealed class CloudViewModel : ObservableObject
         {
             var code = await api.LinkCodeAsync(Settings.AccountId, _token);
             LinkCode = code;
+        });
+    }
+
+    // Opens the hub in the browser, already signed in with a one-time code made here.
+    private async Task OpenHubAsync()
+    {
+        if (_api is not { } api) return;
+        await RunAsync(async _ =>
+        {
+            var code = await api.LinkCodeAsync(Settings.AccountId, _token);
+            Shell.Open(api.HubSignInLink(code));
         });
     }
 
@@ -388,6 +555,7 @@ public sealed class CloudViewModel : ObservableObject
         Raise(nameof(SignedIn));
         Raise(nameof(NotSignedIn));
         Raise(nameof(AccountName));
+        Raise(nameof(EmailText));
         Raise(nameof(PlanLabel));
         Raise(nameof(StorageText));
         Raise(nameof(StorageFraction));
@@ -395,6 +563,9 @@ public sealed class CloudViewModel : ObservableObject
         Raise(nameof(ProfileLink));
         Raise(nameof(HasProfile));
         Raise(nameof(HandleLimitText));
+        Raise(nameof(HasBadge));
+        Raise(nameof(BadgeText));
+        Raise(nameof(ShowBadge));
         Raise(nameof(HasClips));
         Raise(nameof(HasNoClips));
     }
@@ -419,17 +590,38 @@ public sealed class CloudViewModel : ObservableObject
             await CopyAsync(link, "Link copied. It plays in any browser.");
             return;
         }
+        if (TooLongText(clip) is { } tooLong)
+        {
+            _main.ShowToast(tooLong, isError: true);
+            return;
+        }
         Queue(clip, copy: true);
     }
 
     internal void OnFavoriteChanged(ClipItemViewModel clip)
     {
-        if (SignedIn && Settings.SyncStarred && clip.IsFavorite && LinkFor(clip) is null) Queue(clip, copy: false);
+        if (SignedIn && Settings.SyncStarred && clip.IsFavorite && LinkFor(clip) is null && TooLongText(clip) is null) Queue(clip, copy: false);
     }
 
     private void QueueStarred()
     {
-        foreach (var clip in _main.Clips.Where(c => c.IsFavorite && LinkFor(c) is null)) Queue(clip, copy: false);
+        foreach (var clip in _main.Clips.Where(c => c.IsFavorite && LinkFor(c) is null && TooLongText(c) is null)) Queue(clip, copy: false);
+    }
+
+    private static double SecondsOf(ClipItemViewModel clip) => clip.File.Duration?.TotalSeconds ?? clip.File.Metadata?.Seconds ?? 0;
+
+    // Why the cloud library's plan won't take a clip this long, or null when it will: Free takes clips up to 40
+    // seconds, Pro 10 minutes and Ultra 30 (server/src/plans.js).
+    internal string? TooLongText(ClipItemViewModel clip)
+    {
+        var account = _account;
+        var max = account?.MaxSeconds ?? CloudAccount.FreeMaxSeconds;
+        if (SecondsOf(clip) <= max + 1) return null;
+        var label = account?.PlanLabel ?? "Free";
+        var limit = max >= 60 ? $"{max / 60} minutes" : $"{max} seconds";
+        return Plans.FromId(account?.Plan) == Plan.Ultra
+            ? $"Your {label} plan puts clips of up to {limit} in the cloud. Trim this one in the editor to upload it."
+            : $"Your {label} plan puts clips of up to {limit} in the cloud. Trim this one in the editor, or Pro and Ultra take longer ones.";
     }
 
     private void Queue(ClipItemViewModel clip, bool copy)
@@ -478,7 +670,15 @@ public sealed class CloudViewModel : ObservableObject
     private async Task<string> UploadAsync(CloudApi api, ClipItemViewModel clip)
     {
         var metadata = clip.File.Metadata;
-        var seconds = clip.File.Duration?.TotalSeconds ?? metadata?.Seconds ?? 0;
+        var seconds = SecondsOf(clip);
+        if (TooLongText(clip) is { } tooLong) throw new ShareFailedException(tooLong);
+        // What the account's plan takes: Free clips go up at 1080p and up to 100 MB, Pro and Ultra in 4K and bigger.
+        var lines = _account?.Lines ?? 1080;
+        var limit = (int)Math.Max(8, (_account?.MaxClip ?? CloudAccount.FreeMaxClip) / (1L << 20) * 9 / 10);
+        // The size of the picture that goes up: the clip's own, or scaled down to the plan's.
+        var size = Mp4Info.ReadVideoSize(clip.Path);
+        var (width, height) = size is { } s && s.Height > lines ? ((int)Math.Round(s.Width * (double)lines / s.Height) & ~1, lines)
+                            : size ?? (0, 0);
         var recorded = metadata?.UtcStart is > 0 ? metadata.UtcStart : new DateTimeOffset(clip.File.Created).ToUnixTimeMilliseconds();
         var localId = CloudApi.LocalId(clip.Path, clip.File.Bytes);
         var markers = new JsonArray();
@@ -490,18 +690,23 @@ public sealed class CloudViewModel : ObservableObject
             ["game"] = clip.Game,
             ["recorded"] = recorded,
             ["seconds"] = Math.Max(seconds, 0.1),
+            ["width"] = width,
+            ["height"] = height,
             ["visibility"] = Settings.DefaultVisibility,
             ["markers"] = markers,
         };
         var cloud = await api.AddClipAsync(Settings.AccountId, _token, body);
         if (!cloud.Uploaded)
         {
-            var limit = Math.Clamp(Settings.UploadLimitMb, 8, 98);
-            UploadStatus = $"Making a copy of {clip.Title} under {limit} MB…";
+            var making = size is { } source && source.Height > lines
+                ? $"Making a {Resolutions.Name(lines)} copy of {clip.Title} for your {_account?.PlanLabel ?? "Free"} cloud library…"
+                : $"Making a copy of {clip.Title} under {limit} MB…";
+            UploadStatus = making;
             var (copy, _) = await ClipSharing.MakeShareCopyAsync(clip.Path, limit,
-                new Progress<int>(p => UploadStatus = $"Making a copy of {clip.Title} under {limit} MB… {p}%"));
+                new Progress<int>(p => UploadStatus = $"{making} {p}%"), maxLines: lines);
             UploadStatus = $"Uploading {clip.Title}…";
-            await api.UploadAsync(Settings.AccountId, _token, cloud.Id, "video", copy, "video/mp4");
+            await api.UploadVideoAsync(Settings.AccountId, _token, cloud.Id, copy,
+                new Progress<int>(p => UploadStatus = $"Uploading {clip.Title}… {p}%"));
             if (await ThumbnailFile.MakeAsync(clip.Path, 640) is { } thumb)
             {
                 try
@@ -516,7 +721,8 @@ public sealed class CloudViewModel : ObservableObject
                     ThumbnailFile.Delete(thumb);
                 }
             }
-            _main.AddActivity(ActivityKind.Clip, $"Uploaded a {clip.Game} clip to the cloud");
+            _main.Notify(NoticeKind.Clip, "Uploaded to the cloud", $"Your {clip.Game} clip is in your cloud library", "cloud",
+                         $"Uploaded a {clip.Game} clip to the cloud", ActivityKind.Clip);
         }
         Settings.Uploaded[localId] = cloud.Code;
         _main.SaveDesktopSettingsSoon();

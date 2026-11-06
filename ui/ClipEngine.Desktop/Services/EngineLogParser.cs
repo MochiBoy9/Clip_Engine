@@ -57,6 +57,18 @@ internal sealed record MontageProgress(int Percent) : EngineEvent;
 internal sealed record HighlightSaved(string Path, double Megabytes) : EngineEvent;
 // The player's totals in the match, from the game's API or its scoreboard.
 internal sealed record ScoreboardRead(string Game, IReadOnlyDictionary<string, int> Stats) : EngineEvent;
+// A journal note (src/detect/Journal.h), like "extracted" or an enemy destroyed.
+internal sealed record JournalNoted(string Note, string Game, string Value) : EngineEvent
+{
+    public static string Describe(string note) => note switch
+    {
+        "extracted" => "Extracted",
+        "died" => "Died",
+        "failed" => "Run failed",
+        "left" => "Left the run",
+        _ => note.Length > 0 ? char.ToUpperInvariant(note[0]) + note[1..].Replace('_', ' ') : "Journal",
+    };
+}
 
 // Reads the lines clip_engine.exe writes, in the format of src/core/Log.cpp.
 internal static partial class EngineLogParser
@@ -120,6 +132,9 @@ internal static partial class EngineLogParser
 
     [GeneratedRegex(@"^Saved ([\d.]+)s long recording \(([\d.]+) MB\) to (.+)$")]
     private static partial Regex LongSavedRegex();
+
+    [GeneratedRegex(@"^Journal ([a-z0-9_\-]+) in (.+?): (.*)$")]
+    private static partial Regex JournalRegex();
 
     [GeneratedRegex(@"^Scoreboard in (.+?): (.+)$")]
     private static partial Regex ScoreboardRegex();
@@ -207,6 +222,7 @@ internal static partial class EngineLogParser
         if ((m = SavedRegex().Match(text)).Success)
             return new ClipSaved(m.Groups[3].Value, Double(m.Groups[1]), Double(m.Groups[2]));
         if ((m = MomentRegex().Match(text)).Success) return new MomentDetected(m.Groups[1].Value, m.Groups[2].Value, m.Groups[3].Value);
+        if ((m = JournalRegex().Match(text)).Success) return new JournalNoted(m.Groups[1].Value, m.Groups[2].Value, m.Groups[3].Value);
         if ((m = ExportProgressRegex().Match(text)).Success) return new ExportProgress(Int(m.Groups[1]));
         if ((m = ExportedRegex().Match(text)).Success) return new Exported(m.Groups[2].Value, Double(m.Groups[1]));
         if ((m = TrimmedRegex().Match(text)).Success) return new Trimmed(m.Groups[3].Value, Double(m.Groups[1]), Double(m.Groups[2]));

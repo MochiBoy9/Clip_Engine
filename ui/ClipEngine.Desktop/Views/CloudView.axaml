@@ -12,7 +12,7 @@
   <ScrollViewer>
     <StackPanel Margin="0,0,40,40" Spacing="22">
       <StackPanel Spacing="4">
-        <views:SectionMark Index="07" Label="Cloud archive" />
+        <views:SectionMark Index="08" Label="Cloud archive" />
         <TextBlock Classes="h1" Text="Cloud" />
         <TextBlock Classes="caption" TextWrapping="Wrap"
                    Text="Short links to your clips that play in any browser, with every moment marked, and a profile page with the ones you're proudest of." />
@@ -28,27 +28,56 @@
             <StackPanel Spacing="14">
               <TextBlock Classes="eyebrow" Text="NEW HERE" />
               <TextBlock Classes="body" TextWrapping="Wrap"
-                         Text="Make a cloud library. No email or password: this PC holds the key, and other PCs join it with a code." />
+                         Text="Make a free account for your cloud library, profile and friends. Your email is how you sign in on other PCs and get back in if you forget your password." />
               <StackPanel Spacing="6">
                 <TextBlock Text="Your name" FontWeight="SemiBold" FontSize="14" />
                 <TextBox Text="{Binding NameInput}" MaxLength="32" Watermark="Shown on your clips and profile" />
               </StackPanel>
-              <Button Classes="accent" Content="Make my cloud library" Command="{Binding CreateCommand}" HorizontalAlignment="Left" />
+              <StackPanel Spacing="6">
+                <TextBlock Text="Email" FontWeight="SemiBold" FontSize="14" />
+                <TextBox Text="{Binding EmailInput}" MaxLength="254" Watermark="you@example.com" />
+              </StackPanel>
+              <StackPanel Spacing="6">
+                <TextBlock Text="Password" FontWeight="SemiBold" FontSize="14" />
+                <TextBox Text="{Binding PasswordInput}" PasswordChar="•" MaxLength="200" Watermark="At least 8 characters" />
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="10">
+                <Button Classes="accent" Content="Make my account" Command="{Binding CreateCommand}" />
+                <Button Classes="secondary" Content="Sign up with Google" Command="{Binding GoogleCommand}" />
+              </StackPanel>
             </StackPanel>
           </views:Plate>
           <views:Plate Grid.Column="2" Classes="card" Padding="28,26">
             <StackPanel Spacing="14">
               <TextBlock Classes="eyebrow" Text="ALREADY HAVE ONE" />
-              <TextBlock Classes="body" TextWrapping="Wrap"
-                         Text="On a PC that's signed in, open the Cloud page and press Link another PC. Type the code it shows here." />
               <StackPanel Spacing="6">
-                <TextBlock Text="Code" FontWeight="SemiBold" FontSize="14" />
-                <TextBox Text="{Binding CodeInput}" FontFamily="{StaticResource MonoFont}" Watermark="XXXX-XXXX-XXXX-XX" />
+                <TextBlock Text="Email" FontWeight="SemiBold" FontSize="14" />
+                <TextBox Text="{Binding SignInEmail}" MaxLength="254" Watermark="you@example.com" />
               </StackPanel>
-              <Button Classes="accent" Content="Sign in" Command="{Binding SignInCommand}" HorizontalAlignment="Left" />
+              <StackPanel Spacing="6">
+                <TextBlock Text="Password" FontWeight="SemiBold" FontSize="14" />
+                <TextBox Text="{Binding SignInPassword}" PasswordChar="•" MaxLength="200" />
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="10">
+                <Button Classes="accent" Content="Sign in" Command="{Binding SignInWithEmailCommand}" />
+                <Button Classes="secondary" Content="Sign in with Google" Command="{Binding GoogleCommand}" />
+              </StackPanel>
+              <Button Classes="secondary" Content="Forgot your password?" Command="{Binding ForgotPasswordCommand}" HorizontalAlignment="Left" />
             </StackPanel>
           </views:Plate>
         </Grid>
+        <views:Plate Classes="card" Padding="26,22">
+          <Grid ColumnDefinitions="*,Auto,Auto">
+            <StackPanel VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+              <TextBlock Text="A code from another PC" FontWeight="SemiBold" FontSize="14" />
+              <TextBlock Classes="caption" TextWrapping="Wrap"
+                         Text="On a PC that's signed in, press Link another PC on the Cloud page and type its code here." />
+            </StackPanel>
+            <TextBox Grid.Column="1" Width="220" VerticalAlignment="Center" Text="{Binding CodeInput}" FontFamily="{StaticResource MonoFont}"
+                     Watermark="XXXX-XXXX-XXXX-XX" />
+            <Button Grid.Column="2" Classes="secondary" Content="Sign in" Command="{Binding SignInCommand}" VerticalAlignment="Center" Margin="10,0,0,0" />
+          </Grid>
+        </views:Plate>
         <views:Plate Classes="card" Padding="26,22">
           <Grid ColumnDefinitions="Auto,*,Auto">
             <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
@@ -76,6 +105,7 @@
                 </Border>
               </Grid>
               <TextBlock Classes="h2" Text="{Binding AccountName}" />
+              <TextBlock Classes="caption" Text="{Binding EmailText}" TextWrapping="Wrap" />
               <TextBlock Classes="caption" Text="{Binding ClipsText}" />
               <ProgressBar Minimum="0" Maximum="100" Value="{Binding StorageFraction}" Height="6" />
               <TextBlock Classes="caption" Text="{Binding StorageText}" />
@@ -122,6 +152,21 @@
                 </StackPanel>
                 <ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding SyncStarred}" OnContent="{x:Null}" OffContent="{x:Null}" />
               </Grid>
+              <StackPanel IsVisible="{Binding HasBadge}">
+                <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel Spacing="2" Margin="0,0,16,0">
+                    <TextBlock Text="{Binding BadgeText}" FontWeight="SemiBold" FontSize="14" />
+                    <TextBlock Classes="caption" TextWrapping="Wrap" Text="Next to your name on your profile, your clips and the hub." />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding ShowBadge}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                </Grid>
+              </StackPanel>
+              <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+              <TextBlock Text="The hub" FontWeight="SemiBold" FontSize="14" />
+              <TextBlock Classes="caption" TextWrapping="Wrap" Margin="0,2,0,10"
+                         Text="Everyone's public clips on the web, and yours to manage from any phone or browser. Change your email or password there, and see every device signed in to your account. Opens signed in." />
+              <Button Classes="secondary" Content="Open the hub" Command="{Binding OpenHubCommand}" HorizontalAlignment="Left" />
               <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
               <TextBlock Text="Your other PCs" FontWeight="SemiBold" FontSize="14" />
               <TextBlock Classes="caption" TextWrapping="Wrap" Margin="0,2,0,10"
@@ -138,7 +183,7 @@
                       IsVisible="{Binding NotConfirmingSignOut}" />
               <StackPanel Spacing="10" IsVisible="{Binding ConfirmSignOut}">
                 <TextBlock Classes="caption" TextWrapping="Wrap"
-                           Text="Your clips stay in the cloud. To sign in again you'll need a code from another PC that's signed in, so make one first if this is your only one." />
+                           Text="Your clips stay in the cloud. Sign in again any time with your email and password, or with Google." />
                 <StackPanel Orientation="Horizontal" Spacing="8">
                   <Button Classes="record" Content="Sign out" Command="{Binding ConfirmSignOutCommand}" />
                   <Button Classes="secondary" Content="Cancel" Command="{Binding CancelSignOutCommand}" />

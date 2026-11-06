@@ -13,7 +13,8 @@
 const POINTER = "x-media-key";
 // Kept in a location's cache this long, at most, after the last read there.
 const CACHE_SECONDS = 7 * 24 * 3600;
-// Cloudflare caches objects up to 512 MB; uploads are at most 100 MB.
+// Cloudflare caches objects up to 512 MB. Free clips are at most 100 MB; Pro and Ultra clips can be bigger, and those
+// over this are read straight from R2.
 const CACHE_MAX_BYTES = 512 * 1024 * 1024;
 
 export function mediaPointer(key, { type, cacheControl, version, size }) {

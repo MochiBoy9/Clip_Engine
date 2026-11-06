@@ -25,6 +25,15 @@ std::string TimelineScores(double seconds, int match, const Scoreboard& board) {
                      JsonString(board.source), stats);
 }
 
+std::string TimelineNote(double seconds, int match, const JournalNote& note) {
+  std::string line = std::format("{{\"t\": {:.2f}, \"match\": {}, \"note\": {}", seconds, match, JsonString(note.note));
+  if (!note.value.empty()) line += std::format(", \"value\": {}", JsonString(note.value));
+  if (note.amount != 0) line += std::format(", \"amount\": {}", note.amount);
+  if (note.xp != 0) line += std::format(", \"xp\": {}", note.xp);
+  line += std::format(", \"text\": {}}}", JsonString(note.text));
+  return line;
+}
+
 std::filesystem::path TimelineFileName(const std::string& session, const std::string& game) {
   std::string name = session + " " + game;
   std::ranges::replace_if(name, [](char c) { return std::string_view("<>:\"/\\|?*").find(c) != std::string_view::npos; }, '-');

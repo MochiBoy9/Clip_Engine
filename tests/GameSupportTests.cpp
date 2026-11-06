@@ -314,8 +314,9 @@ void TestShippedRules(const char* path) {
   for (const auto& w : rules.warnings) std::printf("detection.ini %s\n", w.c_str());
   CHECK(rules.warnings.empty());
   for (const char* game : {"valorant", "fortnite", "apex_legends", "pubg", "marvel_rivals", "rainbow_six_siege",
-                           "call_of_duty", "arc_raiders", "delta_force", "deadlock", "halo_infinite", "destiny_2",
-                           "team_fortress_2"}) {
+                           "call_of_duty", "delta_force", "deadlock", "halo_infinite", "halo_mcc", "team_fortress_2",
+                           "battlefield_6", "battlefield_2042", "battlefield_v", "battlefield_1", "battlefield_4",
+                           "paladins", "splitgate"}) {
     bool kill = false, death = false, end = false;
     for (const auto& r : rules.ForGame(game, {"Mochi"})) {
       kill |= r.event == EventType::Kill;
@@ -325,8 +326,25 @@ void TestShippedRules(const char* path) {
     if (!(kill && death && end)) std::printf("%s is missing a kill, death or match end rule\n", game);
     CHECK(kill && death && end);
   }
-  // Tarkov shows no kills, but its deaths and raid ends are found.
-  CHECK(rules.ForGame("escape_from_tarkov").size() == 2);
+  // Games that keep kills off screen aren't clipped on kills. Those built around runs have a
+  // journal instead, with how each run ended, which is a moment too.
+  CHECK(rules.ForGame("destiny_2").empty() && rules.JournalsForGame("destiny_2").empty());
+  for (const char* game : {"arc_raiders", "escape_from_tarkov", "helldivers_2", "deep_rock_galactic"}) {
+    bool kill = false, end = false, outcome = false;
+    for (const auto& r : rules.ForGame(game, {"Mochi"})) {
+      kill |= r.event == EventType::Kill;
+      end |= r.event == EventType::MatchEnd;
+    }
+    for (const auto& j : rules.JournalsForGame(game)) outcome |= j.note == "extracted";
+    if (kill || !end || !outcome) std::printf("%s should have a match end and a journal, and no kill rules\n", game);
+    CHECK(!kill && end && outcome);
+  }
+  // Every journal rule is for a built-in game, and reads something.
+  for (const auto& j : rules.journals) {
+    CHECK(j.Reads());
+    CHECK(j.game == "arc_raiders" || j.game == "escape_from_tarkov" || j.game == "helldivers_2" ||
+          j.game == "deep_rock_galactic");
+  }
   // Every scoreboard rule reads kills, and only games that have a scoreboard get one.
   for (const auto& board : rules.scoreboards) {
     CHECK(board.columns.size() >= 2 && board.columns[0].first == "kills");
@@ -335,6 +353,36 @@ void TestShippedRules(const char* path) {
   for (const char* game : {"cs2", "dota2", "league_of_legends", "rocket_league"}) CHECK(rules.ForGame(game).empty());
 }
 
+void TestTf2Console() {
+  Tf2ConsoleTracker tf2({"Mochi"});
+  auto e = tf2.Update("Mochi killed Heavy Bot with scattergun.\r");
+  CHECK(e.size() == 1 && e[0].type == EventType::Kill && e[0].text == "Killed Heavy Bot with scattergun");
+  // Any case, a timestamp from con_timestamp, and a crit.
+  e = tf2.Update("11/04/2026 - 18:41:17: Pyro killed mochi with tf_projectile_rocket. (crit)");
+  CHECK(e.size() == 1 && e[0].type == EventType::Death && e[0].text == "Killed by Pyro with rocket (crit)");
+  e = tf2.Update("Mochi suicided.");
+  CHECK(e.size() == 1 && e[0].type == EventType::Death);
+  CHECK(tf2.Update("Scout killed Spy with bat.").empty());  // someone else's
+  // Names may hold " with ": the weapon is after the last one.
+  e = tf2.Update("Mochi killed a man with a plan with minigun.");
+  CHECK(e.size() == 1 && e[0].text == "Killed a man with a plan with minigun");
+  CHECK(StatValue(tf2.Board(), "kills") == 2 && StatValue(tf2.Board(), "deaths") == 2);
+  // Chat ("name :  message") can't pass for a kill.
+  CHECK(tf2.Update("*DEAD* Spy :  Pyro killed Mochi with fire.").empty());
+  tf2.Update("Connected to 169.254.1.1:27015");  // a new server starts the totals again
+  CHECK(tf2.Board().empty());
+
+  // Without a name from the settings, the name autoexec.cfg prints is used.
+  Tf2ConsoleTracker learning;
+  CHECK(!learning.KnowsName());
+  CHECK(learning.Update("Ace killed Bob with bat.").empty());
+  learning.Update("\"name\" = \"unnamed\" ( def. \"unnamed\" )");
+  CHECK(!learning.KnowsName());
+  learning.Update("\"name\" = \"Ace\" ( def. \"unnamed\" )");
+  CHECK(learning.KnowsName());
+  CHECK(learning.Update("Ace killed Bob with bat.").size() == 1);
+  CHECK(learning.Update("Ace killed Ace with tf_projectile_rocket.").empty());  // "Ace suicided." follows
+}
 
 void TestTrackerBoards() {
   Cs2Tracker cs;
@@ -519,6 +567,7 @@ int main(int argc, char** argv) {
   TestDota2();
   TestLeague();
   TestRocketLeague();
+  TestTf2Console();
   TestJsonObjectStream();
   TestWebSocketReader();
   TestRows();
