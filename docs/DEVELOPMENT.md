@@ -103,8 +103,9 @@ You need [Node.js](https://nodejs.org) 20 or newer and a Cloudflare account.
 5. Point the app at the service. Choose either way:
    - **For release builds:** in the GitHub repository, open **Settings > Secrets and variables > Actions > Variables** and add `ONLINE_SERVER` with the address. CI builds pick it up with `-p:OnlineServer=...`. For a local build, run `dotnet publish ui/ClipEngine.Desktop -p:OnlineServer=https://clip-engine.<your-subdomain>.workers.dev`.
    - **For one PC:** paste the address into **Online service** on the Squad or Cloud page.
+6. Set up account emails and, if you want it, Sign in with Google: see [Accounts](#accounts).
 
-To ship changes later, run `npx wrangler deploy` again. Squads, accounts and clips are kept.
+To ship changes later, run `npx wrangler deploy` again. Squads, accounts and clips are kept (unless you change `ACCOUNTS_EPOCH`, see [Resetting every cloud account](#resetting-every-cloud-account)).
 
 ### Settings
 
@@ -131,6 +132,8 @@ These live in `wrangler.toml` under `[vars]`:
 | `REFERRAL_MAX_REWARDS` | 1 | Rewards one person can earn; with 2, six friends give two months |
 | `REFERRAL_CLAIM_DAYS` | 7 | How long after installing a friend can still add an invite code, and how long an opened invite link is remembered |
 | `REFERRAL_IP_CHECK` | true | `false` lets friends on the inviter's own network, or several on one network, count |
+| `EMAIL_FROM` | empty | Who account emails come from, like `Clip Engine <accounts@yourdomain.com>`, on a domain verified in Resend. Until it and `RESEND_API_KEY` are set, no email is sent. |
+| `ACCOUNTS_EPOCH` | empty | Changing it resets every cloud account. See [Resetting every cloud account](#resetting-every-cloud-account). |
 
 `POLAR_ACCESS_TOKEN` is a secret (`npx wrangler secret put POLAR_ACCESS_TOKEN`): a Polar organization access token with `orders:read`, used to add up how much a customer donated, and `subscriptions:read`, used to look up when a subscription renews (or ends, once cancelled) for the app's reminder a few days before. Without `subscriptions:read` the keys still work; the app just doesn't get the date. Neither answer is stored: the service reads them at each key check and passes on only the amount and the date.
 
@@ -138,19 +141,85 @@ These live in `wrangler.toml` under `[vars]`:
 
 **R2 operations.** Each clip put in the cloud library costs two writes (Class A): the video and its thumbnail, each one plain PUT. A Worker takes a request body of at most 100 MB, so a bigger clip (Pro and Ultra take them) goes up in 64 MB parts as an R2 multipart upload (`POST /clips/<clip>/video/parts`, `PUT /parts/<n>`, `POST /parts/done`): a write for each part and one to finish. `UPLOAD_PART_BYTES` in `[vars]` changes the part size (5 MB to 100 MB). Unfinished uploads are dropped when the clip is removed or the upload is started again, and R2 drops any left after a week. Watching a clip reads R2 (Class B), but the bytes are served by the Worker (`src/media.js`), not the Durable Object, so nothing stays busy while a video streams. Every upload has an ETag, so a browser that already has it gets `304 Not Modified` without an R2 read. On a custom domain, the Cache API keeps each clip in the Cloudflare location that served it: the first viewer there reads R2 once, and every later viewer and seek there is free. On `*.workers.dev` the Cache API does nothing, so each request reads R2; put the Worker on your own domain (Workers & Pages > clip-engine > Settings > Domains & Routes) to turn caching on.
 
-**Protection.** Cloudflare's DDoS protection is on for every Worker. On top of it, each address gets 10 sign-ups, sign-in or invite code tries and key checks a minute (`AUTH_LIMIT`), and 300 other changes a minute (`WRITE_LIMIT`), both in `wrangler.toml`. A sign-in code stops working after 5 wrong tries. Tokens are stored hashed and compared in constant time, every database query is parameterised, uploads have size limits, and the R2 bucket is private. With a custom domain you can also add WAF and rate limiting rules and Bot Fight Mode in the Cloudflare dashboard.
+**Protection.** Cloudflare's DDoS protection is on for every Worker. On top of it, each address gets 10 sign-ups, sign-ins, password reset requests, email link uses, invite code tries and key checks a minute (`AUTH_LIMIT`), and 300 other changes a minute (`WRITE_LIMIT`), both in `wrangler.toml`. A sign-in code stops working after 5 wrong tries, and 5 wrong passwords in a row lock an account's password for 15 minutes. Passwords are PBKDF2-SHA256 with a random salt and 100,000 rounds (the most Workers' WebCrypto runs). Sign-in tokens and email link tokens are stored hashed and compared in constant time, every database query is parameterised, uploads have size limits, and the R2 bucket is private. With a custom domain you can also add WAF and rate limiting rules and Bot Fight Mode in the Cloudflare dashboard.
 
 ### The hub
 
 `/hub` on the service (`src/hub.js`) lists every public, uploaded clip. Each library tells the directory object when one of its clips becomes public or stops being (`src/feed.js`, the `feed` table), and when the owner's name, username or badge changes, so the hub reads one table instead of every library. Views follow every view for the first 20, then every tenth. The pages are server-rendered and work without scripts; scripts add "load more" and the signed-in pages. `/` in a browser redirects to `/hub`.
 
-Signing in: a code from the app (the same one-time code as **Link another PC**; **Open the hub** opens `/hub/signin#code=...`, and the code stays in the fragment so it isn't logged) or a username and password set on the hub (PBKDF2-SHA256, 100,000 rounds; 5 wrong tries lock it for 15 minutes). Either makes a device token on the account that expires after 30 days, kept in an HttpOnly, Secure, SameSite=Lax cookie (`ce_hub`); `ce_hub_who` holds only the name shown in the bar. Every change also needs an `x-hub: 1` header and, when the browser sends one, this origin, so other sites can't act with the cookie. `/hub/api/signin` and `/hub/api/report` are under `AUTH_LIMIT`.
+Signing in: the account's email and password, Google, or a code from the app (the same one-time code as **Link another PC**; **Open the hub** opens `/hub/signin#code=...`, and the code stays in the fragment so it isn't logged). `/hub/signin` also signs up. Each makes a device token on the account that expires after 30 days, kept in an HttpOnly, Secure, SameSite=Lax cookie (`ce_hub`); `ce_hub_who` holds only the name shown in the bar. Every change also needs an `x-hub: 1` header and, when the browser sends one, this origin, so other sites can't act with the cookie. `/hub/api/signin`, `/hub/api/signup` and `/hub/api/report` are under `AUTH_LIMIT`. `/hub/me` has the email, password and device list (see [Accounts](#accounts)).
 
 Badges: `badgeFor` in `src/plans.js` (a special key's role, else Pro or Ultra). `PATCH /v1/accounts/<id>/account { hideBadge }` hides it on the profile, shared clips and the hub; the app's Cloud page and the hub both have the switch.
 
 Reports land in the directory. `GET /v1/admin/reports` lists reported clips and `POST /v1/admin/hide { code, hidden, clearReports }` takes one out of the hub (its link still plays), both with the admin token.
 
 To try it locally: put `ADMIN_TOKEN=<anything>` in `server/.dev.vars` (ignored by git) and run `npx wrangler dev`; the hub is at `http://localhost:8787/hub`.
+
+### Accounts
+
+A cloud account is a name, an email and a password, or a Google account (`src/accounts.js` for signing up and in, `src/library.js` for the account itself). The directory object (`src/handles.js`) keeps which account each email (`emails` table) and Google account (`google` table) is on, so one email or Google account is on one Clip Engine account.
+
+- **Signing up** (`POST /v1/accounts { name, email, password, device }`, or the hub's form) claims the email and sends a link to confirm it (`/hub/confirm#t=...`, a day). The account works before it's confirmed.
+- **Signing in** with the email and password: `POST /v1/accounts/signin { email, password, device }` from the app, `/hub/api/signin` on the hub. An email with no account gets the same answer as a wrong password.
+- **A forgotten password**: `POST /v1/auth/forgot { email }` answers the same whether or not the email has an account, and emails a reset link (`/hub/reset#t=...`) that works once, for 30 minutes. Using it (`POST /v1/auth/reset { token, password }`) sets the password, confirms the email and signs out every device on the account.
+- **A new email**: `POST /v1/accounts/<id>/email { email, password }` needs the current password and sends a link to the new address; the email changes only when it's opened (`POST /v1/auth/confirm { token }`). The old address is told, without a link.
+- **Changing the password** (`POST /password { password, current }`) needs the current one.
+- **Devices**: every sign-in keeps its kind (app or browser), its user agent, the country Cloudflare saw (never the IP address), when it started and when it was last used (updated at most hourly). The first device that ever reached the account is kept on its own. `GET /v1/accounts/<id>/security` lists them for the owner (also on `/hub/me`), and `DELETE /devices/<id>` signs one out.
+- Link tokens are 256-bit random, kept as SHA-256 hashes, one at a time per kind, and at most one email of a kind goes out a minute. They travel after the `#` so they never reach a server log.
+- Accounts made before emails existed keep working; their owners can add an email on `/hub/me`.
+
+**Email (Resend).**
+
+1. Make an account at [resend.com](https://resend.com). Under **Domains**, add a domain you own (a subdomain like `mail.yourdomain.com` is fine) and add the DNS records it shows (SPF and DKIM; DMARC recommended) until it says **Verified**.
+2. Under **API Keys**, create a key with **Sending access** for that domain.
+3. From `server/`:
+
+   ```sh
+   npx wrangler secret put RESEND_API_KEY
+   ```
+
+4. Set `EMAIL_FROM` in `wrangler.toml` to an address on that domain, like `Clip Engine <accounts@mail.yourdomain.com>`, and deploy.
+
+Without both, accounts still work, but no confirmation or reset email goes out. For `wrangler dev`, put `EMAIL_DEV_LOG=true` in `server/.dev.vars` to print each email (with its link) in the terminal instead of sending it.
+
+**Sign in with Google.**
+
+1. In the [Google Cloud console](https://console.cloud.google.com), pick or make a project. Open **APIs & Services > OAuth consent screen** (Google Auth Platform): app name Clip Engine, your support email, and the scopes `openid`, `email` and `profile` (no sensitive scopes, so no review). Publish it (**In production**) so anyone can sign in, not only test users.
+2. Open **Clients** (APIs & Services > Credentials), **Create client**, type **Web application**.
+3. Under **Authorized redirect URIs**, add exactly:
+   - `https://clip-engine.clip-engine.workers.dev/v1/auth/google/callback`
+   - `http://localhost:8787/v1/auth/google/callback` (only for `wrangler dev`)
+   - and `https://<your-domain>/v1/auth/google/callback` for any custom domain the Worker is on.
+
+   No **Authorized JavaScript origins** are needed.
+4. Copy the client ID and secret, then from `server/`:
+
+   ```sh
+   npx wrangler secret put GOOGLE_CLIENT_ID
+   npx wrangler secret put GOOGLE_CLIENT_SECRET
+   ```
+
+Until both are set, `/v1/auth/google` says Google sign-in isn't set up and the hub hides its button (the app's button opens that page). How it works: `/v1/auth/google` sets a 10-minute HttpOnly cookie with the state, the PKCE verifier and the nonce and sends the browser to Google; `/v1/auth/google/callback` checks the state against the cookie, trades the code for an ID token at Google's token endpoint with the verifier and the client secret, and checks the token's issuer, audience, expiry, nonce and `email_verified`. (It comes straight from Google over TLS, which OpenID Connect Core 3.1.3.7 lets stand in for checking its signature.) The account is found by the Google account, then by the email; when there's none, one is made with no password. Linking to an account whose email was never confirmed removes that account's password and signs it out everywhere, so someone who typed in another person's email before they arrived can't keep a way in. The hub gets its cookie; the app (`?app=<state>`) gets a page that opens `clipengine://cloud/signin/<one-time code>?state=<state>`, and the app signs in with the code only if the state is the one it sent in the last 10 minutes.
+
+### Resetting every cloud account
+
+This starts the cloud from nothing: everyone makes a new account (with an email this time) and puts their key on it again. There is no admin route for it and nothing to run against the service; it's a setting.
+
+1. In `server/wrangler.toml`, set `ACCOUNTS_EPOCH = "1"` (for a later reset, `"2"`, and so on), then `npx wrangler deploy`.
+2. Every account's Durable Object is named afresh (`<epoch>:<account>`), so the old ones are never reached again; a PC still signed in hears it's signed out (401) and shows the sign-in page. The directory notices the new epoch when it next starts and empties every table that points at an account.
+3. Empty the old videos out of R2. New videos go under `library-<epoch>/`, so a lifecycle rule on the old prefix only touches old ones:
+
+   ```sh
+   npx wrangler r2 bucket lifecycle add clip-engine-clips reset-old-library library/ --expire-days 1
+   ```
+
+   Once the old `library/` objects are gone (R2 runs rules about once a day), remove the rule: `npx wrangler r2 bucket lifecycle remove clip-engine-clips --name reset-old-library`. On a later reset the old prefix is `library-<old epoch>/`.
+
+**What goes:** every cloud account: its name, email and password, sign-ins and device log, clips in the cloud library (titles, moments, views and the videos and thumbnails in R2, once the lifecycle rule runs), profile and @username, badge setting, friends and friend requests, online status, the hub's list of public clips and its reports, and which account each subscription or special key was on (so it can go on a new one). Share links (`/c/...`) and profile pages (`/u/...`) of old accounts stop working.
+
+**What stays:** Polar subscriptions and donations (they live at Polar; their license keys work as before and go on a new account from the app's Plan page or the Cloud page), special keys with their plans, PCs, perks, messages and replies, the credits, squads and their shared views, invite-a-friend codes and earned Pro keys, and everything on players' PCs (recordings, clips, settings, the key in the app).
+
+The old accounts' Durable Object storage itself (metadata only, no videos) stays in Cloudflare unreached; Cloudflare has no way to empty all objects of a class except deleting the class.
 
 ### Pro and Ultra on Polar
 
