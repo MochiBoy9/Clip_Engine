@@ -3,24 +3,29 @@
 // a clip is only here while its owner has it public.
 //
 //   GET  /hub                       everyone's public clips (?sort=new|top, within=week|month, game=, q=)
-//   GET  /hub/signin                sign in with a code from the app, or a username and password
-//   GET  /hub/me                    your clips, profile, badge and sign-in (signed in only)
+//   GET  /hub/signin                sign in or up: email and password, Google, or a code from the app
+//   GET  /hub/reset, /hub/confirm   the pages behind the links in account emails (the token is after the #)
+//   GET  /hub/me                    your clips, profile, badge, email, password and devices (signed in only)
 //   GET  /hub/api/feed              a page of clips as JSON, with the cards' HTML  (same filters, cursor=)
 //   GET  /hub/api/games             the games with public clips, most first
-//   POST /hub/api/signin            { code } or { handle, password }; sets the session cookie
+//   POST /hub/api/signin            { code } or { email, password }; sets the session cookie
+//   POST /hub/api/signup            { name, email, password }; sets the session cookie
 //   POST /hub/api/signout
 //   GET|PATCH /hub/api/me           the account and its clips; { name, handle, hideBadge }
 //   PATCH /hub/api/clips/<clip>     { visibility, title, featured }
-//   POST /hub/api/password          { password } sets the hub password, { password: null } removes it
+//   POST /hub/api/password          { password, current } changes the password
+//   GET  /hub/api/security          the email, Google, the first device and every sign-in
+//   POST /hub/api/email             { email, password } a new email, once its link is opened; POST /hub/api/verify resends
+//   DELETE /hub/api/devices/<id>    signs one device out
 //   POST /hub/api/report            { code, reason, text } reports a public clip
 //
 // A sign-in is a session on the account like a PC's (src/library.js), ending after 30 days. Its token is kept in an
 // HttpOnly cookie; every change must also carry an "x-hub" header, which another site can't send, so a page
 // elsewhere can't act for the visitor.
 
+import { passwordSignIn, signUp } from "./accounts.js";
 import { isSquadId, randomCode } from "./codes.js";
-import { normalizeHandle } from "./handles.js";
-import { WEB_SESSION_MS } from "./library.js";
+import { libraryStub, MIN_PASSWORD, WEB_SESSION_MS } from "./library.js";
 import { escapeHtml, pageCsp, shell } from "./look.js";
 import { clipCard } from "./pages.js";
 
@@ -72,7 +77,7 @@ function who(account) {
   return account?.handle ? `@${account.handle}` : account?.name || "You";
 }
 
-function sessionCookies(account, token) {
+export function sessionCookies(account, token) {
   const age = Math.floor(WEB_SESSION_MS / 1000);
   return [
     `${COOKIE}=${account.id}.${token}; Path=/; Max-Age=${age}; HttpOnly; Secure; SameSite=Lax`,
@@ -126,7 +131,7 @@ async function games(env, origin) {
 
 // The account's own library, called with the session's token.
 function library(env, origin, s, method, path, body) {
-  return stub(env.LIBRARIES, s.account).fetch(new Request(`${origin}${path}`, {
+  return libraryStub(env, s.account).fetch(new Request(`${origin}${path}`, {
     method,
     headers: { authorization: `Bearer ${s.token}`, "content-type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -144,7 +149,14 @@ export async function hubRoute(request, env, url) {
       const [first, list] = await Promise.all([feed(env, origin, filter), games(env, origin)]);
       return page(hubPage(first, list, filter), { cache: "public, max-age=30" });
     }
-    if (path === "/hub/signin") return page(signInPage());
+    if (path === "/hub/signin") return page(signInPage(Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET)));
+    if (path === "/hub/reset") return page(linkPage("reset"));
+    if (path === "/hub/confirm") return page(linkPage("confirm"));
+    if (path === "/hub/api/security") {
+      const s = session(request);
+      if (!s) return json({ error: "Sign in first." }, 401);
+      return signedIn(await library(env, origin, s, "GET", "/security"), false);
+    }
     if (path === "/hub/me") {
       if (!session(request)) return Response.redirect(`${origin}/hub/signin?next=me`, 303);
       return page(mePage());
@@ -179,7 +191,8 @@ export async function hubRoute(request, env, url) {
     return json(await answer.json(), answer.status);
   }
 
-  if (path === "/hub/api/signin" && method === "POST") return signIn(env, origin, body);
+  if (path === "/hub/api/signin" && method === "POST") return signIn(env, origin, request, body);
+  if (path === "/hub/api/signup" && method === "POST") return withSession(await signUp(env, origin, request, body, true));
 
   const s = session(request);
   if (!s) return json({ error: "Sign in first." }, 401);
@@ -195,8 +208,14 @@ export async function hubRoute(request, env, url) {
     return signedIn(await library(env, origin, s, "PATCH", "/account", changes), false);
   }
   if (path === "/hub/api/password" && method === "POST") {
-    return signedIn(await library(env, origin, s, "POST", "/password", { password: body.password ?? null }), false);
+    return signedIn(await library(env, origin, s, "POST", "/password", { password: body.password ?? null, current: body.current }), false);
   }
+  if (path === "/hub/api/email" && method === "POST") {
+    return signedIn(await library(env, origin, s, "POST", "/email", { email: body.email, password: body.password }), false);
+  }
+  if (path === "/hub/api/verify" && method === "POST") return signedIn(await library(env, origin, s, "POST", "/verify", {}), false);
+  const d = path.match(/^\/hub\/api\/devices\/([0-9a-f]{12})$/);
+  if (d && method === "DELETE") return signedIn(await library(env, origin, s, "DELETE", `/devices/${d[1]}`), false);
   const m = path.match(/^\/hub\/api\/clips\/([0-9A-Z]{6})$/);
   if (m && method === "PATCH") {
     const changes = {};
@@ -226,26 +245,21 @@ async function signedIn(answer, hasClips) {
   return response;
 }
 
-// A code from the app (the same kind that signs another PC in) or a username and password set on the hub.
-async function signIn(env, origin, body) {
-  let answer;
-  if (typeof body.code === "string") {
-    const code = normalizeCode(body.code);
-    if (!code) return json({ error: "That isn't a sign-in code. It looks like K7QM-2X9D-PA4R-HT." }, 400);
-    answer = await stub(env.LIBRARIES, code.account).fetch(new Request(`${origin}/join`, {
-      method: "POST", body: JSON.stringify({ device: `web-${randomCode(10)}`, secret: code.secret, web: true }),
-    }));
-    if (answer.status === 404) return json({ error: "That sign-in code isn't right or has run out. Make a new one in the app." }, 403);
-  } else {
-    const handle = normalizeHandle(typeof body.handle === "string" ? body.handle : "");
-    if (!handle || typeof body.password !== "string") return json({ error: "Type your username and password." }, 400);
-    const found = await stub(env.HANDLES, "handles").fetch(new Request(`${origin}/lookup?handle=${encodeURIComponent(handle)}`));
-    if (!found.ok) return json({ error: "That username and password don't match." }, 403);
-    const { account } = await found.json();
-    answer = await stub(env.LIBRARIES, account).fetch(new Request(`${origin}/web/login`, {
-      method: "POST", body: JSON.stringify({ password: body.password }),
-    }));
-  }
+// A code from the app (the same kind that signs another PC in) or the account's email and password.
+async function signIn(env, origin, request, body) {
+  if (typeof body.code !== "string") return withSession(await passwordSignIn(env, origin, request, body, true));
+  const code = normalizeCode(body.code);
+  if (!code) return json({ error: "That isn't a sign-in code. It looks like K7QM-2X9D-PA4R-HT." }, 400);
+  const answer = await libraryStub(env, code.account).fetch(new Request(`${origin}/join`, {
+    method: "POST", headers: { "user-agent": request.headers.get("user-agent") ?? "" },
+    body: JSON.stringify({ device: `web-${randomCode(10)}`, secret: code.secret, web: true }),
+  }));
+  if (answer.status === 404) return json({ error: "That sign-in code isn't right or has run out. Make a new one in the app." }, 403);
+  return withSession(answer);
+}
+
+// A library's answer with a new sign-in's token: the token goes in the cookie, not the page.
+async function withSession(answer) {
   const reply = await answer.json().catch(() => ({}));
   if (!answer.ok || !reply.token) return json({ error: reply.error ?? "Couldn't sign in." }, answer.ok ? 500 : answer.status);
   return withCookies(json({ account: reply.account }), sessionCookies(reply.account, reply.token));
@@ -321,33 +335,71 @@ var io="IntersectionObserver" in window?new IntersectionObserver(function(es){if
   return shell({ title: "Hub · Clip Engine", description: "Watch the clips Clip Engine players chose to share, newest or most watched, by game.", head, body, current: "hub", script });
 }
 
-export function signInPage() {
-  const body = `<style>.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:14px;margin-top:18px;align-items:start}
-.two form{display:grid;gap:12px}.two h2{margin:0}.two ol{margin:0;padding-left:20px;color:var(--muted);font-size:14px}.two ol b{color:var(--text)}
-#code{font:700 18px var(--mono);letter-spacing:.08em;text-transform:uppercase}</style>
-<h1>Sign in to the hub</h1><p class="sub">Your Clip Engine account, the one the app's Cloud page uses. There's nothing to sign up for here.</p>
+const FORM_STYLE = `<style>.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:14px;margin-top:18px;align-items:start}
+.two form,.two .panel{display:grid;gap:12px}.two h2{margin:0}.two ol{margin:0;padding-left:20px;color:var(--muted);font-size:14px}.two ol b{color:var(--text)}
+.linkish{background:none;border:0;padding:0;color:var(--accent);font:inherit;cursor:pointer;justify-self:start;text-decoration:underline}
+#code{font:700 18px var(--mono);letter-spacing:.08em;text-transform:uppercase}</style>`;
+
+export function signInPage(google = false) {
+  const body = `${FORM_STYLE}
+<h1>Sign in</h1><p class="sub">Your Clip Engine account, the same one the app's Cloud page uses.</p>
 <div class="two">
+<form class="panel" id="with-password"><h2>With your email</h2>
+<div><label for="email">Email</label><input id="email" type="email" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
+<div><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required></div>
+<button class="btn" type="submit">Sign in</button>
+<button class="linkish" type="button" id="forgot">Forgot your password?</button>
+${google ? `<a class="btn ghost" href="/v1/auth/google">Sign in with Google</a>` : ""}
+<div class="msg" role="status"></div></form>
+<form class="panel" id="sign-up"><h2>New here?</h2>
+<p class="sub" style="margin:0">Make a free account for your cloud library, profile and friends.</p>
+<div><label for="new-name">Name</label><input id="new-name" maxlength="32" autocomplete="nickname" required></div>
+<div><label for="new-email">Email</label><input id="new-email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" required></div>
+<div><label for="new-password">Password</label><input id="new-password" type="password" autocomplete="new-password" minlength="${MIN_PASSWORD}" required></div>
+<button class="btn ghost" type="submit">Make my account</button><div class="msg" role="status"></div></form>
 <form class="panel" id="with-code"><h2>With the app</h2>
 <ol><li>In Clip Engine, open <b>Cloud</b>.</li><li>Press <b>Open the hub</b> to come here already signed in, or <b>Link another PC</b> and type its code below.</li></ol>
 <div><label for="code">Sign-in code</label><input id="code" name="code" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" placeholder="K7QM-2X9D-PA4R-HT" required></div>
-<button class="btn" type="submit">Sign in</button><div class="msg" role="status"></div></form>
-<form class="panel" id="with-password"><h2>With a password</h2>
-<p class="sub" style="margin:0">Set one on your hub page after you've signed in with the app once.</p>
-<div><label for="handle">Username</label><input id="handle" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="@kai" required></div>
-<div><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required></div>
 <button class="btn ghost" type="submit">Sign in</button><div class="msg" role="status"></div></form>
 </div>`;
   const script = `<script>(function(){
+var $=function(id){return document.getElementById(id)};
 function go(){var n=new URLSearchParams(location.search).get("next");location.href=n==="hub"?"/hub":"/hub/me";}
-function send(form,data){var m=form.querySelector(".msg"),b=form.querySelector("button");m.className="msg";m.textContent="Signing in…";b.disabled=true;
-return fetch("/hub/api/signin",{method:"POST",headers:{"content-type":"application/json","x-hub":"1"},body:JSON.stringify(data)}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||"Couldn't sign in.");go();});})
-.catch(function(e){m.className="msg bad";m.textContent=e.message;b.disabled=false;});}
-var c=document.getElementById("with-code"),p=document.getElementById("with-password");
-c.addEventListener("submit",function(e){e.preventDefault();send(c,{code:document.getElementById("code").value});});
-p.addEventListener("submit",function(e){e.preventDefault();send(p,{handle:document.getElementById("handle").value,password:document.getElementById("password").value});});
-var h=location.hash.match(/code=([0-9A-Za-z-]+)/);if(h){history.replaceState(null,"",location.pathname+location.search);document.getElementById("code").value=h[1];send(c,{code:h[1]});}
+function say(form,text,kind){var m=form.querySelector(".msg");m.className="msg"+(kind?" "+kind:"");m.textContent=text;}
+function send(form,path,data){var b=form.querySelector("button");say(form,"One moment…");b.disabled=true;
+return fetch(path,{method:"POST",headers:{"content-type":"application/json","x-hub":"1"},body:JSON.stringify(data)}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||"That didn't work.");return j;});})
+.then(function(j){b.disabled=false;return j;},function(e){say(form,e.message,"bad");b.disabled=false;throw e;});}
+var c=$("with-code"),p=$("with-password"),u=$("sign-up");
+c.addEventListener("submit",function(e){e.preventDefault();send(c,"/hub/api/signin",{code:$("code").value}).then(go);});
+p.addEventListener("submit",function(e){e.preventDefault();send(p,"/hub/api/signin",{email:$("email").value,password:$("password").value}).then(go);});
+u.addEventListener("submit",function(e){e.preventDefault();send(u,"/hub/api/signup",{name:$("new-name").value,email:$("new-email").value,password:$("new-password").value}).then(go);});
+$("forgot").addEventListener("click",function(){if(!$("email").value){say(p,"Type your email first, then press this again.","bad");$("email").focus();return;}
+send(p,"/v1/auth/forgot",{email:$("email").value}).then(function(){say(p,"If that email has an account, a link to reset the password is on its way. It works for 30 minutes.","ok");});});
+var h=location.hash.match(/code=([0-9A-Za-z-]+)/);if(h){history.replaceState(null,"",location.pathname+location.search);$("code").value=h[1];send(c,"/hub/api/signin",{code:h[1]}).then(go);}
 })();</script>`;
-  return shell({ title: "Sign in · Clip Engine Hub", description: "Sign in to the Clip Engine hub.", body, current: "me", script });
+  return shell({ title: "Sign in · Clip Engine Hub", description: "Sign in to Clip Engine, or make an account.", body, current: "me", script });
+}
+
+// The pages behind the links in account emails. The token is after the #, so it never reaches a server log, and
+// is taken off the address as soon as the page has it.
+export function linkPage(kind) {
+  const reset = kind === "reset";
+  const body = `${FORM_STYLE}<h1>${reset ? "Pick a new password" : "Confirming your email"}</h1>
+<div class="two"><form class="panel" id="f">${reset ? `<p class="sub" style="margin:0">This signs out every PC and browser on your account. Sign in again with the new password.</p>
+<div><label for="pw">New password</label><input id="pw" type="password" autocomplete="new-password" minlength="${MIN_PASSWORD}" required></div>
+<button class="btn" type="submit">Save my password</button>` : ""}<div class="msg" role="status"></div>
+<a class="btn ghost" href="/hub/signin" id="next" hidden>Sign in</a></form></div>`;
+  const script = `<script>(function(){
+var f=document.getElementById("f"),m=f.querySelector(".msg"),t=(location.hash.match(/t=([0-9A-Za-z._-]+)/)||[])[1]||"";
+if(t)history.replaceState(null,"",location.pathname);
+function say(text,kind){m.className="msg"+(kind?" "+kind:"");m.textContent=text;}
+function post(path,data){return fetch(path,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(data)}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||"That didn't work.");return j;});});}
+function done(text){say(text,"ok");document.getElementById("next").hidden=false;var b=f.querySelector("button");if(b)b.remove();}
+if(!t){say("This page needs the link from your email. Open it again from there.","bad");return;}
+${reset ? `f.addEventListener("submit",function(e){e.preventDefault();say("Saving…");post("/v1/auth/reset",{token:t,password:document.getElementById("pw").value}).then(function(){done("Your password is changed. Sign in with it now.");}).catch(function(x){say(x.message,"bad");});});`
+    : `say("One moment…");post("/v1/auth/confirm",{token:t}).then(function(j){done(j.email+" is confirmed for your Clip Engine account.");}).catch(function(x){say(x.message,"bad");});`}
+})();</script>`;
+  return shell({ title: `${reset ? "New password" : "Confirm email"} · Clip Engine`, description: "", body, current: "me", script });
 }
 
 export function mePage() {
@@ -369,9 +421,17 @@ export function mePage() {
 <form class="panel stack" id="profile"><h2>Profile</h2><div><label for="pname">Name</label><input id="pname" maxlength="32" required></div>
 <div><label for="phandle">Username</label><input id="phandle" maxlength="25" autocapitalize="none" spellcheck="false" placeholder="Leave empty for no profile page"></div>
 <button class="btn ghost small" type="submit">Save</button><div class="msg" role="status"></div></form>
-<form class="panel stack" id="pw"><h2>Password</h2><p class="sub" style="margin:0" id="pw-line">Sign in here with your username and a password, without the app.</p>
-<input type="text" autocomplete="username" id="pw-user" hidden><div><label for="pw-new">New password</label><input id="pw-new" type="password" autocomplete="new-password" minlength="8"></div>
-<div class="row"><button class="btn ghost small" type="submit">Save password</button><button class="btn bad small" type="button" id="pw-remove" hidden>Remove</button></div><div class="msg" role="status"></div></form>
+<form class="panel stack" id="mail"><h2>Email</h2><p class="sub" style="margin:0" id="mail-line"></p>
+<button class="btn ghost small" type="button" id="mail-again" hidden>Send the link again</button>
+<div><label for="mail-new">New email</label><input id="mail-new" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" required></div>
+<div class="needs-pw"><label for="mail-pw">Your password</label><input id="mail-pw" type="password" autocomplete="current-password"></div>
+<button class="btn ghost small" type="submit">Change email</button><div class="msg" role="status"></div></form>
+<form class="panel stack" id="pw"><h2>Password</h2><p class="sub" style="margin:0" id="pw-line"></p>
+<input type="text" autocomplete="username" id="pw-user" hidden>
+<div class="needs-pw"><label for="pw-old">Current password</label><input id="pw-old" type="password" autocomplete="current-password"></div>
+<div><label for="pw-new">New password</label><input id="pw-new" type="password" autocomplete="new-password" minlength="${MIN_PASSWORD}" required></div>
+<button class="btn ghost small" type="submit">Save password</button><div class="msg" role="status"></div></form>
+<section class="panel stack"><h2>Devices</h2><p class="sub" style="margin:0" id="first"></p><div class="list" id="devices"></div><div class="msg" id="dev-msg" role="status"></div></section>
 </div></div>`;
   const script = `<script>(function(){
 var me=null,$=function(id){return document.getElementById(id)};
@@ -383,8 +443,19 @@ function len(s){s=Math.round(s);return Math.floor(s/60)+":"+String(s%60).padStar
 function account(a){me=a;$("name").textContent=a.name;var bits=[a.handle?'<a href="/u/'+esc(a.handle)+'">@'+esc(a.handle)+'</a>':"No profile page yet",esc(a.planLabel)+" plan"];
 if(a.badge&&!a.hideBadge)bits.splice(1,0,'<span class="badge '+esc(a.badge.kind)+'">'+esc(a.badge.label)+'</span>');
 $("line").innerHTML=bits.join(" · ");$("badge-box").hidden=!a.badge;if(a.badge){$("badge").textContent=a.badge.label;$("show-badge").checked=!a.hideBadge;}
-$("pname").value=a.name;$("phandle").value=a.handle||"";$("pw-user").value=a.handle||"";$("pw-remove").hidden=!a.webPassword;
-$("pw-line").textContent=!a.handle?"Pick a username first, then you can sign in here with it and a password, without the app.":a.webPassword?"You can sign in as @"+a.handle+" with your password. Change it here.":"Sign in here as @"+a.handle+" with a password, without the app.";}
+$("pname").value=a.name;$("phandle").value=a.handle||"";$("pw-user").value=a.email||"";
+$("mail-line").textContent=!a.email?"Add an email so you can sign in with it and get back in if you lose this PC.":a.emailVerified?a.email+" is confirmed."+(a.google?" You can also sign in with Google.":""):a.email+" isn't confirmed yet. Open the link we emailed you.";
+$("mail-again").hidden=!a.email||a.emailVerified;
+Array.prototype.forEach.call(document.querySelectorAll(".needs-pw"),function(el){el.hidden=!a.hasPassword;});
+$("pw-line").textContent=a.hasPassword?"Change the password you sign in with.":"You sign in with Google. Add a password to sign in with your email too.";}
+function when(ms){return new Date(ms).toLocaleDateString(undefined,{year:"numeric",month:"short",day:"numeric"});}
+function what(d){var a=d.agent||"",b=/Edg\\//.test(a)?"Edge":/OPR\\//.test(a)?"Opera":/Firefox\\//.test(a)?"Firefox":/Chrome\\//.test(a)?"Chrome":/Safari\\//.test(a)?"Safari":"";
+var os=/Windows/.test(a)?"Windows":/Android/.test(a)?"Android":/iPhone|iPad/.test(a)?"iPhone or iPad":/Mac OS/.test(a)?"Mac":/Linux/.test(a)?"Linux":"";
+return d.kind==="app"?"Clip Engine on a PC":(b||"A browser")+(os?" on "+os:"");}
+function devices(s){$("first").textContent=s.firstDevice?"First used from "+what(s.firstDevice)+(s.firstDevice.country?" in "+s.firstDevice.country:"")+", "+when(s.firstDevice.at)+".":"";
+$("devices").innerHTML=s.devices.map(function(d){return '<div class="item" style="grid-template-columns:minmax(0,1fr) auto" data-id="'+esc(d.id)+'"><div style="min-width:0"><div class="t">'+esc(what(d))+(d.current?" (this one)":"")+'</div><div class="fine">'+(d.country?esc(d.country)+" · ":"")+"Signed in "+when(d.added)+" · last used "+when(d.seen)+'</div></div>'+(d.current?"":'<button class="btn ghost small" type="button">Sign out</button>')+'</div>';}).join("");}
+$("devices").addEventListener("click",function(e){var row=e.target.closest(".item");if(!row||e.target.tagName!=="BUTTON")return;e.target.disabled=true;
+api("DELETE","devices/"+row.dataset.id).then(function(s){devices(s);say($("dev-msg"),"Signed out.","ok");}).catch(function(x){e.target.disabled=false;say($("dev-msg"),x.message,"bad");});});
 function clips(list){var box=$("clips");list=list.filter(function(c){return c.uploaded});if(!list.length){box.innerHTML='<div class="empty">No clips in your cloud library yet. Press the link button on a clip in the app to put it here.</div>';return;}
 box.innerHTML=list.map(function(c){var link="/c/"+c.code;return '<div class="item" data-id="'+esc(c.id)+'">'+(c.thumb?'<img loading="lazy" src="/hub/api/clips/'+esc(c.id)+'/thumb" alt="" onerror="this.replaceWith(Object.assign(document.createElement(\\'div\\'),{className:\\'noimg\\'}))">':'<div class="noimg"></div>')+
 '<div style="min-width:0"><a class="t" style="display:block;color:inherit"'+(c.visibility==="private"?"":' href="'+link+'"')+'>'+esc(c.title||c.game+" clip")+'</a><div class="fine">'+esc(c.game)+" · "+len(c.seconds)+(c.views?" · "+c.views+(c.views===1?" view":" views"):"")+'</div></div>'+
@@ -394,8 +465,10 @@ api("PATCH","clips/"+row.dataset.id,{visibility:e.target.value}).then(function(c
 .catch(function(x){e.target.disabled=false;alert(x.message);});});
 $("show-badge").addEventListener("change",function(e){var m=$("badge-msg");say(m,"Saving…");api("PATCH","me",{hideBadge:!e.target.checked}).then(function(a){account(a);say(m,a.hideBadge?"Your badge is hidden.":"Your badge shows.","ok");}).catch(function(x){e.target.checked=!e.target.checked;say(m,x.message,"bad");});});
 $("profile").addEventListener("submit",function(e){e.preventDefault();var m=e.target.querySelector(".msg");say(m,"Saving…");api("PATCH","me",{name:$("pname").value,handle:$("phandle").value.trim().replace(/^@/,"")}).then(function(a){account(a);say(m,"Saved.","ok");}).catch(function(x){say(m,x.message,"bad");});});
-$("pw").addEventListener("submit",function(e){e.preventDefault();var m=e.target.querySelector(".msg");if(!me.handle){say(m,"Pick a username first.","bad");return;}say(m,"Saving…");api("POST","password",{password:$("pw-new").value}).then(function(a){account(a);$("pw-new").value="";say(m,"Password saved.","ok");}).catch(function(x){say(m,x.message,"bad");});});
-$("pw-remove").addEventListener("click",function(){var m=$("pw").querySelector(".msg");api("POST","password",{password:null}).then(function(a){account(a);say(m,"Password removed. Sign in with a code from the app.","ok");}).catch(function(x){say(m,x.message,"bad");});});
+$("pw").addEventListener("submit",function(e){e.preventDefault();var m=e.target.querySelector(".msg");say(m,"Saving…");api("POST","password",{password:$("pw-new").value,current:$("pw-old").value}).then(function(a){account(a);$("pw-new").value="";$("pw-old").value="";say(m,"Password saved.","ok");}).catch(function(x){say(m,x.message,"bad");});});
+$("mail").addEventListener("submit",function(e){e.preventDefault();var m=e.target.querySelector(".msg");say(m,"Sending…");api("POST","email",{email:$("mail-new").value,password:$("mail-pw").value}).then(function(a){account(a);$("mail-pw").value="";say(m,a.pendingEmail?"Open the link we sent to "+a.pendingEmail+" to switch to it.":"Sent.","ok");}).catch(function(x){say(m,x.message,"bad");});});
+$("mail-again").addEventListener("click",function(){var m=$("mail").querySelector(".msg");api("POST","verify",{}).then(function(j){say(m,j.sent?"Sent. Check your inbox.":"An email went out a moment ago. Check your inbox, or try again in a minute.","ok");}).catch(function(x){say(m,x.message,"bad");});});
+api("GET","security").then(devices).catch(function(){});
 $("signout").addEventListener("click",function(){api("POST","signout",{}).catch(function(){}).then(function(){location.href="/hub";});});
 api("GET","me").then(function(b){account(b.account);clips(b.clips);}).catch(function(x){$("line").textContent=x.message;});
 })();</script>`;

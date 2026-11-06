@@ -110,7 +110,7 @@ assert.equal((await call(`/v1/squads/${squadId}/squad`, { token: a.token })).sta
 console.log("squads: all good");
 
 // The cloud library: an account, a clip with a short link, the web player and a profile.
-const me = await (await call("/v1/accounts", { method: "POST", body: { name: "Enterro", device: "e2e-device-a" } })).json();
+const me = await (await call("/v1/accounts", { method: "POST", body: { name: "Enterro", device: "e2e-device-a", email: `e2e-${Date.now()}@example.com`, password: "correct horse battery" } })).json();
 const lib = `/v1/accounts/${me.account.id}`;
 const clip = await (await call(`${lib}/clips`, {
   method: "POST", token: me.token,

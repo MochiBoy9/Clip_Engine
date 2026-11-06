@@ -4,12 +4,12 @@ import worker from "../src/index.js";
 import { normalizeHandle } from "../src/handles.js";
 import { cleanMarkers } from "../src/library.js";
 import { clipPage, escapeHtml, profilePage, SITE_URL, summarize } from "../src/pages.js";
-import { fakeEnv, request } from "./fakes.js";
+import { fakeEnv, request, signUpBody } from "./fakes.js";
 
 const call = (env, path, options) => worker.fetch(request(path, options), env);
 
 async function account(env, name = "Enterro", device = "device-0000") {
-  const r = await call(env, "/v1/accounts", { method: "POST", body: { name, device } });
+  const r = await call(env, "/v1/accounts", { method: "POST", body: signUpBody(name, device) });
   assert.equal(r.status, 200);
   const b = await r.json();
   return { token: b.token, id: b.account.id, base: `/v1/accounts/${b.account.id}` };
@@ -258,7 +258,7 @@ test("each address gets a limited number of sign-ups, code tries and changes a m
   const counts = new Map();
   const limiter = (limit) => ({ async limit({ key }) { counts.set(key, (counts.get(key) ?? 0) + 1); return { success: counts.get(key) <= limit }; } });
   const env = fakeEnv({ AUTH_LIMIT: limiter(3), WRITE_LIMIT: limiter(100) });
-  const from = (ip) => ({ method: "POST", body: { name: "Spam", device: "device-0000" }, headers: { "cf-connecting-ip": ip } });
+  const from = (ip) => ({ method: "POST", body: signUpBody("Spam"), headers: { "cf-connecting-ip": ip } });
   for (let i = 0; i < 3; i++) assert.equal((await call(env, "/v1/accounts", from("203.0.113.7"))).status, 200);
   const blocked = await call(env, "/v1/accounts", from("203.0.113.7"));
   assert.equal(blocked.status, 429);

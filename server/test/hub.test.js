@@ -4,14 +4,14 @@ import worker from "../src/index.js";
 import { normalizeCode, readCookie } from "../src/hub.js";
 import { WEB_SESSION_MS } from "../src/library.js";
 import { badgeFor } from "../src/plans.js";
-import { fakeEnv, request } from "./fakes.js";
+import { fakeEnv, request, signUpBody } from "./fakes.js";
 
 const call = (env, path, options) => worker.fetch(request(path, options), env);
 const ADMIN = "operator-secret";
 const HUB = { "x-hub": "1" };
 
 async function account(env, name = "Enterro", device = "device-0000") {
-  const b = await (await call(env, "/v1/accounts", { method: "POST", body: { name, device } })).json();
+  const b = await (await call(env, "/v1/accounts", { method: "POST", body: signUpBody(name, device) })).json();
   return { token: b.token, id: b.account.id, base: `/v1/accounts/${b.account.id}` };
 }
 
@@ -219,38 +219,6 @@ test("a hub sign-in runs out after 30 days; the app's doesn't", async () => {
   } finally {
     Date.now = now;
   }
-});
-
-test("signing in on the hub with a username and password", async () => {
-  const env = fakeEnv();
-  const me = await account(env);
-  const { cookie } = await hubSignIn(env, me);
-  const headers = { cookie, ...HUB };
-  const signIn = (handle, password) => call(env, "/hub/api/signin", { method: "POST", headers: HUB, body: { handle, password } });
-
-  assert.equal((await call(env, "/hub/api/password", { method: "POST", headers, body: { password: "short" } })).status, 400);
-  const set = await (await call(env, "/hub/api/password", { method: "POST", headers, body: { password: "correct horse battery" } })).json();
-  assert.equal(set.webPassword, true);
-  assert.equal((await signIn("enterro", "correct horse battery")).status, 403, "no username yet, nothing to sign in as");
-
-  await setHandle(env, me, "enterro");
-  const ok = await signIn("@Enterro", "correct horse battery");
-  assert.equal(ok.status, 200);
-  assert.ok(ok.headers.getSetCookie().some((x) => x.startsWith("ce_hub=")));
-  assert.equal((await signIn("enterro", "wrong")).status, 403);
-  assert.equal((await signIn("nobody_here", "correct horse battery")).status, 403, "the same answer for a name no one has");
-
-  // The password route is the hub's; the library's login can't be reached straight from outside.
-  assert.equal((await call(env, `${me.base}/web/login`, { method: "POST", body: { password: "correct horse battery" } })).status, 404);
-
-  // Five wrong ones and it waits, even for the right one.
-  for (let i = 0; i < 4; i++) await signIn("enterro", "wrong");
-  assert.equal((await signIn("enterro", "correct horse battery")).status, 429);
-
-  // Removing it turns password sign-in off.
-  const off = await (await call(env, "/hub/api/password", { method: "POST", headers, body: { password: null } })).json();
-  assert.equal(off.webPassword, false);
-  assert.equal((await signIn("enterro", "correct horse battery")).status, 403);
 });
 
 test("reporting a clip, and the operator hiding it", async () => {

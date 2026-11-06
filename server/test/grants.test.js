@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import worker from "../src/index.js";
 import { normalizeGrant } from "../src/plans.js";
-import { fakeEnv, request } from "./fakes.js";
+import { fakeEnv, request, signUpBody } from "./fakes.js";
 
 const call = (env, path, options) => worker.fetch(request(path, options), env);
 const ADMIN = "operator-secret";
@@ -15,7 +15,7 @@ const patch = (env, code, body) => call(env, `/v1/admin/grants/${encodeURICompon
 const license = (env, key, device = "pc-one") => call(env, "/v1/license", { method: "POST", body: { key, device } });
 
 async function account(env, name = "Enterro", device = "device-0000") {
-  const b = await (await call(env, "/v1/accounts", { method: "POST", body: { name, device } })).json();
+  const b = await (await call(env, "/v1/accounts", { method: "POST", body: signUpBody(name, device) })).json();
   return { token: b.token, id: b.account.id, base: `/v1/accounts/${b.account.id}` };
 }
 

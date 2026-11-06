@@ -9,7 +9,8 @@ namespace ClipEngine.Desktop.Services.Cloud;
 internal sealed record CloudAccount(string Id, string Name, string? Handle, string Plan, string PlanLabel, long Used, long Limit, int Clips,
                                     string? PlanKey = null, string FriendCode = "", DateTimeOffset? HandleChangeAt = null,
                                     string? RoleLabel = null, string? BadgeLabel = null, bool HideBadge = false,
-                                    int Lines = 1080, long MaxClip = CloudAccount.FreeMaxClip, int MaxSeconds = CloudAccount.FreeMaxSeconds)
+                                    int Lines = 1080, long MaxClip = CloudAccount.FreeMaxClip, int MaxSeconds = CloudAccount.FreeMaxSeconds,
+                                    string? Email = null, bool EmailVerified = false, bool Google = false)
 {
     // Free's cloud library: clips up to 1080p, 100 MB and 40 seconds. Pro and Ultra take 4K, bigger and longer ones
     // (server/src/plans.js).
@@ -33,7 +34,10 @@ internal sealed record CloudAccount(string Id, string Name, string? Handle, stri
         n?["hideBadge"] is JsonValue hide && hide.TryGetValue<bool>(out var hidden) && hidden,
         n?["lines"] is JsonValue l && l.TryGetValue<int>(out var lines) && lines > 0 ? lines : 1080,
         n?["maxClip"] is JsonValue mc && mc.TryGetValue<long>(out var maxClip) && maxClip > 0 ? maxClip : FreeMaxClip,
-        n?["maxSeconds"] is JsonValue ms2 && ms2.TryGetValue<int>(out var maxSeconds) && maxSeconds > 0 ? maxSeconds : FreeMaxSeconds);
+        n?["maxSeconds"] is JsonValue ms2 && ms2.TryGetValue<int>(out var maxSeconds) && maxSeconds > 0 ? maxSeconds : FreeMaxSeconds,
+        n?["email"] is JsonValue e && e.TryGetValue<string>(out var email) && email.Length > 0 ? email : null,
+        n?["emailVerified"] is JsonValue v && v.TryGetValue<bool>(out var verified) && verified,
+        n?["google"] is JsonValue g && g.TryGetValue<bool>(out var google) && google);
 }
 
 internal sealed record CloudClip(string Id, string Code, string? LocalId, string Title, string Game, long Recorded, double Seconds,
@@ -72,17 +76,34 @@ internal sealed class CloudApi(string server, HttpClient? http = null)
     // Names a clip on this PC so uploading it again finds the copy already in the cloud.
     public static string LocalId(string path, long bytes) => $"{Path.GetFileName(path)}|{bytes}";
 
-    public async Task<(string Token, CloudAccount Account)> CreateAsync(string name, string device)
+    // Sign in with Google: the browser opens this, and once Google says who it is, the service sends the browser to
+    // clipengine://cloud/signin/<code>?state=<state> with a one-time code (server/src/accounts.js).
+    public string GoogleSignInLink(string state) => $"{Server}/v1/auth/google?app={Uri.EscapeDataString(state)}";
+
+    public async Task<(string Token, CloudAccount Account)> CreateAsync(string name, string email, string password, string device)
     {
-        var reply = await SendAsync(HttpMethod.Post, "/v1/accounts", null, new JsonObject { ["name"] = name, ["device"] = device });
+        var reply = await SendAsync(HttpMethod.Post, "/v1/accounts", null,
+                                    new JsonObject { ["name"] = name, ["email"] = email, ["password"] = password, ["device"] = device });
         return (reply?["token"]?.GetValue<string>() ?? "", CloudAccount.From(reply?["account"]));
     }
 
+    // A one-time code: from Link another PC on a PC that's signed in, or from Sign in with Google.
     public async Task<(string Token, CloudAccount Account)> SignInAsync(string code, string device)
     {
         var reply = await SendAsync(HttpMethod.Post, "/v1/accounts/signin", null, new JsonObject { ["code"] = code, ["device"] = device });
         return (reply?["token"]?.GetValue<string>() ?? "", CloudAccount.From(reply?["account"]));
     }
+
+    public async Task<(string Token, CloudAccount Account)> SignInWithPasswordAsync(string email, string password, string device)
+    {
+        var reply = await SendAsync(HttpMethod.Post, "/v1/accounts/signin", null,
+                                    new JsonObject { ["email"] = email, ["password"] = password, ["device"] = device });
+        return (reply?["token"]?.GetValue<string>() ?? "", CloudAccount.From(reply?["account"]));
+    }
+
+    // Emails a link to reset the password, if the email has an account (the answer is the same either way).
+    public Task ForgotPasswordAsync(string email) =>
+        SendAsync(HttpMethod.Post, "/v1/auth/forgot", null, new JsonObject { ["email"] = email });
 
     public async Task<CloudAccount> AccountAsync(string account, string token) =>
         CloudAccount.From(await SendAsync(HttpMethod.Get, $"/v1/accounts/{account}/account", token, null));

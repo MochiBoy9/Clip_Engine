@@ -4,6 +4,7 @@
 // with the account id, so a link finds its library without a global index.
 
 import { addColumns, isSquadId, normalizeInvite, randomCode, randomToken, sameSecret, sha256Hex, SQUAD_ID_LENGTH } from "./codes.js";
+import { normalizeEmail, sendEmail } from "./email.js";
 import { normalizeHandle } from "./handles.js";
 import { mediaPointer } from "./media.js";
 import { badgeFor, checkLicense, cleanKey, clipBytes, OFFLINE_GRACE_MS, PLANS, planName, RECHECK_MS, roleLabel, storageBytes } from "./plans.js";
@@ -42,13 +43,45 @@ CREATE TABLE IF NOT EXISTS friends (account TEXT PRIMARY KEY, name TEXT NOT NULL
   since INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS uploads (clip TEXT PRIMARY KEY, upload_id TEXT NOT NULL, size INTEGER NOT NULL,
   part_bytes INTEGER NOT NULL, parts TEXT NOT NULL DEFAULT '[]', started INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS tokens (hash TEXT PRIMARY KEY, kind TEXT NOT NULL, email TEXT, created INTEGER NOT NULL,
+  expires INTEGER NOT NULL);
 `;
 
 // Columns added after the first release. video_v and thumb_v name each upload (its ETag), so a
 // browser or Cloudflare's cache that already has it doesn't read R2 again.
 const COLUMNS = ["clips ADD COLUMN video_v INTEGER NOT NULL DEFAULT 0", "clips ADD COLUMN thumb_v INTEGER NOT NULL DEFAULT 0",
   // Sign-ins on the hub (the website) end after WEB_SESSION_MS; the app's never do.
-  "devices ADD COLUMN expires INTEGER"];
+  "devices ADD COLUMN expires INTEGER",
+  // What each sign-in is, for the owner's list of devices: the browser or app, the country Cloudflare saw (never the
+  // address) and when it was last used.
+  "devices ADD COLUMN agent TEXT", "devices ADD COLUMN country TEXT", "devices ADD COLUMN seen INTEGER"];
+
+// Links in account emails: confirming an address lasts a day, a password reset 30 minutes. Each works once.
+const VERIFY_MS = 24 * 3600_000;
+const RESET_MS = 30 * 60_000;
+// At most one email of a kind a minute, so a form can't be used to flood someone's inbox.
+const EMAIL_EVERY_MS = 60_000;
+const SEEN_EVERY_MS = 3600_000;
+
+// A cloud account reset: a new ACCOUNTS_EPOCH (a var) names every account's Durable Object and R2 folder afresh, so
+// the old ones are never reached again, and the directory forgets every handle, email and Google link on it
+// (src/handles.js). Empty is the first epoch, as before resets existed.
+export function accountsEpoch(env) {
+  return String(env?.ACCOUNTS_EPOCH ?? "");
+}
+
+export function libraryStub(env, account) {
+  const epoch = accountsEpoch(env);
+  return env.LIBRARIES.get(env.LIBRARIES.idFromName(epoch ? `${epoch}:${account}` : account));
+}
+
+// Who's signing in, for the device list: the user agent (cut short) and the country Cloudflare saw.
+export function clientOf(request) {
+  return {
+    agent: (request.headers.get("user-agent") ?? "").slice(0, 160),
+    country: (request.cf?.country ?? request.headers.get("cf-ipcountry") ?? "").slice(0, 2),
+  };
+}
 
 // The hub: how long a sign-in on the website lasts, how a web password is kept and how many wrong ones lock it.
 export const WEB_SESSION_MS = 30 * 24 * 3600_000;
@@ -58,6 +91,17 @@ const PASSWORD_LOCK_MS = 15 * 60_000;
 export const MIN_PASSWORD = 8;
 const MAX_PASSWORD = 200;
 
+const LOCKED = "Too many wrong passwords. Try again in 15 minutes, or reset your password from the sign-in page.";
+
+function goodPassword(password) {
+  return typeof password === "string" && password.length >= MIN_PASSWORD && password.length <= MAX_PASSWORD;
+}
+
+function validDevice(device) {
+  return typeof device === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(device) ? device : null;
+}
+
+// PBKDF2-SHA256 with a random salt per password. 100,000 rounds is the most Workers' WebCrypto runs.
 async function passwordHash(password, salt, iterations = PASSWORD_ITERATIONS) {
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
   const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: new TextEncoder().encode(salt), iterations }, key, 256);
@@ -199,7 +243,10 @@ export class Library {
       maxSeconds: plan.clipSeconds,
       badge: this.badge(),
       hideBadge: this.meta("hide_badge") === "1",
-      webPassword: Boolean(this.meta("web_password")),
+      email: this.meta("email"),
+      emailVerified: this.meta("email_verified") === "1",
+      google: Boolean(this.meta("google_sub")),
+      hasPassword: Boolean(this.meta("web_password")),
       friendCode: formatFriendCode(this.meta("id")),
       handleChangeAt: this.nextHandleChange(),
       storage: { used: this.used(), limit: plan.storage },
@@ -208,11 +255,17 @@ export class Library {
   }
 
   // A sign-in: a PC running the app, which lasts until it signs out, or the hub, which lasts WEB_SESSION_MS.
-  async addDevice(device, web = false) {
+  async addDevice(device, web = false, client = {}) {
     const token = randomToken();
-    this.sql.exec("DELETE FROM devices WHERE expires IS NOT NULL AND expires < ?", Date.now());
-    this.sql.exec("INSERT INTO devices (token_hash, device, added, expires) VALUES (?, ?, ?, ?)",
-      await sha256Hex(token), device, Date.now(), web ? Date.now() + WEB_SESSION_MS : null);
+    const now = Date.now();
+    this.sql.exec("DELETE FROM devices WHERE expires IS NOT NULL AND expires < ?", now);
+    this.sql.exec("INSERT INTO devices (token_hash, device, added, expires, agent, country, seen) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      await sha256Hex(token), device, now, web ? now + WEB_SESSION_MS : null, String(client.agent ?? "").slice(0, 160),
+      String(client.country ?? "").slice(0, 2), now);
+    // The first device ever to reach the account, kept for its owner (GET /security).
+    if (!this.meta("first_device")) {
+      this.setMeta("first_device", JSON.stringify({ kind: web ? "web" : "app", agent: client.agent ?? "", country: client.country ?? "", at: now }));
+    }
     return token;
   }
 
@@ -225,7 +278,11 @@ export class Library {
   async authorized(request) {
     const hash = await this.tokenHash(request);
     if (!hash) return false;
-    return this.sql.exec("SELECT 1 FROM devices WHERE token_hash = ? AND (expires IS NULL OR expires > ?)", hash, Date.now()).toArray().length > 0;
+    const now = Date.now();
+    const row = this.sql.exec("SELECT seen FROM devices WHERE token_hash = ? AND (expires IS NULL OR expires > ?)", hash, now).toArray()[0];
+    if (!row) return false;
+    if (!row.seen || now - row.seen > SEEN_EVERY_MS) this.sql.exec("UPDATE devices SET seen = ? WHERE token_hash = ?", now, hash);
+    return true;
   }
 
   clipRow(id) {
@@ -254,8 +311,11 @@ export class Library {
     };
   }
 
+  // After a reset the videos go in a folder of their own, so the old library/ folder can be emptied with an R2
+  // lifecycle rule (docs/DEVELOPMENT.md).
   key(id, kind) {
-    return `library/${this.meta("id")}/${id}.${kind === "thumb" ? "img" : "mp4"}`;
+    const epoch = accountsEpoch(this.env);
+    return `library${epoch ? `-${epoch}` : ""}/${this.meta("id")}/${id}.${kind === "thumb" ? "img" : "mp4"}`;
   }
 
   async fetch(request) {
@@ -264,9 +324,13 @@ export class Library {
     const method = request.method;
 
     if (path === "/create" && method === "POST") return this.create(request);
-    if (!this.meta("id")) return fail(404, "There's no such account.");
+    // A PC still signed in to an account that was reset hears it's signed out.
+    if (!this.meta("id")) return request.headers.has("authorization") ? fail(401, "This account isn't here any more. Sign in again.") : fail(404, "There's no such account.");
     if (path === "/join" && method === "POST") return this.join(request);
-    if (path === "/web/login" && method === "POST") return this.passwordLogin(request);
+    if (path === "/auth/login" && method === "POST") return this.passwordLogin(request);
+    if (path === "/auth/forgot" && method === "POST") return this.forgot(request);
+    if (path === "/auth/use" && method === "POST") return this.useToken(request);
+    if (path === "/auth/google" && method === "POST") return this.googleSignIn(request);
     if (path.startsWith("/public/")) return this.publicRequest(request, path.slice(8));
     if (path.startsWith("/peer/") && method === "POST") return this.peer(path.slice(6), await readJson(request));
     if (path === "/admin/plan" && method === "POST") {
@@ -295,6 +359,17 @@ export class Library {
       return json({ ok: true });
     }
     if (path === "/password" && method === "POST") return this.setPassword(request);
+    if (path === "/security" && method === "GET") return this.security(request);
+    if (path === "/email" && method === "POST") return this.changeEmail(request);
+    if (path === "/verify" && method === "POST") {
+      const sent = this.meta("email") && this.meta("email_verified") !== "1" ? await this.sendVerify(request, this.meta("email")) : false;
+      return json({ sent });
+    }
+    const d = path.match(/^\/devices\/([0-9a-f]{12})$/);
+    if (d && method === "DELETE") {
+      this.sql.exec("DELETE FROM devices WHERE substr(token_hash, 1, 12) = ?", d[1]);
+      return this.security(request);
+    }
     if (path === "/friends" && method === "GET") return this.friendList();
     if (path === "/friends" && method === "POST") return this.addFriend(request);
     const f = path.match(/^\/friends\/([0-9A-Z]{8})(\/accept)?$/);
@@ -308,12 +383,7 @@ export class Library {
 
     if (path === "/account" && method === "GET") return json(this.account());
     if (path === "/account" && method === "PATCH") return this.updateAccount(request);
-    if (path === "/link" && method === "POST") {
-      const secret = randomCode(6);
-      this.setMeta("link", JSON.stringify({ secret, until: Date.now() + LINK_CODE_MS }));
-      const code = (this.meta("id") + secret).match(/.{1,4}/g).join("-");
-      return json({ code, expires: Date.now() + LINK_CODE_MS });
-    }
+    if (path === "/link" && method === "POST") return json(this.linkCode());
     if (path === "/clips" && method === "GET") {
       const rows = this.sql.exec("SELECT * FROM clips ORDER BY recorded DESC").toArray();
       return json({ clips: rows.map((r) => this.clipJson(r)), account: this.account() });
@@ -347,25 +417,48 @@ export class Library {
     return fail(404, "Not found.");
   }
 
+  // A new account: a name, an email and a password, or (from src/accounts.js) a Google account instead of the
+  // password. The Worker builds the body, so `google` never comes from a client.
   async create(request) {
     if (this.meta("id")) return fail(409, "That account already exists.");
     const body = await readJson(request);
     const id = request.headers.get("x-account-id");
     const name = cleanName(body?.name);
-    const device = typeof body?.device === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(body.device) ? body.device : null;
+    const device = validDevice(body?.device);
+    const email = normalizeEmail(body?.email);
+    const google = typeof body?.google === "string" && body.google.length > 0 && body.google.length <= 255 ? body.google : null;
     if (!isSquadId(id) || !name || !device) return fail(400, "An account needs your name and this PC's id.");
+    if (!email) return fail(400, "Type your email address. It's how you get back in if you lose this PC.");
+    if (!google && !goodPassword(body?.password)) return fail(400, `Pick a password of ${MIN_PASSWORD} to ${MAX_PASSWORD} characters.`);
+    const claimed = await this.handles("/email/claim", { email, account: id });
+    if (!claimed.ok) return fail(claimed.status, (await claimed.json()).error);
+    if (google) {
+      const linked = await this.handles("/google/claim", { sub: google, account: id });
+      if (!linked.ok) {
+        await this.handles("/email/release", { email, account: id });
+        return fail(linked.status, (await linked.json()).error);
+      }
+    }
     this.setMeta("id", id);
     this.setMeta("name", name);
     this.setMeta("plan", "free");
     this.setMeta("created", String(Date.now()));
-    const token = await this.addDevice(device);
+    this.setMeta("email", email);
+    if (google) {
+      this.setMeta("google_sub", google);
+      this.setMeta("email_verified", "1");
+    } else {
+      await this.storePassword(body.password);
+    }
+    const token = await this.addDevice(device, body?.web === true, clientOf(request));
+    if (!google) await this.sendVerify(request, email);
     return json({ token, account: this.account() });
   }
 
   // Signing another PC in with a code made on one that is signed in.
   async join(request) {
     const body = await readJson(request);
-    const device = typeof body?.device === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(body.device) ? body.device : null;
+    const device = validDevice(body?.device);
     const link = JSON.parse(this.meta("link") ?? "null");
     if (!device || !link || Date.now() > link.until || !sameSecret(String(body?.secret ?? ""), link.secret)) {
       // A few wrong guesses and the code is gone, so it can't be guessed by trying them all.
@@ -377,48 +470,222 @@ export class Library {
       return fail(403, "That sign-in code isn't right or has run out. Make a new one on the PC that's signed in.");
     }
     this.sql.exec("DELETE FROM meta WHERE key = 'link'");
-    const token = await this.addDevice(device, body?.web === true);
+    const token = await this.addDevice(device, body?.web === true, clientOf(request));
     return json({ token, account: this.account() });
   }
 
-  // ---- the hub's own sign-in: a username and a password set from a signed-in PC or the hub ----
+  // A one-time code that signs another PC (or the hub) in, for LINK_CODE_MS.
+  linkCode() {
+    const secret = randomCode(6);
+    this.setMeta("link", JSON.stringify({ secret, until: Date.now() + LINK_CODE_MS }));
+    return { code: (this.meta("id") + secret).match(/.{1,4}/g).join("-"), expires: Date.now() + LINK_CODE_MS };
+  }
 
-  async setPassword(request) {
-    const body = await readJson(request);
-    if (body?.password === null || body?.password === "") {
-      this.sql.exec("DELETE FROM meta WHERE key IN ('web_password', 'web_fails')");
-      return json(this.account());
-    }
-    const password = typeof body?.password === "string" ? body.password : "";
-    if (password.length < MIN_PASSWORD || password.length > MAX_PASSWORD) {
-      return fail(400, `Pick a password of at least ${MIN_PASSWORD} characters.`);
-    }
+  // ---- email and password ----
+
+  async storePassword(password) {
     const salt = randomToken();
     this.setMeta("web_password", JSON.stringify({ salt, iterations: PASSWORD_ITERATIONS, hash: await passwordHash(password, salt) }));
     this.sql.exec("DELETE FROM meta WHERE key = 'web_fails'");
+  }
+
+  // "ok", "wrong" or "locked": five wrong passwords in a row lock it for 15 minutes, even for the right one.
+  async checkPassword(password) {
+    const saved = JSON.parse(this.meta("web_password") ?? "null");
+    if (!saved || typeof password !== "string" || password.length > MAX_PASSWORD) return "wrong";
+    const fails = JSON.parse(this.meta("web_fails") ?? "null") ?? { count: 0, until: 0 };
+    if (fails.until > Date.now()) return "locked";
+    if (sameSecret(await passwordHash(password, saved.salt, saved.iterations), saved.hash)) {
+      this.sql.exec("DELETE FROM meta WHERE key = 'web_fails'");
+      return "ok";
+    }
+    fails.count += 1;
+    if (fails.count >= PASSWORD_TRIES) {
+      fails.count = 0;
+      fails.until = Date.now() + PASSWORD_LOCK_MS;
+    }
+    this.setMeta("web_fails", JSON.stringify(fails));
+    return "wrong";
+  }
+
+  // Changing the password needs the current one; taking it off is only for an account that signs in with Google.
+  async setPassword(request) {
+    const body = await readJson(request);
+    if (this.meta("web_password")) {
+      const check = await this.checkPassword(body?.current);
+      if (check !== "ok") return check === "locked" ? fail(429, LOCKED) : fail(403, "Your current password isn't right.");
+    }
+    if (body?.password === null || body?.password === "") {
+      if (!this.meta("google_sub")) return fail(400, "Keep a password, so you can still sign in. Add Google sign-in first to go without one.");
+      this.sql.exec("DELETE FROM meta WHERE key IN ('web_password', 'web_fails')");
+      return json(this.account());
+    }
+    if (!goodPassword(body?.password)) return fail(400, `Pick a password of ${MIN_PASSWORD} to ${MAX_PASSWORD} characters.`);
+    await this.storePassword(body.password);
     return json(this.account());
   }
 
+  // Signing in with the email (looked up by the Worker) and password: the app (device) or the hub (web).
   async passwordLogin(request) {
     const body = await readJson(request);
-    const saved = JSON.parse(this.meta("web_password") ?? "null");
-    const wrong = () => fail(403, "That username and password don't match.");
-    if (!saved || typeof body?.password !== "string" || body.password.length > MAX_PASSWORD) return wrong();
-    const fails = JSON.parse(this.meta("web_fails") ?? "null") ?? { count: 0, until: 0 };
-    if (fails.until > Date.now()) return fail(429, "Too many wrong passwords. Try again in 15 minutes, or sign in with a code from the app.");
-    const hash = await passwordHash(body.password, saved.salt, saved.iterations);
-    if (!sameSecret(hash, saved.hash)) {
-      fails.count += 1;
-      if (fails.count >= PASSWORD_TRIES) {
-        fails.count = 0;
-        fails.until = Date.now() + PASSWORD_LOCK_MS;
-      }
-      this.setMeta("web_fails", JSON.stringify(fails));
-      return wrong();
-    }
-    this.sql.exec("DELETE FROM meta WHERE key = 'web_fails'");
-    const token = await this.addDevice("web", true);
+    const check = await this.checkPassword(body?.password);
+    if (check === "locked") return fail(429, LOCKED);
+    if (check !== "ok") return fail(403, "That email and password don't match.");
+    const web = body?.web === true;
+    const device = web ? `web-${randomCode(10)}` : validDevice(body?.device);
+    if (!device) return fail(400, "Signing in needs this PC's id.");
+    const token = await this.addDevice(device, web, clientOf(request));
     return json({ token, account: this.account() });
+  }
+
+  // A link for an account email, kept hashed, replacing any earlier one of its kind. Null when one went out less
+  // than a minute ago.
+  async newToken(request, kind, email, ms) {
+    const now = Date.now();
+    this.sql.exec("DELETE FROM tokens WHERE expires < ?", now);
+    if (this.sql.exec("SELECT 1 FROM tokens WHERE kind = ? AND created > ?", kind, now - EMAIL_EVERY_MS).toArray().length > 0) return null;
+    this.sql.exec("DELETE FROM tokens WHERE kind = ?", kind);
+    const secret = randomToken();
+    this.sql.exec("INSERT INTO tokens (hash, kind, email, created, expires) VALUES (?, ?, ?, ?, ?)", await sha256Hex(secret), kind, email, now, now + ms);
+    // The token is after the #, so it never reaches a server log; the page posts it (src/hub.js).
+    return `${new URL(request.url).origin}/hub/${kind === "reset" ? "reset" : "confirm"}#t=${this.meta("id")}.${secret}`;
+  }
+
+  async sendVerify(request, email) {
+    const link = await this.newToken(request, "verify", email, VERIFY_MS);
+    if (!link) return false;
+    return sendEmail(this.env, {
+      to: email,
+      subject: "Confirm your email for Clip Engine",
+      text: `Hi ${this.meta("name")},\n\nConfirm this is your email for your Clip Engine cloud account, so you can get back in if you ever lose your password:\n\n${link}\n\nThe link works for 24 hours. If you didn't make a Clip Engine account, ignore this email.`,
+    });
+  }
+
+  // "Forgot your password?": a reset link to the account's email. The Worker answers the same whether or not the
+  // email has an account.
+  async forgot(request) {
+    const email = this.meta("email");
+    const link = email && (await this.newToken(request, "reset", email, RESET_MS));
+    if (link) {
+      await sendEmail(this.env, {
+        to: email,
+        subject: "Reset your Clip Engine password",
+        text: `Someone (hopefully you) asked to reset the password for your Clip Engine account.\n\n${link}\n\nThe link works once, for 30 minutes. Resetting signs out every PC and browser on the account. If it wasn't you, ignore this email; your password stays as it is.`,
+      });
+    }
+    return json({ ok: true });
+  }
+
+  // Opening a link from an email: confirming the address (verify), a new one (email), or a new password (reset).
+  async useToken(request) {
+    const body = await readJson(request);
+    const kinds = Array.isArray(body?.kinds) ? body.kinds : [];
+    const secret = typeof body?.secret === "string" && body.secret.length <= 128 ? body.secret : "";
+    const row = secret && this.sql.exec("SELECT * FROM tokens WHERE hash = ? AND expires > ?", await sha256Hex(secret), Date.now()).toArray()[0];
+    if (!row || !kinds.includes(row.kind)) return fail(403, "That link isn't right or has run out. Ask for a new one.");
+    if (row.kind === "reset") {
+      if (!goodPassword(body.password)) return fail(400, `Pick a password of ${MIN_PASSWORD} to ${MAX_PASSWORD} characters.`);
+      await this.storePassword(body.password);
+      // Whoever had the old password is signed out everywhere.
+      this.sql.exec("DELETE FROM devices");
+      this.sql.exec("DELETE FROM meta WHERE key = 'link'");
+      this.sql.exec("DELETE FROM tokens WHERE kind = 'reset'");
+      if (row.email === this.meta("email")) this.setMeta("email_verified", "1");
+      return json({ ok: true, kind: "reset", email: this.meta("email") });
+    }
+    if (row.kind === "email" && row.email !== this.meta("email")) {
+      // Claiming the new one lets the old one go.
+      const claimed = await this.handles("/email/claim", { email: row.email, account: this.meta("id") });
+      if (!claimed.ok) return fail(claimed.status, (await claimed.json()).error);
+      this.setMeta("email", row.email);
+    }
+    if (row.email !== this.meta("email")) return fail(403, "That link is for an email this account doesn't use any more.");
+    this.setMeta("email_verified", "1");
+    this.sql.exec("DELETE FROM tokens WHERE hash = ?", row.hash);
+    return json({ ok: true, kind: row.kind, email: row.email });
+  }
+
+  // A new email for the account (or a first one, for an account made before emails): it changes once the link sent
+  // to it is opened, and the old address hears about it.
+  async changeEmail(request) {
+    const body = await readJson(request);
+    const email = normalizeEmail(body?.email);
+    if (!email) return fail(400, "That isn't an email address.");
+    if (this.meta("web_password")) {
+      const check = await this.checkPassword(body?.password);
+      if (check !== "ok") return check === "locked" ? fail(429, LOCKED) : fail(403, "Your password isn't right.");
+    }
+    const old = this.meta("email");
+    if (email === old) {
+      const sent = this.meta("email_verified") !== "1" ? await this.sendVerify(request, email) : false;
+      return json({ ...this.account(), sent });
+    }
+    if ((await this.handles("/email/lookup", { email })).ok) return fail(409, "That email is already on a Clip Engine account.");
+    const link = await this.newToken(request, "email", email, VERIFY_MS);
+    if (!link) return fail(429, "An email just went out. Wait a minute and try again.");
+    const sent = await sendEmail(this.env, {
+      to: email,
+      subject: "Confirm your new email for Clip Engine",
+      text: `Open this link to use ${email} for your Clip Engine cloud account:\n\n${link}\n\nThe link works for 24 hours. If you didn't ask for this, ignore this email.`,
+    });
+    if (old) {
+      await sendEmail(this.env, {
+        to: old,
+        subject: "Your Clip Engine email is changing",
+        text: `Someone signed in to your Clip Engine account asked to change its email to ${email}. It changes once they open the link sent there.\n\nIf this wasn't you, reset your password now: ${new URL(request.url).origin}/hub/signin`,
+      });
+    }
+    return json({ ...this.account(), pendingEmail: email, sent });
+  }
+
+  // Signing in with Google (src/accounts.js has checked Google's answer). An account found by its email is linked to
+  // the Google account. When that email was never confirmed, someone else may have typed it in to be there when its
+  // owner arrives, so the password and every sign-in on it go and only the Google account's owner gets in.
+  async googleSignIn(request) {
+    const body = await readJson(request);
+    const sub = typeof body?.sub === "string" && body.sub.length > 0 && body.sub.length <= 255 ? body.sub : null;
+    const email = normalizeEmail(body?.email);
+    if (!sub || !email) return fail(400, "Google didn't say who you are.");
+    const linked = this.meta("google_sub");
+    if (linked && linked !== sub) return fail(409, "This Clip Engine account is linked to a different Google account.");
+    if (!linked) {
+      if (this.meta("email") !== email) return fail(409, "This Clip Engine account uses a different email.");
+      const claimed = await this.handles("/google/claim", { sub, account: this.meta("id") });
+      if (!claimed.ok) return fail(claimed.status, (await claimed.json()).error);
+      if (this.meta("email_verified") !== "1") {
+        this.sql.exec("DELETE FROM meta WHERE key IN ('web_password', 'web_fails', 'link')");
+        this.sql.exec("DELETE FROM devices");
+        this.sql.exec("DELETE FROM tokens");
+      }
+      this.setMeta("google_sub", sub);
+      this.setMeta("email_verified", "1");
+    }
+    // The app gets a one-time code back through a clipengine:// link and signs in with it, as with Link another PC.
+    if (body.app === true) return json(this.linkCode());
+    const token = await this.addDevice(`web-${randomCode(10)}`, true, clientOf(request));
+    return json({ token, account: this.account() });
+  }
+
+  // The owner's view of who can get in: the email, Google, the first device that ever reached the account and every
+  // sign-in now, newest first. Each can be signed out (DELETE /devices/<id>).
+  async security(request) {
+    const now = Date.now();
+    const mine = await this.tokenHash(request);
+    const rows = this.sql.exec("SELECT * FROM devices WHERE expires IS NULL OR expires > ? ORDER BY COALESCE(seen, added) DESC", now).toArray();
+    const device = (r) => ({
+      id: r.token_hash.slice(0, 12), kind: r.expires ? "web" : "app", agent: r.agent ?? "", country: r.country ?? "",
+      added: r.added, seen: r.seen ?? r.added, current: r.token_hash === mine,
+    });
+    let first = JSON.parse(this.meta("first_device") ?? "null");
+    if (!first) {
+      // Accounts made before devices were logged: the oldest sign-in still on it.
+      const oldest = this.sql.exec("SELECT * FROM devices ORDER BY added LIMIT 1").toArray()[0];
+      first = oldest ? { kind: oldest.expires ? "web" : "app", agent: oldest.agent ?? "", country: oldest.country ?? "", at: oldest.added } : null;
+    }
+    return json({
+      email: this.meta("email"), emailVerified: this.meta("email_verified") === "1", google: Boolean(this.meta("google_sub")),
+      hasPassword: Boolean(this.meta("web_password")), firstDevice: first, devices: rows.map(device),
+    });
   }
 
   async updateAccount(request) {
@@ -588,7 +855,7 @@ export class Library {
   }
 
   peerStub(account) {
-    return this.env.LIBRARIES.get(this.env.LIBRARIES.idFromName(account));
+    return libraryStub(this.env, account);
   }
 
   async tellPeer(account, what, body = {}) {

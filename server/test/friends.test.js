@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import worker from "../src/index.js";
 import { normalizeFriendCode } from "../src/library.js";
-import { fakeEnv, request } from "./fakes.js";
+import { fakeEnv, request, signUpBody } from "./fakes.js";
 
 const call = (env, path, options) => worker.fetch(request(path, options), env);
 
 async function account(env, name, handle) {
-  const b = await (await call(env, "/v1/accounts", { method: "POST", body: { name, device: `device-${name}0000` } })).json();
+  const b = await (await call(env, "/v1/accounts", { method: "POST", body: signUpBody(name, `device-${name}0000`) })).json();
   const me = { token: b.token, id: b.account.id, base: `/v1/accounts/${b.account.id}`, code: b.account.friendCode };
   if (handle) await call(env, `${me.base}/account`, { method: "PATCH", token: me.token, body: { handle } });
   return me;
