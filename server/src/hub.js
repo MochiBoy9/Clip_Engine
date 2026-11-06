@@ -251,7 +251,8 @@ async function signIn(env, origin, request, body) {
   const code = normalizeCode(body.code);
   if (!code) return json({ error: "That isn't a sign-in code. It looks like K7QM-2X9D-PA4R-HT." }, 400);
   const answer = await libraryStub(env, code.account).fetch(new Request(`${origin}/join`, {
-    method: "POST", headers: { "user-agent": request.headers.get("user-agent") ?? "" },
+    method: "POST",
+    headers: { "user-agent": request.headers.get("user-agent") ?? "", "cf-ipcountry": request.cf?.country ?? request.headers.get("cf-ipcountry") ?? "" },
     body: JSON.stringify({ device: `web-${randomCode(10)}`, secret: code.secret, web: true }),
   }));
   if (answer.status === 404) return json({ error: "That sign-in code isn't right or has run out. Make a new one in the app." }, 403);
