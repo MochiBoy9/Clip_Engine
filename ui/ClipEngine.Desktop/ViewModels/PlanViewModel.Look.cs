@@ -7,7 +7,7 @@ namespace ClipEngine.Desktop.ViewModels;
 
 // Ultra's colour wheel and adaptive themes on the plan card. The wheel picks any hue and saturation at a brightness,
 // and only colours that read on the panels apply: a darker pick is lifted toward white until it does. Adaptive
-// themes add gradients, livelier buttons and an occasional scan across the background (Theme/Adaptive.axaml,
+// themes add gradients, livelier buttons and a still wash behind the pages (Theme/Adaptive.axaml,
 // Views/AdaptiveBackdrop.cs).
 public sealed partial class PlanViewModel
 {
@@ -121,8 +121,8 @@ public sealed partial class PlanViewModel
     public bool ShowAdaptiveUltraTag => !CanUseAdaptive;
 
     public string AdaptiveCaption => CanUseAdaptive
-        ? "Gradients from your colour and its neighbour on the wheel, buttons with more snap, and a background that answers your pointer. It all holds still while a game is in front."
-        : "Comes with Ultra: gradients from your colour and its neighbour on the wheel, buttons with more snap, and a background that answers your pointer.";
+        ? "Gradients from your colour and its neighbour on the wheel, and buttons with more snap."
+        : "Comes with Ultra: gradients from your colour and its neighbour on the wheel, and buttons with more snap.";
 
     // Sets the wheel from the saved colour.
     private void LoadWheel()

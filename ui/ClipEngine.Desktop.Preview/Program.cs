@@ -237,7 +237,7 @@ vm.ShowPage(vm.Home);
 Save(window, "10-theme-ember.png");
 
 // Supporter looks: Pro's thirteen colours, then Ultra's colour wheel and an adaptive theme, with a button under the
-// pointer and the backdrop's scan part of the way down the page.
+// pointer.
 vm.Plan.Remove();
 vm.Plan.ShowSample(Plan.Pro, new Credits([], ["Kai the Clipper", "Rook"]));
 vm.Plan.Themes.Single(t => t.Name == "Cobalt").IsSelected = true;
@@ -249,10 +249,6 @@ Capture(Page.Settings, "31-ultra-wheel.png");
 window.Height = 900;
 vm.ShowPage(vm.Home);
 Settle();
-var backdrop = window.GetVisualDescendants().OfType<AdaptiveBackdrop>().First();
-backdrop.ShowScan(0.42);
-// The light under the pointer, resting in the gutter between the recent clips and the activity.
-backdrop.ShowLight(new Point(835, 360));
 // Hover shown at its end state: the preview's clock doesn't run transitions.
 foreach (var button in window.GetVisualDescendants().OfType<Avalonia.Controls.Button>().Where(b => b.Classes.Contains("accent")).Take(1))
 {
