@@ -189,6 +189,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Friends = new FriendsViewModel(this, DesktopSettings);
 
         if (!live) return;
+        UploadPace.InGame = () => IsRecording && _recording?.Label != "Desktop";
         _cleanupTimer.Start();
         if (OperatingSystem.IsWindows())
         {

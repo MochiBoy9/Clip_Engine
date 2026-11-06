@@ -3,7 +3,8 @@ namespace ClipEngine.Desktop.Services;
 // The same locations clip_engine.exe uses (see src/main.cpp and src/core/Config.cpp).
 internal static class AppPaths
 {
-    public static string DataDir { get; } =
+    // The preview tool points it at a folder of its own, so its sample squad and account never land in the real settings.
+    public static string DataDir { get; internal set; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Clip_Engine");
 
     public static string EngineSettingsFile => Path.Combine(DataDir, "clip_engine.ini");
