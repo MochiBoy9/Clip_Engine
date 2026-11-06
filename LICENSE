@@ -7,9 +7,20 @@ models, data and other files (together, the "Software"), is the proprietary and
 confidential property of the copyright holder.
 
 No license or right is granted to anyone by this notice, by access to the Software, or by
-any other means, except by a separate written agreement signed by the copyright holder.
+any other means, except as set out under "Players" below or by a separate written agreement
+signed by the copyright holder.
 
-Without that prior written permission, you may not:
+Players. You may download the official Clip Engine release builds that the copyright holder
+publishes (on this repository's Releases page or the Clip Engine website), and install and
+use them on your own computers, including to record, keep, share and publish your own clips.
+This covers only those official builds, unmodified. It does not cover the source code or any
+build made from it, and it ends if you break this license.
+
+Viewing on GitHub. While this repository is public, GitHub's Terms of Service let GitHub
+users view it and fork it on GitHub. That gives no other right: it is not permission to use,
+copy, modify, build or distribute the Software anywhere else.
+
+Except as allowed above, and without prior written permission, you may not:
 
   1. copy, reproduce or store the Software, in whole or in part;
   2. use, run or install the Software;

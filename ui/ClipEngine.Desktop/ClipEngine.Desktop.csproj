@@ -8,7 +8,7 @@
     <LangVersion>latest</LangVersion>
     <AssemblyName>ClipEngine</AssemblyName>
     <RootNamespace>ClipEngine.Desktop</RootNamespace>
-    <Version>0.10.0</Version>
+    <Version>1.0.3</Version>
     <Product>Clip Engine</Product>
     <Copyright>Copyright (c) 2026 MochiBoy9. All rights reserved.</Copyright>
     <ApplicationIcon>Assets\ClipEngine.ico</ApplicationIcon>
@@ -32,6 +32,11 @@
   <!-- Where the app looks for updates: dotnet publish -p:UpdateRepo=owner/repo. The source repository otherwise. -->
   <ItemGroup Condition="'$(UpdateRepo)' != ''">
     <AssemblyMetadata Include="UpdateRepo" Value="$(UpdateRepo)" />
+  </ItemGroup>
+
+  <!-- Clip Engine's online service for squads and the cloud library: dotnet publish -p:OnlineServer=https://... -->
+  <ItemGroup Condition="'$(OnlineServer)' != ''">
+    <AssemblyMetadata Include="OnlineServer" Value="$(OnlineServer)" />
   </ItemGroup>
 
   <ItemGroup>

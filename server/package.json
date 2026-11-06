@@ -1,0 +1,14 @@
+{
+  "name": "clip-engine-service",
+  "private": true,
+  "type": "module",
+  "description": "Clip Engine's online service: squad sync, the cloud library, share links and profiles.",
+  "scripts": {
+    "test": "node --test --no-warnings \"test/*.test.js\"",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

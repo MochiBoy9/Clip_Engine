@@ -47,8 +47,28 @@ internal sealed record TrackProgress(int Percent) : EngineEvent;
 internal sealed record TrackDone(int Reads) : EngineEvent;
 // --cut-sound: where the sound was saved.
 internal sealed record SoundSaved(string Path) : EngineEvent;
+// Squad sync: when the moment just detected happened by the wall clock (Unix ms), a squadmate's
+// moment this player's view of was saved, or why it wasn't.
+internal sealed record MomentTime(string Type, long UnixMs) : EngineEvent;
+internal sealed record SquadViewSaved(string Moment, string Path) : EngineEvent;
+internal sealed record SquadViewSkipped(string Moment, string Reason) : EngineEvent;
+// --montage: how far the squad highlight has got, and where it was saved.
+internal sealed record MontageProgress(int Percent) : EngineEvent;
+internal sealed record HighlightSaved(string Path, double Megabytes) : EngineEvent;
 // The player's totals in the match, from the game's API or its scoreboard.
 internal sealed record ScoreboardRead(string Game, IReadOnlyDictionary<string, int> Stats) : EngineEvent;
+// A journal note (src/detect/Journal.h), like "extracted" or an enemy destroyed.
+internal sealed record JournalNoted(string Note, string Game, string Value) : EngineEvent
+{
+    public static string Describe(string note) => note switch
+    {
+        "extracted" => "Extracted",
+        "died" => "Died",
+        "failed" => "Run failed",
+        "left" => "Left the run",
+        _ => note.Length > 0 ? char.ToUpperInvariant(note[0]) + note[1..].Replace('_', ' ') : "Journal",
+    };
+}
 
 // Reads the lines clip_engine.exe writes, in the format of src/core/Log.cpp.
 internal static partial class EngineLogParser
@@ -113,6 +133,9 @@ internal static partial class EngineLogParser
     [GeneratedRegex(@"^Saved ([\d.]+)s long recording \(([\d.]+) MB\) to (.+)$")]
     private static partial Regex LongSavedRegex();
 
+    [GeneratedRegex(@"^Journal ([a-z0-9_\-]+) in (.+?): (.*)$")]
+    private static partial Regex JournalRegex();
+
     [GeneratedRegex(@"^Scoreboard in (.+?): (.+)$")]
     private static partial Regex ScoreboardRegex();
 
@@ -149,6 +172,21 @@ internal static partial class EngineLogParser
     [GeneratedRegex(@"^Sound saved to (.+)$")]
     private static partial Regex SoundSavedRegex();
 
+    [GeneratedRegex(@"^Moment (\S+) at (\d+)$")]
+    private static partial Regex MomentTimeRegex();
+
+    [GeneratedRegex(@"^Squad view (\S+) saved to (.+)$")]
+    private static partial Regex SquadViewSavedRegex();
+
+    [GeneratedRegex(@"^Squad moment (\S+) skipped: (.+)$")]
+    private static partial Regex SquadViewSkippedRegex();
+
+    [GeneratedRegex(@"^Montage progress (\d+)%$")]
+    private static partial Regex MontageProgressRegex();
+
+    [GeneratedRegex(@"^Highlight saved \(([\d.]+) MB\) to (.+)$")]
+    private static partial Regex HighlightSavedRegex();
+
     [GeneratedRegex(@"^(.+) (detected|closed)$")]
     private static partial Regex GameRegex();
 
@@ -184,6 +222,7 @@ internal static partial class EngineLogParser
         if ((m = SavedRegex().Match(text)).Success)
             return new ClipSaved(m.Groups[3].Value, Double(m.Groups[1]), Double(m.Groups[2]));
         if ((m = MomentRegex().Match(text)).Success) return new MomentDetected(m.Groups[1].Value, m.Groups[2].Value, m.Groups[3].Value);
+        if ((m = JournalRegex().Match(text)).Success) return new JournalNoted(m.Groups[1].Value, m.Groups[2].Value, m.Groups[3].Value);
         if ((m = ExportProgressRegex().Match(text)).Success) return new ExportProgress(Int(m.Groups[1]));
         if ((m = ExportedRegex().Match(text)).Success) return new Exported(m.Groups[2].Value, Double(m.Groups[1]));
         if ((m = TrimmedRegex().Match(text)).Success) return new Trimmed(m.Groups[3].Value, Double(m.Groups[1]), Double(m.Groups[2]));
@@ -218,6 +257,12 @@ internal static partial class EngineLogParser
         if ((m = TrackProgressRegex().Match(text)).Success) return new TrackProgress(Int(m.Groups[1]));
         if ((m = TrackDoneRegex().Match(text)).Success) return new TrackDone(Int(m.Groups[1]));
         if ((m = SoundSavedRegex().Match(text)).Success) return new SoundSaved(m.Groups[1].Value);
+        if ((m = MomentTimeRegex().Match(text)).Success)
+            return new MomentTime(m.Groups[1].Value, long.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture));
+        if ((m = SquadViewSavedRegex().Match(text)).Success) return new SquadViewSaved(m.Groups[1].Value, m.Groups[2].Value);
+        if ((m = SquadViewSkippedRegex().Match(text)).Success) return new SquadViewSkipped(m.Groups[1].Value, m.Groups[2].Value);
+        if ((m = MontageProgressRegex().Match(text)).Success) return new MontageProgress(Int(m.Groups[1]));
+        if ((m = HighlightSavedRegex().Match(text)).Success) return new HighlightSaved(m.Groups[2].Value, Double(m.Groups[1]));
         if ((m = GameRegex().Match(text)).Success)
             return m.Groups[2].Value == "detected" ? new GameDetected(m.Groups[1].Value) : new GameClosed(m.Groups[1].Value);
         return null;

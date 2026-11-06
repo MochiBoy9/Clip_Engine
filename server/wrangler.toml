@@ -1,0 +1,94 @@
+# Clip Engine's online service: squad sync and the cloud library. Deploy with `npx wrangler deploy` from this folder; see README.md.
+name = "clip-engine"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+
+# One Durable Object per squad: its members, who's online and playing what, moments and the library.
+[[durable_objects.bindings]]
+name = "SQUADS"
+class_name = "Squad"
+
+# One per cloud library account: its clips, profile and plan.
+[[durable_objects.bindings]]
+name = "LIBRARIES"
+class_name = "Library"
+
+# Which account each public profile name (@handle) belongs to.
+[[durable_objects.bindings]]
+name = "HANDLES"
+class_name = "Handles"
+
+# Inviting friends: every invite code, which PCs installed from one, and the Pro keys they earned.
+[[durable_objects.bindings]]
+name = "REFERRALS"
+class_name = "Referrals"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Squad", "Library", "Handles"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Referrals"]
+
+# Every uploaded clip: squad views under <squad>/ and cloud library clips under library/<account>/.
+[[r2_buckets]]
+binding = "CLIPS"
+bucket_name = "clip-engine-clips"
+
+# Per-address limits on top of Cloudflare's own DDoS protection (src/index.js, overLimit). namespace_id is any
+# number unique to this account's limiters.
+[[ratelimits]]
+name = "AUTH_LIMIT"
+namespace_id = "1101"
+simple = { limit = 10, period = 60 }
+
+[[ratelimits]]
+name = "WRITE_LIMIT"
+namespace_id = "1102"
+simple = { limit = 300, period = 60 }
+
+[vars]
+MAX_MEMBERS = "8"
+# Uploaded clips each squad can keep, in MB; the oldest unstarred ones go first when it's full.
+SQUAD_STORAGE_MB = "5120"
+# Uploaded clips are removed after this many days unless starred.
+KEEP_DAYS = "30"
+# Cloud library storage for each plan, in MB: Free 2 GB, Pro 100 GB, Ultra 250 GB.
+FREE_STORAGE_MB = "2048"
+PRO_STORAGE_MB = "102400"
+ULTRA_STORAGE_MB = "256000"
+# Pro and Ultra subscriptions are sold through Polar. Copy these ids from the Polar dashboard;
+# until POLAR_ORGANIZATION_ID is set, the app says subscriptions aren't open yet.
+POLAR_ORGANIZATION_ID = "74bd753b-92a2-432a-8e9d-4cf073398ec3"
+POLAR_PRO_BENEFIT_ID = "0d0f448a-f4ca-4c6d-ad34-d097ad5310c7"
+POLAR_ULTRA_BENEFIT_ID = "d87f2807-053f-4842-ab0e-59905d6d91f1"
+# Donations: a one-time, pay-what-you-want Polar product with a License Keys benefit. Until the benefit id is set,
+# donation keys are refused. How much someone gave, and when a subscription renews, are read with POLAR_ACCESS_TOKEN (orders:read, subscriptions:read), a secret:
+# npx wrangler secret put POLAR_ACCESS_TOKEN
+POLAR_DONATION_PRODUCT_ID = ""
+POLAR_DONATION_BENEFIT_ID = ""
+# What donating gives: GB of cloud storage per dollar (at least 1), the most it adds, and the dollars in all before
+# a supporter's name can go in the credits.
+DONATION_GB_PER_DOLLAR = "1"
+DONATION_MAX_GB = "25"
+DONATION_CREDITS_FROM = "5"
+# Inviting friends: this many friends who install Clip Engine on PCs of their own give a month (REFERRAL_REWARD_DAYS) of
+# Pro, at most REFERRAL_MAX_REWARDS times per person. A friend can add an invite code for REFERRAL_CLAIM_DAYS after
+# installing. REFERRAL_IP_CHECK = "false" lets friends on the inviter's own network count.
+REFERRAL_FRIENDS = "3"
+REFERRAL_REWARD_DAYS = "30"
+REFERRAL_MAX_REWARDS = "1"
+REFERRAL_CLAIM_DAYS = "7"
+REFERRAL_IP_CHECK = "true"
+# Account emails (confirming an address, password resets, email changes) go out through Resend from this address, on
+# a domain verified there. The key is a secret: npx wrangler secret put RESEND_API_KEY. Until both are set, nothing is
+# sent (and accounts still work). See docs/DEVELOPMENT.md, "Accounts".
+EMAIL_FROM = ""
+# Sign in with Google: npx wrangler secret put GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET. Until both are set, the
+# button is hidden.
+# A cloud account reset. Changing this (to "1", then "2" for the next one) and deploying forgets every cloud account:
+# its clips, profile, friends, handle and sign-ins. Special keys, subscriptions and credits stay. docs/DEVELOPMENT.md
+# says exactly what goes. Leave it alone unless you mean it.
+ACCOUNTS_EPOCH = ""
+# ADMIN_TOKEN (for setting plans) is a secret: npx wrangler secret put ADMIN_TOKEN

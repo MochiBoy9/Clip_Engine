@@ -18,7 +18,9 @@ constexpr std::string_view kDefaultFile = R"(# Clip Engine settings. Delete this
 # Folder for saved clips. Empty means Videos\Clip_Engine.
 output_dir =
 
-# Seconds of recent gameplay kept in memory, and the length of a clip saved with the hotkey.
+# Seconds of recent gameplay kept in memory (up to 1800, half an hour), and the length of a clip
+# saved with the hotkey. A long buffer takes a lot of memory at high resolutions; the engine keeps
+# it to 40% of the PC's memory, and Settings shows what yours would take.
 buffer_seconds = 60
 clip_seconds = 30
 
@@ -28,14 +30,49 @@ fps = 0
 # Video bitrate in megabits per second. 0 picks one from resolution and frame rate.
 bitrate_mbps = 0
 
+# The highest resolution to record at: native (the monitor's own), or 2160, 1440, 1080, 720 or
+# 480 to record smaller. Never records bigger than the monitor. The app sets it from your plan.
+resolution = native
+
 # auto, h264 or hevc. auto uses H.264 and switches to HEVC when H.264 can't handle the resolution.
 codec = auto
 
+# Audio sources, each recorded on its own track, with a track of them all mixed together first
+# that every player plays. game_audio is the game alone (or everything you hear, on Windows older
+# than version 2004); discord_audio is Discord, TeamSpeak and Mumble; apps_audio is every other app.
 game_audio = true
 mic_audio = true
+discord_audio = true
+apps_audio = true
+
+# How loud each track is recorded, in percent (0 to 200), and the tracks that are muted, like
+# muted_audio = mic, discord. The app changes these while you play, and they apply at once.
+game_volume = 100
+mic_volume = 100
+discord_volume = 100
+apps_volume = 100
+muted_audio =
+
+# Say one of these phrases to save a clip, with Windows' own speech recognition, on this PC.
+# Separate phrases with commas; a number after one gives its clip a length of its own in seconds,
+# like: clip that, save the last minute 60. voice_clip_seconds is the length of the others (0 means
+# clip_seconds). voice_sensitivity is low, medium or high: higher catches more in a noisy room,
+# lower saves fewer clips by accident.
+voice_clips = false
+voice_phrases = clip that
+voice_clip_seconds = 0
+voice_sensitivity = medium
 
 # Examples: F8, Alt+F10, Ctrl+Shift+S
 save_hotkey = F8
+
+# More keys that save a clip, each with its own length in seconds (up to buffer_seconds),
+# separated by commas. Example: Alt+F8 15, Shift+F8 120
+more_clip_hotkeys =
+
+# A game can have its own clip keys, used instead of save_hotkey and more_clip_hotkeys while
+# it's recorded: clip_hotkeys. and the game id from detection.ini. Detection Studio sets them.
+# Example: clip_hotkeys.valorant = F8 20, Alt+F8 60
 
 # Starts a long recording, which keeps going until this is pressed again and still marks every
 # kill, death and other moment on its timeline. Automatic clips carry on as usual meanwhile.
@@ -88,6 +125,10 @@ hud_scale =
 
 # Log everything read off the screen, to see what words a game uses when tuning detection.ini.
 detection_debug = false
+
+# Keep a journal of each run in games built around runs, like ARC Raiders and Escape from
+# Tarkov: the map, whether you went in, enemies destroyed, loot and how the run ended.
+journal = true
 )";
 
 std::string Trim(std::string_view s) {
@@ -173,55 +214,10 @@ double ReadHudScale(const std::filesystem::path& file, std::string_view gameId) 
   return scale;
 }
 
-std::optional<Hotkey> ParseHotkey(std::string_view text) {
-  Hotkey hotkey{};
-  bool haveKey = false;
-  std::string rest(text);
-  while (!rest.empty()) {
-    const auto plus = rest.find('+');
-    const std::string token = Lower(Trim(rest.substr(0, plus)));
-    rest = plus == std::string::npos ? std::string() : rest.substr(plus + 1);
-    if (token.empty()) return std::nullopt;
-
-    if (token == "ctrl" || token == "control") {
-      hotkey.modifiers |= MOD_CONTROL;
-    } else if (token == "alt") {
-      hotkey.modifiers |= MOD_ALT;
-    } else if (token == "shift") {
-      hotkey.modifiers |= MOD_SHIFT;
-    } else if (token == "win") {
-      hotkey.modifiers |= MOD_WIN;
-    } else if (haveKey) {
-      return std::nullopt;
-    } else {
-      haveKey = true;
-      if (token.size() == 1 && std::isalnum(static_cast<unsigned char>(token[0]))) {
-        hotkey.key = static_cast<UINT>(std::toupper(static_cast<unsigned char>(token[0])));
-      } else if (token[0] == 'f' && token.size() <= 3) {
-        const auto n = ParseInt(token.substr(1));
-        if (!n || *n < 1 || *n > 24) return std::nullopt;
-        hotkey.key = VK_F1 + static_cast<UINT>(*n - 1);
-      } else if (token == "printscreen" || token == "print") {
-        hotkey.key = VK_SNAPSHOT;
-      } else if (token == "insert") {
-        hotkey.key = VK_INSERT;
-      } else if (token == "home") {
-        hotkey.key = VK_HOME;
-      } else if (token == "end") {
-        hotkey.key = VK_END;
-      } else if (token == "pageup") {
-        hotkey.key = VK_PRIOR;
-      } else if (token == "pagedown") {
-        hotkey.key = VK_NEXT;
-      } else if (token == "pause") {
-        hotkey.key = VK_PAUSE;
-      } else {
-        return std::nullopt;
-      }
-    }
-  }
-  if (!haveKey) return std::nullopt;
-  return hotkey;
+std::vector<ClipHotkey> Config::ClipHotkeys() const {
+  std::vector<ClipHotkey> keys{ClipHotkey{saveHotkey, saveHotkeyText, clipSeconds}};
+  keys.insert(keys.end(), moreClipHotkeys.begin(), moreClipHotkeys.end());
+  return keys;
 }
 
 Config Config::Load(const std::filesystem::path& file) {
@@ -267,6 +263,12 @@ Config Config::Load(const std::filesystem::path& file) {
       setInt(config.fps);
     } else if (key == "bitrate_mbps") {
       setInt(config.bitrateMbps);
+    } else if (key == "resolution") {
+      auto v = Lower(value);
+      if (!v.empty() && v.back() == 'p') v.pop_back();
+      if (v == "native" || v == "auto" || v.empty()) config.resolution = 0;
+      else if (const auto lines = ParseInt(v)) config.resolution = *lines;
+      else log::Warn("Setting resolution should be native or a number of lines like 1080, got '{}'", value);
     } else if (key == "codec") {
       const auto v = Lower(value);
       if (v == "auto" || v == "h264" || v == "hevc") config.codec = v;
@@ -275,6 +277,25 @@ Config Config::Load(const std::filesystem::path& file) {
       setBool(config.gameAudio);
     } else if (key == "mic_audio") {
       setBool(config.micAudio);
+    } else if (key == "discord_audio") {
+      setBool(config.discordAudio);
+    } else if (key == "apps_audio") {
+      setBool(config.appsAudio);
+    } else if (std::string badLevel; config.levels.Apply(key, value, &badLevel)) {
+      if (!badLevel.empty()) log::Warn("Setting {}: '{}' isn't a volume or an audio track", key, badLevel);
+    } else if (key == "voice_clips") {
+      setBool(config.voiceClips);
+    } else if (key == "voice_phrases") {
+      std::vector<std::string> bad;
+      config.voicePhrases = ParseVoicePhrases(value, &bad);
+      for (const auto& entry : bad) {
+        log::Warn("voice_phrases: '{}' should be words, perhaps with a length in seconds, like clip that 30", entry);
+      }
+    } else if (key == "voice_clip_seconds") {
+      setInt(config.voiceClipSeconds);
+    } else if (key == "voice_sensitivity") {
+      if (const auto sensitivity = ParseVoiceSensitivity(value)) config.voiceSensitivity = *sensitivity;
+      else log::Warn("Setting voice_sensitivity '{}' should be low, medium or high", value);
     } else if (key == "save_hotkey") {
       if (const auto hk = ParseHotkey(value)) {
         config.saveHotkey = *hk;
@@ -283,6 +304,14 @@ Config Config::Load(const std::filesystem::path& file) {
         log::Warn("Setting save_hotkey '{}' isn't a key this app understands, keeping {}", value,
                   config.saveHotkeyText);
       }
+    } else if (key == "more_clip_hotkeys") {
+      std::vector<std::string> bad;
+      config.moreClipHotkeys = ParseClipHotkeys(value, &bad);
+      for (const auto& entry : bad) {
+        log::Warn("more_clip_hotkeys: '{}' should be a key and a length in seconds, like Alt+F8 15", entry);
+      }
+    } else if (key.starts_with("clip_hotkeys.")) {
+      // Read for each game as it starts (ReadGameClipHotkeys).
     } else if (key == "record_hotkey") {
       if (const auto hk = ParseHotkey(value)) {
         config.recordHotkey = *hk;
@@ -303,6 +332,8 @@ Config Config::Load(const std::filesystem::path& file) {
       setBool(config.detection);
     } else if (key == "detection_debug") {
       setBool(config.detectionDebug);
+    } else if (key == "journal") {
+      setBool(config.journal);
     } else if (key == "reading_quality") {
       if (const auto quality = ParseReadQuality(value)) config.readingQuality = *quality;
       else log::Warn("Setting reading_quality '{}' should be low, medium, high or ultra; keeping {}", value,
@@ -341,10 +372,20 @@ Config Config::Load(const std::filesystem::path& file) {
   }
 
   if (config.outputDir.empty()) config.outputDir = DefaultOutputDir();
-  config.bufferSeconds = std::clamp(config.bufferSeconds, 10, 600);
+  config.bufferSeconds = std::clamp(config.bufferSeconds, 10, kMaxBufferSeconds);
   config.clipSeconds = std::clamp(config.clipSeconds, 5, config.bufferSeconds);
+  for (auto& clipKey : config.moreClipHotkeys) clipKey.seconds = std::clamp(clipKey.seconds, 5, config.bufferSeconds);
+  config.voiceClipSeconds = config.voiceClipSeconds <= 0 ? 0 : std::clamp(config.voiceClipSeconds, 5, config.bufferSeconds);
+  for (auto& phrase : config.voicePhrases) {
+    if (phrase.seconds > 0) phrase.seconds = std::clamp(phrase.seconds, 5, config.bufferSeconds);
+  }
+  if (config.voiceClips && config.voicePhrases.empty()) {
+    log::Warn("Voice clips are on but voice_phrases has no phrase to listen for");
+    config.voiceClips = false;
+  }
   config.fps = std::clamp(config.fps, 0, 360);
   config.bitrateMbps = std::clamp(config.bitrateMbps, 0, 300);
+  config.resolution = config.resolution <= 0 ? 0 : std::clamp(config.resolution, 240, 4320);
   config.clipBeforeSeconds = std::clamp(config.clipBeforeSeconds, 0, config.bufferSeconds - 5);
   config.clipAfterSeconds = std::clamp(config.clipAfterSeconds, 0, 30);
   return config;

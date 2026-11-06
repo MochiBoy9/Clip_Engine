@@ -1,42 +1,57 @@
-# Clip_Engine
+<p align="center"><img src="website/assets/icon.png" width="96" alt="Clip Engine"></p>
 
-Clipping software that can clip almost any game with detection, API, etc. A competitor to Medal.
+<h1 align="center">Clip Engine</h1>
 
-Proprietary software. All rights reserved; see [LICENSE](LICENSE).
+<p align="center"><b>Free game clipping for Windows that saves your best plays by itself.</b><br>
+Kills, clutches, revives and wins are spotted as they happen and clipped for you, with every moment marked.</p>
 
-## What works today
+<p align="center">
+  <a href="https://github.com/MochiBoy9/Clip_Engine/releases/latest/download/Clip_Engine-Setup.exe"><b>Download for Windows</b></a> ·
+  <a href="https://mochiboy9.github.io/Clip_Engine/">Website</a> ·
+  <a href="../../releases">All releases</a>
+</p>
 
-- Detects 23 games (see [Supported games](#supported-games)) and starts recording on the monitor the game is on, stopping when it closes.
-- Captures at the monitor's native resolution and refresh rate (up to 120 fps unless you pick 144, 165 or 240 in Settings) with Windows.Graphics.Capture. Nothing is injected into the game, so it is safe with anti-cheat.
-- Encodes on the GPU (NVIDIA, AMD or Intel) with H.264, switching to HEVC when the resolution and frame rate need it.
-- Records only the game: when you switch to another window, the video shows a "Game Not Found" card and game audio goes quiet until you're back, so nothing else on your PC ends up in a clip. Turn it off with **Record only the game** in Settings (`game_focus`).
-- Discord Rich Presence: while Discord is open, your status shows the game you're playing, how long you've been at it, your kills and deaths in the match and the clips you've saved. Turn it off with **Discord status** in Settings (`discord_presence`).
-- Keeps the last 60 seconds in memory; press **F8** to save the last 30 seconds as an MP4 with separate game and mic audio tracks.
+![Clip Engine's home screen](website/assets/1-home.webp)
 
-- Long recordings: press **F9** (or the button on Home) to record for as long as you like, until you press it again. Detection keeps running, so every kill, death and other moment is marked on its timeline, and automatic clips carry on meanwhile. It streams to disk as it records, so memory use doesn't grow, and it stops by itself before the drive fills up.
-- Player records: a Records page with lifetime kills, deaths, assists, revives, K/D and wins, personal bests across every game (most kills in a match, longest kill streak, biggest multi-kill, most kills without dying, best K/D, most kills in a day, longest win streak and more), totals per game and recent matches. While you play, it shows the current match against your best in that game. Every moment the engine sees counts, clipped or not. Each game also shows how many of the kills its scoreboard showed were caught over its last matches, with Detection Studio a click away when it keeps missing kills or counting extra ones.
-- Reads games' own scoreboards for exact totals: from CS2, Dota 2, League of Legends and Rocket League's APIs, and in Valorant, Overwatch, Marvel Rivals, Rainbow Six Siege, The Finals, Battlefield 6, Call of Duty and Delta Force from the Tab scoreboard on screen, by finding your name and the column headers. The scoreboard is read only while you hold its key and for 30 seconds after a match ends, so it costs nothing the rest of the time; your records count kills and deaths as they happen, and the scoreboard checks them.
-- Splits matches in every game, from match start and end banners, scoreboards that start again from zero, and long quiet spells in games where something happens every few minutes.
-- Makes multi-kill (double, triple, quad, penta) and kill streak (every 5 kills without dying) highlights from the kills it finds, in every game, unless the game called the multi-kill out itself. Turn it off with **Multi-kills and streaks** in Settings (`auto_highlights`).
-- Clip lengths per kind of moment: a match end keeps more of the fight that won it, a match start more of the start, and a death less after it; a death on its own can be left unclipped (**Clip deaths on their own**). Set them with `moment_clip_seconds` and `clip_lone_deaths`.
-- Kills seen during a killcam or while spectating a teammate don't count as yours (`[<game>.pause]` rules); kills found by your name in a killfeed always do.
-- Reads the screen only as much as it needs to: a box is read again only when HUD text in it came or went (not when scenery moves behind it), and quick popups are looked for half as often after 30 seconds with nothing happening.
-- Spots kills, assists, deaths, revives, match start and end, and highlights, and saves a clip around them by itself: from the game's own live events where the game has them, and otherwise by reading the HUD with Windows text recognition. Each clip carries its moments, in a `.json` next to it and inside the MP4.
-- A desktop app (`ClipEngine.exe`) with a sharp, amber-on-gunmetal look that stays light on the GPU: live recording status, a Save clip button, a clip gallery with thumbnails, the supported games and all the settings. It runs the engine for you and keeps recording from the tray.
-- A clip player in the app with the detected moments on the timeline.
-- Share to Discord: a copy that fits the upload limit, put on the clipboard. Clips friends send can be dropped on the window to import them, moments included.
-- A side panel (Alt+Shift+C) on the edge of the screen, over the game. It and the "Clip saved" notice are left out of recordings.
-- Trim a clip in the player (drag the handles, or I and O) and save that part as a new clip, instantly and at full quality.
-- Clips grouped by match: each match's result, kills, assists, deaths and revives, every moment on one colored ribbon, and its best clips.
-- Star clips as favorites, and optionally have old clips cleaned up by age or by a size limit. Favorites are always kept.
-- Works on any screen shape and HUD size: each box keeps to the edge or middle of the HUD it sits next to, so the killfeed is read in the right place on ultrawide, 16:10 and 4:3 screens, and a game's HUD size set in Detection Studio moves and resizes every box with it.
-- How each moment was found: pick a moment in the player to see every rule that saw it, what each one read off the screen (or heard), which one counted it, and open that frame in Detection Studio with the rule picked.
-- A moment the HUD shows in more than one place counts once. In The Finals a kill comes from the killfeed by your name, backed up by the score line under the crosshair and the elimination chime, so the score line fading in and out no longer counts one kill two or three times.
-- Check detection (in the player): mark what really happened in a clip, run the game's rules over the whole clip the way the engine reads the game, and see what they caught, missed and found that wasn't there.
-- Moments over the game: the in-game notice also shows each kill with the match's count, multi-kills, streaks, revives, the match's line when it ends and a new personal best. Turn it off in Settings.
-- Detection Studio (Games page, or the scan button in the player): add any game, or fix how one is read. Pick a frame from a clip or a screenshot, draw a box where the game shows a kill, type the words it shows, test it on that frame exactly as the engine would read it in game, and save. Read the box all through a clip to see every change in what it reads, listen for a sound cut from a clip, and test every rule (unsaved changes included) on all the clips you've marked in Check detection at once, with each missed or extra moment one click away. Each rule says in plain words what it reads, how repeats are told apart and how it works with the game's other rules (which one decides the count, which back it up), and its fine-tuning (how often it reads, when a message counts again, counting once with other rules, priority, squad tags) is right there with the engine's defaults shown. Step through a clip a tenth of a second at a time, jump between its moments, copy a rule to try a change beside it, and keep changes to several games until you save them together.
+## Getting started
 
-![Home screen](docs/screenshots/1-home.png)
+1. [Download the installer](https://github.com/MochiBoy9/Clip_Engine/releases/latest/download/Clip_Engine-Setup.exe) and run it. It installs for your Windows account only, with no admin prompt, and adds Clip Engine to the Start menu. If Windows says the app is from an unknown publisher, choose **More info**, then **Run anyway**. Prefer no installing? Get the [portable zip](https://github.com/MochiBoy9/Clip_Engine/releases/latest/download/Clip_Engine-windows-x64.zip), unzip it anywhere and run `ClipEngine.exe`.
+2. Launch a game. Clip Engine notices it and starts recording on the screen the game is on.
+3. Play. Moments are clipped by themselves, and **F8** saves the last 30 seconds whenever you like. **F9** starts a long recording.
+
+Clips go to `Videos\Clip_Engine\<Game>`. Nothing is injected into the game, so it's safe with anti-cheat.
+
+You need Windows 10 (version 1903 or newer) or Windows 11, and a graphics card with a video encoder, which practically every NVIDIA, AMD or Intel GPU from the last ten years has.
+
+## What it does
+
+- **Clips itself.** Kills, assists, deaths, revives, multi-kills, match starts and results are found from the game's own live data where it has it, and otherwise by reading the HUD. A clip is saved around each one, with its moments on the timeline.
+- **Clip keys your way.** F8 saves the last 30 seconds; add more keys that each save their own length, and give each game its own set.
+- **Say "clip that".** Turn on voice clips and say a phrase you pick to save the last moments, with no key to reach for. Windows' own speech recognition listens on your PC; nothing you say leaves it.
+- **Audio on its own tracks.** The game, your mic, Discord and other apps each get a track, after one with everything mixed that every player plays. Turn any of them down or mute it from Settings, even mid-game.
+- **Up to 30 minutes of replay.** Keep as much as half an hour ready to save. Settings shows the memory it takes and warns you when your PC would struggle.
+- **Long recordings.** Record a whole session with F9; every moment is still marked.
+- **Records.** Lifetime kills, deaths, K/D and wins, personal bests in every game, and the current match against your best, live.
+- **Journal.** For extraction and co-op games, Clip Engine keeps a field journal of every run: the map and conditions you picked (and the times you backed out), what you took in, each enemy you took down, what you found, whether you made it out or died and everything you lost when you did, and the XP from the results screen. Each run is told as a short story in the game's own words, with your shortest and longest runs, most enemies, best streak, the first time you make it out of a map, how you do on each map and how your last ten runs compare, and the items you find and lose most. Each run links to the clips saved during it. PvP kills the screen doesn't show can be added by hand with + and −. Turn it off in Settings if you'd rather not.
+- **Squads.** Make a squad and send friends the invite. Every moment one of you gets is saved from everyone's view, lined up to the moment. Watch up to four views side by side, or cut them into one highlight.
+- **Friends.** Add friends by username or friend code, see who's online, what they're playing and for how long, get a notice when they come on, and right-click to join their squad.
+- **Notifications.** A small pop-up when a friend sends a request or comes online, after each clip is saved, a few days before your subscription renews, when someone joins your squad and when an update is out. Choose which ones pop up in Settings, or turn them all off; the bell in the sidebar and Home's recent events keep the list either way.
+- **Share anywhere.** One click puts a short link on your clipboard. It plays in any browser, with the moments marked, and shows a preview in Discord. A small copy that fits Discord's upload limit is a click away too.
+- **Your profile.** Public clips show on your page, pinned ones first, under the same username your friends know you by.
+- **The hub.** Everyone's public clips on the web, newest or most watched, by game, and searchable. Watching needs no account, and nothing goes there unless you set it to Public. Sign in from your phone or any browser with one click in the app, your email and password, or Google, to change who can see each clip.
+- **Your badge, your call.** Pro, Ultra and Content Creator badges show next to your name. Hide yours any time from the app or the hub.
+- **Trim, edit, star and tidy.** Trim a clip in the player with no quality lost, or open it in the editor to split it into parts, cut what you don't need, put parts in another order and export a new clip with its moments kept. Star favourites, and have old clips cleaned up by age or size, favourites always kept.
+- **Detection Studio.** Add any game, or fine-tune how one is read: draw a box where the game shows a kill, type the words, and test it on your own clips.
+- **FPS and PC stats.** Turn on the stats overlay (Alt+Shift+F) for a slim strip in a corner of the game: frame rate, 1% lows, CPU, GPU and its temperature, video memory and RAM, turning yellow then red when something holds the game back. It reads what Windows already measures, never touches the game (so anti-cheat has nothing to object to), and never shows up in your clips. The FPS counter needs Windows' permission once; Settings asks for it.
+- **Light on your game.** Encodes on the GPU at your monitor's resolution and refresh rate, and records only the game, so nothing else on your PC ends up in a clip.
+- **Discord status.** Shows the game, the match time and your kills while you play.
+
+Every clip made with Clip Engine says so in its file details, with a link back here, and clips you share from the cloud carry a small, see-through Clip Engine mark in the corner of the player. A shared link's preview in Discord says it was clipped with Clip Engine, with a link to get it.
+
+<p align="center">
+  <img src="website/assets/5-player.webp" width="49%" alt="The clip player with moments on the timeline">
+  <img src="website/assets/17-squad.webp" width="49%" alt="A squad">
+</p>
 
 ## Supported games
 
@@ -46,75 +61,58 @@ Proprietary software. All rights reserved; see [LICENSE](LICENSE).
 | Dota 2 | Official Game State Integration: kills, deaths, assists, multi-kills, the horn and the match result |
 | League of Legends | Official Live Client Data API: kills, deaths, assists, multi-kills, aces, first blood, dragons, Baron and steals, game start and result |
 | Rocket League | Official Stats API: goals, assists, demolitions, saves, kickoff and the match result |
-| Valorant, Marvel Rivals, Rainbow Six Siege, Delta Force, Deadlock, Halo Infinite, Destiny 2, Team Fortress 2 | The killfeed, by your in-game name (set it on the Games page), plus round and match banners and medals |
+| Team Fortress 2 | Its console log, which names every kill: your kills (with the weapon and crits) and deaths, exactly; the killfeed is read until the log starts |
+| Valorant, Marvel Rivals, Rainbow Six Siege, Delta Force, Deadlock, Halo Infinite, Paladins, Splitgate | The killfeed, by your in-game name (set it on the Games page), plus round and match banners and medals |
 | The Finals | Kills and deaths from the killfeed by your in-game name, backed up by the score line and the elimination chime, so each counts once; assists, revives and match messages from the HUD |
-| Overwatch, Battlefield 6, Fortnite, Apex Legends, PUBG, Call of Duty, ARC Raiders | The HUD's kill, death, revive and match messages |
-| Escape from Tarkov | Deaths and the end of each raid (Tarkov shows no kills on screen) |
+| Battlefield 6, 2042, V, 1 and 4 | The KILL line under the crosshair and the killfeed by your name, counted once between them; assists, revives, deaths and match results from the HUD |
+| Halo: The Master Chief Collection | "You killed ..." and "... killed you" in the corner, medals and the end of the game; no in-game name needed |
+| Overwatch, Fortnite, Apex Legends, PUBG, Call of Duty | The HUD's kill, death, revive and match messages |
+| ARC Raiders | The journal: the map and conditions you pick, queueing and deploying, ARC destroyed (from the XP lines), raiders downed, loot, your inventory, and whether you extracted or died, with the XP from the results; the death and extraction screens are clipped |
+| Hunt: Showdown 1896 | The journal, from the match summary the game saves after each match: the mode, monsters and bosses killed, hunters killed, bounties, XP and whether you extracted |
+| Escape from Tarkov | The journal: the location picked, queueing, deploying, and Survived, Killed in action or Left the raid, with the XP; the end of each raid is clipped |
+| Helldivers 2, Deep Rock Galactic | The journal: the mission, enemies killed where the game counts them, and whether it was a success or failed; the end of each mission is clipped |
 | Roblox, Minecraft | Recorded, with clips on the hotkey; add rules for the experiences you play in Detection Studio |
 
-The official events are exact and work whatever the HUD looks like. Clip Engine turns them on by itself: it writes a `gamestate_integration_clipengine.cfg` into CS2's and Dota 2's `cfg` folders and sets `PacketSendRate` in Rocket League's `TAGame\Config\DefaultStatsAPI.ini`, for installs it finds through Steam and the Epic Games launcher and for any game it sees running. A game that was already open needs one restart to pick that up. Dota 2 may also need `-gamestateintegration` in its Steam launch options. League's API is always on during a game.
+Kill clips are only offered for games that say plainly on screen when you get a kill or die, since that's what makes them dependable. Extraction games like ARC Raiders and Escape from Tarkov keep kills off the screen, so they get the journal instead, with their death and extraction screens clipped; the journal's screen rules are a first pass and get tuned against real gameplay like the rest. Detection Studio can add any other game, such as Destiny 2, with your own rules.
+
+The official events are exact and work whatever the HUD looks like. Clip Engine turns them on by itself: it writes a `gamestate_integration_clipengine.cfg` into CS2's and Dota 2's `cfg` folders, sets `PacketSendRate` in Rocket League's `TAGame\Config\DefaultStatsAPI.ini` and adds a `con_logfile` line to Team Fortress 2's `tf\cfg\autoexec.cfg`, for installs it finds through Steam and the Epic Games launcher and for any game it sees running. If a HUD or config in `tf\custom` has its own `autoexec.cfg`, add `-condebug` to Team Fortress 2's launch options instead. A game that was already open needs one restart to pick that up. Dota 2 may also need `-gamestateintegration` in its Steam launch options. League's API is always on during a game.
 
 Screen rules for the rest are a first pass and get tuned against real gameplay; see `detection.ini` below. For a HUD that shows a kill as an icon rather than words, a rule can look for a picture of the icon cut from a screenshot instead. Screen reading stays light: a box inside another is read with it when that is cheaper, a box that has not changed is not read again, and death screens and match banners are checked less often than kill popups. Valorant has no local events API, so it is read off the screen like the others.
 
-## Requirements
+## Plans
 
-- Windows 10 version 1903 or newer (Windows 11 recommended, so the yellow capture border can be turned off)
-- A GPU with a hardware video encoder (practically any GPU from the last ten years)
+Clip Engine is free. Subscriptions add more for people who want it:
 
-## Installing
+| | Free | Pro ($2.99 a month) | Ultra ($4.99 a month) |
+| --- | --- | --- | --- |
+| Recording | Up to 4K | Up to 4K | Up to 4K |
+| Cloud library | 2 GB | 100 GB | 250 GB |
+| Clips in the cloud | Up to 1080p, 100 MB and 40 seconds | 4K, up to 1 GB and 10 minutes | 4K, up to 4 GB and 30 minutes |
+| Username changes | Once a month | Once a week | Once a week |
+| Extras | | Thirteen colour themes, a badge, a name in the credits | Every colour on a colour wheel, adaptive themes with gradients and motion, a badge, a name at the top of the credits |
 
-Download the zip from the [latest release](../../releases/latest), unzip it anywhere and run `ClipEngine.exe`.
+Subscribe from the [website](https://mochiboy9.github.io/Clip_Engine/#plans) and paste the key you're emailed into **Settings > Plan**.
 
-## Building
+Or get Pro free: invite friends from the **Friends** page. When three of them install Clip Engine on their own PC and start it, you get a month of Pro. Each friend has to be on a PC and an internet connection of their own, so a second PC at home doesn't count.
 
-Install Visual Studio 2022 or newer with the **Desktop development with C++** workload, which includes CMake and the Windows SDK, and the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0). Then:
+### Donations
 
-```
-cmake -S . -B build -A x64
-cmake --build build --config Release
-dotnet publish ui/ClipEngine.Desktop -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o dist
-copy build\Release\clip_engine.exe dist\
-```
+You can also donate any amount, once, to help keep Clip Engine developed and maintained. It's never needed, and a few small thank-yous come with it:
 
-`dist\ClipEngine.exe` is the app, and it expects `clip_engine.exe` next to it. Every push to a pull request also builds both on GitHub Actions; the run's artifacts have the ready-to-run folder and screenshots of the app.
+- a **Supporter** badge in the app and on your cloud account,
+- 1 GB more cloud storage for every dollar, up to 25 GB, for good,
+- from $5 in all, your name in the credits in the app and on the website.
 
-To see the app without Windows, `dotnet run --project ui/ClipEngine.Desktop.Preview -- screenshots` renders every screen with sample data to PNGs. `dotnet test ui/ClipEngine.Desktop.Tests` runs the app's tests.
+Donate from **Settings > Plan** or the [website](https://mochiboy9.github.io/Clip_Engine/#donate), and paste the key you're emailed into **Settings > Plan**. If you subscribe with the same email, the thank-yous join your plan on their own.
 
-To publish a release, set the version in `CMakeLists.txt` and run the **Release** workflow from the Actions tab.
+## Privacy
 
-## Using it
+Clips stay on your PC unless you share them. The first time Clip Engine starts on a PC it tells the online service so, with a hashed id for the PC, so friends who invited you get credit. Voice clips are off until you turn them on, and are heard by Windows' speech recognition on your PC, not sent anywhere. The cloud library, squads and friends need a free cloud account, made with your email and a password or with Google. Your email is how you sign in on other PCs and get back in if you forget your password; it's never shown to anyone. Online, the service keeps only what those features need: your email, the clips you upload, your username, your friends and squads, whether you're online, and the devices signed in to your account, which you can see and sign out on the hub. See the [privacy notice](website/privacy.html).
 
-Run `ClipEngine.exe` and launch a supported game. `clip_engine.exe` can also run on its own, in which case its console shows what is being recorded.
+## Help and feedback
 
-- Settings: `%LOCALAPPDATA%\Clip_Engine\clip_engine.ini` (created on first run, with comments)
-- Log: `%LOCALAPPDATA%\Clip_Engine\clip_engine.log`
-- Timelines (what the records are built from): `%LOCALAPPDATA%\Clip_Engine\timeline\`, one JSON-lines file per recording with every moment and scoreboard reading
-- Long recordings: next to clips, named `<Game>_<date>_long.mp4`. Change the hotkey with `record_hotkey` in the settings or on the Settings page.
-- Clips: `Videos\Clip_Engine\<Game>\`
-- Detection rules: `detection.ini` next to the app. To tune a game, change its rules in Detection Studio (or put its sections in `%LOCALAPPDATA%\Clip_Engine\detection.ini`): a game with rules there uses them instead of the shipped ones, and every other game keeps the shipped rules, so updates still reach it. `reading_quality` (low, medium, high or ultra) in the settings trades CPU for more accurate reading. `[<game>.scoreboard]` sections say which column headers a game's scoreboard uses for kills, deaths and the rest, and `key` which key shows it (Tab by default). `[<game>.pause]` sections name what a killcam or spectating shows, so kills aren't counted then. With `detection_debug = true` in the settings, the log shows what the engine reads from each screen region, which is how rules are tuned.
-- `clip_engine.exe --export <clip.mp4> <out.mp4> --max-mb 10` makes a small copy for sharing.
-- Supporter key: `%LOCALAPPDATA%\Clip_Engine\supporter.key`. Patreon backers get a key that unlocks colour themes, a supporter badge and a place in the thank-you list; every recording feature is free. Keys are made with `dotnet run --project ui/ClipEngine.SupporterKeys -- make "Name"` and checked offline against the public key in `ui/ClipEngine.Desktop/Services/SupporterKey.cs`. Thank-you names live in `ui/ClipEngine.Desktop/Assets/Supporters.txt`.
-- `clip_engine.exe --frame <clip.mp4 or image> <out.png> --at 12.5` saves one frame as a PNG, and `clip_engine.exe --read <clip.mp4 or image> --at 12.5 --region 0.65,0.12,0.33,0.05 --words "ELIMINATED|KNOCKED OUT"` reads that box the way detection does and prints the text and how many times the words matched; `--position start|middle|end` reads it as a killfeed (with `{player}` filled in from your in-game names, and `--skip-tag true` for a squad tag before them), and `--image icon.png` also says how alike the box is to an icon. Detection Studio uses both.
-- `clip_engine.exe --scan <clip.mp4> --game <id or name> [--quality medium] [--hud-scale 100] [--rules draft.ini]` runs a game's rules over a whole clip and prints each moment they find with its time; the player's Check detection uses it, and Detection Studio passes `--rules` to test changes before they're saved.
-- `clip_engine.exe --trim <clip.mp4> <out.mp4> --start 4.5 --end 20` copies part of a clip without re-encoding, starting on the keyframe at or before the start (at most a second early).
+Found a bug or have an idea? [Open an issue](../../issues). Logs that help: `%LOCALAPPDATA%\Clip_Engine\clip_engine.log`.
 
-## Layout
+## License
 
-| Folder | What's in it |
-| --- | --- |
-| `src/app` | App loop, game sessions, hotkey and clip saving |
-| `src/capture` | GPU device and monitor capture |
-| `src/video` | BGRA to NV12 conversion and the hardware encoder |
-| `src/audio` | WASAPI game/mic capture and AAC encoding |
-| `src/media` | Replay buffer, MP4 writing, clip metadata, trimming and the share export |
-| `src/detect` | Reading the HUD for kills and other moments, and the rules for each game |
-| `src/game` | Supported games and detection of running games |
-| `src/core` | Settings, logging, clock, JSON |
-| `src/integrations` | Live events from games' own APIs (CS2, Dota 2, League of Legends, Rocket League) and turning them on |
-| `assets/detection.ini` | Where each game shows kills and other moments, and the words to look for |
-| `tests` | Tests for the detection rules, matching, clip metadata, game API events and killfeed rules |
-| `ui/ClipEngine.Desktop` | The desktop app (C#, Avalonia) |
-| `ui/ClipEngine.Desktop.Preview` | Renders the app's screens to PNGs with sample data |
-| `ui/ClipEngine.Desktop.Tests` | Tests for the app's log parsing, settings file, MP4 reading, clip markers, import, supporter keys, match grouping, storage cleanup and player records |
-| `ui/ClipEngine.SupporterKeys` | Makes supporter keys for Patreon backers (the signing key stays on your PC, never in the repo) |
-| `website` | The landing page (plain HTML, hosted on Cloudflare Pages; see `website/README.md`) |
+Clip Engine is free to download and use, but it is not open source. The source code is shared here so you can see how it works; copying, changing or redistributing it isn't allowed. See [LICENSE](LICENSE).

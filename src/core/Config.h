@@ -1,6 +1,8 @@
 #pragma once
 
 #include "app/AutoClipPlanner.h"
+#include "core/AudioSettings.h"
+#include "core/Hotkeys.h"
 #include "core/Win.h"
 #include "detect/GameEvent.h"
 #include "detect/OcrImage.h"
@@ -14,11 +16,6 @@
 
 namespace clip {
 
-struct Hotkey {
-  UINT modifiers = 0;  // MOD_ALT | MOD_CONTROL | MOD_SHIFT | MOD_WIN
-  UINT key = VK_F8;
-};
-
 // The player_names setting from the file as it is now. The desktop app can change it while the
 // engine runs, so it's read again each time a game starts.
 std::vector<std::string> ReadPlayerNames(const std::filesystem::path& file);
@@ -28,20 +25,32 @@ std::vector<std::string> ReadPlayerNames(const std::filesystem::path& file);
 // each time a game starts, like the player's names, since the app can change it.
 double ReadHudScale(const std::filesystem::path& file, std::string_view gameId);
 
-// Parses "F8", "Alt+F10", "Ctrl+Shift+S" and similar.
-std::optional<Hotkey> ParseHotkey(std::string_view text);
-
 struct Config {
   std::filesystem::path outputDir;  // where clips are saved; one folder per game
-  int bufferSeconds = 60;           // recent gameplay kept in memory
+  static constexpr int kMaxBufferSeconds = 1800;  // 30 minutes
+  int bufferSeconds = 60;           // recent gameplay kept in memory, up to kMaxBufferSeconds
   int clipSeconds = 30;             // length of a clip saved with the hotkey
   int fps = 0;                      // 0 = match the monitor's refresh rate
   int bitrateMbps = 0;              // 0 = pick from resolution and frame rate
+  int resolution = 0;               // the most lines to record, like 1440 for 1440p; 0 = the monitor's own
   std::string codec = "auto";       // auto | h264 | hevc
+  // Which sources are recorded, each on its own track: the game, the mic, Discord (and other voice
+  // chat apps) and every other app. Turning one off needs a restart; muting is live (levels).
   bool gameAudio = true;
   bool micAudio = true;
+  bool discordAudio = true;
+  bool appsAudio = true;
+  AudioLevels levels;
+
+  // Saves a clip when the player says one of these, of its own length or voiceClipSeconds (0 = clipSeconds).
+  bool voiceClips = false;
+  std::vector<VoicePhrase> voicePhrases{{"clip that", 0}};
+  int voiceClipSeconds = 0;
+  VoiceSensitivity voiceSensitivity = VoiceSensitivity::Medium;
   Hotkey saveHotkey;
   std::string saveHotkeyText = "F8";
+  // More keys that save a clip, each of its own length ("Alt+F8 15, Shift+F8 120").
+  std::vector<ClipHotkey> moreClipHotkeys;
   // Starts a recording that runs until it's pressed again (a "long recording"), however long that is.
   Hotkey recordHotkey{0, VK_F9};
   std::string recordHotkeyText = "F9";
@@ -56,6 +65,8 @@ struct Config {
 
   bool detection = true;          // read the screen for kills, deaths and other moments
   bool detectionDebug = false;    // log everything read off the screen, for tuning detection.ini
+  // Keep a journal of each run in games with journal rules (maps, enemies, loot, how it ended).
+  bool journal = true;
   ReadQuality readingQuality = ReadQuality::Medium;  // how hard to work at reading the screen
   bool autoClip = true;           // save a clip around each detected moment
   std::set<EventType> autoClipEvents{kAllEventTypes.begin(), kAllEventTypes.end()};
@@ -67,6 +78,9 @@ struct Config {
   std::vector<std::string> playerNames;  // the player's in-game names, for reading killfeeds
 
   std::filesystem::path file;  // where these came from
+
+  // Every key that saves a clip: the save hotkey with clip_seconds first, then the others.
+  std::vector<ClipHotkey> ClipHotkeys() const;
 
   // Reads key = value settings, writing a commented default file first if none exists.
   static Config Load(const std::filesystem::path& file);

@@ -11,12 +11,16 @@ const std::vector<GameProfile>& BuiltInGames() {
       {"the_finals", "The Finals", {L"Discovery.exe"}},
       {"overwatch", "Overwatch", {L"Overwatch.exe"}},
       {"battlefield_6", "Battlefield 6", {L"bf6.exe"}},
-      // Official game APIs.
+      // Official game APIs, or for Team Fortress 2 the kills it prints to its console log.
       {"cs2", "Counter-Strike 2", {L"cs2.exe"}, GameApi::Cs2Gsi},
       {"dota2", "Dota 2", {L"dota2.exe"}, GameApi::Dota2Gsi},
       {"league_of_legends", "League of Legends", {L"League of Legends.exe"}, GameApi::LeagueLiveClient},
       {"rocket_league", "Rocket League", {L"RocketLeague.exe"}, GameApi::RocketLeagueStats},
-      // Read off the screen.
+      {"team_fortress_2", "Team Fortress 2", {L"tf_win64.exe", L"tf.exe"}, GameApi::Tf2ConsoleLog},
+      // Read off the screen. Only games whose HUD says plainly when you kill or die: a killfeed
+      // with names, or a kill message. Games that keep kills off screen, like Escape from Tarkov,
+      // can't be clipped on every kill; those built around runs are listed further down for
+      // their journal.
       {"valorant", "Valorant", {L"VALORANT-Win64-Shipping.exe"}},
       {"fortnite", "Fortnite", {L"FortniteClient-Win64-Shipping.exe"}},
       {"apex_legends", "Apex Legends", {L"r5apex.exe", L"r5apex_dx12.exe"}},
@@ -24,13 +28,25 @@ const std::vector<GameProfile>& BuiltInGames() {
       {"marvel_rivals", "Marvel Rivals", {L"Marvel-Win64-Shipping.exe"}},
       {"rainbow_six_siege", "Rainbow Six Siege", {L"RainbowSix.exe", L"RainbowSix_Vulkan.exe", L"RainbowSix_DX11.exe"}},
       {"call_of_duty", "Call of Duty", {L"cod.exe", L"cod24-cod.exe", L"cod25-cod.exe"}},
-      {"arc_raiders", "ARC Raiders", {L"PioneerGame.exe"}},
       {"delta_force", "Delta Force", {L"DeltaForceClient-Win64-Shipping.exe"}},
       {"deadlock", "Deadlock", {L"deadlock.exe", L"project8.exe"}},
       {"halo_infinite", "Halo Infinite", {L"HaloInfinite.exe"}},
-      {"destiny_2", "Destiny 2", {L"destiny2.exe"}},
-      {"team_fortress_2", "Team Fortress 2", {L"tf_win64.exe", L"tf.exe"}},
+      {"halo_mcc", "Halo MCC", {L"MCC-Win64-Shipping.exe", L"MCCWinStore-Win64-Shipping.exe"}},
+      {"battlefield_2042", "Battlefield 2042", {L"BF2042.exe"}},
+      {"battlefield_v", "Battlefield V", {L"bfv.exe"}},
+      {"battlefield_1", "Battlefield 1", {L"bf1.exe"}},
+      {"battlefield_4", "Battlefield 4", {L"bf4.exe", L"bf4_x86.exe"}},
+      {"paladins", "Paladins", {L"Paladins.exe"}},
+      {"splitgate", "Splitgate", {L"PortalWars2-Win64-Shipping.exe", L"PortalWars-Win64-Shipping.exe"}},
+      // Games built around runs, with a journal of each one (the journal rules in detection.ini):
+      // the map, going in, enemies, loot and how the run ended. Their raid results are moments
+      // too, but they keep most kills off screen, so the rest is clipped with the hotkey.
+      {"arc_raiders", "ARC Raiders", {L"PioneerGame.exe"}},
       {"escape_from_tarkov", "Escape from Tarkov", {L"EscapeFromTarkov.exe"}},
+      {"helldivers_2", "Helldivers 2", {L"helldivers2.exe"}},
+      {"deep_rock_galactic", "Deep Rock Galactic", {L"FSD-Win64-Shipping.exe"}},
+      // Its journal comes from the match summary the game writes to a file.
+      {"hunt_showdown", "Hunt: Showdown 1896", {L"HuntGame.exe"}, GameApi::HuntMissionFile},
       // Recorded, with clips from the hotkey; their HUDs differ from one experience or mod to the next.
       {"roblox", "Roblox", {L"RobloxPlayerBeta.exe"}},
       {"minecraft", "Minecraft", {L"Minecraft.Windows.exe"}},

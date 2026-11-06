@@ -13,12 +13,14 @@
 #include "detect/ReadPacing.h"
 #include "detect/TextMatcher.h"
 #include "media/ClipMetadata.h"
+#include "video/OutputSize.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <sstream>
 #include <string>
 
@@ -1063,6 +1065,65 @@ void TestMetadataBox(const char* scratch) {
   std::remove(path.c_str());
 }
 
+std::string TestBox(std::string_view type, std::string_view payload) {
+  std::string out;
+  const auto size = static_cast<uint32_t>(8 + payload.size());
+  for (int i = 3; i >= 0; --i) out += static_cast<char>(size >> (8 * i));
+  out += type;
+  out += payload;
+  return out;
+}
+
+std::string ReadAll(const std::string& path) {
+  std::ifstream in(path, std::ios::binary);
+  return std::string(std::istreambuf_iterator<char>(in), {});
+}
+
+uint32_t Be32(const std::string& s, size_t at) {
+  return (uint32_t{static_cast<uint8_t>(s[at])} << 24) | (uint32_t{static_cast<uint8_t>(s[at + 1])} << 16) |
+         (uint32_t{static_cast<uint8_t>(s[at + 2])} << 8) | static_cast<uint8_t>(s[at + 3]);
+}
+
+// Every clip names Clip Engine and links to the download, in the tags players and Explorer show,
+// whether the movie box comes before or after the video data.
+void TestCreditTags(const char* scratch) {
+  const std::string path = std::string(scratch) + "/credit_test.mp4";
+  const std::string ftyp = TestBox("ftyp", std::string("isom\0\0\2\0", 8));
+  const std::string mdat = TestBox("mdat", "frame-bytes");
+  for (const bool moovFirst : {false, true}) {
+    // One track whose one chunk starts at the mdat's payload.
+    auto moovFor = [&](uint32_t chunk) {
+      std::string stco("\0\0\0\0\0\0\0\1", 8);
+      for (int i = 3; i >= 0; --i) stco += static_cast<char>(chunk >> (8 * i));
+      return TestBox("moov", TestBox("mvhd", std::string(100, '\0')) +
+                                 TestBox("trak", TestBox("mdia", TestBox("minf", TestBox("stbl", TestBox("stco", stco))))));
+    };
+    const size_t moovSize = moovFor(0).size();
+    const uint32_t chunk = static_cast<uint32_t>(ftyp.size() + (moovFirst ? moovSize : 0) + 8);
+    const std::string moov = moovFor(chunk);
+    {
+      std::ofstream out(path, std::ios::binary | std::ios::trunc);
+      out << ftyp << (moovFirst ? moov + mdat : mdat + moov);
+    }
+    CHECK(TagMadeWithClipEngine(path));
+    const std::string tagged = ReadAll(path);
+    CHECK(tagged.find("Clip Engine") != std::string::npos);
+    CHECK(tagged.find(std::string(kClipEngineSite)) != std::string::npos);
+    CHECK(tagged.find("\xA9" "too") != std::string::npos);
+    const size_t stco = tagged.find("stco");
+    const size_t data = tagged.find("frame-bytes");
+    CHECK(stco != std::string::npos && data != std::string::npos);
+    if (stco != std::string::npos && data != std::string::npos) CHECK(Be32(tagged, stco + 12) == data);  // still points at the frames
+
+    CHECK(TagMadeWithClipEngine(path));
+    CHECK(ReadAll(path).size() == tagged.size());  // once is enough
+    CHECK(AppendMetadataBox(path, R"({"game":"Valorant"})"));
+    const auto json = ReadMetadataBox(path);
+    CHECK(json.has_value() && *json == R"({"game":"Valorant"})");
+  }
+  std::remove(path.c_str());
+}
+
 }  // namespace
 
 // The user's detection.ini replaces only the games it has rules for.
@@ -1516,7 +1577,23 @@ void TestRegionChanged() {
   CHECK(!RegionChanged(before, before, false));
 }
 
+// The resolution setting: smaller recordings keep the monitor's shape and never grow past it.
+void TestOutputSize() {
+  using clip::FrameSize;
+  using clip::OutputSize;
+  CHECK((OutputSize(2560, 1440, 0) == FrameSize{2560, 1440}));
+  CHECK((OutputSize(2560, 1440, 1080) == FrameSize{1920, 1080}));
+  CHECK((OutputSize(3440, 1440, 1080) == FrameSize{2580, 1080}));
+  CHECK((OutputSize(3840, 2160, 1440) == FrameSize{2560, 1440}));
+  CHECK((OutputSize(1920, 1080, 2160) == FrameSize{1920, 1080}));
+  CHECK((OutputSize(1920, 1080, 720) == FrameSize{1280, 720}));
+  CHECK((OutputSize(1080, 1920, 720) == FrameSize{720, 1280}));
+  CHECK((OutputSize(1366, 768, 720) == FrameSize{1282, 720}));
+  CHECK((OutputSize(1921, 1081, 0) == FrameSize{1920, 1080}));
+}
+
 int main(int argc, char** argv) {
+  TestOutputSize();
   TestTokenize();
   TestWordsMatch();
   TestCountPhrase();
@@ -1558,6 +1635,7 @@ int main(int argc, char** argv) {
   if (argc > 1) TestFinalsRules(argv[1]);
   if (argc > 1) TestFinalsKillfeed(argv[1]);
   if (argc > 2) TestMetadataBox(argv[2]);
+  if (argc > 2) TestCreditTags(argv[2]);
   if (g_failures == 0) std::printf("All detection tests passed\n");
   return g_failures == 0 ? 0 : 1;
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app/AutoClipPlanner.h"
+#include "app/CommandChannel.h"
 #include "app/HighlightMaker.h"
 #include "app/MatchTracker.h"
 #include "app/RecordingSession.h"
@@ -11,6 +12,7 @@
 #include "integrations/DiscordPresence.h"
 #include "integrations/GameIntegration.h"
 #include "media/LongRecorder.h"
+#include "squad/SquadClips.h"
 
 #include <filesystem>
 #include <future>
@@ -33,9 +35,24 @@ class App {
   void StopSession();
   void HandleEvents();
   void SaveReadyAutoClips(bool all);
-  void SaveHotkeyClip();
+  // Saves the clips the player asked for by voice ("clip that").
+  void HandleVoiceClips();
+  // Saves the last seconds of the recording, for a clip key or the app's Save clip button.
+  void SaveHotkeyClip(int seconds);
+  // Registers these keys to save clips, in place of the ones registered before. game names the
+  // game they belong to, or is empty for the ones from the settings.
+  void UseClipHotkeys(std::vector<ClipHotkey> keys, std::string_view game);
+  // Uses the recorded game's own clip keys when it has some (clip_hotkeys.<game id>, read from
+  // the settings file as it is now), and the usual ones otherwise.
+  void ApplyGameClipHotkeys();
   // Saves [start, end] of the replay buffer. Returns false when there's nothing to save yet.
-  bool SaveRange(int64_t start, int64_t end, const char* trigger);
+  // squadMoment names the squad moment it shows, for clips saved for squad sync.
+  bool SaveRange(int64_t start, int64_t end, const char* trigger, std::string_view squadMoment = {});
+  // Commands from the desktop app: a squadmate's moment to save this player's view of.
+  void HandleCommands();
+  void SaveReadySquadClips(bool all);
+  // The squad's part of the Discord status, from the desktop app.
+  void ApplySquadPresence();
   // A new file name in the game's clip folder; suffix goes before the extension.
   std::filesystem::path ClipPath(std::string_view suffix = {});
   // Starts a long recording, or stops the one running.
@@ -46,6 +63,8 @@ class App {
   void CheckLongRecording();
   // Writes changes to the player's totals, from the game's API or its scoreboard, to the timeline.
   void PumpScoreboards();
+  // Writes the journal notes from the screen and the game's own files into the timeline.
+  void PumpJournal();
   double SessionSeconds(int64_t time) const;
   // Which match of the recording a moment belongs to: the match starts detected by then.
   int MatchAt(int64_t time) const;
@@ -86,12 +105,22 @@ class App {
   const GameProfile* integrationGame_ = nullptr;
   DWORD integrationProcess_ = 0;
 
+  // The keys that save a clip right now, and the game whose own keys they are (empty for the
+  // settings' save hotkey and more_clip_hotkeys).
+  std::vector<ClipHotkey> clipHotkeys_;
+  std::string clipHotkeysGame_;
+
   std::unique_ptr<LongRecorder> longRecording_;
   std::vector<GameEvent> longEvents_;  // the moments it caught, for its markers
   std::unique_ptr<TimelineWriter> timeline_;
 
+  CommandChannel commands_;
+  SquadSaveQueue squadSaves_;
+
   std::unique_ptr<DiscordPresence> presence_;
   PresenceState presenceState_;  // the game being recorded, counted since its match started
+  int64_t flashUntil_ = 0;       // when the highlight on the status comes off
+  SquadPresence squadPresence_;
 };
 
 }  // namespace clip

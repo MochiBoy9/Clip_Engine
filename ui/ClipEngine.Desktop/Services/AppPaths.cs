@@ -9,7 +9,8 @@ internal static class AppPaths
     public static string EngineSettingsFile => Path.Combine(DataDir, "clip_engine.ini");
     public static string EngineLogFile => Path.Combine(DataDir, "clip_engine.log");
     public static string DesktopSettingsFile => Path.Combine(DataDir, "desktop.json");
-    public static string SupporterKeyFile => Path.Combine(DataDir, "supporter.key");
+    public static string LicenseFile => Path.Combine(DataDir, "license.json");
+    public static string NotificationsFile => Path.Combine(DataDir, "notifications.json");
 
     public static string DefaultClipsDir { get; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), "Clip_Engine");

@@ -490,9 +490,9 @@ int RunCutSoundCommand(const std::filesystem::path& input, const std::filesystem
 }
 
 int RunScanCommand(const std::filesystem::path& input, const std::vector<DetectionRule>& rules, ReadQuality quality,
-                   double hudScale) {
+                   double hudScale, const std::vector<JournalRule>& journals) {
   try {
-    if (rules.empty()) {
+    if (rules.empty() && journals.empty()) {
       log::Error("Scan failed: this game has no rules that read the screen");
       return 1;
     }
@@ -529,6 +529,31 @@ int RunScanCommand(const std::filesystem::path& input, const std::vector<Detecti
       watch->intervalMs = ScaledSampleMs(rule.sampleMs > 0 ? rule.sampleMs : 250, quality);
       watches.push_back(std::move(watch));
     }
+    // Journal rules, each with its tracker, and the box that opens it if it has a when_region.
+    struct JournalWatch {
+      explicit JournalWatch(const JournalRule& r) : rule(r), tracker(rule) {}
+      JournalRule rule;
+      JournalTracker tracker;
+      PixelBox box;
+      std::optional<PixelBox> gate;
+      int intervalMs = 1000;
+      int64_t dueMs = 0;
+      int64_t gateSeenMs = INT64_MIN / 2;
+    };
+    std::vector<std::unique_ptr<JournalWatch>> journalWatches;
+    for (const auto& journal : ocr ? journals : std::vector<JournalRule>{}) {
+      auto watch = std::make_unique<JournalWatch>(journal);
+      watch->box = BoxOn(PlaceRegion(journal.region, video.width, video.height, hudScale), video.width, video.height);
+      if (watch->box.TooSmall()) continue;
+      if (journal.whenRegion && !journal.when.empty()) {
+        const PixelBox gate = BoxOn(PlaceRegion(*journal.whenRegion, video.width, video.height, hudScale), video.width, video.height);
+        if (!gate.TooSmall()) watch->gate = gate;
+      }
+      watch->intervalMs = ScaledSampleMs(journal.sampleMs, quality);
+      journalWatches.push_back(std::move(watch));
+    }
+    int noted = 0;
+
     // The rules that listen hear the clip's game audio as it goes.
     SoundWatch sounds(rules, [](const std::string& warning) { log::Warn("Scan: {}", warning); });
     std::optional<AudioReader> audio;
@@ -539,7 +564,7 @@ int RunScanCommand(const std::filesystem::path& input, const std::vector<Detecti
         log::Warn("Scan: the clip's audio can't be read ({}), so its sounds aren't listened for", Describe(e));
       }
     }
-    if (watches.empty() && !audio) {
+    if (watches.empty() && journalWatches.empty() && !audio) {
       if (ocr) log::Error("Scan failed: none of this game's rules fit the video");
       else log::Error("Scan failed: Windows text recognition isn't installed. Add English under Settings > Time & language > Language.");
       return 1;
@@ -571,10 +596,53 @@ int RunScanCommand(const std::filesystem::path& input, const std::vector<Detecti
         });
       }
       fuser.Flush(time);
-      if (std::ranges::none_of(watches, [&](const auto& w) { return w->dueMs <= ms; })) continue;
+      if (std::ranges::none_of(watches, [&](const auto& w) { return w->dueMs <= ms; }) &&
+          std::ranges::none_of(journalWatches, [&](const auto& w) { return w->dueMs <= ms; })) {
+        continue;
+      }
       const Picture frame = video.ToPicture(sample.get());
       // Rules that look at the same box share one read of it.
       std::map<std::pair<PixelBox, int>, std::vector<std::vector<WordBox>>> readsOf;
+      auto rowsOf = [&](const PixelBox& box, int threshold) {
+        auto key = std::make_pair(box, threshold);
+        auto cached = readsOf.find(key);
+        if (cached == readsOf.end()) {
+          const UINT w = box.right - box.left;
+          const UINT h = box.bottom - box.top;
+          const auto pixels = Crop(frame, box.left, box.top, w, h);
+          cached = readsOf.emplace(key, ReadWords(ocr, pixels, w, h, threshold, 1, quality)).first;
+        }
+        std::vector<std::vector<std::vector<std::string>>> rows;
+        for (const auto& words : cached->second) rows.push_back(GroupIntoRows(words));
+        if (rows.empty()) rows.emplace_back();
+        return rows;
+      };
+      for (auto& watch : journalWatches) {
+        if (watch->dueMs > ms) continue;
+        watch->dueMs = ms + watch->intervalMs;
+        bool open = true;
+        if (watch->gate) {
+          const auto gateRows = rowsOf(*watch->gate, watch->rule.threshold);
+          if (std::ranges::any_of(gateRows, [&](const auto& r) { return ShowsAny(watch->rule.when, r); })) watch->gateSeenMs = ms;
+          open = ms - watch->gateSeenMs <= std::max<int64_t>(2500, int64_t{2} * watch->intervalMs + 500);
+          // As in game, the box itself isn't read while its menu is closed.
+          if (!open) {
+            watch->tracker.Update({}, ms, false);
+            continue;
+          }
+        }
+        const auto rows = rowsOf(watch->box, watch->rule.threshold);
+        size_t chosen = 0, most = 0;
+        for (size_t i = 0; rows.size() > 1 && i < rows.size(); ++i) {
+          const size_t n = FindNotes(watch->rule, rows[i]).size();
+          if (n > most) most = n, chosen = i;
+        }
+        for (const auto& note : watch->tracker.Update(rows[chosen], ms, open)) {
+          ++noted;
+          log::Info("Scan journal {} at {:.2f}: {}{}{}", note.note, ms / 1000.0, note.value.empty() ? note.text : note.value,
+                    note.amount != 0 ? std::format(" ({})", note.amount) : "", note.xp != 0 ? std::format(" +{} XP", note.xp) : "");
+        }
+      }
       for (auto& watch : watches) {
         if (watch->dueMs > ms) continue;
         watch->dueMs = ms + watch->intervalMs;
@@ -632,6 +700,7 @@ int RunScanCommand(const std::filesystem::path& input, const std::vector<Detecti
       }
     }
     fuser.FlushAll();
+    if (!journalWatches.empty()) log::Info("Scan journal done: {} notes", noted);
     log::Info("Scan done: {} moments", found);
     return 0;
   } catch (const winrt::hresult_error& e) {

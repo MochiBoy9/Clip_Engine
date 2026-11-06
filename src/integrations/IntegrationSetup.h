@@ -4,6 +4,7 @@
 
 #include <filesystem>
 #include <string>
+#include <vector>
 
 namespace clip {
 
@@ -26,6 +27,14 @@ SetupResult InstallDota2Config(const std::filesystem::path& gameExe);
 // Rocket League's Stats API is off until PacketSendRate in TAGame\Config\DefaultStatsAPI.ini is
 // above 0. Turns it on and reports the port it uses.
 SetupResult EnableRocketLeagueStats(const std::filesystem::path& gameExe, unsigned short& port);
+
+// Team Fortress 2 prints every killfeed line to its console. This adds a line to
+// tf\cfg\autoexec.cfg that has the game write its console to kTf2ConsoleLog (in the tf folder)
+// as well, from the folder holding tf_win64.exe. A log grown very large is emptied first.
+constexpr wchar_t kTf2ConsoleLog[] = L"clip_engine_console.log";
+SetupResult EnableTf2ConsoleLog(const std::filesystem::path& gameExe);
+// The console logs Team Fortress 2 may be writing: ours, and console.log from -condebug.
+std::vector<std::filesystem::path> Tf2ConsoleLogs(const std::filesystem::path& gameExe);
 
 // Runs the above for every install found through Steam and the Epic Games launcher, so the
 // APIs are already on the first time a game is launched. Logs what it changed.

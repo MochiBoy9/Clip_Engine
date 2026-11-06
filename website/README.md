@@ -1,15 +1,5 @@
 # Website
 
-The landing page for Clip Engine: plain HTML and CSS, no build step. Open `index.html` in a browser to see it.
+Clip Engine's home page, at **https://mochiboy9.github.io/Clip_Engine/**: what Clip Engine does, the games it supports, the plans, and the download. A [comparison page](https://mochiboy9.github.io/Clip_Engine/compare.html) puts it side by side with Medal, Outplayed, Xbox Game Bar, NVIDIA, AMD and Steam. It works on phones as well as desktops, with a menu for the sections, and links to the hub, where players' public clips are.
 
-- Checkout, download and support links are set in `site.js`.
-- `privacy.html` and `terms.html` are drafts to finish before taking payments.
-- Screenshots in `assets/` come from `dotnet run --project ui/ClipEngine.Desktop.Preview -- screenshots`.
-
-## Hosting on Cloudflare Pages
-
-Cloudflare Pages hosts it for free and redeploys on every push to `main`.
-
-1. In the Cloudflare dashboard, open **Workers & Pages → Create → Pages → Connect to Git** and pick this repository.
-2. Leave the framework preset as **None**, the build command empty, and set the build output directory to `website`.
-3. Deploy. The site is live at `<project>.pages.dev`; add your own domain under **Custom domains**.
+It's plain HTML and CSS with no build step, so opening `index.html` in a browser shows it as it is online. It's published with GitHub Pages from this folder whenever it changes.

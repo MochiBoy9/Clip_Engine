@@ -30,6 +30,36 @@ void ReplayBuffer::Push(EncodedPacket&& packet) {
   if (stream == kVideoStream) {
     while (!queue.empty() && !queue.front()->keyframe) popFront();
   }
+
+  // Over the memory limit: drop the oldest group of pictures, and the audio from before what's
+  // left of the video, until it fits. The newest group always stays.
+  auto& video = streams_[kVideoStream];
+  while (maxBytes_ > 0 && bytes_ > maxBytes_ && video.size() > 1) {
+    auto next = std::find_if(video.begin() + 1, video.end(), [](const PacketPtr& p) { return p->keyframe; });
+    if (next == video.end()) break;
+    for (auto it = video.begin(); it != next; ++it) bytes_ -= (*it)->data.size();
+    video.erase(video.begin(), next);
+    const int64_t from = video.front()->pts;
+    for (int s = 0; s < kStreamCount; ++s) {
+      if (s == kVideoStream) continue;
+      auto& audio = streams_[s];
+      while (!audio.empty() && audio.front()->pts < from) {
+        bytes_ -= audio.front()->data.size();
+        audio.pop_front();
+      }
+    }
+  }
+}
+
+void ReplayBuffer::SetMaxBytes(size_t maxBytes) {
+  std::lock_guard lock(mutex_);
+  maxBytes_ = maxBytes;
+}
+
+int64_t ReplayBuffer::HeldDuration() const {
+  std::lock_guard lock(mutex_);
+  const auto& video = streams_[kVideoStream];
+  return video.empty() ? 0 : video.back()->pts - video.front()->pts;
 }
 
 std::optional<ReplayBuffer::Clip> ReplayBuffer::Extract(int64_t start, int64_t end) const {

@@ -11,6 +11,8 @@ internal sealed class Timeline
     public required string Game { get; init; }
     public List<TimelineMoment> Moments { get; } = [];
     public List<TimelineScores> Scores { get; } = [];
+    // Journal notes (src/detect/Journal.h), which the journal builds each run's story from.
+    public List<TimelineNote> Notes { get; } = [];
 
     public DateTime? Start => DateTime.TryParseExact(Session, "yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture,
                                                      DateTimeStyles.AssumeLocal, out var t) ? t : null;
@@ -37,7 +39,13 @@ internal sealed class Timeline
                 }
                 var t = root.TryGetProperty("t", out var tv) && tv.TryGetDouble(out var td) ? td : 0;
                 var match = root.TryGetProperty("match", out var mv) && mv.TryGetInt32(out var mi) ? mi : 0;
-                if (root.TryGetProperty("type", out var type))
+                if (root.TryGetProperty("note", out var note) && note.ValueKind == JsonValueKind.String)
+                {
+                    string Text(string key) => root.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
+                    int Number(string key) => root.TryGetProperty(key, out var v) && v.TryGetInt32(out var n) ? n : 0;
+                    timeline.Notes.Add(new TimelineNote(t, match, note.GetString() ?? "", Text("value"), Number("amount"), Number("xp"), Text("text")));
+                }
+                else if (root.TryGetProperty("type", out var type))
                 {
                     var text = root.TryGetProperty("text", out var tx) ? tx.GetString() ?? "" : "";
                     timeline.Moments.Add(new TimelineMoment(t, match, type.GetString() ?? "", text));
@@ -118,6 +126,7 @@ internal sealed record DetectionCheck(int Matches, int BoardKills, int CaughtKil
                                   list.Sum(c => c.ExtraDeaths));
     }
 }
+internal sealed record TimelineNote(double Seconds, int Match, string Note, string Value, int Amount, int Xp, string Text);
 
 // One match as the records see it: the moments counted, or the game's own totals where it showed
 // them, whichever is higher (a scoreboard read mid-match can't have the last kills yet).

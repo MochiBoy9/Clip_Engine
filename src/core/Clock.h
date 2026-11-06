@@ -4,6 +4,8 @@
 
 #include <cstdint>
 
+#include "squad/SquadClips.h"
+
 namespace clip {
 
 // Every timestamp in the engine is QueryPerformanceCounter time in 100 ns units. That is the
@@ -26,6 +28,16 @@ inline int64_t NowHns() {
   QueryPerformanceCounter(&now);
   const int64_t f = QpcFrequency();
   return (now.QuadPart / f) * kHnsPerSecond + (now.QuadPart % f) * kHnsPerSecond / f;
+}
+
+// The engine clock and the wall clock read together, for turning a moment's time into the
+// Unix time a squadmate's app can line its own clip up with, and back.
+inline ClockPair NowClocks() {
+  FILETIME ft;
+  GetSystemTimePreciseAsFileTime(&ft);
+  const int64_t hns = NowHns();
+  const int64_t sinceUnix = ((static_cast<int64_t>(ft.dwHighDateTime) << 32) | ft.dwLowDateTime) - 116'444'736'000'000'000;
+  return {hns, sinceUnix / 10'000};
 }
 
 }  // namespace clip

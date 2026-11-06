@@ -45,6 +45,8 @@ internal sealed class EngineHost : IDisposable
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
+                // Commands for the engine, one a line (src/app/CommandChannel.h).
+                RedirectStandardInput = true,
                 WorkingDirectory = AppContext.BaseDirectory,
             };
             var process = new Process { StartInfo = info, EnableRaisingEvents = true };
@@ -97,6 +99,27 @@ internal sealed class EngineHost : IDisposable
 
     // Starts a long recording, or stops the one running.
     public bool ToggleLongRecording() => Signal(RecordEventName);
+
+    // Sends a command line to the engine, like squad sync's "squad-save ...". False when it isn't running.
+    public bool SendCommand(string line)
+    {
+        Process? process;
+        lock (_gate) process = _process;
+        if (process is null || process.HasExited) return false;
+        try
+        {
+            lock (_gate)
+            {
+                process.StandardInput.Write(line.Replace('\n', ' ').Replace('\r', ' ') + "\n");
+                process.StandardInput.Flush();
+            }
+            return true;
+        }
+        catch (Exception e) when (e is IOException or InvalidOperationException or ObjectDisposedException)
+        {
+            return false;
+        }
+    }
 
     private static bool Signal(string name)
     {

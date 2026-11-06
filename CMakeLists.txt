@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(ClipEngine VERSION 0.10.0 LANGUAGES CXX)
+project(ClipEngine VERSION 1.0.3 LANGUAGES CXX)
 
 if(NOT WIN32 OR NOT MSVC)
   message(FATAL_ERROR "Clip Engine builds on Windows with MSVC (Visual Studio 2022 or newer).")
@@ -12,16 +12,25 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_executable(clip_engine
   src/main.cpp
   src/app/App.cpp
+  src/app/CommandChannel.cpp
   src/app/RecordingSession.cpp
   src/app/Timeline.cpp
   src/audio/AacEncoder.cpp
+  src/audio/AppAudioCapture.cpp
   src/audio/AudioCapture.cpp
+  src/audio/AudioRouting.cpp
+  src/audio/MixClock.cpp
+  src/audio/PcmMixer.cpp
+  src/audio/VoiceCommands.cpp
   src/capture/GpuDevice.cpp
   src/capture/MonitorCapture.cpp
+  src/core/AudioSettings.cpp
   src/core/Config.cpp
+  src/core/Hotkeys.cpp
   src/core/Json.cpp
   src/core/Log.cpp
   src/detect/DetectionRules.cpp
+  src/detect/Journal.cpp
   src/detect/EventDetector.cpp
   src/detect/EventFuser.cpp
   src/detect/ImageMatch.cpp
@@ -47,6 +56,7 @@ add_executable(clip_engine
   src/media/Mp4Writer.cpp
   src/media/ReplayBuffer.cpp
   src/media/Trimmer.cpp
+  src/squad/SquadClips.cpp
   src/video/GameNotFoundFrame.cpp
   src/video/Nv12Converter.cpp
   src/video/VideoEncoder.cpp
@@ -65,7 +75,7 @@ target_compile_options(clip_engine PRIVATE /W4 /permissive- /utf-8 /EHsc /bigobj
 target_link_libraries(clip_engine PRIVATE
   d3d11 dxgi gdi32 user32
   mfplat mfuuid mfreadwrite mf wmcodecdspuuid
-  windowsapp ole32 winmm avrt windowscodecs
+  windowsapp ole32 winmm avrt windowscodecs mmdevapi sapi
   ws2_32 winhttp advapi32
 )
 
@@ -79,6 +89,7 @@ enable_testing()
 add_executable(clip_engine_tests
   tests/DetectTests.cpp
   src/detect/DetectionRules.cpp
+  src/detect/Journal.cpp
   src/detect/EventFuser.cpp
   src/detect/SoundMatch.cpp
   src/detect/SoundWatch.cpp
@@ -101,6 +112,7 @@ add_executable(clip_engine_game_tests
   src/app/Timeline.cpp
   src/core/Json.cpp
   src/detect/DetectionRules.cpp
+  src/detect/Journal.cpp
   src/detect/Scoreboard.cpp
   src/detect/ScreenRegion.cpp
   src/detect/TextMatcher.cpp
@@ -111,3 +123,57 @@ add_executable(clip_engine_game_tests
 target_include_directories(clip_engine_game_tests PRIVATE src)
 target_compile_options(clip_engine_game_tests PRIVATE /W4 /permissive- /utf-8 /EHsc)
 add_test(NAME games COMMAND clip_engine_game_tests ${CMAKE_SOURCE_DIR}/assets/detection.ini)
+
+# Tests for the journal: journal rules, what they note from the screen, telling new notes from
+# ones already seen, Hunt: Showdown 1896's match summaries and the shipped journal rules.
+add_executable(clip_engine_journal_tests
+  tests/JournalTests.cpp
+  src/app/Timeline.cpp
+  src/core/Json.cpp
+  src/detect/DetectionRules.cpp
+  src/detect/Journal.cpp
+  src/detect/Scoreboard.cpp
+  src/detect/ScreenRegion.cpp
+  src/detect/TextMatcher.cpp
+  src/integrations/GameStateTrackers.cpp
+  src/integrations/StreamReaders.cpp
+)
+target_include_directories(clip_engine_journal_tests PRIVATE src)
+target_compile_options(clip_engine_journal_tests PRIVATE /W4 /permissive- /utf-8 /EHsc)
+add_test(NAME journal COMMAND clip_engine_journal_tests ${CMAKE_SOURCE_DIR}/assets/detection.ini)
+
+# Tests for squad sync's engine side: lining clips up by wall-clock time, the app's save
+# command and the squad fields in clip metadata.
+add_executable(clip_engine_squad_tests
+  tests/SquadTests.cpp
+  src/media/ClipMetadata.cpp
+  src/squad/SquadClips.cpp
+)
+target_include_directories(clip_engine_squad_tests PRIVATE src)
+target_compile_options(clip_engine_squad_tests PRIVATE /W4 /permissive- /utf-8 /EHsc)
+add_test(NAME squad COMMAND clip_engine_squad_tests)
+
+# Tests for the clip keys: several keys that each save a clip of their own length, and a
+# game's own set of them from the settings file.
+add_executable(clip_engine_hotkey_tests
+  tests/HotkeyTests.cpp
+  src/core/Hotkeys.cpp
+)
+target_include_directories(clip_engine_hotkey_tests PRIVATE src)
+target_compile_definitions(clip_engine_hotkey_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+target_compile_options(clip_engine_hotkey_tests PRIVATE /W4 /permissive- /utf-8 /EHsc)
+add_test(NAME hotkeys COMMAND clip_engine_hotkey_tests ${CMAKE_CURRENT_BINARY_DIR})
+
+# Tests for the audio tracks and voice clips: mixing sources that arrive on their own clocks,
+# which app goes on which track, volumes and mutes from the settings, the phrases that save a
+# clip, and the tracks a clip lists in its metadata.
+add_executable(clip_engine_audio_tests
+  tests/AudioTests.cpp
+  src/audio/AudioRouting.cpp
+  src/audio/PcmMixer.cpp
+  src/core/AudioSettings.cpp
+  src/media/ClipMetadata.cpp
+)
+target_include_directories(clip_engine_audio_tests PRIVATE src)
+target_compile_options(clip_engine_audio_tests PRIVATE /W4 /permissive- /utf-8 /EHsc)
+add_test(NAME audio COMMAND clip_engine_audio_tests ${CMAKE_CURRENT_BINARY_DIR})

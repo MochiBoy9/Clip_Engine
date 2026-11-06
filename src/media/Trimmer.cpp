@@ -20,7 +20,7 @@ ReplayBuffer::Clip ReadRange(const std::filesystem::path& input, int64_t start, 
   winrt::com_ptr<IMFSourceReader> reader;
   winrt::check_hresult(MFCreateSourceReaderFromURL(input.c_str(), nullptr, reader.put()));
 
-  // Same stream layout as clips written from the replay buffer: video, then up to two audio tracks.
+  // Same stream layout as clips written from the replay buffer: video, then every audio track in order.
   ReplayBuffer::Clip clip;
   std::array<DWORD, kStreamCount> sourceOf;
   sourceOf.fill(MAXDWORD);
@@ -39,8 +39,8 @@ ReplayBuffer::Clip ReadRange(const std::filesystem::path& input, int64_t start, 
     if (major == MFMediaType_Video && sourceOf[kVideoStream] == MAXDWORD) {
       stream = kVideoStream;
       hevc = subtype == MFVideoFormat_HEVC;
-    } else if (major == MFMediaType_Audio && audioTracks < 2) {
-      stream = kGameAudioStream + audioTracks++;
+    } else if (major == MFMediaType_Audio && kMixAudioStream + audioTracks < kStreamCount) {
+      stream = kMixAudioStream + audioTracks++;
     }
     if (stream < 0) continue;
     sourceOf[stream] = i;
@@ -124,6 +124,7 @@ int RunTrim(const TrimOptions& options) {
     const auto clip = ReadRange(options.input, start, end);
     if (options.output.has_parent_path()) std::filesystem::create_directories(options.output.parent_path());
     WriteMp4(partial, clip);
+    TagMadeWithClipEngine(partial);
 
     const double from = static_cast<double>(clip.start) / kHnsPerSecond;
     const double to = static_cast<double>(clip.end) / kHnsPerSecond;

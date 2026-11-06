@@ -8,6 +8,8 @@ namespace ClipEngine.Desktop.Views;
 public partial class GameNoticeWindow : Window
 {
     private static readonly TimeSpan ShowFor = TimeSpan.FromSeconds(2.5);
+    // A notification, with a line more to read, stays a little longer.
+    private static readonly TimeSpan ShowNoticeFor = TimeSpan.FromSeconds(5);
     private const int Inset = 24;
 
     private readonly DispatcherTimer _hide;
@@ -26,10 +28,15 @@ public partial class GameNoticeWindow : Window
 
     // Shows text in the top-right corner of the screen the game is on. Does nothing where Windows
     // can't keep the notice out of recordings, so it never ends up in a clip.
-    internal void Show(string text)
+    internal void Show(string text) => Show(text, "");
+
+    internal void Show(string title, string detail)
     {
         if (!OperatingSystem.IsWindows()) return;
-        Message.Text = text;
+        Message.Text = title;
+        Detail.Text = detail;
+        Detail.IsVisible = detail.Length > 0;
+        _hide.Interval = detail.Length > 0 ? ShowNoticeFor : ShowFor;
         if (!IsVisible)
         {
             Opacity = 0;

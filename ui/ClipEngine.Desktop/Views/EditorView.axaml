@@ -1,0 +1,237 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ClipEngine.Desktop.ViewModels"
+             xmlns:editing="using:ClipEngine.Desktop.Services.Editing"
+             xmlns:views="using:ClipEngine.Desktop.Views"
+             x:Class="ClipEngine.Desktop.Views.EditorView"
+             x:DataType="vm:EditorViewModel"
+             Focusable="True">
+  <DockPanel Margin="0,0,40,32">
+    <!-- Title, undo and redo, and export -->
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,22">
+      <Button Classes="secondary" Command="{Binding BackCommand}" VerticalAlignment="Center">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <PathIcon Data="{StaticResource IconBack}" Width="14" Height="14" />
+          <TextBlock Text="{Binding BackLabel}" VerticalAlignment="Center" />
+        </StackPanel>
+      </Button>
+      <StackPanel Grid.Column="1" Margin="20,0" VerticalAlignment="Center" Spacing="4">
+        <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Left">
+          <TextBlock Classes="h1" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+          <Border Grid.Column="1" Classes="pill accent" VerticalAlignment="Center" Padding="8,2" Margin="10,0,0,0">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <PathIcon Data="{StaticResource IconEdit}" Width="10" Height="10" />
+              <TextBlock Text="EDITOR" FontSize="10" FontWeight="Bold" LetterSpacing="1" />
+            </StackPanel>
+          </Border>
+        </Grid>
+        <TextBlock Classes="caption" Text="{Binding Subtitle}" TextTrimming="CharacterEllipsis" />
+      </StackPanel>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+        <Button Classes="icon" Command="{Binding UndoCommand}" ToolTip.Tip="Undo (Ctrl+Z)">
+          <PathIcon Data="{StaticResource IconUndo}" />
+        </Button>
+        <Button Classes="icon" Command="{Binding RedoCommand}" ToolTip.Tip="Redo (Ctrl+Y)">
+          <PathIcon Data="{StaticResource IconRedo}" />
+        </Button>
+        <Button Classes="secondary" Command="{Binding StartOverCommand}"
+                ToolTip.Tip="Put the whole clip back, as it was before any cuts (you can undo this too)">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <PathIcon Data="{StaticResource IconRefresh}" Width="14" Height="14" />
+            <TextBlock Text="Start over" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Button Classes="accent" Command="{Binding ExportCommand}"
+                ToolTip.Tip="Save the edit as a new clip next to the original (Ctrl+E)">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <PathIcon Data="{StaticResource IconShare}" Width="14" Height="14" />
+            <TextBlock Text="Export" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+      </StackPanel>
+    </Grid>
+
+    <!-- The parts of the edit, and exporting it -->
+    <views:Plate DockPanel.Dock="Right" Classes="card" Width="320" Margin="20,0,0,0" Padding="22,22,12,16">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,10,14">
+          <TextBlock Classes="h2" Text="Parts" />
+          <TextBlock Classes="caption" Text="{Binding Summary}" FontFeatures="tnum" />
+          <Border Classes="inset" Padding="10,8" Margin="0,6,0,0" IsVisible="{Binding IsResumed}">
+            <TextBlock Classes="caption" TextWrapping="Wrap"
+                       Text="Picked up your last edit of this clip. Start over puts the whole clip back." />
+          </Border>
+        </StackPanel>
+
+        <!-- Export -->
+        <Border DockPanel.Dock="Bottom" Classes="inset" Padding="12,10" Margin="0,14,10,0">
+          <StackPanel Spacing="10">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="Export" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
+              <ComboBox Grid.Column="1" Width="130" ItemsSource="{Binding Qualities}" SelectedItem="{Binding Quality}"
+                        IsEnabled="{Binding IsNotExporting}" ToolTip.Tip="How big the exported video is">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="editing:ExportQualityOption">
+                    <TextBlock Text="{Binding Label}" ToolTip.Tip="{Binding Detail}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+            </Grid>
+            <TextBlock Classes="caption" Text="{Binding ExportHint}" TextWrapping="Wrap" IsVisible="{Binding IsNotExporting}" />
+            <StackPanel Spacing="8" IsVisible="{Binding IsExporting}">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="caption" Text="{Binding ExportText}" FontFeatures="tnum" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Classes="secondary" Content="Stop" Command="{Binding CancelExportCommand}" Padding="10,3" />
+              </Grid>
+              <ProgressBar Minimum="0" Maximum="100" Value="{Binding ExportProgress}" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+          <ItemsControl ItemsSource="{Binding Parts}" Margin="0,0,8,0">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:EditPartViewModel">
+                <Button Classes="marker" Classes.active="{Binding IsSelected}" Command="{Binding SelectCommand}"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" ToolTip.Tip="Jump to this part">
+                  <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                    <Border Width="3" Height="26" CornerRadius="0" Background="{DynamicResource AccentBrush}" Margin="0,0,12,0"
+                            Opacity="{Binding IsSelected, Converter={x:Static views:EditorView.SelectedOpacity}}" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                      <TextBlock FontSize="13">
+                        <Run Text="{Binding Name}" FontWeight="SemiBold" />
+                        <Run Text="{Binding LengthText}" Foreground="{StaticResource TextTertiary}" FontFeatures="tnum" />
+                      </TextBlock>
+                      <TextBlock Text="{Binding RangeText}" Classes="caption" FontFeatures="tnum" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" IsVisible="{Binding IsSelected}"
+                                VerticalAlignment="Center">
+                      <Button Classes="icon" Width="26" Height="26" Padding="6" Command="{Binding MoveEarlierCommand}"
+                              ToolTip.Tip="Play this part earlier">
+                        <PathIcon Data="{StaticResource IconPrevMarker}" Width="11" Height="11" />
+                      </Button>
+                      <Button Classes="icon" Width="26" Height="26" Padding="6" Command="{Binding MoveLaterCommand}"
+                              ToolTip.Tip="Play this part later">
+                        <PathIcon Data="{StaticResource IconNextMarker}" Width="11" Height="11" />
+                      </Button>
+                    </StackPanel>
+                    <Button Grid.Column="3" Classes="icon danger" Width="26" Height="26" Padding="6" Margin="2,0,0,0"
+                            Command="{Binding RemoveCommand}" IsVisible="{Binding IsSelected}"
+                            VerticalAlignment="Center" ToolTip.Tip="Cut this part out (Delete)">
+                      <PathIcon Data="{StaticResource IconTrash}" Width="11" Height="11" />
+                    </Button>
+                  </Grid>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </DockPanel>
+    </views:Plate>
+
+    <!-- The video, the edit's timeline and its tools -->
+    <views:Plate Classes="card" Padding="10">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Bottom" Margin="6,12,6,0" Spacing="10">
+          <Grid ColumnDefinitions="*,Auto,*">
+            <TextBlock VerticalAlignment="Center" FontFeatures="tnum" FontSize="13">
+              <Run Text="{Binding PositionText}" FontWeight="SemiBold" />
+              <Run Text=" / " Foreground="{StaticResource TextTertiary}" />
+              <Run Text="{Binding DurationText}" Foreground="{StaticResource TextTertiary}" />
+            </TextBlock>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+              <Button Classes="icon" Command="{Binding PreviousCutCommand}" ToolTip.Tip="Previous cut (Up)">
+                <PathIcon Data="{StaticResource IconPrevMarker}" />
+              </Button>
+              <Button Classes="icon" Command="{Binding SkipBackCommand}" ToolTip.Tip="Back 5 seconds (Left)">
+                <PathIcon Data="{StaticResource IconSkipBack}" />
+              </Button>
+              <Button Classes="accent" Width="48" Height="48" CornerRadius="24" Padding="0"
+                      HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                      Command="{Binding PlayPauseCommand}" ToolTip.Tip="Play or pause the edit (Space)">
+                <Panel>
+                  <PathIcon Data="{StaticResource IconPlay}" Width="18" Height="18" Margin="3,0,0,0" IsVisible="{Binding IsPaused}" />
+                  <PathIcon Data="{StaticResource IconPause}" Width="18" Height="18" IsVisible="{Binding IsPlaying}" />
+                </Panel>
+              </Button>
+              <Button Classes="icon" Command="{Binding SkipForwardCommand}" ToolTip.Tip="Forward 5 seconds (Right)">
+                <PathIcon Data="{StaticResource IconSkipForward}" />
+              </Button>
+              <Button Classes="icon" Command="{Binding NextCutCommand}" ToolTip.Tip="Next cut (Down)">
+                <PathIcon Data="{StaticResource IconNextMarker}" />
+              </Button>
+            </StackPanel>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+              <PathIcon Data="{StaticResource IconVolume}" Width="16" Height="16" Foreground="{StaticResource TextSecondary}"
+                        VerticalAlignment="Center" />
+              <Slider Width="110" Minimum="0" Maximum="100" Value="{Binding Volume}" VerticalAlignment="Center" />
+            </StackPanel>
+          </Grid>
+
+          <!-- Editing tools -->
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+              <Button Classes="secondary" Command="{Binding SplitCommand}" ToolTip.Tip="Cut the part in two at the playhead (S)">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <PathIcon Data="{StaticResource IconTrim}" Width="14" Height="14" />
+                  <TextBlock Text="Split · S" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <Button Classes="secondary" Command="{Binding TrimStartHereCommand}"
+                      ToolTip.Tip="Start the part under the playhead here, cutting what's before it (I)">
+                <TextBlock Text="Start here · I" />
+              </Button>
+              <Button Classes="secondary" Command="{Binding TrimEndHereCommand}"
+                      ToolTip.Tip="End the part under the playhead here, cutting what's after it (O)">
+                <TextBlock Text="End here · O" />
+              </Button>
+              <Button Classes="secondary" Command="{Binding DuplicateCommand}" ToolTip.Tip="Play the picked part twice (Ctrl+D)">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <PathIcon Data="{StaticResource IconCopy}" Width="14" Height="14" />
+                  <TextBlock Text="Duplicate" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <Button Classes="secondary" Command="{Binding DeleteCommand}" ToolTip.Tip="Cut the picked part out (Delete)">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <PathIcon Data="{StaticResource IconTrash}" Width="14" Height="14" />
+                  <TextBlock Text="Delete" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+            </StackPanel>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+              <Button Classes="icon" Command="{Binding ZoomOutCommand}" ToolTip.Tip="Zoom out (Ctrl and the wheel on the timeline, or -)">
+                <TextBlock Text="−" FontSize="16" FontWeight="SemiBold" />
+              </Button>
+              <TextBlock Text="{Binding ZoomText}" Width="38" TextAlignment="Center" VerticalAlignment="Center"
+                         Classes="caption" FontFeatures="tnum" />
+              <Button Classes="icon" Command="{Binding ZoomInCommand}" ToolTip.Tip="Zoom in (Ctrl and the wheel on the timeline, or +)">
+                <TextBlock Text="+" FontSize="16" FontWeight="SemiBold" />
+              </Button>
+            </StackPanel>
+          </Grid>
+
+          <Border Classes="inset" Padding="0,8,0,8">
+            <views:EditorTimeline Position="{Binding Position}" Duration="{Binding Duration}" Zoom="{Binding Zoom}"
+                                  Parts="{Binding Parts}" Markers="{Binding Markers}" SelectedIndex="{Binding SelectedIndex}" />
+          </Border>
+          <TextBlock Classes="caption" TextWrapping="Wrap"
+                     Text="Drag the ends of a part to trim it, or split it at the playhead and delete what you don't need. The clip itself is never changed." />
+        </StackPanel>
+
+        <Border Background="Black" CornerRadius="0" ClipToBounds="True">
+          <Panel Name="VideoHost">
+            <!-- The preview tool has no video window, so it shows the clip's thumbnail. -->
+            <Image Source="{Binding Clip.Thumbnail}" Stretch="Uniform" IsVisible="{Binding !IsLive}" />
+            <StackPanel IsVisible="{Binding HasError}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Spacing="10" MaxWidth="420">
+              <Border Classes="tile record" Width="44" Height="44" HorizontalAlignment="Center">
+                <PathIcon Data="{StaticResource IconAlert}" Width="20" Height="20" />
+              </Border>
+              <TextBlock Classes="body" Text="{Binding Error}" TextWrapping="Wrap" TextAlignment="Center" />
+            </StackPanel>
+          </Panel>
+        </Border>
+      </DockPanel>
+    </views:Plate>
+  </DockPanel>
+</UserControl>

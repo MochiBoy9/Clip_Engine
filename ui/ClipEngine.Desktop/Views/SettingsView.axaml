@@ -24,10 +24,41 @@
     <Style Selector="RadioButton.swatch:disabled">
       <Setter Property="Opacity" Value="0.35" />
     </Style>
+    <Style Selector="Border.offer.current">
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <Style Selector="Border.credit.ultra">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="BorderBrush" Value="{x:Null}" />
+    </Style>
+    <Style Selector="Border.credit.ultra TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
   </UserControl.Styles>
+  <UserControl.DataTemplates>
+    <!-- A track's mute and volume, which apply at once, even mid-game -->
+    <DataTemplate DataType="vm:AudioTrackViewModel">
+      <Grid ColumnDefinitions="Auto,*,Auto" IsEnabled="{Binding IsRecorded}">
+        <ToggleButton Classes="chip" IsChecked="{Binding IsMuted}" VerticalAlignment="Center" Margin="0,0,14,0"
+                      ToolTip.Tip="Keep this track out of clips until you unmute it">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Data="{StaticResource IconVolume}" Width="12" Height="12" />
+            <TextBlock Text="Mute" />
+          </StackPanel>
+        </ToggleButton>
+        <Slider Grid.Column="1" Minimum="0" Maximum="200" Value="{Binding Volume}" IsEnabled="{Binding !IsMuted}"
+                SmallChange="5" LargeChange="10" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center" />
+        <Border Grid.Column="2" Classes="inset" Width="78" Padding="0,6" CornerRadius="10" VerticalAlignment="Center" Margin="12,0,0,0">
+          <TextBlock Text="{Binding VolumeText}" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" />
+        </Border>
+      </Grid>
+    </DataTemplate>
+  </UserControl.DataTemplates>
   <DockPanel Margin="0">
     <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="0,0,40,22">
       <StackPanel VerticalAlignment="Center" Spacing="4">
+        <views:SectionMark Index="09" Label="System config" />
         <TextBlock Classes="h1" Text="Settings" />
         <TextBlock Classes="caption" Text="{Binding SavedMessage, TargetNullValue='Recording changes apply when you save; the engine restarts in a second.'}" />
       </StackPanel>
@@ -48,17 +79,22 @@
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
                 <TextBlock Text="Replay buffer" FontWeight="SemiBold" FontSize="14" />
-                <TextBlock Classes="caption" Text="Recent gameplay kept in memory, ready to save." TextWrapping="Wrap" />
+                <TextBlock Classes="caption" Text="{Binding BufferHint}" TextWrapping="Wrap" />
               </StackPanel>
               <Panel Grid.Column="2" VerticalAlignment="Center">
                 <StackPanel Orientation="Horizontal" Spacing="12">
-                  <Slider Width="200" Minimum="10" Maximum="600" Value="{Binding BufferSeconds}"
-                          SmallChange="10" LargeChange="10" TickFrequency="10" IsSnapToTickEnabled="True" />
+                  <Slider Width="200" Minimum="10" Maximum="{Binding MaxBufferSeconds}" Value="{Binding BufferSeconds}"
+                          SmallChange="10" LargeChange="60" TickFrequency="10" IsSnapToTickEnabled="True" />
                   <Border Classes="inset" Width="78" Padding="0,6" CornerRadius="10" VerticalAlignment="Center">
                     <TextBlock Text="{Binding BufferText}" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" />
                   </Border>
                 </StackPanel>
               </Panel>
+            </Grid>
+            <Grid ColumnDefinitions="Auto,*" Margin="56,12,0,0" IsVisible="{Binding HasBufferWarning}">
+              <PathIcon Data="{StaticResource IconAlert}" Width="14" Height="14" VerticalAlignment="Top" Margin="0,1,8,0"
+                        Foreground="{StaticResource RecordBrush}" />
+              <TextBlock Grid.Column="1" Classes="caption error" Text="{Binding BufferWarning}" TextWrapping="Wrap" />
             </Grid>
             <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <Grid ColumnDefinitions="Auto,*,Auto">
@@ -90,6 +126,25 @@
               </StackPanel>
               <Panel Grid.Column="2" VerticalAlignment="Center">
                 <ComboBox Width="190" ItemsSource="{Binding FpsOptions}" SelectedItem="{Binding Fps}" />
+              </Panel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
+                <PathIcon Data="{StaticResource IconMonitor}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Resolution" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="{Binding ResolutionHint}" TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <ComboBox Width="210" ItemsSource="{Binding ResolutionOptions}" SelectedItem="{Binding Resolution}">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ResolutionOption">
+                      <TextBlock Text="{Binding Label}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
               </Panel>
             </Grid>
             <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
@@ -134,19 +189,23 @@
         </views:Plate>
         <views:Plate Classes="card" Padding="26,24" Margin="0,0,0,22">
           <StackPanel>
-            <TextBlock Classes="eyebrow" Margin="0,0,0,18" Text="AUDIO" />
+            <TextBlock Classes="eyebrow" Margin="0,0,0,8" Text="AUDIO" />
+            <TextBlock Classes="caption" TextWrapping="Wrap" Margin="0,0,0,18"
+                       Text="Each source has a track of its own, after one with them all mixed that every player plays. Volume and mute change right away, even mid-game; turning a track on or off applies when you save." />
             <Grid ColumnDefinitions="Auto,*,Auto">
               <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconGames}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
-                <TextBlock Text="Game audio" FontWeight="SemiBold" FontSize="14" />
-                <TextBlock Classes="caption" Text="Everything you hear, on its own track." TextWrapping="Wrap" />
+                <TextBlock Text="Game" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="Only the game, quiet while you're in another window. On Windows older than version 2004 it's everything you hear." TextWrapping="Wrap" />
               </StackPanel>
               <Panel Grid.Column="2" VerticalAlignment="Center">
-                <ToggleSwitch IsChecked="{Binding GameAudio}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                <ToggleSwitch IsChecked="{Binding GameTrack.IsRecorded}" OnContent="{x:Null}" OffContent="{x:Null}"
+                              ToolTip.Tip="Record this track" />
               </Panel>
             </Grid>
+            <ContentControl Content="{Binding GameTrack}" Margin="56,12,0,0" />
             <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <Grid ColumnDefinitions="Auto,*,Auto">
               <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
@@ -154,12 +213,120 @@
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
                 <TextBlock Text="Microphone" FontWeight="SemiBold" FontSize="14" />
-                <TextBlock Classes="caption" Text="Your mic on a separate track, so it can be muted later." TextWrapping="Wrap" />
+                <TextBlock Classes="caption" Text="Your voice. Muted, it's kept out of clips, and voice clips still hear you." TextWrapping="Wrap" />
               </StackPanel>
               <Panel Grid.Column="2" VerticalAlignment="Center">
-                <ToggleSwitch IsChecked="{Binding MicAudio}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                <ToggleSwitch IsChecked="{Binding MicTrack.IsRecorded}" OnContent="{x:Null}" OffContent="{x:Null}"
+                              ToolTip.Tip="Record this track" />
               </Panel>
             </Grid>
+            <ContentControl Content="{Binding MicTrack}" Margin="56,12,0,0" />
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
+                <PathIcon Data="{StaticResource IconSquad}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Discord" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="Discord calls, and TeamSpeak or Mumble, so squad chat can be turned down on its own." TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <ToggleSwitch IsChecked="{Binding DiscordTrack.IsRecorded}" OnContent="{x:Null}" OffContent="{x:Null}"
+                              ToolTip.Tip="Record this track" />
+              </Panel>
+            </Grid>
+            <ContentControl Content="{Binding DiscordTrack}" Margin="56,12,0,0" />
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
+                <PathIcon Data="{StaticResource IconGrid}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Other apps" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="Music, videos and anything else that plays, quiet while you're in another window." TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <ToggleSwitch IsChecked="{Binding AppsTrack.IsRecorded}" OnContent="{x:Null}" OffContent="{x:Null}"
+                              ToolTip.Tip="Record this track" />
+              </Panel>
+            </Grid>
+            <ContentControl Content="{Binding AppsTrack}" Margin="56,12,0,0" />
+          </StackPanel>
+        </views:Plate>
+        <views:Plate Classes="card" Padding="26,24" Margin="0,0,0,22">
+          <StackPanel>
+            <TextBlock Classes="eyebrow" Margin="0,0,0,18" Text="VOICE CLIPS" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
+                <PathIcon Data="{StaticResource IconMic}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Clip by voice" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" TextWrapping="Wrap"
+                           Text="Say a phrase and the last moments are saved, like pressing a clip key. Windows' own speech recognition listens on this PC, and nothing you say leaves it." />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <ToggleSwitch IsChecked="{Binding VoiceClips}" OnContent="{x:Null}" OffContent="{x:Null}" />
+              </Panel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+            <StackPanel IsEnabled="{Binding VoiceClips}">
+              <Grid ColumnDefinitions="Auto,*">
+                <Border Classes="tile" VerticalAlignment="Top" Margin="0,0,16,0">
+                  <PathIcon Data="{StaticResource IconKeyboard}" />
+                </Border>
+                <StackPanel Grid.Column="1" Spacing="8">
+                  <StackPanel Spacing="2">
+                    <TextBlock Text="Phrases" FontWeight="SemiBold" FontSize="14" />
+                    <TextBlock Classes="caption" TextWrapping="Wrap"
+                               Text="Separate them with commas. A number after one gives its clip a length of its own, like save the last minute 60." />
+                  </StackPanel>
+                  <TextBox Text="{Binding VoicePhrasesText}" Watermark="clip that" />
+                  <TextBlock Classes="caption error" Text="{Binding VoicePhrasesProblem}" TextWrapping="Wrap"
+                             IsVisible="{Binding VoicePhrasesProblem, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                  <TextBlock Classes="caption" Text="{Binding VoicePhrasesAdvice}" TextWrapping="Wrap"
+                             IsVisible="{Binding VoicePhrasesAdvice, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                </StackPanel>
+              </Grid>
+              <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+              <Grid ColumnDefinitions="Auto,*,Auto">
+                <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
+                  <PathIcon Data="{StaticResource IconBolt}" />
+                </Border>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                  <TextBlock Text="Clip length" FontWeight="SemiBold" FontSize="14" />
+                  <TextBlock Classes="caption" Text="How much a phrase saves, unless it has its own length. All the way left uses your clip length." TextWrapping="Wrap" />
+                </StackPanel>
+                <Panel Grid.Column="2" VerticalAlignment="Center">
+                  <StackPanel Orientation="Horizontal" Spacing="12">
+                    <Slider Width="200" Minimum="0" Maximum="{Binding BufferSeconds}" Value="{Binding VoiceClipSeconds}"
+                            SmallChange="5" LargeChange="5" TickFrequency="5" IsSnapToTickEnabled="True" />
+                    <Border Classes="inset" Width="92" Padding="0,6" CornerRadius="10" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding VoiceClipText}" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" />
+                    </Border>
+                  </StackPanel>
+                </Panel>
+              </Grid>
+              <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+              <Grid ColumnDefinitions="Auto,*,Auto">
+                <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
+                  <PathIcon Data="{StaticResource IconTarget}" />
+                </Border>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                  <TextBlock Text="Sensitivity" FontWeight="SemiBold" FontSize="14" />
+                  <TextBlock Classes="caption" Text="{Binding VoiceSensitivityHint}" TextWrapping="Wrap" />
+                </StackPanel>
+                <Panel Grid.Column="2" VerticalAlignment="Center">
+                  <Border Classes="segments">
+                    <StackPanel Orientation="Horizontal" Spacing="2">
+                      <RadioButton Classes="segment" GroupName="voice" Content="Low" IsChecked="{Binding VoiceLow}" />
+                      <RadioButton Classes="segment" GroupName="voice" Content="Medium" IsChecked="{Binding VoiceMedium}" />
+                      <RadioButton Classes="segment" GroupName="voice" Content="High" IsChecked="{Binding VoiceHigh}" />
+                    </StackPanel>
+                  </Border>
+                </Panel>
+              </Grid>
+            </StackPanel>
           </StackPanel>
         </views:Plate>
         <views:Plate Classes="card" Padding="26,24" Margin="0,0,0,22">
@@ -222,6 +389,19 @@
               </StackPanel>
               <Panel Grid.Column="2" VerticalAlignment="Center">
                 <ToggleSwitch IsChecked="{Binding AutoClip}" OnContent="{x:Null}" OffContent="{x:Null}" />
+              </Panel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
+                <PathIcon Data="{StaticResource IconJournal}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Keep a journal of each run" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="In ARC Raiders, Escape from Tarkov, Hunt: Showdown 1896, Helldivers 2 and Deep Rock Galactic: the map, enemies destroyed, loot, and whether you made it out. See it on the Journal page." TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <ToggleSwitch IsChecked="{Binding Journal}" OnContent="{x:Null}" OffContent="{x:Null}" />
               </Panel>
             </Grid>
             <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
@@ -294,25 +474,161 @@
         </views:Plate>
         </StackPanel>
         <StackPanel Grid.Column="2">
-        <views:Plate Classes="card" Padding="26,24" Margin="0,0,0,22" DataContext="{Binding Supporter}" x:DataType="vm:SupporterViewModel"
+        <views:Plate Classes="card" Padding="26,24" Margin="0,0,0,22" DataContext="{Binding Plan}" x:DataType="vm:PlanViewModel"
                 IsVisible="{Binding $self.DataContext, Converter={x:Static ObjectConverters.IsNotNull}}">
           <StackPanel>
-            <TextBlock Classes="eyebrow" Margin="0,0,0,18" Text="SUPPORT" />
+            <TextBlock Classes="eyebrow" Margin="0,0,0,18" Text="PLAN" />
             <Grid ColumnDefinitions="Auto,*,Auto">
               <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconSparkle}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
-                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="14" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="14" />
+                  <Border Classes="pill accent" Padding="6,1" VerticalAlignment="Center" IsVisible="{Binding ShowBadge}">
+                    <TextBlock Text="{Binding Badge}" FontSize="9" FontWeight="Bold" LetterSpacing="1" />
+                  </Border>
+                </StackPanel>
                 <TextBlock Classes="caption" Text="{Binding Detail}" TextWrapping="Wrap" />
+                <TextBlock Classes="caption" Text="{Binding Reason}" IsVisible="{Binding HasReason}" TextWrapping="Wrap" FontStyle="Italic" />
               </StackPanel>
               <Panel Grid.Column="2" VerticalAlignment="Center">
-                <Button Classes="secondary" Content="Patreon" Command="{Binding OpenPatreonCommand}" IsVisible="{Binding HasPatreon}" />
+                <Button Classes="secondary" Content="Manage" Command="{Binding ManageCommand}" IsVisible="{Binding HasManage}" />
               </Panel>
             </Grid>
+            <TextBlock Classes="caption error" Text="{Binding StatusText}" IsVisible="{Binding HasStatus}" TextWrapping="Wrap" Margin="0,10,0,0" />
+            <Grid ColumnDefinitions="*,12,*" Margin="0,16,0,0">
+              <ItemsControl Grid.ColumnSpan="3" ItemsSource="{Binding Offers}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate><UniformGrid Rows="1" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:PlanOffer">
+                    <Border Classes="inset offer" Classes.current="{Binding IsCurrent}" Padding="14,12" Margin="0,0,6,0" CornerRadius="2">
+                      <DockPanel>
+                        <Button DockPanel.Dock="Bottom" Classes="accent" Classes.secondary="{Binding !IsUltra}" HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center" Content="{Binding ButtonText}" Command="{Binding SubscribeCommand}" Margin="0,12,0,0" />
+                        <StackPanel Spacing="4">
+                          <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Classes="markLabel" Text="{Binding Label}" FontSize="13" />
+                            <TextBlock Grid.Column="1" Classes="mono" Text="{Binding PriceText}" FontSize="12" FontWeight="Bold" />
+                          </Grid>
+                          <ItemsControl ItemsSource="{Binding Perks}" Margin="0,4,0,0">
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate x:DataType="x:String">
+                                <Grid ColumnDefinitions="Auto,*" Margin="0,2">
+                                  <Border Width="5" Height="5" Background="{DynamicResource AccentBrush}" VerticalAlignment="Top" Margin="0,6,8,0" />
+                                  <TextBlock Grid.Column="1" Classes="caption" Text="{Binding}" TextWrapping="Wrap" />
+                                </Grid>
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+                        </StackPanel>
+                      </DockPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </Grid>
+            <Border Classes="inset" Padding="14,12" Margin="0,12,0,0" CornerRadius="2">
+              <StackPanel>
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Classes="markLabel" Text="Support Clip Engine" FontSize="13" />
+                  <TextBlock Grid.Column="1" Classes="mono" Text="ANY AMOUNT" FontSize="11" FontWeight="Bold" LetterSpacing="1" />
+                </Grid>
+                <TextBlock Classes="caption" Text="{Binding DonateCaption}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                <ItemsControl ItemsSource="{Binding DonationPerks}" Margin="0,6,0,0">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="x:String">
+                      <Grid ColumnDefinitions="Auto,*" Margin="0,2">
+                        <Border Width="5" Height="5" Background="{DynamicResource AccentBrush}" VerticalAlignment="Top" Margin="0,6,8,0" />
+                        <TextBlock Grid.Column="1" Classes="caption" Text="{Binding}" TextWrapping="Wrap" />
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <ItemsControl ItemsSource="{Binding DonateOptions}" Margin="0,10,0,0">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:DonateOption">
+                      <Button Classes="accent" Classes.secondary="{Binding !IsAny}" Content="{Binding Label}" Command="{Binding DonateCommand}"
+                              Margin="0,0,8,8" MinWidth="64" HorizontalContentAlignment="Center" />
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Classes="caption" Text="{Binding DonateStatus}" IsVisible="{Binding HasDonateStatus}" TextWrapping="Wrap" />
+                <TextBlock Classes="caption" Text="{Binding DonateHint}" TextWrapping="Wrap" FontSize="11" Margin="0,2,0,0" />
+              </StackPanel>
+            </Border>
+            <StackPanel IsVisible="{Binding ShowKeyBox}">
+              <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+              <TextBlock Text="License key" FontWeight="SemiBold" FontSize="14" />
+              <TextBlock Classes="caption" Text="Subscribing or donating emails you a key. Paste it, or a special key (CEK-...), here on each PC you play on."
+                         TextWrapping="Wrap" Margin="0,2,0,12" />
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBox Text="{Binding KeyInput}" Watermark="Your license key or special key" />
+                <Button Grid.Column="1" Classes="accent" Content="Activate" Command="{Binding ActivateCommand}" Margin="10,0,0,0" />
+              </Grid>
+            </StackPanel>
+            <StackPanel IsVisible="{Binding CanBeCredited}">
+              <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Spacing="2" Margin="0,0,16,0">
+                  <TextBlock Text="Name in the credits" FontWeight="SemiBold" FontSize="14" />
+                  <TextBlock Classes="caption" Text="{Binding CreditCaption}" TextWrapping="Wrap" />
+                </StackPanel>
+                <ToggleSwitch Grid.Column="1" IsChecked="{Binding InCredits}" OnContent="" OffContent="" VerticalAlignment="Center" />
+              </Grid>
+              <Grid ColumnDefinitions="*,Auto" Margin="0,10,0,0" IsVisible="{Binding InCredits}">
+                <TextBox Text="{Binding CreditInput}" Watermark="The name to show" MaxLength="40" />
+                <Button Grid.Column="1" Classes="secondary" Content="Save name" Command="{Binding SaveCreditCommand}" Margin="10,0,0,0" />
+              </Grid>
+            </StackPanel>
+            <StackPanel IsVisible="{Binding HasContact}">
+              <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+              <TextBlock Text="{Binding ContactTitle}" FontWeight="SemiBold" FontSize="14" />
+              <TextBlock Classes="caption" Text="{Binding ContactCaption}" TextWrapping="Wrap" Margin="0,2,0,10" />
+              <TextBox Text="{Binding ContactInput}" Watermark="Write to the developer" MaxLength="2000" AcceptsReturn="True"
+                       TextWrapping="Wrap" MinHeight="72" MaxHeight="180" />
+              <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,10,0,0">
+                <Button Classes="accent" Content="Send message" Command="{Binding SendMessageCommand}" IsVisible="{Binding HasDirectLine}" />
+                <Button Classes="secondary" Content="Send bug report" Command="{Binding SendBugCommand}" IsVisible="{Binding HasBugReports}" />
+              </StackPanel>
+              <TextBlock Classes="caption" Text="{Binding ContactMessage}" IsVisible="{Binding HasContactMessage}" TextWrapping="Wrap"
+                         Margin="0,10,0,0" Classes.error="{Binding ContactIsError}" />
+              <ItemsControl ItemsSource="{Binding ContactMessages}" IsVisible="{Binding HasContactMessages}" Margin="0,12,0,0">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:ContactMessageView">
+                    <Border Classes="inset" CornerRadius="2" Padding="12,10" Margin="0,0,0,8">
+                      <StackPanel Spacing="4">
+                        <Grid ColumnDefinitions="*,Auto">
+                          <TextBlock Classes="mono caption" Text="{Binding Kind}" FontSize="10" FontWeight="Bold" LetterSpacing="1" />
+                          <TextBlock Grid.Column="1" Classes="caption" Text="{Binding Sent}" FontSize="11" />
+                        </Grid>
+                        <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="13" />
+                        <Border BorderBrush="{DynamicResource AccentBrush}" BorderThickness="2,0,0,0" Padding="10,2,0,2" Margin="0,4,0,0"
+                                IsVisible="{Binding HasReply}">
+                          <StackPanel Spacing="2">
+                            <TextBlock Classes="caption" Text="The developer answered" FontSize="11" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding Reply}" TextWrapping="Wrap" FontSize="13" />
+                          </StackPanel>
+                        </Border>
+                        <TextBlock Classes="caption" Text="{Binding Status}" FontSize="11" IsVisible="{Binding !HasReply}" />
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+            <Button Classes="secondary" Content="Remove key from this PC" Command="{Binding RemoveCommand}" IsVisible="{Binding !ShowKeyBox}"
+                    Margin="0,12,0,0" />
+            <TextBlock Classes="caption" Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextWrapping="Wrap" Margin="0,10,0,0"
+                       Classes.error="{Binding MessageIsError}" />
             <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <TextBlock Text="Colour theme" FontWeight="SemiBold" FontSize="14" />
-            <TextBlock Classes="caption" Text="{Binding ThemeCaption}" Margin="0,2,0,10" />
+            <TextBlock Classes="caption" Text="{Binding ThemeCaption}" TextWrapping="Wrap" Margin="0,2,0,10" />
             <ItemsControl ItemsSource="{Binding Themes}">
               <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
@@ -326,31 +642,60 @@
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
-            <StackPanel IsVisible="{Binding KeysEnabled}">
-              <Border Height="1" Background="{StaticResource Divider}" Margin="0,12,0,16" />
-              <TextBlock Text="Supporter key" FontWeight="SemiBold" FontSize="14" />
-              <TextBlock Classes="caption" Text="Patrons get a key in a Patreon message. It works forever, offline, on all your PCs."
-                         TextWrapping="Wrap" Margin="0,2,0,12" IsVisible="{Binding ShowKeyBox}" />
-              <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding ShowKeyBox}">
-                <TextBox Text="{Binding KeyInput}" Watermark="CE1-…" />
-                <Button Grid.Column="1" Classes="accent" Content="Activate" Command="{Binding ActivateCommand}" Margin="10,0,0,0" />
-              </Grid>
-              <Button Classes="secondary" Content="Remove key from this PC" Command="{Binding RemoveCommand}" IsVisible="{Binding IsSupporter}"
-                      Margin="0,4,0,0" />
-              <TextBlock Classes="caption" Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextWrapping="Wrap" Margin="0,10,0,0"
-                         Classes.error="{Binding MessageIsError}" />
-            </StackPanel>
+            <!-- Ultra's colour wheel, while it's the theme in use -->
+            <Grid ColumnDefinitions="Auto,*" Margin="0,8,0,0" IsVisible="{Binding ShowWheel}">
+              <views:ColorWheel Width="176" Height="176" Hue="{Binding WheelHue}" Saturation="{Binding WheelSaturation}"
+                                Brightness="{Binding WheelBrightness}" TickBrush="{StaticResource TextTertiary}"
+                                ToolTip.Tip="Drag to pick a colour. Arrow keys turn it a little." />
+              <StackPanel Grid.Column="1" Margin="22,4,0,0" Spacing="6" VerticalAlignment="Center">
+                <TextBlock Classes="eyebrow" Text="YOUR COLOUR" />
+                <Grid ColumnDefinitions="Auto,*">
+                  <views:Plate Width="36" Height="36" Cut="7" Background="{Binding WheelPreview}" />
+                  <TextBox Grid.Column="1" Text="{Binding WheelHex}" MaxLength="7" Margin="10,0,0,0" FontFamily="{StaticResource MonoFont}"
+                           Watermark="#RRGGBB" />
+                </Grid>
+                <TextBlock Classes="caption" Text="Brightness" Margin="0,6,0,0" />
+                <Slider Minimum="{x:Static vm:PlanViewModel.MinBrightness}" Maximum="1" Value="{Binding WheelBrightness}" />
+                <TextBlock Classes="caption" Text="{Binding WheelNote}" IsVisible="{Binding HasWheelNote}" TextWrapping="Wrap" />
+              </StackPanel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,12,0,16" />
+            <Grid ColumnDefinitions="*,Auto">
+              <StackPanel VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBlock Text="Adaptive theme" FontWeight="SemiBold" FontSize="14" />
+                  <Border Classes="pill accent" Padding="6,1" VerticalAlignment="Center" IsVisible="{Binding ShowAdaptiveUltraTag}">
+                    <TextBlock Text="ULTRA" FontSize="9" FontWeight="Bold" LetterSpacing="1" />
+                  </Border>
+                </StackPanel>
+                <TextBlock Classes="caption" Text="{Binding AdaptiveCaption}" TextWrapping="Wrap" />
+              </StackPanel>
+              <ToggleSwitch Grid.Column="1" IsChecked="{Binding AdaptiveOn}" IsEnabled="{Binding CanUseAdaptive}"
+                            OnContent="{x:Null}" OffContent="{x:Null}" VerticalAlignment="Center" />
+            </Grid>
+            <Grid ColumnDefinitions="*,Auto" Margin="0,12,0,0" IsVisible="{Binding AdaptiveOn}">
+              <StackPanel VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Motion" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="A light follows your pointer across the background, a scan reads each page in, and switches and the side rail flicker as they take. Only while Clip Engine is in front, and never while Windows' animation effects are off." TextWrapping="Wrap" />
+              </StackPanel>
+              <ToggleSwitch Grid.Column="1" IsChecked="{Binding BackgroundMotion}" OnContent="{x:Null}" OffContent="{x:Null}"
+                            VerticalAlignment="Center" />
+            </Grid>
             <StackPanel IsVisible="{Binding HasCredits}">
-              <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+              <Border Height="1" Background="{StaticResource Divider}" Margin="0,8,0,16" />
               <TextBlock Text="Thanks to our supporters" FontWeight="SemiBold" FontSize="14" Margin="0,0,0,8" />
               <ItemsControl ItemsSource="{Binding Credits}">
                 <ItemsControl.ItemsPanel>
                   <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="x:String">
-                    <Border Classes="inset" CornerRadius="10" Padding="10,4" Margin="0,0,8,8">
-                      <TextBlock Text="{Binding}" FontSize="12" />
+                  <DataTemplate x:DataType="vm:CreditName">
+                    <Border Classes="inset credit" Classes.ultra="{Binding Ultra}" CornerRadius="2" Padding="10,4" Margin="0,0,8,8">
+                      <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="{Binding Name}" FontSize="12" />
+                        <TextBlock Text="{Binding Tag}" IsVisible="{Binding HasTag}" FontSize="9" FontWeight="Bold" LetterSpacing="1"
+                                   Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
+                      </StackPanel>
                     </Border>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
@@ -390,7 +735,7 @@
             <Grid ColumnDefinitions="*,Auto">
               <StackPanel VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
                 <TextBlock Text="Install from a zip" FontWeight="SemiBold" FontSize="14" />
-                <TextBlock Classes="caption" Text="A Clip_Engine-…-windows-x64.zip you already downloaded." TextWrapping="Wrap" />
+                <TextBlock Classes="caption" Text="A Clip_Engine-windows-x64.zip you already downloaded." TextWrapping="Wrap" />
               </StackPanel>
               <Button Grid.Column="1" Classes="secondary" Content="Choose zip" Command="{Binding InstallFromZipCommand}" />
             </Grid>
@@ -421,6 +766,20 @@
               <Panel Grid.Column="2" VerticalAlignment="Center">
                 <TextBox Width="160" Text="{Binding SaveHotkey}" HorizontalContentAlignment="Center" FontWeight="SemiBold" />
               </Panel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+            <Grid ColumnDefinitions="Auto,*">
+              <Border Classes="tile" VerticalAlignment="Top" Margin="0,0,16,0">
+                <PathIcon Data="{StaticResource IconClock}" />
+              </Border>
+              <StackPanel Grid.Column="1" Spacing="12">
+                <StackPanel Spacing="2">
+                  <TextBlock Text="More clip keys" FontWeight="SemiBold" FontSize="14" />
+                  <TextBlock Classes="caption" TextWrapping="Wrap"
+                             Text="Each key saves a clip of its own length, up to the replay buffer. The save hotkey keeps the clip length above. A game can have its own keys, set in Detection Studio." />
+                </StackPanel>
+                <views:ClipKeybindsEditor DataContext="{Binding MoreClipKeys}" />
+              </StackPanel>
             </Grid>
             <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <Grid ColumnDefinitions="Auto,*,Auto">
@@ -543,31 +902,161 @@
             <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <Grid ColumnDefinitions="Auto,*,Auto">
               <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
-                <PathIcon Data="{StaticResource IconCheck}" />
+                <PathIcon Data="{StaticResource IconGames}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
-                <TextBlock Text="Notice over the game" FontWeight="SemiBold" FontSize="14" />
-                <TextBlock Classes="caption" Text="A small &quot;Clip saved&quot; in the corner while you play. It never shows up in your clips."
-                           TextWrapping="Wrap" />
+                <TextBlock Text="Game pictures from Steam" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" TextWrapping="Wrap"
+                           Text="Games show their art and icons from this PC. When a picture isn't here, it's fetched once from the Steam store, which sees the game's name. Off keeps to what's on this PC." />
               </StackPanel>
               <Panel Grid.Column="2" VerticalAlignment="Center">
-                <ToggleSwitch IsChecked="{Binding GameNotifications}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                <ToggleSwitch IsChecked="{Binding GameArtOnline}" OnContent="{x:Null}" OffContent="{x:Null}" />
+              </Panel>
+            </Grid>
+          </StackPanel>
+        </views:Plate>
+        <!-- Notifications: which pop-ups show, where, or none at all. The history keeps everything either way. -->
+        <views:Plate Classes="card" Padding="26,24" Margin="0,0,0,22" IsVisible="{Binding Notifications, Converter={x:Static ObjectConverters.IsNotNull}}">
+          <StackPanel>
+            <TextBlock Classes="eyebrow" Margin="0,0,0,18" Text="NOTIFICATIONS" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
+                <PathIcon Data="{StaticResource IconBell}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Pop-ups" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" TextWrapping="Wrap"
+                           Text="A card in the corner when something happens. Off turns every pop-up off; the bell in the sidebar and Home's recent events still list them." />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <ToggleSwitch IsChecked="{Binding Notifications.On}" OnContent="{x:Null}" OffContent="{x:Null}" />
               </Panel>
             </Grid>
             <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
-            <Grid ColumnDefinitions="Auto,*,Auto" IsEnabled="{Binding GameNotifications}">
+            <Grid ColumnDefinitions="Auto,*,Auto" IsEnabled="{Binding Notifications.On}">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
+                <PathIcon Data="{StaticResource IconCheck}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Over the game too" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="While you play, pop-ups show in the game's corner. They never show up in your clips."
+                           TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <ToggleSwitch IsChecked="{Binding Notifications.OverGame}" OnContent="{x:Null}" OffContent="{x:Null}" />
+              </Panel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+            <TextBlock Classes="caption" Text="SHOW POP-UPS FOR" FontWeight="Bold" LetterSpacing="1.2" Margin="0,0,0,10" />
+            <ItemsControl ItemsSource="{Binding Notifications.Filters}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:NoticeFilter">
+                  <StackPanel IsEnabled="{Binding IsEnabled}">
+                    <Border Height="1" Background="{StaticResource Divider}" Margin="0,10" IsVisible="{Binding IsNotFirst}" />
+                    <Grid ColumnDefinitions="*,Auto">
+                      <StackPanel VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                        <TextBlock Text="{Binding Label}" FontWeight="SemiBold" FontSize="13" />
+                        <TextBlock Classes="caption" Text="{Binding Caption}" TextWrapping="Wrap" />
+                      </StackPanel>
+                      <ToggleSwitch Grid.Column="1" IsChecked="{Binding IsOn}" OnContent="{x:Null}" OffContent="{x:Null}"
+                                    VerticalAlignment="Center" />
+                    </Grid>
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </views:Plate>
+        <views:Plate Classes="card" Padding="26,24" Margin="0,0,0,22">
+          <StackPanel>
+            <TextBlock Classes="eyebrow" Margin="0,0,0,18" Text="STATS OVERLAY" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
               <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconBolt}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
-                <TextBlock Text="Moments over the game" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Text="FPS and PC stats over the game" FontWeight="SemiBold" FontSize="14" />
                 <TextBlock Classes="caption" TextWrapping="Wrap"
-                           Text="The same notice for each kill, multi-kill, revive and assist as it's spotted, the match's line when it ends, and a new personal best." />
+                           Text="A slim strip in a corner while you play: frame rate, 1% lows, CPU, GPU and memory. It reads what Windows already measures, never touches the game, updates once a second and never shows up in your clips." />
               </StackPanel>
               <Panel Grid.Column="2" VerticalAlignment="Center">
-                <ToggleSwitch IsChecked="{Binding MomentNotices}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                <ToggleSwitch IsChecked="{Binding StatsOverlayOn}" OnContent="{x:Null}" OffContent="{x:Null}" />
               </Panel>
             </Grid>
+            <Border Classes="inset" Padding="14,12" Margin="48,14,0,0" IsVisible="{Binding FrameTimingNeedsPermission}">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Spacing="2" Margin="0,0,16,0" VerticalAlignment="Center">
+                  <TextBlock Text="FPS needs Windows' permission" FontWeight="SemiBold" FontSize="13" />
+                  <TextBlock Classes="caption" TextWrapping="Wrap"
+                             Text="Windows shares games' frame timing only with administrators and its Performance Log Users group. Allow adds this account to that group once, with Windows' own prompt. The other stats work without it." />
+                  <TextBlock Classes="caption" Foreground="{StaticResource WarnBrush}" Text="{Binding FrameTimingProblem}"
+                             IsVisible="{Binding HasFrameTimingProblem}" TextWrapping="Wrap" />
+                </StackPanel>
+                <Button Grid.Column="1" Classes="secondary" Content="Allow" Command="{Binding AllowFrameTimingCommand}" VerticalAlignment="Center" />
+              </Grid>
+            </Border>
+            <Border Classes="inset" Padding="14,12" Margin="48,14,0,0" IsVisible="{Binding FrameTimingNeedsSignIn}">
+              <TextBlock Classes="caption" TextWrapping="Wrap"
+                         Text="Allowed. Sign out of Windows and back in (or restart) and the FPS counter starts reading." />
+            </Border>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+            <Grid ColumnDefinitions="Auto,*" IsEnabled="{Binding StatsOverlayOn}">
+              <Border Classes="tile" VerticalAlignment="Top" Margin="0,0,16,0">
+                <PathIcon Data="{StaticResource IconTarget}" />
+              </Border>
+              <StackPanel Grid.Column="1" Spacing="10">
+                <StackPanel Spacing="2">
+                  <TextBlock Text="What it shows" FontWeight="SemiBold" FontSize="14" />
+                  <TextBlock Classes="caption" Text="Numbers turn yellow, then red, when something is holding the game back." TextWrapping="Wrap" />
+                </StackPanel>
+                <WrapPanel>
+                  <ToggleButton Classes="chip" Content="FPS" IsChecked="{Binding StatsFps}" Margin="0,0,8,8" />
+                  <ToggleButton Classes="chip" Content="1% low" IsChecked="{Binding StatsLows}" Margin="0,0,8,8" />
+                  <ToggleButton Classes="chip" Content="CPU" IsChecked="{Binding StatsCpu}" Margin="0,0,8,8" />
+                  <ToggleButton Classes="chip" Content="GPU" IsChecked="{Binding StatsGpu}" Margin="0,0,8,8" />
+                  <ToggleButton Classes="chip" Content="GPU temperature" IsChecked="{Binding StatsGpuTemp}" Margin="0,0,8,8" />
+                  <ToggleButton Classes="chip" Content="Video memory" IsChecked="{Binding StatsVram}" Margin="0,0,8,8" />
+                  <ToggleButton Classes="chip" Content="RAM" IsChecked="{Binding StatsRam}" Margin="0,0,8,8" />
+                </WrapPanel>
+              </StackPanel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,8,0,16" />
+            <Grid ColumnDefinitions="Auto,*" IsEnabled="{Binding StatsOverlayOn}">
+              <Border Classes="tile" VerticalAlignment="Top" Margin="0,0,16,0">
+                <PathIcon Data="{StaticResource IconMonitor}" />
+              </Border>
+              <StackPanel Grid.Column="1" Spacing="10">
+                <StackPanel Spacing="2">
+                  <TextBlock Text="Corner" FontWeight="SemiBold" FontSize="14" />
+                  <TextBlock Classes="caption" Text="Where it sits on the screen the game is on." TextWrapping="Wrap" />
+                </StackPanel>
+                <Border Classes="segments" HorizontalAlignment="Left">
+                  <StackPanel Orientation="Horizontal">
+                    <RadioButton Classes="segment" GroupName="statsCorner" Content="Top left" IsChecked="{Binding StatsTopLeft}" />
+                    <RadioButton Classes="segment" GroupName="statsCorner" Content="Top right" IsChecked="{Binding StatsTopRight}" />
+                    <RadioButton Classes="segment" GroupName="statsCorner" Content="Bottom left" IsChecked="{Binding StatsBottomLeft}" />
+                    <RadioButton Classes="segment" GroupName="statsCorner" Content="Bottom right" IsChecked="{Binding StatsBottomRight}" />
+                  </StackPanel>
+                </Border>
+              </StackPanel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
+                <PathIcon Data="{StaticResource IconKeyboard}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Overlay hotkey" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="Turns the overlay on and off mid-game." TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <TextBox Width="160" Text="{Binding StatsOverlayHotkey, UpdateSourceTrigger=LostFocus}"
+                         HorizontalContentAlignment="Center" FontWeight="SemiBold" />
+              </Panel>
+            </Grid>
+            <TextBlock Classes="caption" Foreground="{StaticResource WarnBrush}" Text="{Binding StatsOverlayHotkeyProblem}"
+                       IsVisible="{Binding StatsOverlayHotkeyProblem, Converter={x:Static ObjectConverters.IsNotNull}}"
+                       Margin="48,6,0,0" />
           </StackPanel>
         </views:Plate>
         <views:Plate Classes="card" Padding="26,24" Margin="0,0,0,22">

@@ -68,6 +68,15 @@ public sealed class PlayerViewModel : ObservableObject
         CancelTrimCommand = new RelayCommand(CancelTrim);
         SaveTrimCommand = new RelayCommand(() => _ = SaveTrimAsync(), () => IsTrimming && !IsSavingTrim && TrimLength >= 0.5);
         ShowCommand = new RelayCommand(() => _main.ShowClipCommand.Execute(Clip));
+        // The editor starts on the part being trimmed, if any, so a trim can grow into an edit.
+        EditCommand = new RelayCommand(() =>
+        {
+            _player?.Pause();
+            IsPlaying = false;
+            var trimming = IsTrimming;
+            IsTrimming = false;
+            _main.OpenEditor(Clip, this, trimming ? _trimStart : null, trimming ? _trimEnd : null);
+        });
         StudioCommand = new RelayCommand(() =>
         {
             _player?.Pause();
@@ -125,6 +134,7 @@ public sealed class PlayerViewModel : ObservableObject
     public RelayCommand CancelTrimCommand { get; }
     public RelayCommand SaveTrimCommand { get; }
     public RelayCommand ShowCommand { get; }
+    public RelayCommand EditCommand { get; }
     public RelayCommand OpenExternallyCommand { get; }
     public RelayCommand DeleteCommand { get; }
     public RelayCommand CheckCommand { get; }

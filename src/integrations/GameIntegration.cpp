@@ -13,7 +13,9 @@
 #include <cctype>
 #include <chrono>
 #include <cstdlib>
+#include <filesystem>
 #include <format>
+#include <fstream>
 #include <functional>
 #include <random>
 #include <utility>
@@ -56,6 +58,21 @@ std::vector<GameEvent> GameIntegration::TakeEvents() {
   return std::exchange(events_, {});
 }
 
+std::vector<JournalNote> GameIntegration::TakeNotes() {
+  std::lock_guard lock(mutex_);
+  return std::exchange(notes_, {});
+}
+
+void GameIntegration::Note(std::vector<JournalNote> notes) {
+  if (notes.empty()) return;
+  const int64_t now = NowHns();
+  std::lock_guard lock(mutex_);
+  for (auto& note : notes) {
+    note.time = now;
+    notes_.push_back(std::move(note));
+  }
+}
+
 std::optional<Scoreboard> GameIntegration::TakeScoreboard() {
   std::lock_guard lock(mutex_);
   return std::exchange(newBoard_, std::nullopt);
@@ -78,8 +95,7 @@ void GameIntegration::Emit(const std::vector<ApiEvent>& events) {
 }
 
 void GameIntegration::Connected() {
-  if (connected_) return;
-  connected_ = true;
+  if (connected_.exchange(true)) return;
   log::Info("Receiving game events from {}", gameName_);
 }
 
@@ -383,9 +399,147 @@ class RocketLeagueIntegration final : public GameIntegration {
   RocketLeagueTracker tracker_;
 };
 
+// ---------------------------------------------------------------------- Team Fortress 2
+
+// Follows Team Fortress 2's console log as it grows, like tail -f, from where it ended when the
+// game was found, so kills from an earlier session aren't clipped again. Looking twice a second
+// at a file's size costs next to nothing.
+class Tf2ConsoleIntegration final : public GameIntegration {
+ public:
+  Tf2ConsoleIntegration(std::vector<std::filesystem::path> logs, std::vector<std::string> names)
+      : GameIntegration("Team Fortress 2"), logs_(std::move(logs)), tracker_(std::move(names)) {
+    for (const auto& log : logs_) offsets_.push_back(Size(log));
+    Start();
+  }
+  ~Tf2ConsoleIntegration() override { Stop(); }
+
+  std::vector<EventType> Covers() const override { return {EventType::Kill, EventType::Death}; }
+
+ private:
+  static uintmax_t Size(const std::filesystem::path& file) {
+    std::error_code ec;
+    const auto size = std::filesystem::file_size(file, ec);
+    return ec ? 0 : size;
+  }
+
+  void Run() override {
+    const auto started = std::chrono::steady_clock::now();
+    bool hinted = false;
+    bool warnedName = false;
+    while (Wait(500)) {
+      // With -condebug and our line both on, the game writes every line to both files; the
+      // first one to grow is followed and the other left alone, so nothing counts twice.
+      for (size_t i = 0; i < logs_.size(); ++i) {
+        if (active_ >= 0 && static_cast<size_t>(active_) != i) continue;
+        if (ReadNew(i)) active_ = static_cast<int>(i);
+      }
+      if (!hinted && !Live() && std::chrono::steady_clock::now() - started > std::chrono::seconds(90)) {
+        log::Warn("Team Fortress 2 hasn't written to its console log yet. Restart it once so it picks up the line "
+                  "Clip Engine added to autoexec.cfg, or add -condebug to its launch options in Steam. Until then "
+                  "its killfeed is read off the screen.");
+        hinted = true;
+      }
+      if (!warnedName && Live() && !tracker_.KnowsName() && std::chrono::steady_clock::now() - started > std::chrono::seconds(60)) {
+        log::Warn("Add your Team Fortress 2 name on the Games page so the console log can tell your kills apart");
+        warnedName = true;
+      }
+    }
+  }
+
+  // True when it read whole lines.
+  bool ReadNew(size_t i) {
+    const uintmax_t size = Size(logs_[i]);
+    if (size < offsets_[i]) offsets_[i] = 0;  // emptied (-conclearlog) or replaced
+    if (size == offsets_[i]) return false;
+    // The game keeps the file open while writing, so it's opened shared, and only whole lines
+    // are taken: the rest waits for the next look.
+    std::ifstream in(logs_[i], std::ios::binary);
+    if (!in) return false;
+    in.seekg(static_cast<std::streamoff>(offsets_[i]));
+    // A burst bigger than this (a map change floods the console) is skipped to its end.
+    constexpr uintmax_t kMaxRead = 1 << 20;
+    const uintmax_t want = std::min(size - offsets_[i], kMaxRead);
+    std::string chunk(static_cast<size_t>(want), '\0');
+    in.read(chunk.data(), static_cast<std::streamsize>(want));
+    chunk.resize(static_cast<size_t>(in.gcount()));
+    const auto lastNewline = chunk.rfind('\n');
+    if (lastNewline == std::string::npos) {
+      if (want == kMaxRead) offsets_[i] += want;
+      return false;
+    }
+    offsets_[i] += lastNewline + 1;
+    if (size - offsets_[i] > kMaxRead) offsets_[i] = size;
+
+    Connected();
+    std::vector<ApiEvent> events;
+    size_t start = 0;
+    for (size_t end = chunk.find('\n'); end != std::string::npos && end <= lastNewline; end = chunk.find('\n', start)) {
+      auto found = tracker_.Update(std::string_view(chunk).substr(start, end - start));
+      events.insert(events.end(), found.begin(), found.end());
+      start = end + 1;
+    }
+    Emit(events);
+    Report(tracker_.Board());
+    return true;
+  }
+
+  std::vector<std::filesystem::path> logs_;
+  std::vector<uintmax_t> offsets_;
+  int active_ = -1;  // the log being followed, once one has grown
+  Tf2ConsoleTracker tracker_;
+};
+
+// ---------------------------------------------------------------------- Hunt: Showdown 1896
+
+// Looks every few seconds at the file where Hunt writes each match's summary, and writes a
+// new one down in the journal. The game rewrites it at the end of each match; looking at its
+// time and size costs nothing.
+class HuntMissionIntegration final : public GameIntegration {
+ public:
+  explicit HuntMissionIntegration(std::vector<std::filesystem::path> files)
+      : GameIntegration("Hunt: Showdown 1896"), files_(std::move(files)) {
+    Start();
+  }
+  ~HuntMissionIntegration() override { Stop(); }
+
+ private:
+  void Run() override {
+    bool told = false;
+    while (true) {
+      for (const auto& file : files_) {
+        std::error_code ec;
+        const auto time = std::filesystem::last_write_time(file, ec);
+        if (ec) continue;
+        const auto size = std::filesystem::file_size(file, ec);
+        if (ec || (time == seenTime_ && size == seenSize_)) break;
+        std::ifstream in(file, std::ios::binary);
+        std::string xml((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        // Caught mid-write: try again next look.
+        if (xml.find("</Attributes>") == std::string::npos && xml.size() > 64) break;
+        seenTime_ = time;
+        seenSize_ = size;
+        if (!told) {
+          log::Info("Following Hunt: Showdown 1896's match summaries in {} for its journal", file.string());
+          told = true;
+          Connected();
+        }
+        Note(tracker_.Update(xml));
+        break;
+      }
+      if (!Wait(3000)) return;
+    }
+  }
+
+  std::vector<std::filesystem::path> files_;
+  std::filesystem::file_time_type seenTime_{};
+  uintmax_t seenSize_ = 0;
+  HuntMissionTracker tracker_;
+};
+
 }  // namespace
 
-std::unique_ptr<GameIntegration> StartGameIntegration(const DetectedGame& game) {
+std::unique_ptr<GameIntegration> StartGameIntegration(const DetectedGame& game,
+                                                      const std::vector<std::string>& playerNames) {
   const GameProfile& profile = *game.profile;
   const auto exe = ProcessImagePath(game.processId);
   switch (profile.api) {
@@ -417,6 +571,21 @@ std::unique_ptr<GameIntegration> StartGameIntegration(const DetectedGame& game) 
       unsigned short port = kRocketLeagueDefaultPort;
       if (!exe.empty()) EnableRocketLeagueStats(exe, port);
       return std::make_unique<RocketLeagueIntegration>(port);
+    }
+    case GameApi::Tf2ConsoleLog: {
+      if (exe.empty()) return nullptr;
+      EnableTf2ConsoleLog(exe);
+      return std::make_unique<Tf2ConsoleIntegration>(Tf2ConsoleLogs(exe), playerNames);
+    }
+    case GameApi::HuntMissionFile: {
+      if (exe.empty()) return nullptr;
+      // HuntGame.exe is in bin\win_x64 under the game's folder.
+      const std::filesystem::path folder = std::filesystem::path(exe).parent_path();
+      std::vector<std::filesystem::path> files;
+      for (const auto& root : {folder.parent_path().parent_path(), folder.parent_path(), folder}) {
+        files.push_back(root / "user" / "profiles" / "default" / "attributes.xml");
+      }
+      return std::make_unique<HuntMissionIntegration>(std::move(files));
     }
     default:
       return nullptr;

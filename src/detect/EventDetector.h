@@ -32,14 +32,17 @@ class EventDetector {
  public:
   using Sink = std::function<void(const GameEvent&)>;
   using ScoreboardSink = std::function<void(const Scoreboard&)>;
+  using JournalSink = std::function<void(const JournalNote&)>;
 
   // playerNames: for finding the player's row on a scoreboard. settings: the [detection] ones.
   // quality: how hard to work at reading (see ReadQuality). hudScale: the size the game's HUD
   // is set to, 1 for 100%; with the screen's shape, it moves each rule's region to where the
-  // HUD draws it (PlaceRegion).
+  // HUD draws it (PlaceRegion). journals: what to write down for the game's journal
+  // (Journal.h), reported to journalSink.
   EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCapture& capture, std::vector<DetectionRule> rules,
                 std::vector<ScoreboardRule> scoreboards, std::vector<std::string> playerNames, DetectionSettings settings,
-                ReadQuality quality, double hudScale, bool debug, Sink sink, ScoreboardSink scoreboardSink);
+                ReadQuality quality, double hudScale, bool debug, Sink sink, ScoreboardSink scoreboardSink,
+                std::vector<JournalRule> journals = {}, JournalSink journalSink = {});
   ~EventDetector();
 
   EventDetector(const EventDetector&) = delete;
@@ -69,12 +72,14 @@ class EventDetector {
   const MonitorCapture& capture_;
   std::vector<DetectionRule> rules_;
   std::vector<ScoreboardRule> scoreboards_;
+  std::vector<JournalRule> journals_;
   std::vector<std::string> playerNames_;
   DetectionSettings settings_;
   ReadQuality quality_;
   bool debug_;
   Sink sink_;
   ScoreboardSink scoreboardSink_;
+  JournalSink journalSink_;
   ScoreboardGate boardGate_;
   CalmPacer calm_;
   EventFuser fuser_;  // turns each rule's sightings into moments, for sink_

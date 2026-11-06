@@ -68,6 +68,20 @@ struct EventDetector::Region {
   const ScoreboardRule* board = nullptr;
   ScoreboardTracker boardTracker;
 
+  // Journal rules read here (Journal.h).
+  std::vector<JournalTracker> journals;
+  // A journal rule's when_region: the words that open its gate, and when they last showed.
+  std::vector<Phrase> gateWords;
+  int64_t gateSeenMs = INT64_MIN / 2;
+  // The when_region this region waits on: it's only copied and read while that shows its words,
+  // so a big list (an inventory) costs nothing until its menu is open.
+  Region* gatedBy = nullptr;
+
+  bool GateOpen(int64_t nowMs) const {
+    // Open while the words showed within the last couple of looks at the gate.
+    return nowMs - gateSeenMs <= std::max<int64_t>(2500, int64_t{2} * intervalMs + 500);
+  }
+
   // A region inside this one, read from this one's words instead of on its own.
   Region* within = nullptr;
   std::vector<Region*> inside;
@@ -86,7 +100,7 @@ struct EventDetector::Region {
   std::vector<std::vector<WordBox>> reads;  // the last read, one for each way it's read (ReadPasses)
   std::string lastText;
 
-  bool ReadsText() const { return !textRules.empty() || !inside.empty() || board; }
+  bool ReadsText() const { return !textRules.empty() || !inside.empty() || board || !journals.empty() || !gateWords.empty(); }
 };
 
 namespace {
@@ -119,18 +133,20 @@ bool EventDetector::IsAvailable() {
 EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCapture& capture,
                              std::vector<DetectionRule> rules, std::vector<ScoreboardRule> scoreboards,
                              std::vector<std::string> playerNames, DetectionSettings settings, ReadQuality quality,
-                             double hudScale,
-                             bool debug, Sink sink, ScoreboardSink scoreboardSink)
+                             double hudScale, bool debug, Sink sink, ScoreboardSink scoreboardSink,
+                             std::vector<JournalRule> journals, JournalSink journalSink)
     : gpu_(std::move(gpu)),
       capture_(capture),
       rules_(std::move(rules)),
       scoreboards_(std::move(scoreboards)),
+      journals_(std::move(journals)),
       playerNames_(std::move(playerNames)),
       settings_(settings),
       quality_(quality),
       debug_(debug),
       sink_(std::move(sink)),
       scoreboardSink_(std::move(scoreboardSink)),
+      journalSink_(std::move(journalSink)),
       calm_(settings.calmMs),
       fuser_(
           [this](const GameEvent& e) {
@@ -197,7 +213,7 @@ EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCaptur
 
     auto existing = std::ranges::find_if(regions_, [&](const auto& r) {
       return r->box.left == box.left && r->box.top == box.top && r->box.right == box.right &&
-             r->box.bottom == box.bottom && r->threshold == rule.threshold;
+             r->box.bottom == box.bottom && r->threshold == rule.threshold && !r->gatedBy;
     });
     Region* region = existing != regions_.end() ? existing->get() : addRegion(rule.name, box, rule.threshold);
     region->intervalMs = std::min(region->intervalMs, ScaledSampleMs(rule.sampleMs > 0 ? rule.sampleMs : settings_.sampleMs, quality_));
@@ -210,6 +226,39 @@ EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCaptur
     if (rule.pauses) fuser_.UsePauses();
     if (rule.ReadsText()) region->textRules.emplace_back(rule);
     if (matcher) region->icons.push_back({RuleTracker(rule), std::move(*matcher), rule.imageMatch});
+  }
+
+  // Journal rules share regions with the rules above where they read the same box, so a banner
+  // that's both a moment and a note is read once.
+  auto sameBox = [](const Region& r, const D3D11_BOX& box, int threshold) {
+    return r.box.left == box.left && r.box.top == box.top && r.box.right == box.right && r.box.bottom == box.bottom &&
+           r.threshold == threshold && !r.board;
+  };
+  for (const auto& journal : journals_) {
+    const D3D11_BOX box = boxFor(journal.region);
+    if (box.right < box.left + 8 || box.bottom < box.top + 8) {
+      log::Warn("Journal rule {} covers too little of the screen; skipping it", journal.name);
+      continue;
+    }
+    Region* gate = nullptr;
+    if (journal.whenRegion && !journal.when.empty()) {
+      const D3D11_BOX gateBox = boxFor(*journal.whenRegion);
+      if (gateBox.right >= gateBox.left + 8 && gateBox.bottom >= gateBox.top + 8) {
+        auto found = std::ranges::find_if(regions_, [&](const auto& r) { return sameBox(*r, gateBox, journal.threshold) && !r->gatedBy; });
+        gate = found != regions_.end() ? found->get() : addRegion(journal.name + ".when", gateBox, journal.threshold);
+        gate->gateWords.insert(gate->gateWords.end(), journal.when.begin(), journal.when.end());
+        gate->intervalMs = std::min(gate->intervalMs, ScaledSampleMs(journal.sampleMs, quality_));
+      }
+    }
+    auto found = std::ranges::find_if(regions_, [&](const auto& r) { return sameBox(*r, box, journal.threshold) && r->gatedBy == gate; });
+    Region* region = found != regions_.end() ? found->get() : addRegion(journal.name, box, journal.threshold);
+    region->gatedBy = gate;
+    region->intervalMs = std::min(region->intervalMs, ScaledSampleMs(journal.sampleMs, quality_));
+    // Lists and feeds are small print, so they're never read at half size.
+    region->banner &= !journal.ReadsFeed();
+    // Lists and results screens can be dimmer than the HUD, so any change in them counts.
+    region->hudOnly = false;
+    region->journals.emplace_back(journal);
   }
 
   if (!scoreboards_.empty() && playerNames_.empty()) {
@@ -242,11 +291,18 @@ EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCaptur
   for (auto& region : regions_) order.push_back(region.get());
   std::ranges::sort(order, [](const Region* a, const Region* b) { return Area(a->box) < Area(b->box); });
   for (Region* inner : order) {
-    // Icons need the region's own pixels; a scoreboard is read on its own schedule.
-    if (!inner->icons.empty() || inner->board || inner->textRules.empty()) continue;
+    // Icons need the region's own pixels; a scoreboard is read on its own schedule; and a
+    // region that waits on a when_region is read only while that's open.
+    if (!inner->icons.empty() || inner->board || inner->gatedBy ||
+        (inner->textRules.empty() && inner->journals.empty() && inner->gateWords.empty())) {
+      continue;
+    }
     Region* best = nullptr;
     for (Region* outer : order) {
-      if (outer == inner || outer->within || outer->board || !outer->ReadsText() || outer->threshold != inner->threshold) continue;
+      if (outer == inner || outer->within || outer->board || outer->gatedBy || !outer->ReadsText() ||
+          outer->threshold != inner->threshold) {
+        continue;
+      }
       if (!Contains(outer->box, inner->box) || Area(outer->box) <= Area(inner->box)) continue;
       // Text must be read at the same size either way.
       if (OcrScale(outer->width, outer->height, outer->shrink, quality_) !=
@@ -294,6 +350,7 @@ EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCaptur
 
   log::Info("Watching {} screen regions ({} read directly) for {} detection rules, reading quality {}", regions_.size(),
             read, rules_.size(), ToString(quality_));
+  if (!journals_.empty()) log::Info("Keeping a journal with {} journal rules", journals_.size());
   if (sounds_) log::Info("Listening to the game's audio for its sounds");
   if (const auto pauses = std::ranges::count_if(rules_, &DetectionRule::pauses); pauses > 0) {
     log::Info("Not counting kills during killcams or while spectating ({} pause rules)", pauses);
@@ -397,7 +454,9 @@ void EventDetector::Run() {
           const int64_t time = NowHns();
           const int64_t nowMs = time / kHnsPerMs;
           for (Region* region : direct) {
-            int intervalMs = calm_.IntervalMs(region->intervalMs, nowMs);
+            // Journal notes (menus, results screens, lists) keep their pace through a quiet spell.
+            const bool keepsPace = !region->journals.empty() || !region->gateWords.empty();
+            int intervalMs = keepsPace ? region->intervalMs : calm_.IntervalMs(region->intervalMs, nowMs);
             if (region->board) {
               // Only while the scoreboard can be up: its key is held, or a match just ended.
               const ScoreboardRule& board = *region->board;
@@ -421,6 +480,7 @@ void EventDetector::Run() {
                 now + std::chrono::milliseconds(tickMs / 2) < region->copiedAt + std::chrono::milliseconds(intervalMs)) {
               continue;
             }
+            if (region->gatedBy && !region->gatedBy->GateOpen(nowMs)) continue;
             gpu_->context->CopySubresourceRegion(region->staging.get(), 0, 0, 0, 0, frame, 0, &region->box);
             region->copying = true;
             region->copyTime = time;
@@ -496,10 +556,28 @@ void EventDetector::Process(Region& region, int64_t time, const OcrEngine& ocr) 
     const std::string text = textOf(reads);
     if (debug_ && text != target.lastText && !text.empty()) log::Info("Read [{}]: {}", target.name, Shorten(text, 160));
     target.lastText = text;
-    if (target.textRules.empty()) return;
+    if (target.textRules.empty() && target.journals.empty() && target.gateWords.empty()) return;
     std::vector<std::vector<std::vector<std::string>>> rows;
     for (const auto& words : reads) rows.push_back(GroupIntoRows(words));
     if (rows.empty()) rows.emplace_back();
+    if (!target.gateWords.empty() && std::ranges::any_of(rows, [&](const auto& r) { return ShowsAny(target.gateWords, r); })) {
+      if (debug_ && !target.GateOpen(ms)) log::Info("[{}] shows its words; reading what waits on it", target.name);
+      target.gateSeenMs = ms;
+    }
+    for (auto& journal : target.journals) {
+      // The read where the rule finds the most.
+      size_t chosen = 0, most = 0;
+      for (size_t i = 0; rows.size() > 1 && i < rows.size(); ++i) {
+        const size_t found = FindNotes(journal.Rule(), rows[i]).size();
+        if (found > most) most = found, chosen = i;
+      }
+      const bool open = !target.gatedBy || target.gatedBy->GateOpen(ms);
+      for (auto& note : journal.Update(rows[chosen], ms, open)) {
+        note.time = time;
+        if (debug_) log::Info("Journal [{}]: {} {}", journal.Rule().name, note.value, note.amount);
+        if (journalSink_) journalSink_(note);
+      }
+    }
     for (auto& tracker : target.textRules) {
       const size_t chosen = ChooseRead(tracker.Rule(), rows);
       if (tracker.Rule().pauses) {

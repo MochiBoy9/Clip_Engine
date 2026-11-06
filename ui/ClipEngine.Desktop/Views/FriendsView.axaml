@@ -1,0 +1,291 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ClipEngine.Desktop.ViewModels"
+             xmlns:views="using:ClipEngine.Desktop.Views"
+             x:Class="ClipEngine.Desktop.Views.FriendsView"
+             x:DataType="vm:FriendsViewModel">
+  <UserControl.Styles>
+    <Style Selector="TextBlock.caption.error">
+      <Setter Property="Foreground" Value="{StaticResource RecordBrush}" />
+    </Style>
+    <Style Selector="Border.avatar">
+      <Setter Property="Width" Value="38" />
+      <Setter Property="Height" Value="38" />
+      <Setter Property="CornerRadius" Value="2" />
+      <Setter Property="Background" Value="{StaticResource Divider}" />
+    </Style>
+    <Style Selector="Border.avatar.online">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <Style Selector="Border.avatar TextBlock">
+      <Setter Property="FontWeight" Value="Black" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.avatar.online TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
+    </Style>
+    <Style Selector="Ellipse.dot">
+      <Setter Property="Width" Value="7" />
+      <Setter Property="Height" Value="7" />
+      <Setter Property="Fill" Value="{StaticResource IdleBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Ellipse.dot.online">
+      <Setter Property="Fill" Value="{StaticResource SuccessBrush}" />
+    </Style>
+  </UserControl.Styles>
+  <ScrollViewer>
+    <StackPanel Margin="0,0,40,40" Spacing="22">
+      <StackPanel Spacing="4">
+        <views:SectionMark Index="04" Label="Friend roster" />
+        <TextBlock Classes="h1" Text="Friends" />
+        <TextBlock Classes="caption" TextWrapping="Wrap"
+                   Text="See which friends are on, what they're playing and for how long, and jump into their squad. Right-click a friend to join them straight away. Friends are kept with your cloud account, so they follow you to every PC." />
+      </StackPanel>
+
+      <TextBlock Classes="caption" Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextWrapping="Wrap"
+                 Classes.error="{Binding MessageIsError}" />
+
+      <!-- Inviting friends to Clip Engine: a month of Pro for enough of them. Needs no cloud account. -->
+      <views:Plate Classes="card" Padding="26,24" DataContext="{Binding Inviting}" x:DataType="vm:InviteViewModel">
+        <StackPanel>
+          <TextBlock Classes="eyebrow" Margin="0,0,0,18" Text="INVITE FRIENDS" />
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
+              <PathIcon Data="{StaticResource IconSparkle}" />
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+              <TextBlock Text="{Binding Headline}" FontWeight="SemiBold" FontSize="14" />
+              <TextBlock Classes="caption" Text="{Binding Caption}" TextWrapping="Wrap" />
+            </StackPanel>
+            <Button Grid.Column="2" Classes="accent" Content="Get my invite link" Command="{Binding GetLinkCommand}"
+                    IsVisible="{Binding NoLink}" VerticalAlignment="Center" />
+          </Grid>
+          <StackPanel IsVisible="{Binding HasLink}" Margin="0,16,0,0">
+            <Grid ColumnDefinitions="*,Auto,Auto">
+              <Border Classes="inset" Padding="12,8" CornerRadius="2">
+                <TextBlock Classes="mono" Text="{Binding Link}" FontSize="13" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
+              </Border>
+              <Button Grid.Column="1" Classes="accent" Content="Copy link" Command="{Binding CopyLinkCommand}" Margin="10,0,0,0" />
+              <Button Grid.Column="2" Classes="icon" Command="{Binding RefreshCommand}" ToolTip.Tip="Check for new friends" Margin="6,0,0,0">
+                <PathIcon Data="{StaticResource IconRefresh}" />
+              </Button>
+            </Grid>
+            <TextBlock Classes="caption" Margin="0,8,0,0" TextWrapping="Wrap" Text="{Binding CodeText}" />
+            <Grid ColumnDefinitions="*,Auto" Margin="0,14,0,0">
+              <ProgressBar Minimum="0" Maximum="1" Value="{Binding Progress}" Height="6" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="1" Classes="caption" Text="{Binding ProgressText}" Margin="12,0,0,0" VerticalAlignment="Center" />
+            </Grid>
+            <StackPanel IsVisible="{Binding HasRewards}" Margin="0,14,0,0" Spacing="8">
+              <TextBlock Text="Your free Pro" FontWeight="SemiBold" FontSize="14" />
+              <ItemsControl ItemsSource="{Binding Rewards}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="x:String">
+                    <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,8">
+                      <Border Classes="inset" Padding="12,6" CornerRadius="2">
+                        <TextBlock Classes="mono" Text="{Binding}" FontSize="13" FontWeight="Bold" />
+                      </Border>
+                      <Button Grid.Column="1" Classes="secondary" Content="Copy" Margin="10,0,0,0"
+                              Command="{Binding $parent[ItemsControl].((vm:InviteViewModel)DataContext).CopyRewardCommand}" CommandParameter="{Binding}" />
+                      <Button Grid.Column="2" Classes="secondary" Content="Use on this PC" Margin="8,0,0,0"
+                              Command="{Binding $parent[ItemsControl].((vm:InviteViewModel)DataContext).UseRewardCommand}" CommandParameter="{Binding}" />
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <TextBlock Classes="caption" TextWrapping="Wrap"
+                         Text="A special key for Pro. Its month starts the first time it's used, so you can save it for later if you already subscribe." />
+            </StackPanel>
+          </StackPanel>
+          <StackPanel IsVisible="{Binding ShowCodeBox}">
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+            <TextBlock Text="Did a friend invite you?" FontWeight="SemiBold" FontSize="14" />
+            <TextBlock Classes="caption" Text="Type their invite code so they get credit. It works for a week after installing." TextWrapping="Wrap" Margin="0,2,0,12" />
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBox Text="{Binding CodeInput}" Watermark="ABCD-1234" MaxLength="64" />
+              <Button Grid.Column="1" Classes="secondary" Content="Add invite code" Command="{Binding AddCodeCommand}" Margin="10,0,0,0" />
+            </Grid>
+          </StackPanel>
+          <TextBlock Classes="caption" Text="{Binding InvitedText}" IsVisible="{Binding HasInvitedText}" TextWrapping="Wrap" Margin="0,12,0,0" />
+          <TextBlock Classes="caption" Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextWrapping="Wrap" Margin="0,10,0,0"
+                     Classes.error="{Binding MessageIsError}" />
+        </StackPanel>
+      </views:Plate>
+
+      <!-- Needs a cloud account -->
+      <views:Plate Classes="card lead" Padding="28,26" IsVisible="{Binding NotSignedIn}">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
+            <PathIcon Data="{StaticResource IconFriends}" />
+          </Border>
+          <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+            <TextBlock Text="Sign in to the cloud to add friends" FontWeight="SemiBold" FontSize="14" />
+            <TextBlock Classes="caption" TextWrapping="Wrap"
+                       Text="Friends find you by your profile name or friend code, which come with a cloud account. It's free and needs no email." />
+          </StackPanel>
+          <Button Grid.Column="2" Classes="accent" Content="Go to Cloud" Command="{Binding GoToCloudCommand}" VerticalAlignment="Center" />
+        </Grid>
+      </views:Plate>
+
+      <Grid ColumnDefinitions="*,22,*" IsVisible="{Binding SignedIn}">
+        <!-- The list -->
+        <views:Plate Classes="card" Padding="26,24">
+          <StackPanel>
+            <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,18">
+              <TextBlock Classes="eyebrow" Text="ROSTER" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="1" Classes="caption" Text="{Binding FriendsCaption}" VerticalAlignment="Center" Margin="0,0,10,0" />
+              <Button Grid.Column="2" Classes="icon" Command="{Binding RefreshCommand}" ToolTip.Tip="Refresh">
+                <PathIcon Data="{StaticResource IconRefresh}" />
+              </Button>
+            </Grid>
+            <TextBlock Classes="caption" IsVisible="{Binding HasNoFriends}" TextWrapping="Wrap"
+                       Text="No friends yet. Add one with their profile name or friend code, or send them yours." />
+            <ItemsControl ItemsSource="{Binding Friends}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:FriendRow">
+                  <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,0,0,14" Background="Transparent"
+                        ToolTip.Tip="Right-click for more">
+                    <Grid.ContextMenu>
+                      <ContextMenu>
+                        <MenuItem Header="Join their squad" Command="{Binding JoinCommand}" IsEnabled="{Binding CanJoin}">
+                          <MenuItem.Icon><PathIcon Data="{StaticResource IconFriends}" Width="13" Height="13" /></MenuItem.Icon>
+                        </MenuItem>
+                        <MenuItem Header="Copy username" Command="{Binding CopyUsernameCommand}">
+                          <MenuItem.Icon><PathIcon Data="{StaticResource IconCopy}" Width="13" Height="13" /></MenuItem.Icon>
+                        </MenuItem>
+                        <Separator />
+                        <MenuItem Header="Remove friend" Command="{Binding RemoveCommand}">
+                          <MenuItem.Icon><PathIcon Data="{StaticResource IconClose}" Width="13" Height="13" /></MenuItem.Icon>
+                        </MenuItem>
+                      </ContextMenu>
+                    </Grid.ContextMenu>
+                    <Border Classes="avatar" Classes.online="{Binding IsPlaying}" Margin="0,0,12,0">
+                      <TextBlock Text="{Binding Initial}" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                      <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Classes="caption" Text="{Binding SecondaryName}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                      </StackPanel>
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Ellipse Classes="dot" Classes.online="{Binding Online}" />
+                        <TextBlock Classes="caption" Text="{Binding StatusText}" TextTrimming="CharacterEllipsis" />
+                      </StackPanel>
+                    </StackPanel>
+                    <Button Grid.Column="2" Classes="accent" Content="Join squad" Command="{Binding JoinCommand}" IsVisible="{Binding CanJoin}"
+                            VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <Button Grid.Column="3" Classes="icon" Command="{Binding RemoveCommand}" ToolTip.Tip="Remove friend" VerticalAlignment="Center">
+                      <PathIcon Data="{StaticResource IconClose}" />
+                    </Button>
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </views:Plate>
+
+        <StackPanel Grid.Column="2" Spacing="22">
+          <!-- Adding -->
+          <views:Plate Classes="card" Padding="26,24">
+            <StackPanel>
+              <TextBlock Classes="eyebrow" Margin="0,0,0,18" Text="ADD A FRIEND" />
+              <TextBlock Text="Username or friend code" FontWeight="SemiBold" FontSize="14" />
+              <TextBlock Classes="caption" Text="Their username, like @kai, or a code like K7QM-2X9D. They get a request to accept." TextWrapping="Wrap" Margin="0,2,0,12" />
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBox Text="{Binding AddInput}" Watermark="@name or XXXX-XXXX" />
+                <Button Grid.Column="1" Classes="accent" Content="Send request" Command="{Binding AddCommand}" Margin="10,0,0,0" />
+              </Grid>
+              <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Spacing="2" Margin="0,0,16,0">
+                  <TextBlock Text="Your username" FontWeight="SemiBold" FontSize="14" />
+                  <TextBlock Classes="caption" Text="{Binding MyHandleCaption}" TextWrapping="Wrap" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                  <Border Classes="inset" Padding="12,6" CornerRadius="2" IsVisible="{Binding HasMyHandle}">
+                    <TextBlock Classes="mono" Text="{Binding MyHandleText}" FontSize="14" FontWeight="Bold" />
+                  </Border>
+                  <Button Classes="secondary" Content="Copy" Command="{Binding CopyUsernameCommand}" IsVisible="{Binding HasMyHandle}" />
+                  <Button Classes="secondary" Content="Pick one" Command="{Binding GoToCloudCommand}" IsVisible="{Binding !HasMyHandle}" />
+                </StackPanel>
+              </Grid>
+              <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Spacing="2" Margin="0,0,16,0">
+                  <TextBlock Text="Your friend code" FontWeight="SemiBold" FontSize="14" />
+                  <TextBlock Classes="caption" Text="Send it to friends so they can add you." TextWrapping="Wrap" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                  <Border Classes="inset" Padding="12,6" CornerRadius="2">
+                    <TextBlock Classes="mono" Text="{Binding FriendCode}" FontSize="14" FontWeight="Bold" />
+                  </Border>
+                  <Button Classes="secondary" Content="Copy" Command="{Binding CopyCodeCommand}" IsEnabled="{Binding HasFriendCode}" />
+                </StackPanel>
+              </Grid>
+              <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Spacing="2" Margin="0,0,16,0">
+                  <TextBlock Text="Let friends join my squad" FontWeight="SemiBold" FontSize="14" />
+                  <TextBlock Classes="caption" Text="While you're in a squad, friends get a Join squad button next to your name." TextWrapping="Wrap" />
+                </StackPanel>
+                <ToggleSwitch Grid.Column="1" IsChecked="{Binding ShareSquad}" OnContent="" OffContent="" VerticalAlignment="Center" />
+              </Grid>
+              <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Spacing="2" Margin="0,0,16,0">
+                  <TextBlock Text="Tell me when friends come online" FontWeight="SemiBold" FontSize="14" />
+                  <TextBlock Classes="caption" Text="A small notice, over your game too, when a friend comes on or starts playing something." TextWrapping="Wrap" />
+                </StackPanel>
+                <ToggleSwitch Grid.Column="1" IsChecked="{Binding FriendNotices}" OnContent="" OffContent="" VerticalAlignment="Center" />
+              </Grid>
+            </StackPanel>
+          </views:Plate>
+
+          <!-- Requests -->
+          <views:Plate Classes="card" Padding="26,24" IsVisible="{Binding HasReceived}">
+            <StackPanel>
+              <TextBlock Classes="eyebrow" Margin="0,0,0,18" Text="REQUESTS" />
+              <ItemsControl ItemsSource="{Binding Received}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:FriendRow">
+                    <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,0,0,12">
+                      <Border Classes="avatar" Margin="0,0,12,0">
+                        <TextBlock Text="{Binding Initial}" />
+                      </Border>
+                      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                        <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Classes="caption" Text="{Binding StatusText}" />
+                      </StackPanel>
+                      <Button Grid.Column="2" Classes="accent" Content="Accept" Command="{Binding AcceptCommand}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                      <Button Grid.Column="3" Classes="secondary" Content="{Binding RemoveText}" Command="{Binding RemoveCommand}" VerticalAlignment="Center" />
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </views:Plate>
+
+          <views:Plate Classes="card" Padding="26,24" IsVisible="{Binding HasSent}">
+            <StackPanel>
+              <TextBlock Classes="eyebrow" Margin="0,0,0,18" Text="SENT" />
+              <ItemsControl ItemsSource="{Binding Sent}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:FriendRow">
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+                      <StackPanel VerticalAlignment="Center" Spacing="1">
+                        <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Classes="caption" Text="{Binding StatusText}" />
+                      </StackPanel>
+                      <Button Grid.Column="1" Classes="secondary" Content="{Binding RemoveText}" Command="{Binding RemoveCommand}" VerticalAlignment="Center" />
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </views:Plate>
+        </StackPanel>
+      </Grid>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

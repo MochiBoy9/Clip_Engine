@@ -108,4 +108,81 @@ public class EngineSettingsTests : IDisposable
         File.WriteAllText(_file, "reading_quality = extreme\n");
         Assert.Equal("medium", EngineSettings.Load(_file).ReadingQuality);
     }
+
+    [Fact]
+    public void ReadsAndWritesAudioTracks()
+    {
+        var defaults = EngineSettings.Load(_file);
+        Assert.True(defaults.DiscordAudio && defaults.AppsAudio);
+        Assert.All(EngineSettings.AudioTracks, t => Assert.Equal(100, defaults.VolumeOf(t)));
+        Assert.Empty(defaults.MutedAudio);
+
+        File.WriteAllText(_file, """
+            discord_audio = false
+            mic_volume = 140%
+            game_volume = 900
+            radio_volume = 20
+            muted_audio = Discord, radio, apps
+            """);
+        var settings = EngineSettings.Load(_file);
+        Assert.False(settings.DiscordAudio);
+        Assert.Equal((140, 200, 100), (settings.VolumeOf("mic"), settings.VolumeOf("game"), settings.VolumeOf("apps")));
+        Assert.Equal(["discord", "apps"], settings.MutedAudio);
+        Assert.True(settings.IsMuted("apps"));
+
+        settings.Volumes["apps"] = 35;
+        settings.MutedAudio = ["mic"];
+        settings.Save(_file);
+        var reloaded = EngineSettings.Load(_file);
+        Assert.Equal(35, reloaded.VolumeOf("apps"));
+        Assert.Equal(["mic"], reloaded.MutedAudio);
+        Assert.Contains("muted_audio = mic", File.ReadAllLines(_file));
+    }
+
+    [Fact]
+    public void SavesAudioLevelsWithoutTouchingOtherSettings()
+    {
+        File.WriteAllText(_file, """
+            buffer_seconds = 60
+            mic_volume = 100
+            muted_audio =
+            """);
+        // Another setting changed in the file meanwhile, such as one saved from the Settings page.
+        var levels = new EngineSettings { BufferSeconds = 900, Volumes = new() { ["mic"] = 60 }, MutedAudio = ["game"] };
+        levels.SaveAudioLevels(_file);
+
+        var lines = File.ReadAllLines(_file);
+        Assert.Contains("buffer_seconds = 60", lines);
+        Assert.Contains("mic_volume = 60", lines);
+        Assert.Contains("game_volume = 100", lines);
+        Assert.Contains("muted_audio = game", lines);
+        Assert.DoesNotContain(lines, l => l.StartsWith("clip_seconds", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ReadsAndWritesVoiceClips()
+    {
+        var defaults = EngineSettings.Load(_file);
+        Assert.False(defaults.VoiceClips);
+        Assert.Equal(("clip that", 0, "medium"), (defaults.VoicePhrases, defaults.VoiceClipSeconds, defaults.VoiceSensitivity));
+
+        File.WriteAllText(_file, "voice_clips = true\nvoice_phrases = clip it, save that 60\nvoice_clip_seconds = 45\nvoice_sensitivity = HIGH\n");
+        var settings = EngineSettings.Load(_file);
+        Assert.True(settings.VoiceClips);
+        Assert.Equal(("clip it, save that 60", 45, "high"), (settings.VoicePhrases, settings.VoiceClipSeconds, settings.VoiceSensitivity));
+
+        // A # would start a comment in the file.
+        settings.VoicePhrases = "clip #1, clip that";
+        settings.VoiceSensitivity = "low";
+        settings.Save(_file);
+        var reloaded = EngineSettings.Load(_file);
+        Assert.Equal(("clip  1, clip that", "low"), (reloaded.VoicePhrases, reloaded.VoiceSensitivity));
+    }
+
+    [Fact]
+    public void BufferCanBeHalfAnHour()
+    {
+        File.WriteAllText(_file, "buffer_seconds = 1800\n");
+        Assert.Equal(1800, EngineSettings.Load(_file).BufferSeconds);
+    }
 }

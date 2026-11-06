@@ -2,6 +2,7 @@
 
 #include "detect/GameEvent.h"
 
+#include <cstdint>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -21,7 +22,7 @@ struct ClipMetadata {
   };
 
   std::string game;
-  std::string trigger;  // "hotkey" or "auto"
+  std::string trigger;  // "hotkey", "voice", "auto", "squad" or "long"
   double seconds = 0;
   std::vector<Marker> markers;
 
@@ -32,6 +33,17 @@ struct ClipMetadata {
   std::string session;
   double sessionSeconds = -1;
   int match = 0;
+
+  // When the clip's first frame was recorded, in Unix milliseconds (0 when unknown), so clips
+  // of one moment from squadmates' PCs line up. squadMoment names the squad moment the clip
+  // shows, for the squad library; empty for a clip that isn't part of one.
+  int64_t utcStartMs = 0;
+  std::string squadMoment;
+
+  // The clip's audio tracks in order, by what each has: "all" (every source mixed, the one
+  // players play), "game", "system" (everything heard), "mic", "discord" and "apps". Empty for
+  // clips from before 0.15, which have game audio and then the mic.
+  std::vector<std::string> audioTracks;
 };
 
 std::string ToJson(const ClipMetadata& metadata);
@@ -51,6 +63,14 @@ std::string Summarize(const std::vector<ClipMetadata::Marker>& markers);
 // know. Must match ClipEngine.Desktop/Services/ClipMetadataFile.cs.
 bool AppendMetadataBox(const std::filesystem::path& mp4, const std::string& json);
 std::optional<std::string> ReadMetadataBox(const std::filesystem::path& mp4);
+
+// Every clip says where it came from: an iTunes-style tag list inside the movie box
+// (moov/udta/meta/ilst) with the encoding tool ("Clip Engine 0.13.0") and a comment that
+// links to the download, which Windows Explorer, VLC, ffprobe and phones all show. Leaves a
+// file that already has it alone, and keeps chunk offsets right wherever the movie box is.
+// AppendMetadataBox does this too, so most callers never need to.
+inline constexpr std::string_view kClipEngineSite = "https://mochiboy9.github.io/Clip_Engine/";
+bool TagMadeWithClipEngine(const std::filesystem::path& mp4);
 
 // The clip's metadata JSON, from the .json next to it or else from inside the file.
 std::optional<std::string> ReadClipMetadataJson(const std::filesystem::path& mp4);

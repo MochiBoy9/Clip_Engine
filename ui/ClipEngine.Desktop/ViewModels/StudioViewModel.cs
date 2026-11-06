@@ -42,13 +42,23 @@ public sealed class StudioViewModel : ObservableObject
         new("marvel_rivals", "Marvel Rivals", false, ["Marvel-Win64-Shipping.exe"]),
         new("rainbow_six_siege", "Rainbow Six Siege", false, ["RainbowSix.exe", "RainbowSix_Vulkan.exe", "RainbowSix_DX11.exe"]),
         new("call_of_duty", "Call of Duty", false, ["cod.exe", "cod24-cod.exe", "cod25-cod.exe"]),
-        new("arc_raiders", "ARC Raiders", false, ["PioneerGame.exe"]),
         new("delta_force", "Delta Force", false, ["DeltaForceClient-Win64-Shipping.exe"]),
         new("deadlock", "Deadlock", false, ["deadlock.exe", "project8.exe"]),
         new("halo_infinite", "Halo Infinite", false, ["HaloInfinite.exe"]),
-        new("destiny_2", "Destiny 2", false, ["destiny2.exe"]),
+        new("halo_mcc", "Halo MCC", false, ["MCC-Win64-Shipping.exe", "MCCWinStore-Win64-Shipping.exe"]),
+        new("battlefield_2042", "Battlefield 2042", false, ["BF2042.exe"]),
+        new("battlefield_v", "Battlefield V", false, ["bfv.exe"]),
+        new("battlefield_1", "Battlefield 1", false, ["bf1.exe"]),
+        new("battlefield_4", "Battlefield 4", false, ["bf4.exe", "bf4_x86.exe"]),
+        new("paladins", "Paladins", false, ["Paladins.exe"]),
+        new("splitgate", "Splitgate", false, ["PortalWars2-Win64-Shipping.exe", "PortalWars-Win64-Shipping.exe"]),
+        // Kills and deaths come from its console log; these killfeed rules fill in until it arrives.
         new("team_fortress_2", "Team Fortress 2", false, ["tf_win64.exe", "tf.exe"]),
+        // How their runs end is read off the screen; the rest goes into their journal.
+        new("arc_raiders", "ARC Raiders", false, ["PioneerGame.exe"]),
         new("escape_from_tarkov", "Escape from Tarkov", false, ["EscapeFromTarkov.exe"]),
+        new("helldivers_2", "Helldivers 2", false, ["helldivers2.exe"]),
+        new("deep_rock_galactic", "Deep Rock Galactic", false, ["FSD-Win64-Shipping.exe"]),
         new("roblox", "Roblox", false, ["RobloxPlayerBeta.exe"]),
         new("minecraft", "Minecraft", false, ["Minecraft.Windows.exe"]),
     ];
@@ -110,6 +120,7 @@ public sealed class StudioViewModel : ObservableObject
         _user = main.IsLive ? DetectionIni.LoadUser() : DetectionIni.NewChanges();
         _sampleMs = _user.SampleMs ?? _shipped.SampleMs ?? 250;
         PlayerNames = new PlayerNamesViewModel(AppPaths.EngineSettingsFile);
+        ClipKeys = new GameClipKeysViewModel(main.IsLive, main.IsLive ? main.SendEngineCommand : null);
         PlayerNames.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(PlayerNamesViewModel.HasSavedNames)) RefreshRules();
@@ -296,6 +307,9 @@ public sealed class StudioViewModel : ObservableObject
     }
 
     public string HudScaleText => $"{_hudScale}%";
+
+    // The game's own clip keys, saved on their own with their own button.
+    public GameClipKeysViewModel ClipKeys { get; }
 
     internal double HudFactor => _hudScale / 100.0;
 
@@ -580,6 +594,7 @@ public sealed class StudioViewModel : ObservableObject
     {
         if (_game is null) return;
         _ownRules = _user.EditedGames.Contains(_game.Id);
+        ClipKeys.Load(_game.Id, _game.Name);
         _savedHudScale = _hudScale = _main.IsLive ? LoadHudScale(_game.Id) : 100;
         if (_drafts.Remove(_game.Id, out var draft))
         {

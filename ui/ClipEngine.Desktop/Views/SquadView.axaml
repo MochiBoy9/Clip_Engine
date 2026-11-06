@@ -1,0 +1,315 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ClipEngine.Desktop.ViewModels"
+             xmlns:views="using:ClipEngine.Desktop.Views"
+             x:Class="ClipEngine.Desktop.Views.SquadView"
+             x:DataType="vm:SquadViewModel">
+  <UserControl.Styles>
+    <Style Selector="TextBlock.caption.error">
+      <Setter Property="Foreground" Value="{StaticResource RecordBrush}" />
+    </Style>
+    <Style Selector="Border.avatar">
+      <Setter Property="Width" Value="38" />
+      <Setter Property="Height" Value="38" />
+      <Setter Property="CornerRadius" Value="2" />
+      <Setter Property="Background" Value="{StaticResource Divider}" />
+    </Style>
+    <Style Selector="Border.avatar.together">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <Style Selector="Border.avatar TextBlock">
+      <Setter Property="FontWeight" Value="Black" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.avatar.together TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
+    </Style>
+  </UserControl.Styles>
+  <ScrollViewer>
+    <StackPanel Margin="0,0,40,40" Spacing="22">
+      <StackPanel Spacing="4">
+        <views:SectionMark Index="03" Label="Squad link" />
+        <TextBlock Classes="h1" Text="Squad" />
+        <TextBlock Classes="caption" TextWrapping="Wrap"
+                   Text="Play with friends who run Clip Engine. When you play together, every moment is saved from each teammate's view, and lands in a library you all share." />
+      </StackPanel>
+
+      <TextBlock Classes="caption" Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextWrapping="Wrap"
+                 Classes.error="{Binding MessageIsError}" />
+
+      <!-- Not in a squad yet: make one, or join with a squadmate's invite -->
+      <StackPanel Spacing="22" IsVisible="{Binding NotInSquad}">
+        <Grid ColumnDefinitions="*,22,*">
+          <views:Plate Classes="card lead" Padding="28,26">
+            <StackPanel Spacing="14">
+              <TextBlock Classes="eyebrow" Text="MAKE A SQUAD" />
+              <TextBlock Classes="body" TextWrapping="Wrap"
+                         Text="Start one and send the invite to your friends. Up to 8 can be in a squad." />
+              <StackPanel Spacing="6">
+                <TextBlock Text="Your name" FontWeight="SemiBold" FontSize="14" />
+                <TextBox Text="{Binding PlayerName}" MaxLength="32" Watermark="What your squad calls you" />
+              </StackPanel>
+              <StackPanel Spacing="6">
+                <TextBlock Text="Squad name" FontWeight="SemiBold" FontSize="14" />
+                <TextBox Text="{Binding SquadNameInput}" MaxLength="40" Watermark="Optional" />
+              </StackPanel>
+              <Button Classes="accent" Content="Make squad" Command="{Binding CreateCommand}" HorizontalAlignment="Left" />
+            </StackPanel>
+          </views:Plate>
+          <views:Plate Grid.Column="2" Classes="card" Padding="28,26">
+            <StackPanel Spacing="14">
+              <TextBlock Classes="eyebrow" Text="JOIN A SQUAD" />
+              <TextBlock Classes="body" TextWrapping="Wrap"
+                         Text="Paste the invite code or link a squadmate sent you. Opening an invite link fills it in here." />
+              <StackPanel Spacing="6">
+                <TextBlock Text="Your name" FontWeight="SemiBold" FontSize="14" />
+                <TextBox Text="{Binding PlayerName}" MaxLength="32" Watermark="What your squad calls you" />
+              </StackPanel>
+              <StackPanel Spacing="6">
+                <TextBlock Text="Invite" FontWeight="SemiBold" FontSize="14" />
+                <TextBox Text="{Binding InviteInput}" FontFamily="{StaticResource MonoFont}" Watermark="Invite code or link" />
+              </StackPanel>
+              <Button Classes="accent" Content="Join" Command="{Binding JoinCommand}" HorizontalAlignment="Left" />
+            </StackPanel>
+          </views:Plate>
+        </Grid>
+
+        <views:Plate Classes="card" Padding="26,22">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
+              <PathIcon Data="{StaticResource IconCloud}" />
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+              <TextBlock Text="Online service" FontWeight="SemiBold" FontSize="14" />
+              <TextBlock Classes="caption" TextWrapping="Wrap"
+                         Text="Squads, the shared library and share links go through Clip Engine's online service. Leave this empty to use the built-in one, or point it at your own." />
+            </StackPanel>
+            <TextBox Grid.Column="2" Width="320" VerticalAlignment="Center" Text="{Binding ServerAddress}" Watermark="{Binding ServerHint}" />
+          </Grid>
+        </views:Plate>
+      </StackPanel>
+
+      <!-- In a squad -->
+      <StackPanel Spacing="22" IsVisible="{Binding InSquad}">
+        <views:Plate Classes="card lead" Padding="32,28,30,28">
+          <Panel>
+            <views:Stripes Width="150" Height="9" Spacing="9" Fill="{DynamicResource AccentStripeBrush}"
+                           HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-27,-29,0" />
+            <Grid ColumnDefinitions="*,Auto">
+              <StackPanel Spacing="8" VerticalAlignment="Center">
+                <Border Classes="pill" HorizontalAlignment="Left" Padding="9,3">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Ellipse Classes="liveDot" Classes.pulsing="{Binding IsTogether}" VerticalAlignment="Center"
+                             Fill="{StaticResource SuccessBrush}" IsVisible="{Binding IsConnected}" />
+                    <Ellipse Classes="liveDot" VerticalAlignment="Center" Fill="{StaticResource WarnBrush}"
+                             IsVisible="{Binding !IsConnected}" />
+                    <TextBlock Text="{Binding ConnectionText}" FontSize="11" FontWeight="Bold" LetterSpacing="1.1" />
+                  </StackPanel>
+                </Border>
+                <TextBlock Classes="h2" Text="{Binding SquadName}" />
+                <TextBlock Text="{Binding TogetherTitle}" FontWeight="SemiBold" FontSize="15" TextWrapping="Wrap" />
+                <TextBlock Classes="caption" Text="{Binding TogetherDetail}" TextWrapping="Wrap" />
+              </StackPanel>
+              <StackPanel Grid.Column="1" Spacing="8" Margin="24,0,0,0" VerticalAlignment="Center" IsVisible="{Binding HasInvite}">
+                <TextBlock Classes="eyebrow" Text="INVITE" HorizontalAlignment="Right" />
+                <Border Classes="inset" Padding="14,8" CornerRadius="2">
+                  <SelectableTextBlock Text="{Binding InviteCode}" FontFamily="{StaticResource MonoFont}" FontSize="14"
+                                       FontWeight="Bold" LetterSpacing="1.2" />
+                </Border>
+                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                  <Button Classes="secondary" Content="Copy code" Command="{Binding CopyInviteCommand}" />
+                  <Button Classes="secondary" Content="Copy link" Command="{Binding CopyInviteLinkCommand}" />
+                  <Button Classes="icon" Width="36" Height="36" Command="{Binding NewInviteCommand}" IsVisible="{Binding IsOwner}"
+                          ToolTip.Tip="Make a new code. The old one stops working.">
+                    <PathIcon Data="{StaticResource IconRefresh}" Width="15" Height="15" />
+                  </Button>
+                </StackPanel>
+              </StackPanel>
+            </Grid>
+          </Panel>
+        </views:Plate>
+
+        <Grid ColumnDefinitions="1.25*,22,*">
+          <views:Plate Classes="card" Padding="26,24">
+            <StackPanel>
+              <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,18">
+                <TextBlock Classes="eyebrow" Text="MEMBERS" />
+                <TextBlock Grid.Column="1" Classes="caption" Text="{Binding MembersCaption}" />
+              </Grid>
+              <ItemsControl ItemsSource="{Binding Members}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:SquadMemberRow">
+                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,14">
+                      <Border Classes="avatar" Classes.together="{Binding PlayingWithYou}" Margin="0,0,12,0">
+                        <TextBlock Text="{Binding Initial}" />
+                      </Border>
+                      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                          <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                          <Border Classes="pill" Padding="6,1" VerticalAlignment="Center" IsVisible="{Binding IsOwner}">
+                            <TextBlock Text="OWNER" FontSize="9" FontWeight="Bold" LetterSpacing="1" />
+                          </Border>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <Ellipse Width="6" Height="6" VerticalAlignment="Center" Fill="{StaticResource SuccessBrush}"
+                                   IsVisible="{Binding IsOnline}" />
+                          <TextBlock Classes="caption" Text="{Binding Status}" />
+                          <TextBlock Classes="caption" Text="· unlinked" IsVisible="{Binding IsUnlinked}" />
+                        </StackPanel>
+                      </StackPanel>
+                      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <Button Classes="secondary" Content="Unlink" Command="{Binding UnlinkCommand}" IsVisible="{Binding CanUnlink}"
+                                ToolTip.Tip="Stop saving moments from each other's view, even in the same match" />
+                        <Button Classes="secondary" Content="Link again" Command="{Binding LinkCommand}" IsVisible="{Binding CanLink}" />
+                        <Button Classes="icon danger" Width="32" Height="32" Command="{Binding RemoveCommand}" IsVisible="{Binding CanRemove}"
+                                ToolTip.Tip="Remove from the squad">
+                          <PathIcon Data="{StaticResource IconClose}" Width="13" Height="13" />
+                        </Button>
+                      </StackPanel>
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <Border Height="1" Background="{StaticResource Divider}" Margin="0,4,0,16" />
+              <TextBlock Text="Your name in the squad" FontWeight="SemiBold" FontSize="14" Margin="0,0,0,8" />
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBox Text="{Binding PlayerName}" MaxLength="32" />
+                <Button Grid.Column="1" Classes="secondary" Content="Save" Command="{Binding RenameCommand}" Margin="10,0,0,0" />
+              </Grid>
+            </StackPanel>
+          </views:Plate>
+
+          <views:Plate Grid.Column="2" Classes="card" Padding="26,24">
+            <StackPanel>
+              <TextBlock Classes="eyebrow" Margin="0,0,0,18" Text="WHAT YOU SHARE" />
+              <TextBlock Text="Send your views to the library" FontWeight="SemiBold" FontSize="14" />
+              <TextBlock Classes="caption" Text="{Binding UploadsCaption}" TextWrapping="Wrap" Margin="0,2,0,10" />
+              <Border Classes="segments" HorizontalAlignment="Left">
+                <StackPanel Orientation="Horizontal">
+                  <RadioButton Classes="segment" GroupName="uploads" Content="Highlights" IsChecked="{Binding UploadsHighlights}" />
+                  <RadioButton Classes="segment" GroupName="uploads" Content="Everything" IsChecked="{Binding UploadsAll}" />
+                  <RadioButton Classes="segment" GroupName="uploads" Content="Never" IsChecked="{Binding UploadsOff}" />
+                </StackPanel>
+              </Border>
+              <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+              <TextBlock Text="Tell the squad about these moments" FontWeight="SemiBold" FontSize="14" />
+              <TextBlock Classes="caption" TextWrapping="Wrap" Margin="0,2,0,10"
+                         Text="Squadmates playing with you save their view of each one." />
+              <ItemsControl ItemsSource="{Binding ShareMoments}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:EventToggle">
+                    <ToggleButton Classes="chip" Content="{Binding Label}" IsChecked="{Binding IsOn}" Margin="0,0,8,8" />
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <Border Height="1" Background="{StaticResource Divider}" Margin="0,8,0,16" />
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Spacing="2" Margin="0,0,16,0">
+                  <TextBlock Text="Join button on Discord" FontWeight="SemiBold" FontSize="14" />
+                  <TextBlock Classes="caption" TextWrapping="Wrap"
+                             Text="Your Discord status gets a Join my squad button with your invite. Anyone who sees your profile can use it." />
+                </StackPanel>
+                <ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding JoinOnDiscord}" OnContent="{x:Null}" OffContent="{x:Null}" />
+              </Grid>
+              <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+              <Button Classes="secondary" Content="Leave squad" Command="{Binding LeaveCommand}" HorizontalAlignment="Left"
+                      IsVisible="{Binding NotConfirmingLeave}" />
+              <StackPanel Spacing="10" IsVisible="{Binding ConfirmLeave}">
+                <TextBlock Text="{Binding SquadName, StringFormat='Leave {0}?'}" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="{Binding LeaveWarning}" TextWrapping="Wrap" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Button Classes="record" Content="Leave" Command="{Binding ConfirmLeaveCommand}" />
+                  <Button Classes="secondary" Content="Stay" Command="{Binding CancelLeaveCommand}" />
+                </StackPanel>
+              </StackPanel>
+            </StackPanel>
+          </views:Plate>
+        </Grid>
+
+        <!-- The shared library: every squad moment, with each teammate's view of it -->
+        <StackPanel Spacing="14">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <TextBlock Classes="eyebrow" Text="SHARED LIBRARY" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Classes="caption" Text="{Binding StorageText}" Margin="14,0,0,0" VerticalAlignment="Center" />
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10">
+              <TextBlock Classes="caption" Text="{Binding UploadStatus}" IsVisible="{Binding IsUploading}" VerticalAlignment="Center" />
+              <Button Classes="icon" Width="34" Height="34" Command="{Binding RefreshLibraryCommand}" ToolTip.Tip="Refresh">
+                <PathIcon Data="{StaticResource IconRefresh}" Width="14" Height="14" />
+              </Button>
+            </StackPanel>
+          </Grid>
+          <TextBlock Classes="caption error" Text="{Binding LibraryMessage}" IsVisible="{Binding HasLibraryMessage}" TextWrapping="Wrap" />
+
+          <views:Plate Classes="card" Padding="28" IsVisible="{Binding HasNoMoments}">
+            <StackPanel Spacing="8" HorizontalAlignment="Center">
+              <PathIcon Data="{StaticResource IconSquad}" Width="34" Height="34" Foreground="{StaticResource TextTertiary}" />
+              <TextBlock Classes="h2" Text="No squad moments yet" HorizontalAlignment="Center" />
+              <TextBlock Classes="caption" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="480"
+                         Text="Play a match with a squadmate. Each kill, revive and highlight either of you gets shows up here, with a view from each of you." />
+            </StackPanel>
+          </views:Plate>
+
+          <ItemsControl ItemsSource="{Binding Moments}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:SquadMomentRow">
+                <views:Plate Classes="card" Padding="0" Margin="0,0,0,12">
+                  <Grid ColumnDefinitions="Auto,*,Auto">
+                    <Border Width="4" Background="{Binding Brush}" />
+                    <StackPanel Grid.Column="1" Margin="22,18" Spacing="6">
+                      <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="15" />
+                      <TextBlock Classes="caption" Text="{Binding Caption}" />
+                      <TextBlock Classes="caption" Text="{Binding Text}" IsVisible="{Binding HasText}" TextTrimming="CharacterEllipsis"
+                                 FontFamily="{StaticResource MonoFont}" />
+                      <ItemsControl ItemsSource="{Binding Views}" Margin="0,4,0,0">
+                        <ItemsControl.ItemsPanel>
+                          <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="vm:SquadViewChip">
+                            <Border Classes="inset" CornerRadius="2" Padding="9,3" Margin="0,0,8,6">
+                              <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Ellipse Width="6" Height="6" VerticalAlignment="Center" Fill="{StaticResource SuccessBrush}"
+                                         IsVisible="{Binding Ready}" />
+                                <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding State}" FontSize="12" Foreground="{StaticResource TextTertiary}" />
+                              </StackPanel>
+                            </Border>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" Margin="0,0,20,0" VerticalAlignment="Center">
+                      <Button Classes="icon" Width="34" Height="34" Command="{Binding StarCommand}" ToolTip.Tip="{Binding StarTip}">
+                        <Panel>
+                          <PathIcon Data="{StaticResource IconStarOutline}" Width="14" Height="14" IsVisible="{Binding !IsStarred}" />
+                          <PathIcon Data="{StaticResource IconStar}" Width="14" Height="14" Foreground="{DynamicResource AccentBrush}"
+                                    IsVisible="{Binding IsStarred}" />
+                        </Panel>
+                      </Button>
+                      <Button Classes="secondary" Content="Ask for views" Command="{Binding AskCommand}" IsVisible="{Binding CanAsk}"
+                              ToolTip.Tip="Ask squadmates to send their view to the library" />
+                      <Button Classes="secondary" Content="Make highlight" Command="{Binding HighlightCommand}" IsEnabled="{Binding CanHighlight}"
+                              ToolTip.Tip="Cut the play and a replay from each view into one clip" />
+                      <Button Classes="accent" Command="{Binding WatchCommand}" IsEnabled="{Binding CanWatch}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                          <PathIcon Data="{StaticResource IconPlay}" Width="12" Height="12" />
+                          <TextBlock Text="Watch together" />
+                        </StackPanel>
+                      </Button>
+                    </StackPanel>
+                  </Grid>
+                </views:Plate>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Button Classes="secondary" Content="Show older moments" Command="{Binding LoadMoreCommand}" IsVisible="{Binding HasMore}"
+                  HorizontalAlignment="Center" />
+        </StackPanel>
+      </StackPanel>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

@@ -2,9 +2,11 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="using:ClipEngine.Desktop.Views">
 
-  <!-- Hazard: gunmetal panels with cut corners, an amber accent, an angular display face and monospace numbers.
-       Everything is opaque and flat (no blur, transparency, gradients or soft shadows), so redraws stay cheap and
-       the app stays out of the game's way. -->
+  <!-- Hazard: gunmetal panels with cut corners, an amber accent, an angular display face and monospace numbers,
+       dressed like printed technical matter from a future that never happened: numbered sections, ruled lines with
+       ticks, crop-mark brackets on the panels, barcodes, a dotted grid behind the pages and solid blocks of colour
+       for where you are. Everything is opaque and flat (no blur, transparency, gradients or soft shadows), so redraws
+       stay cheap and the app stays out of the game's way. -->
   <Styles.Resources>
     <ResourceDictionary>
       <ResourceDictionary.MergedDictionaries>
@@ -31,6 +33,8 @@
       <SolidColorBrush x:Key="BorderBrush" Color="#25272D" />
       <SolidColorBrush x:Key="BorderStrongBrush" Color="#363942" />
       <SolidColorBrush x:Key="Divider" Color="#202227" />
+      <!-- The crop-mark brackets on panel corners -->
+      <SolidColorBrush x:Key="BracketBrush" Color="#565A64" />
 
       <!-- Text -->
       <SolidColorBrush x:Key="TextPrimary" Color="#EEECE6" />
@@ -103,9 +107,9 @@
   </Style>
   <Style Selector="TextBlock.h1">
     <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
-    <Setter Property="FontSize" Value="26" />
+    <Setter Property="FontSize" Value="30" />
     <Setter Property="FontWeight" Value="Bold" />
-    <Setter Property="LetterSpacing" Value="-0.2" />
+    <Setter Property="LetterSpacing" Value="-0.4" />
   </Style>
   <Style Selector="TextBlock.h2">
     <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
@@ -120,11 +124,33 @@
     <Setter Property="FontSize" Value="12" />
     <Setter Property="Foreground" Value="{StaticResource TextTertiary}" />
   </Style>
+  <!-- Small capitals in the monospace face, like a label printed on a panel -->
   <Style Selector="TextBlock.eyebrow">
-    <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
+    <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="LetterSpacing" Value="2.2" />
+    <Setter Property="Foreground" Value="{StaticResource TextTertiary}" />
+  </Style>
+  <!-- A number or short reading, like 06 or 2 clips -->
+  <Style Selector="TextBlock.readout">
+    <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
     <Setter Property="FontSize" Value="12" />
-    <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="LetterSpacing" Value="1.6" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+  </Style>
+  <!-- The section mark over a page title: 02 CLIP LIBRARY, then a ruler -->
+  <Style Selector="TextBlock.markIndex">
+    <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector="TextBlock.markLabel">
+    <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="LetterSpacing" Value="2.4" />
     <Setter Property="Foreground" Value="{StaticResource TextTertiary}" />
   </Style>
   <Style Selector="TextBlock.stat">
@@ -148,7 +174,34 @@
   <Style Selector="views|Plate.card">
     <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
     <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+    <Setter Property="Brackets" Value="{StaticResource BracketBrush}" />
     <Setter Property="Cut" Value="12" />
+  </Style>
+  <!-- A game on the Games page: its art, then its details -->
+  <Style Selector="views|Plate.card.game:pointerover">
+    <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}" />
+    <Setter Property="Brackets" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector="views|GameBadge.dim">
+    <Setter Property="Opacity" Value="0.4" />
+  </Style>
+  <Style Selector="Border.rule">
+    <Setter Property="Height" Value="1" />
+    <Setter Property="Background" Value="{StaticResource Divider}" />
+  </Style>
+  <!-- A label stuck to the corner of a picture, like STEAM on a game's art -->
+  <Style Selector="Border.tag">
+    <Setter Property="Background" Value="{StaticResource WindowBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="BorderThickness" Value="2,0,0,0" />
+    <Setter Property="Padding" Value="8,3,9,3" />
+  </Style>
+  <Style Selector="Border.tag TextBlock">
+    <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+    <Setter Property="FontSize" Value="10" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="LetterSpacing" Value="1.6" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
   </Style>
   <!-- A card that leads its page, marked with a tab of the accent in its corner -->
   <Style Selector="views|Plate.card.lead">
@@ -444,6 +497,10 @@
     <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
     <Setter Property="BorderBrush" Value="{x:Null}" />
   </Style>
+  <!-- The plain TextBlock style above would otherwise keep the label white on the accent. -->
+  <Style Selector="RadioButton.chip:checked TextBlock, ToggleButton.chip:checked TextBlock, ListBox.chips ListBoxItem:selected TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
+  </Style>
 
   <!-- Filter chips as a horizontal list -->
   <Style Selector="ListBox.chips">
@@ -539,17 +596,31 @@
   <Style Selector="ListBox.nav ListBoxItem:pointerover">
     <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
   </Style>
+  <!-- The page you're on is a solid block of the accent, with a dark notch down its edge -->
   <Style Selector="ListBox.nav ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter, ListBox.nav ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
   </Style>
   <Style Selector="ListBox.nav ListBoxItem:selected">
-    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
   </Style>
   <Style Selector="ListBox.nav ListBoxItem Border.navBar">
     <Setter Property="Background" Value="Transparent" />
   </Style>
   <Style Selector="ListBox.nav ListBoxItem:selected Border.navBar">
-    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Background" Value="{StaticResource RailBrush}" />
+  </Style>
+  <Style Selector="ListBox.nav ListBoxItem TextBlock.navIndex">
+    <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+    <Setter Property="FontSize" Value="9" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Foreground" Value="{StaticResource BorderStrongBrush}" />
+  </Style>
+  <Style Selector="ListBox.nav ListBoxItem:pointerover TextBlock.navIndex">
+    <Setter Property="Foreground" Value="{StaticResource TextTertiary}" />
+  </Style>
+  <Style Selector="ListBox.nav ListBoxItem:selected TextBlock.navIndex">
+    <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
+    <Setter Property="Opacity" Value="0.6" />
   </Style>
   <Style Selector="ListBox.nav ListBoxItem PathIcon.navIcon">
     <Setter Property="Foreground" Value="{StaticResource TextTertiary}" />
@@ -558,7 +629,7 @@
     <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
   </Style>
   <Style Selector="ListBox.nav ListBoxItem:selected PathIcon.navIcon">
-    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
   </Style>
 
   <!-- Inputs -->
@@ -757,6 +828,22 @@
         <BrushTransition Property="Background" Duration="0:0:0.12" />
       </Transitions>
     </Setter>
+  </Style>
+
+  <!-- A notification pop-up slides in from the right as it arrives -->
+  <Style Selector="views|Plate.popUp">
+    <Style.Animations>
+      <Animation Duration="0:0:0.24" Easing="CubicEaseOut" FillMode="Forward">
+        <KeyFrame Cue="0%">
+          <Setter Property="Opacity" Value="0" />
+          <Setter Property="TranslateTransform.X" Value="28" />
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+          <Setter Property="Opacity" Value="1" />
+          <Setter Property="TranslateTransform.X" Value="0" />
+        </KeyFrame>
+      </Animation>
+    </Style.Animations>
   </Style>
 
   <!-- The toast rises in from the bottom each time it shows -->

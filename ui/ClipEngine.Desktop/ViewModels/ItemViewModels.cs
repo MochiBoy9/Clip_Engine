@@ -6,9 +6,13 @@ using ClipEngine.Desktop.Services;
 
 namespace ClipEngine.Desktop.ViewModels;
 
-public enum Page { Home, Clips, Records, Games, Settings }
+public enum Page { Home, Clips, Squad, Friends, Records, Journal, Games, Cloud, Settings }
 
-public sealed record NavItem(Page Page, string Title, StreamGeometry Icon);
+public sealed record NavItem(Page Page, string Title, StreamGeometry Icon)
+{
+    // Its place in the rail, printed beside it: 01 for the first.
+    public string Index => ((int)Page + 1).ToString("00", CultureInfo.InvariantCulture);
+}
 
 public enum ActivityKind { Info, Recording, Clip, Moment, Warning, Error }
 
@@ -37,6 +41,7 @@ public sealed class ClipItemViewModel : ObservableObject
         ShowCommand = new RelayCommand(() => owner?.ShowClipCommand.Execute(this));
         DeleteCommand = new RelayCommand(() => owner?.DeleteClipCommand.Execute(this));
         ShareCommand = new RelayCommand(() => owner?.ShareClipCommand.Execute(this));
+        LinkCommand = new RelayCommand(() => owner?.CopyLinkCommand.Execute(this));
         FavoriteCommand = new RelayCommand(() => owner?.FavoriteClipCommand.Execute(this));
     }
 
@@ -44,6 +49,7 @@ public sealed class ClipItemViewModel : ObservableObject
     public RelayCommand ShowCommand { get; }
     public RelayCommand DeleteCommand { get; }
     public RelayCommand ShareCommand { get; }
+    public RelayCommand LinkCommand { get; }
     public RelayCommand FavoriteCommand { get; }
 
     internal ClipFile File
@@ -72,6 +78,7 @@ public sealed class ClipItemViewModel : ObservableObject
     public string Summary => File.Metadata?.Title ?? "";
     public bool HasSummary => Summary.Length > 0;
     public bool IsAutomatic => File.Metadata?.IsAutomatic == true;
+    public bool IsVoice => File.Metadata?.IsVoice == true;
     public string Caption => HasSummary ? $"{Summary} · {Size}" : Size;
     internal IReadOnlyList<ClipEvent> Events => File.Metadata?.Events ?? [];
     public string When => Format.When(File.Created);
@@ -245,6 +252,8 @@ public sealed class GameItemViewModel(string name, int paletteIndex) : Observabl
 {
     private bool _isRunning;
     private bool _isRecording;
+    private bool _isInstalled = true;
+    private string? _store;
     private int _clipCount;
 
     public string Name { get; } = name;
@@ -280,12 +289,53 @@ public sealed class GameItemViewModel(string name, int paletteIndex) : Observabl
         }
     }
 
+    // Off Windows nothing can be looked up, so every game counts as installed.
+    public bool IsInstalled
+    {
+        get => _isInstalled;
+        set
+        {
+            if (!Set(ref _isInstalled, value)) return;
+            Raise(nameof(Status));
+            Raise(nameof(StoreText));
+            Raise(nameof(StoreTag));
+        }
+    }
+
+    // The store it was found through, like Steam or Battle.net.
+    public string? Store
+    {
+        get => _store;
+        set
+        {
+            if (!Set(ref _store, value)) return;
+            Raise(nameof(StoreText));
+            Raise(nameof(StoreTag));
+        }
+    }
+
+    public string StoreText => Store ?? (IsInstalled ? "Supported" : "Not installed");
+    public string StoreTag => StoreText.ToUpperInvariant();
+
     public string ClipCountText => ClipCount == 1 ? "1 clip" : $"{ClipCount} clips";
-    public string Status => IsRecording ? "Recording now" : IsRunning ? "Running" : "Ready to detect";
+    public string Status => IsRecording ? "Recording now" : IsRunning ? "Running" : IsInstalled ? "Ready to detect" : "Not installed";
 }
 
 public sealed record FpsOption(int Value, string Label)
 {
+    public override string ToString() => Label;
+}
+
+// One choice in Settings' resolution list. Every plan has them all.
+public sealed record ResolutionOption(int Value)
+{
+    public string Label => Value switch
+    {
+        <= 0 => "Best (up to 4K)",
+        2160 => "4K (2160p)",
+        _ => Resolutions.Name(Value),
+    };
+
     public override string ToString() => Label;
 }
 
@@ -310,6 +360,13 @@ internal static class Palettes
             EndPoint = new Avalonia.RelativePoint(1, 1, Avalonia.RelativeUnit.Relative),
             GradientStops = { new GradientStop(a, 0), new GradientStop(b, 1) },
         };
+    }
+
+    // A dark plate in the game's first colour, behind its icon.
+    public static IBrush Plate(int index)
+    {
+        var (a, _) = Pairs[Math.Abs(index) % Pairs.Length];
+        return new ImmutableSolidColorBrush(Color.FromRgb((byte)(a.R * 0.22 + 14), (byte)(a.G * 0.22 + 14), (byte)(a.B * 0.22 + 16)));
     }
 
     public static int IndexFor(string name)
