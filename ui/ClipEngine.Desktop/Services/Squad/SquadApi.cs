@@ -101,7 +101,7 @@ internal sealed class SquadApi(string server, HttpClient? http = null)
         await using var stream = File.OpenRead(file);
         using var request = new HttpRequestMessage(HttpMethod.Put, $"{Server}/v1/squads/{squad}/moments/{moment}/views/me/{kind}")
         {
-            Content = new StreamContent(stream),
+            Content = UploadPace.Content(stream),
         };
         request.Content.Headers.ContentType = new MediaTypeHeaderValue(contentType);
         request.Content.Headers.ContentLength = stream.Length;

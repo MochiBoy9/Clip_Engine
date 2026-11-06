@@ -16,6 +16,7 @@ using ClipEngine.Desktop.Views;
 // Usage: ClipEngine.Desktop.Preview <output folder>
 var output = Path.GetFullPath(args.Length > 0 ? args[0] : "screenshots");
 Directory.CreateDirectory(output);
+AppPaths.DataDir = Path.Combine(Path.GetTempPath(), "ClipEngine-preview");
 
 AppBuilder.Configure<App>()
           .UseSkia()

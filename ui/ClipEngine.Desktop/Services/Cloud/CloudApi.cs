@@ -150,7 +150,7 @@ internal sealed class CloudApi(string server, HttpClient? http = null)
             {
                 using var request = new HttpRequestMessage(HttpMethod.Put, $"{Server}/v1/accounts/{account}/clips/{clip}/video/parts/{n}")
                 {
-                    Content = new ByteArrayContent(buffer, 0, length),
+                    Content = UploadPace.Content(new MemoryStream(buffer, 0, length, writable: false)),
                 };
                 request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -177,7 +177,7 @@ internal sealed class CloudApi(string server, HttpClient? http = null)
         await using var stream = File.OpenRead(file);
         using var request = new HttpRequestMessage(HttpMethod.Put, $"{Server}/v1/accounts/{account}/clips/{clip}/{kind}")
         {
-            Content = new StreamContent(stream),
+            Content = UploadPace.Content(stream),
         };
         request.Content.Headers.ContentType = new MediaTypeHeaderValue(contentType);
         request.Content.Headers.ContentLength = stream.Length;
