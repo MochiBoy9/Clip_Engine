@@ -351,6 +351,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             ShowPage(Friends);
             Invite.PrefillCode(Uri.UnescapeDataString(invite));
         }
+        else if (CloudViewModel.ReadSignInLink(uri) is var (signInCode, state))
+        {
+            // Back from Sign in with Google in the browser.
+            ShowPage(Cloud);
+            Cloud.CompleteGoogleSignIn(signInCode, state);
+        }
     }
 
     internal PlayerViewModel OpenPlayer(ClipItemViewModel clip)

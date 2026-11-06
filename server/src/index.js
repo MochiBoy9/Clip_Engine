@@ -9,9 +9,11 @@
 //   PUT/GET /v1/squads/<id>/moments/<moment>/views/<member|me>/(video|thumb)
 //   POST /v1/squads/<id>/moments/<moment>/star, POST /invite/rotate, PATCH|DELETE /members/me
 //
-// Cloud library (one Durable Object per account, src/library.js):
-//   POST /v1/accounts               make an account           { name, device }
-//   POST /v1/accounts/signin        sign another PC in        { code, device }
+// Cloud library (one Durable Object per account, src/library.js; signing up and in, src/accounts.js):
+//   POST /v1/accounts               make an account           { name, email, password, device }
+//   POST /v1/accounts/signin        sign a PC in              { email, password, device } or { code, device }
+//   POST /v1/auth/forgot|reset|confirm, GET /v1/auth/google   password resets, email links, Sign in with Google
+//   GET /security, POST /email, POST /password, POST /verify, DELETE /devices/<id>   email, password and devices
 //   GET|PATCH /v1/accounts/<id>/account, POST /link, GET|POST /clips,
 //   PATCH|DELETE /clips/<clip>, PUT|GET /clips/<clip>/(video|thumb)
 //   POST /clips/<clip>/video/parts, PUT /parts/<n>, POST /parts/done   a clip over 100 MB, in parts (Pro and Ultra)
@@ -58,11 +60,12 @@
 //
 // See README.md for the messages on the squad socket.
 
+import { authRoute, passwordSignIn, signUp } from "./accounts.js";
 import { isSquadId, normalizeInvite, randomCode, sameSecret, SQUAD_ID_LENGTH } from "./codes.js";
 import { Handles, normalizeHandle } from "./handles.js";
 import { hubRoute } from "./hub.js";
 import { pageCsp } from "./look.js";
-import { CLIP_CODE_LENGTH, Library } from "./library.js";
+import { CLIP_CODE_LENGTH, Library, libraryStub } from "./library.js";
 import { formatInvite } from "./codes.js";
 import { clipOembed, clipPage, invitePage, notFoundPage, profilePage, referralPage } from "./pages.js";
 import { checkLicense, creditGroup, donationSettings, normalizeGrant, PLANS, planJson } from "./plans.js";
@@ -104,6 +107,8 @@ function forward(target, request, path, { body, headers = {} } = {}) {
     ? new Request(url.toString(), request)
     : new Request(url.toString(), { method: request.method, headers: request.headers, body });
   for (const [name, value] of Object.entries(headers)) sent.headers.set(name, value);
+  // The country Cloudflare saw, for an account's device list (src/library.js, clientOf).
+  if (request.cf?.country) sent.headers.set("cf-ipcountry", request.cf.country);
   return target.fetch(sent);
 }
 
@@ -117,7 +122,7 @@ async function readBody(request) {
 
 // Paths a Durable Object only takes from the Worker itself, never straight from a client.
 function internal(path) {
-  return /^\/(create|join|admin|public|peer|web)(\/|$)/.test(path);
+  return /^\/(create|join|admin|public|peer|web|auth)(\/|$)/.test(path);
 }
 
 // "K7QM-2X9D-PA4R-HT" (or a link ending in it): the account id and the one-time secret.
@@ -190,7 +195,7 @@ function decodeSegment(text) {
 async function clipRoute(request, env, code, rest) {
   const account = code.slice(0, SQUAD_ID_LENGTH);
   const clip = code.slice(SQUAD_ID_LENGTH);
-  const library = stub(env.LIBRARIES, account);
+  const library = libraryStub(env, account);
   if (rest === "/video" || rest === "/thumb") return forward(library, request, `/public/clip/${clip}${rest}`);
   const origin = new URL(request.url).origin;
   const viewed = rest === "" && request.method === "GET" && !PREVIEW_AGENTS.test(request.headers.get("user-agent") ?? "") ? "?view=1" : "";
@@ -211,7 +216,7 @@ async function profileRoute(request, env, handle, asJson) {
   const found = await stub(env.HANDLES, "handles").fetch(new Request(`${origin}/lookup?handle=${encodeURIComponent(handle)}`));
   if (!found.ok) return asJson ? json({ error: "No one has that name." }, 404) : html(notFoundPage(), 404);
   const { account } = await found.json();
-  const answer = await stub(env.LIBRARIES, account).fetch(new Request(`${origin}/public/profile`));
+  const answer = await libraryStub(env, account).fetch(new Request(`${origin}/public/profile`));
   if (!answer.ok) return asJson ? json({ error: "No one has that name." }, 404) : html(notFoundPage(), 404);
   const profile = await answer.json();
   return asJson ? json(profile) : html(profilePage(profile, origin));
@@ -230,7 +235,7 @@ export default {
 // protection: making accounts and squads, sign-in and invite codes, key checks and special-key messages get
 // AUTH_LIMIT; every other change (uploads, friends, edits, the key maker's) gets WRITE_LIMIT. Reads aren't limited
 // here. Without the bindings (tests, wrangler dev) nothing is limited.
-const AUTH_ROUTES = /^\/(v1\/(accounts|accounts\/signin|squads|join|license|contact|contact\/list|referrals|referrals\/activate)|hub\/api\/(signin|report))$/;
+const AUTH_ROUTES = /^\/(v1\/(accounts|accounts\/signin|auth\/(forgot|reset|confirm)|squads|join|license|contact|contact\/list|referrals|referrals\/activate)|hub\/api\/(signin|signup|report))$/;
 
 async function overLimit(request, env, path, method) {
   const sensitive = method === "POST" && AUTH_ROUTES.test(path);
@@ -287,26 +292,25 @@ async function route(request, env) {
     }
 
     // ---- cloud library ----
-    if (path === "/v1/accounts" && method === "POST") {
-      const id = randomCode(SQUAD_ID_LENGTH);
-      return forward(stub(env.LIBRARIES, id), request, "/create", { headers: { "x-account-id": id } });
-    }
+    if (path === "/v1/accounts" && method === "POST") return signUp(env, url.origin, request, await readBody(request));
     if (path === "/v1/accounts/signin" && method === "POST") {
       const body = await readBody(request);
+      if (typeof body?.email === "string") return passwordSignIn(env, url.origin, request, body);
       const code = normalizeSignIn(body?.code);
       if (!code) return json({ error: "That isn't a sign-in code." }, 400);
-      return forward(stub(env.LIBRARIES, code.account), request, "/join", {
+      return forward(libraryStub(env, code.account), request, "/join", {
         body: JSON.stringify({ device: body?.device, secret: code.secret }),
       });
     }
+    if (path.startsWith("/v1/auth/")) return authRoute(request, env, url);
     m = path.match(/^\/v1\/accounts\/([0-9A-Za-z]+)(\/.*)$/);
-    if (m && isSquadId(m[1].toUpperCase()) && !internal(m[2])) return forward(stub(env.LIBRARIES, m[1].toUpperCase()), request, m[2]);
+    if (m && isSquadId(m[1].toUpperCase()) && !internal(m[2])) return forward(libraryStub(env, m[1].toUpperCase()), request, m[2]);
     if (/^\/v1\/admin\/(grants|messages|reports|hide)(\/|$)/.test(path)) return withCors(await grantRoute(request, env, url, path, method));
     if (path.startsWith("/v1/admin/") && !admin(request, env)) return json({ error: "Not allowed." }, 403);
     if (path === "/v1/admin/plan" && method === "POST") {
       const body = await readBody(request);
       if (!isSquadId(body?.account)) return json({ error: "Which account?" }, 400);
-      return forward(stub(env.LIBRARIES, body.account), request, "/admin/plan", { body: JSON.stringify({ plan: body.plan }) });
+      return forward(libraryStub(env, body.account), request, "/admin/plan", { body: JSON.stringify({ plan: body.plan }) });
     }
 
     // ---- inviting friends ----

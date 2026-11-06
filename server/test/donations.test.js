@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import worker from "../src/index.js";
 import { checkLicense, donationPerks } from "../src/plans.js";
-import { fakeEnv, request } from "./fakes.js";
+import { fakeEnv, request, signUpBody } from "./fakes.js";
 
 const call = (env, path, options) => worker.fetch(request(path, options), env);
 const GB = 1024 * 1024 * 1024;
@@ -173,7 +173,7 @@ test("a donation key on a cloud account adds its storage and shows Supporter", a
     { "GIFT-KEY-0001": { status: "granted", benefit_id: "ben_donate", customer_id: "cus_1" } },
     [order("cus_1", 800)],
   );
-  const made = await (await call(env, "/v1/accounts", { method: "POST", body: { name: "Mira", device: "device-0000" } })).json();
+  const made = await (await call(env, "/v1/accounts", { method: "POST", body: signUpBody("Mira") })).json();
   const base = `/v1/accounts/${made.account.id}`;
   const claimed = await (await call(env, `${base}/plan`, { method: "POST", token: made.token, body: { key: "GIFT-KEY-0001" } })).json();
   assert.equal(claimed.plan, "free");

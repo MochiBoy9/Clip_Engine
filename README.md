@@ -38,7 +38,7 @@ You need Windows 10 (version 1903 or newer) or Windows 11, and a graphics card w
 - **Notifications.** A small pop-up when a friend sends a request or comes online, after each clip is saved, a few days before your subscription renews, when someone joins your squad and when an update is out. Choose which ones pop up in Settings, or turn them all off; the bell in the sidebar and Home's recent events keep the list either way.
 - **Share anywhere.** One click puts a short link on your clipboard. It plays in any browser, with the moments marked, and shows a preview in Discord. A small copy that fits Discord's upload limit is a click away too.
 - **Your profile.** Public clips show on your page, pinned ones first, under the same username your friends know you by.
-- **The hub.** Everyone's public clips on the web, newest or most watched, by game, and searchable. Watching needs no account, and nothing goes there unless you set it to Public. Sign in from your phone or any browser with one click in the app (or a username and password you set) to change who can see each clip.
+- **The hub.** Everyone's public clips on the web, newest or most watched, by game, and searchable. Watching needs no account, and nothing goes there unless you set it to Public. Sign in from your phone or any browser with one click in the app, your email and password, or Google, to change who can see each clip.
 - **Your badge, your call.** Pro, Ultra and Content Creator badges show next to your name. Hide yours any time from the app or the hub.
 - **Trim, edit, star and tidy.** Trim a clip in the player with no quality lost, or open it in the editor to split it into parts, cut what you don't need, put parts in another order and export a new clip with its moments kept. Star favourites, and have old clips cleaned up by age or size, favourites always kept.
 - **Detection Studio.** Add any game, or fine-tune how one is read: draw a box where the game shows a kill, type the words, and test it on your own clips.
@@ -107,7 +107,7 @@ Donate from **Settings > Plan** or the [website](https://mochiboy9.github.io/Cli
 
 ## Privacy
 
-Clips stay on your PC unless you share them. The first time Clip Engine starts on a PC it tells the online service so, with a hashed id for the PC, so friends who invited you get credit. Voice clips are off until you turn them on, and are heard by Windows' speech recognition on your PC, not sent anywhere. The cloud library, squads and friends need a free cloud account, which asks for no email. Online, the service keeps only what those features need: the clips you upload, your username, your friends and squads, and whether you're online. See the [privacy notice](website/privacy.html).
+Clips stay on your PC unless you share them. The first time Clip Engine starts on a PC it tells the online service so, with a hashed id for the PC, so friends who invited you get credit. Voice clips are off until you turn them on, and are heard by Windows' speech recognition on your PC, not sent anywhere. The cloud library, squads and friends need a free cloud account, made with your email and a password or with Google. Your email is how you sign in on other PCs and get back in if you forget your password; it's never shown to anyone. Online, the service keeps only what those features need: your email, the clips you upload, your username, your friends and squads, whether you're online, and the devices signed in to your account, which you can see and sign out on the hub. See the [privacy notice](website/privacy.html).
 
 ## Help and feedback
 

@@ -122,7 +122,11 @@ public class OnlineServiceTests
     {
         if (string.IsNullOrEmpty(Server)) return;
         var api = new CloudApi(Server);
-        var (token, account) = await api.CreateAsync("Enterro", "device-cccccccc");
+        var email = $"e2e-{Guid.NewGuid():N}@example.com";
+        var (token, account) = await api.CreateAsync("Enterro", email, "correct horse battery", "device-cccccccc");
+        Assert.Equal(email, account.Email);
+        var (_, again2) = await api.SignInWithPasswordAsync(email.ToUpperInvariant(), "correct horse battery", "device-eeeeeeee");
+        Assert.Equal(account.Id, again2.Id);
         var clip = await api.AddClipAsync(account.Id, token, new JsonObject
         {
             ["localId"] = "Valorant_2026-11-03.mp4|65536", ["title"] = "3 kills", ["game"] = "Valorant", ["seconds"] = 30,
