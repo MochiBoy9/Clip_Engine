@@ -9,7 +9,7 @@
        The motion keeps to the printed-panel look: things shift, register and snap like a misaligned second print
        pass, never float, bounce or glow. As in Theme.axaml, only colours, opacity and render transforms move, and
        only while a pointer is on something, so layout never reruns and nothing animates on its own. The backdrop
-       (Views/AdaptiveBackdrop.cs) has a light that follows the pointer and a scan now and then.
+       (Views/AdaptiveBackdrop.cs) is a still wash.
 
        The window's "motion" class is on while the adaptive theme's motion is (Settings > Plan, and Windows' own
        animation effects): the extra flickers and steps at the end of this file hang off it. -->

@@ -480,7 +480,7 @@
                   <DataTemplate x:DataType="vm:PlanOffer">
                     <Border Classes="inset offer" Classes.current="{Binding IsCurrent}" Padding="14,12" Margin="0,0,6,0" CornerRadius="2">
                       <DockPanel>
-                        <Button DockPanel.Dock="Bottom" Classes="accent" Classes.secondary="{Binding !IsUltra}" HorizontalAlignment="Stretch"
+                        <Button DockPanel.Dock="Bottom" Classes.accent="{Binding IsUltra}" Classes.secondary="{Binding !IsUltra}" HorizontalAlignment="Stretch"
                                 HorizontalContentAlignment="Center" Content="{Binding ButtonText}" Command="{Binding SubscribeCommand}" Margin="0,12,0,0" />
                         <StackPanel Spacing="4">
                           <Grid ColumnDefinitions="*,Auto">
@@ -527,7 +527,7 @@
                   </ItemsControl.ItemsPanel>
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:DonateOption">
-                      <Button Classes="accent" Classes.secondary="{Binding !IsAny}" Content="{Binding Label}" Command="{Binding DonateCommand}"
+                      <Button Classes.accent="{Binding IsAny}" Classes.secondary="{Binding !IsAny}" Content="{Binding Label}" Command="{Binding DonateCommand}"
                               Margin="0,0,8,8" MinWidth="64" HorizontalContentAlignment="Center" />
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
@@ -650,7 +650,7 @@
             <Grid ColumnDefinitions="*,Auto" Margin="0,12,0,0" IsVisible="{Binding AdaptiveOn}">
               <StackPanel VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
                 <TextBlock Text="Motion" FontWeight="SemiBold" FontSize="14" />
-                <TextBlock Classes="caption" Text="A light follows your pointer across the background, a scan reads each page in, and switches and the side rail flicker as they take. Only while Clip Engine is in front, and never while Windows' animation effects are off." TextWrapping="Wrap" />
+                <TextBlock Classes="caption" Text="Switches, chips and the side rail flicker as they take, and chips step up under the pointer. Never while Windows' animation effects are off." TextWrapping="Wrap" />
               </StackPanel>
               <ToggleSwitch Grid.Column="1" IsChecked="{Binding BackgroundMotion}" OnContent="{x:Null}" OffContent="{x:Null}"
                             VerticalAlignment="Center" />

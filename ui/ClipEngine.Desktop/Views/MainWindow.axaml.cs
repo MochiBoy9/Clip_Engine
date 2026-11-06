@@ -26,32 +26,16 @@ public partial class MainWindow : Window, IAppDialogs
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
         AddHandler(DragDrop.DropEvent, OnDrop);
         // In front, the window lives; behind the game or out of sight, it holds still and runs light.
-        Activated += (_, _) =>
-        {
-            Classes.Set("awake", true);
-            Backdrop.Awake = true;
-        };
-        Deactivated += (_, _) =>
-        {
-            Classes.Set("awake", false);
-            Backdrop.Awake = false;
-        };
+        Activated += (_, _) => Classes.Set("awake", true);
+        Deactivated += (_, _) => Classes.Set("awake", false);
         DataContextChanged += (_, _) =>
         {
             if (DataContext is MainViewModel vm)
             {
                 vm.Plan.LookChanged += ApplyLook;
                 ApplyLook(vm.Plan.Look);
-                // A new page gets a quick scan, like the sheet being read in.
-                vm.PropertyChanged += (_, e) =>
-                {
-                    if (e.PropertyName == nameof(MainViewModel.CurrentPage)) Backdrop.Sweep(AdaptiveBackdrop.PageSweepTime);
-                };
             }
         };
-        // The backdrop's light follows the pointer anywhere over the window, even over buttons that handle it.
-        AddHandler(PointerMovedEvent, (_, e) => Backdrop.Follow(e.GetPosition(Backdrop)), RoutingStrategies.Tunnel, true);
-        PointerExited += (_, _) => Backdrop.HideLight();
         // A click beside the notifications list closes it; the pointer over the pop-ups keeps them up while they're read.
         NoticeDismiss.PointerPressed += (_, e) =>
         {

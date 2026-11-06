@@ -67,12 +67,17 @@ internal static class AccentThemes
         app.Resources["AccentColor"] = accent;
         app.Resources["AccentBrush"] = new SolidColorBrush(accent);
         app.Resources["AccentHoverBrush"] = new SolidColorBrush(Mix(accent, Colors.White, 0.18));
-        app.Resources["AccentPressedBrush"] = new SolidColorBrush(Mix(accent, Colors.Black, 0.12));
+        // Pressed steps back down from the hover's lift rather than darkening past the accent, which would sink the
+        // dark label on mid-tone accents like Cobalt below a readable contrast.
+        app.Resources["AccentPressedBrush"] = new SolidColorBrush(Mix(accent, Colors.White, 0.06));
         app.Resources["AccentSoftBrush"] = new SolidColorBrush(WithAlpha(accent, 0x1F));
         app.Resources["AccentStripeBrush"] = new SolidColorBrush(WithAlpha(accent, 0x2E));
         app.Resources["AccentForegroundBrush"] = new SolidColorBrush(foreground);
         app.Resources["ToggleSwitchKnobFillOn"] = new SolidColorBrush(foreground);
         app.Resources["ToggleSwitchKnobFillOnPointerOver"] = new SolidColorBrush(foreground);
+        // Fluent has an "accent" button class of its own that paints a text label white; ours share the name.
+        foreach (var key in new[] { "AccentButtonForeground", "AccentButtonForegroundPointerOver", "AccentButtonForegroundPressed" })
+            app.Resources[key] = new SolidColorBrush(foreground);
 
         // Fluent's own accent, used by focus rings, toggles, sliders and text selection.
         app.Resources["SystemAccentColor"] = accent;
