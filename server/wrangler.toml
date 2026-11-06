@@ -81,4 +81,14 @@ REFERRAL_REWARD_DAYS = "30"
 REFERRAL_MAX_REWARDS = "1"
 REFERRAL_CLAIM_DAYS = "7"
 REFERRAL_IP_CHECK = "true"
+# Account emails (confirming an address, password resets, email changes) go out through Resend from this address, on
+# a domain verified there. The key is a secret: npx wrangler secret put RESEND_API_KEY. Until both are set, nothing is
+# sent (and accounts still work). See docs/DEVELOPMENT.md, "Accounts".
+EMAIL_FROM = ""
+# Sign in with Google: npx wrangler secret put GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET. Until both are set, the
+# button is hidden.
+# A cloud account reset. Changing this (to "1", then "2" for the next one) and deploying forgets every cloud account:
+# its clips, profile, friends, handle and sign-ins. Special keys, subscriptions and credits stay. docs/DEVELOPMENT.md
+# says exactly what goes. Leave it alone unless you mean it.
+ACCOUNTS_EPOCH = ""
 # ADMIN_TOKEN (for setting plans) is a secret: npx wrangler secret put ADMIN_TOKEN

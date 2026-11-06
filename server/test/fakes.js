@@ -218,6 +218,12 @@ export function fakeEnv(vars = {}) {
   return env;
 }
 
+// What signing up sends: a name, this PC's id, a fresh email and a password.
+export const PASSWORD = "correct horse battery";
+export function signUpBody(name = "Enterro", device = "device-0000", email = `${crypto.randomUUID()}@example.com`) {
+  return { name, device, email, password: PASSWORD };
+}
+
 export function request(path, { method = "GET", token, body, headers = {} } = {}) {
   const h = new Headers(headers);
   if (token) h.set("authorization", `Bearer ${token}`);

@@ -20,7 +20,7 @@ export const STYLE = `
 :root{--bg:#0b0c0e;--surface:#131418;--surface-2:#191a1f;--inset:#0d0e11;--line:#25272d;--line-strong:#363942;--text:#eeece6;--muted:#a7a59d;--dim:#706f69;--accent:#ffc21a;--accent-hover:#ffd04d;--accent-soft:rgba(255,194,26,.12);--on-accent:#0b0c0e;--bad:#ff5d6c;--ok:#34d17d;
 --kill:#ffc21a;--death:#ff5d6c;--assist:#6cb4ee;--revive:#34d17d;--match:#b48cf2;--highlight:#ffe27a;
 --display:"Chakra Petch","Segoe UI",system-ui,sans-serif;--mono:"JetBrains Mono",ui-monospace,Consolas,monospace;--body:Inter,"Segoe UI",system-ui,-apple-system,sans-serif;--cut:10px}
-*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}[hidden]{display:none!important}
 html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 var(--body);-webkit-font-smoothing:antialiased}
 body{background-image:radial-gradient(circle at 1px 1px,rgba(255,255,255,.06) 1px,transparent 1.2px);background-size:24px 24px;min-height:100vh}
 a{color:var(--accent)}img,video{max-width:100%}

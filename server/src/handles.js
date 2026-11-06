@@ -25,7 +25,14 @@ CREATE TABLE IF NOT EXISTS grant_messages (id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL DEFAULT '', text TEXT NOT NULL, created INTEGER NOT NULL, reply TEXT, replied INTEGER,
   done INTEGER NOT NULL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS grant_messages_code ON grant_messages (code, created);
+CREATE TABLE IF NOT EXISTS emails (email TEXT PRIMARY KEY, account TEXT NOT NULL UNIQUE, claimed INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS google (sub TEXT PRIMARY KEY, account TEXT NOT NULL UNIQUE, claimed INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
 `;
+
+// What a cloud account reset (a new ACCOUNTS_EPOCH, src/library.js) clears here: everything that points at an
+// account. Special keys, their PCs and messages, and the credits stay.
+const ACCOUNT_TABLES = ["handles", "presence", "licenses", "emails", "google", "feed", "feed_reports"];
 
 // Which perk each kind of message needs, and how many a key can send a day.
 const MESSAGE_KINDS = { message: "contact", bug: "bugs" };
@@ -55,7 +62,7 @@ function json(body, status = 200) {
 }
 
 export class Handles {
-  constructor(ctx) {
+  constructor(ctx, env = {}) {
     this.sql = ctx.storage.sql;
     this.sql.exec(SCHEMA);
     this.sql.exec(FEED_SCHEMA);
@@ -69,6 +76,38 @@ export class Handles {
       "grants ADD COLUMN minutes INTEGER", "grants ADD COLUMN ends_at INTEGER",
     ]);
     this.sql.exec("UPDATE grants SET minutes = days * 1440, days = NULL WHERE days IS NOT NULL AND minutes IS NULL");
+    const epoch = String(env.ACCOUNTS_EPOCH ?? "");
+    const was = this.sql.exec("SELECT value FROM settings WHERE key = 'accounts_epoch'").toArray()[0]?.value ?? "";
+    if (epoch !== was) {
+      for (const table of ACCOUNT_TABLES) this.sql.exec(`DELETE FROM ${table}`);
+      this.sql.exec("INSERT OR REPLACE INTO settings (key, value) VALUES ('accounts_epoch', ?)", epoch);
+    }
+  }
+
+  // Which account an email address or a Google account belongs to, one each.
+  owners(path, body) {
+    const [, table, action] = path.split("/");
+    const column = table === "email" ? "email" : "sub";
+    const name = table === "email" ? "emails" : "google";
+    const key = typeof body?.[column] === "string" ? body[column] : null;
+    if (!key) return json({ error: "Which one?" }, 400);
+    const row = this.sql.exec(`SELECT account FROM ${name} WHERE ${column} = ?`, key).toArray()[0];
+    if (action === "lookup") return row ? json({ account: row.account }) : json({ error: "Not found." }, 404);
+    const account = typeof body.account === "string" ? body.account : null;
+    if (!account) return json({ error: "Which account?" }, 400);
+    if (action === "claim") {
+      if (row && row.account !== account) {
+        return json({ error: table === "email" ? "That email is already on a Clip Engine account." : "That Google account is on another Clip Engine account." }, 409);
+      }
+      this.sql.exec(`DELETE FROM ${name} WHERE account = ?`, account);
+      this.sql.exec(`INSERT INTO ${name} (${column}, account, claimed) VALUES (?, ?, ?)`, key, account, Date.now());
+      return json({ ok: true });
+    }
+    if (action === "release") {
+      this.sql.exec(`DELETE FROM ${name} WHERE ${column} = ? AND account = ?`, key, account);
+      return json({ ok: true });
+    }
+    return json({ error: "Not found." }, 404);
   }
 
   async fetch(request) {
@@ -103,9 +142,11 @@ export class Handles {
 
   async directory(request, url) {
     const path = url.pathname;
-    if (!/^\/(presence|license|credits|grant|feed)(\/|$)/.test(path)) return null;
+    if (!/^\/(presence|license|credits|grant|feed|email|google)(\/|$)/.test(path)) return null;
     const body = request.method === "POST" ? await request.json().catch(() => null) : null;
     const now = Date.now();
+
+    if (/^\/(email|google)\/(lookup|claim|release)$/.test(path) && request.method === "POST") return this.owners(path, body);
 
     // ---- the hub's public clips (src/feed.js) ----
     if (path.startsWith("/feed/")) {
