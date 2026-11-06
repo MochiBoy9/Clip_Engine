@@ -108,7 +108,7 @@ function bar(current) {
 
 export function shell({ title, description, head = "", body, current = "", script = "" }) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>${escapeHtml(title)}</title><meta name="description" content="${escapeHtml(description)}"><meta name="theme-color" content="#0b0c0e">${FONTS}${head}<style>${STYLE}</style></head>
+<title>${escapeHtml(title)}</title><meta name="description" content="${escapeHtml(description)}"><meta name="theme-color" content="#0b0c0e"><link rel="icon" href="${SITE_URL}favicon.ico">${FONTS}${head}<style>${STYLE}</style></head>
 <body>${bar(current)}<main>${body}</main>
 <footer class="foot"><span>Made with <a href="${SITE_URL}">Clip Engine</a>, free clipping for PC games.</span><span><a href="/hub">Hub</a> · <a href="/bugs">Report a bug</a> · <a href="${DOWNLOAD_URL}">Download Clip Engine</a> · <a href="${SITE_URL}privacy.html">Privacy</a></span></footer>${script}</body></html>`;
 }

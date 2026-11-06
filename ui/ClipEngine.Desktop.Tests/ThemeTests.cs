@@ -79,6 +79,32 @@ public class ThemeTests
     }
 
     [Fact]
+    public void TextOnTheAccentReadsInEveryTheme()
+    {
+        // Every swatch, and a spread of the wheel's colours as they apply.
+        var accents = AccentThemes.All.Select(t => t.Accent).ToList();
+        for (var h = 0; h < 360; h += 15)
+            foreach (var (s, v) in new[] { (1.0, 1.0), (0.66, 1.0), (0.3, 0.8), (1.0, PlanViewModel.MinBrightness) })
+                accents.Add(AccentThemes.Legible(AdaptiveLook.FromHsv(h, s, v)));
+
+        foreach (var accent in accents)
+        {
+            var text = AccentThemes.Foreground(accent);
+            var partner = AdaptiveLook.Partner(accent);
+            // What a label can sit on: the accent at rest, under the pointer and pressed, and an adaptive gradient's
+            // far end and its hover.
+            var fills = new[]
+            {
+                accent, AccentThemes.Mix(accent, Colors.White, 0.18), AccentThemes.Mix(accent, Colors.White, 0.06),
+                partner, AccentThemes.Mix(accent, Colors.White, 0.16), AccentThemes.Mix(partner, Colors.White, 0.1),
+            };
+            foreach (var fill in fills)
+                Assert.True(AccentThemes.Contrast(text, fill) >= AccentThemes.MinContrast,
+                    $"{AccentThemes.Hex(text)} on {AccentThemes.Hex(fill)} (accent {AccentThemes.Hex(accent)}) is {AccentThemes.Contrast(text, fill):0.00}");
+        }
+    }
+
+    [Fact]
     public void TheWheelAndAdaptiveThemesAreUltras()
     {
         var free = Vm(Plan.Free);
