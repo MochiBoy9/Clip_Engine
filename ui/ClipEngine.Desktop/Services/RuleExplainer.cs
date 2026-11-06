@@ -96,6 +96,7 @@ internal static class RuleExplainer
             {
                 "start" => rule.SkipTag ? " at the start of a row, after any squad tag" : " at the start of a row",
                 "end" => " at the end of a row",
+                "middle" => " between two names on a row",
                 _ => "",
             };
             var unless = Phrases(rule.Exclude) is { Count: > 0 } ex ? $", unless {Or(ex)} is on the same row" : "";

@@ -64,7 +64,7 @@ std::vector<std::pair<double, double>> Find(const std::vector<Token>& tokens, co
     bool match = true;
     for (size_t k = 0; k < n && match; ++k) {
       const std::string& token = tokens[i + k].text;
-      match = (!header || !HasDigit(token)) && WordsMatch(token, phrase.words[k]);
+      match = (!header || !HasDigit(token)) && PhraseWordMatches(phrase, k, token);
     }
     if (match) spans.emplace_back(tokens[i].left, tokens[i + n - 1].right);
   }
@@ -132,7 +132,9 @@ std::optional<Stats> ReadScoreboard(const ScoreboardRule& rule, const std::vecto
   // The player's row: the first line below the headers with one of their names on it.
   std::vector<Phrase> names;
   for (const auto& name : playerNames) {
-    if (auto phrase = MakePhrase(name); !phrase.words.empty()) names.push_back(std::move(phrase));
+    auto phrase = MakePhrase(name);
+    phrase.name = true;
+    if (!phrase.words.empty()) names.push_back(std::move(phrase));
   }
   const Line* row = nullptr;
   for (size_t l = headerLine + 1; l < lines.size() && !row; ++l) {

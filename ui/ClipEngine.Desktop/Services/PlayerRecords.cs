@@ -55,7 +55,8 @@ internal sealed class Timeline
                     var values = new Dictionary<string, int>();
                     foreach (var p in stats.EnumerateObject())
                         if (p.Value.TryGetInt32(out var v)) values[p.Name] = v;
-                    timeline.Scores.Add(new TimelineScores(t, match, values));
+                    var source = root.TryGetProperty("source", out var sv) ? sv.GetString() ?? "" : "";
+                    timeline.Scores.Add(new TimelineScores(t, match, values, source));
                 }
             }
             catch (JsonException)
@@ -89,7 +90,42 @@ internal sealed class Timeline
 }
 
 internal sealed record TimelineMoment(double Seconds, int Match, string Type, string Text);
-internal sealed record TimelineScores(double Seconds, int Match, IReadOnlyDictionary<string, int> Stats);
+// Source: "screen" when read off the game's scoreboard, "api" from the game's own API.
+internal sealed record TimelineScores(double Seconds, int Match, IReadOnlyDictionary<string, int> Stats, string Source = "");
+
+// One match's kills and deaths as counted, against the game's scoreboard read off the screen at
+// the same moment: how well detection did in that match.
+internal sealed record ScoreboardCheck(int BoardKills, int CountedKills, int BoardDeaths, int CountedDeaths)
+{
+    public int MissedKills => Math.Max(0, BoardKills - CountedKills);
+    public int ExtraKills => Math.Max(0, CountedKills - BoardKills);
+    public int CaughtKills => BoardKills - MissedKills;
+    public int MissedDeaths => Math.Max(0, BoardDeaths - CountedDeaths);
+    public int ExtraDeaths => Math.Max(0, CountedDeaths - BoardDeaths);
+}
+
+// How detection has done in one game over its last few matches with a scoreboard read.
+internal sealed record DetectionCheck(int Matches, int BoardKills, int CaughtKills, int ExtraKills, int BoardDeaths,
+                                      int CaughtDeaths, int ExtraDeaths)
+{
+    // Fewer matches than this says too little to go on.
+    public const int Enough = 3;
+
+    public int MissedKills => BoardKills - CaughtKills;
+    public double KillShare => BoardKills == 0 ? 1 : (double)CaughtKills / BoardKills;
+    public double ExtraShare => BoardKills == 0 ? (ExtraKills > 0 ? 1 : 0) : (double)ExtraKills / BoardKills;
+    // Missing more than one kill in seven, or counting more than one in ten that weren't there.
+    public bool NeedsTuning => Matches >= Enough && (KillShare < 0.85 || ExtraShare > 0.10);
+
+    public static DetectionCheck? Of(IEnumerable<ScoreboardCheck> checks)
+    {
+        var list = checks.ToList();
+        if (list.Count == 0) return null;
+        return new DetectionCheck(list.Count, list.Sum(c => c.BoardKills), list.Sum(c => c.CaughtKills), list.Sum(c => c.ExtraKills),
+                                  list.Sum(c => c.BoardDeaths), list.Sum(c => c.BoardDeaths - c.MissedDeaths),
+                                  list.Sum(c => c.ExtraDeaths));
+    }
+}
 internal sealed record TimelineNote(double Seconds, int Match, string Note, string Value, int Amount, int Xp, string Text);
 
 // One match as the records see it: the moments counted, or the game's own totals where it showed
@@ -111,6 +147,8 @@ internal sealed class MatchStats
     public IReadOnlyDictionary<string, int> Extra { get; init; } = new Dictionary<string, int>();
     // Whether the game's own totals were seen, which makes the numbers exact.
     public bool FromScoreboard { get; init; }
+    // The kills and deaths counted against a scoreboard read off the screen, when there was one.
+    public ScoreboardCheck? Check { get; init; }
 
     public bool Won => Result is { } r && (r.Contains("VICTORY", StringComparison.OrdinalIgnoreCase) ||
                                            r.Contains("WIN", StringComparison.OrdinalIgnoreCase) ||
@@ -120,6 +158,13 @@ internal sealed class MatchStats
                                             r.Contains("LOST", StringComparison.OrdinalIgnoreCase));
     public double KillDeathRatio => Deaths == 0 ? Kills : (double)Kills / Deaths;
     public bool HasCombat => Kills + Deaths + Assists + Revives > 0;
+
+    public MatchStats With(ScoreboardCheck check) => new()
+    {
+        Game = Game, Start = Start, Kills = Kills, Deaths = Deaths, Assists = Assists, Revives = Revives,
+        Highlights = Highlights, BestStreak = BestStreak, BestBurst = BestBurst, Result = Result, Extra = Extra,
+        FromScoreboard = FromScoreboard, Check = check,
+    };
 }
 
 // A personal best, like "Most kills in a match: 31 in Valorant on 12 Oct".
@@ -128,7 +173,8 @@ internal sealed record PlayerRecord(string Key, string Title, int Value, string 
     public string Detail => $"{Game} · {When.ToString("d MMM yyyy", CultureInfo.CurrentCulture)}";
 }
 
-internal sealed record GameTotals(string Game, int Matches, int Wins, int Kills, int Deaths, int Assists, int Revives, int BestKills)
+internal sealed record GameTotals(string Game, int Matches, int Wins, int Kills, int Deaths, int Assists, int Revives, int BestKills,
+                                  DetectionCheck? Check = null)
 {
     public double KillDeathRatio => Deaths == 0 ? Kills : (double)Kills / Deaths;
 }
@@ -176,7 +222,9 @@ internal static class PlayerRecords
                 var scores = timeline.Scores.Where(s => s.Match == number).ToList();
                 var first = moments.Select(m => m.Seconds).Concat(scores.Select(s => s.Seconds)).DefaultIfEmpty().Min();
                 var stats = Summarize(timeline.Game, start.AddSeconds(first), moments, scores.Select(s => s.Stats));
-                if (stats.HasCombat) matches.Add(stats);
+                if (!stats.HasCombat) continue;
+                var check = Check(moments, scores);
+                matches.Add(check is null ? stats : stats.With(check));
             }
         }
 
@@ -190,6 +238,35 @@ internal static class PlayerRecords
 
         matches.Sort((a, b) => b.Start.CompareTo(a.Start));
         return new RecordBook { Matches = matches, Records = FindRecords(matches), Games = Totals(matches) };
+    }
+
+    // Kills this close to a scoreboard read may or may not be on it yet.
+    public const double CheckSlack = 3;
+
+    // The match's scoreboard read off the screen with the highest totals (they only go up in a
+    // match, so that's the latest true one; a lower read after it is a misread), against the kills
+    // and deaths counted by then. A kill counted within CheckSlack of the read may or may not be on
+    // it yet, so the board agrees anywhere in that range; it's off only by what falls outside it.
+    // Null with no read.
+    public static ScoreboardCheck? Check(IReadOnlyList<(double Seconds, string Type, string Text)> moments,
+                                         IReadOnlyList<TimelineScores> scores)
+    {
+        var read = scores.Where(s => s.Source == "screen" && (s.Stats.ContainsKey("kills") || s.Stats.ContainsKey("deaths")))
+                         .OrderBy(s => s.Stats.GetValueOrDefault("kills") + s.Stats.GetValueOrDefault("deaths"))
+                         .ThenBy(s => s.Seconds).LastOrDefault();
+        if (read is null) return null;
+        int Counted(string type, string stat, out int board)
+        {
+            board = read.Stats.GetValueOrDefault(stat);
+            var low = moments.Count(m => m.Type == type && m.Seconds <= read.Seconds - CheckSlack);
+            var high = moments.Count(m => m.Type == type && m.Seconds <= read.Seconds + CheckSlack);
+            return Math.Clamp(board, low, high);
+        }
+        var kills = Counted("kill", "kills", out var boardKills);
+        var deaths = Counted("death", "deaths", out var boardDeaths);
+        if (!read.Stats.ContainsKey("kills")) kills = boardKills = 0;
+        if (!read.Stats.ContainsKey("deaths")) deaths = boardDeaths = 0;
+        return new ScoreboardCheck(boardKills, kills, boardDeaths, deaths);
     }
 
     public static MatchStats Summarize(string game, DateTime start, IReadOnlyList<(double Seconds, string Type, string Text)> moments,
@@ -288,10 +365,15 @@ internal static class PlayerRecords
         return records;
     }
 
+    // A game's detection check goes by its latest matches, so a fix shows up soon after it's made.
+    public const int CheckedMatches = 10;
+
     private static IReadOnlyList<GameTotals> Totals(IReadOnlyList<MatchStats> matches) =>
         matches.GroupBy(m => m.Game, StringComparer.OrdinalIgnoreCase)
                .Select(g => new GameTotals(g.First().Game, g.Count(), g.Count(m => m.Won), g.Sum(m => m.Kills), g.Sum(m => m.Deaths),
-                                           g.Sum(m => m.Assists), g.Sum(m => m.Revives), g.Max(m => m.Kills)))
+                                           g.Sum(m => m.Assists), g.Sum(m => m.Revives), g.Max(m => m.Kills),
+                                           DetectionCheck.Of(g.OrderByDescending(m => m.Start).Where(m => m.Check is not null)
+                                                              .Take(CheckedMatches).Select(m => m.Check!))))
                .OrderByDescending(t => t.Matches).ThenBy(t => t.Game)
                .ToList();
 

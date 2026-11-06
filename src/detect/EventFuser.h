@@ -32,8 +32,23 @@ class EventFuser {
 
   // How long a group waits for the other rules to see what one rule saw.
   static constexpr int64_t kHoldMs = 1000;
+  // With a rule that listens for a sound: a sound is only recognized once it has played out,
+  // up to a second after it began, so the group waits that much longer for it.
+  static constexpr int64_t kSoundHoldMs = 2000;
 
   explicit EventFuser(Sink sink, Note note = {}) : sink_(std::move(sink)), note_(std::move(note)) {}
+
+  // How long groups wait before they're settled (kHoldMs by default).
+  void SetHoldMs(int64_t ms) { holdMs_ = ms; }
+
+  // For a game with pause rules ([<game>.pause]): kills, assists and revives seen while one's
+  // words are up (a killcam, spectating a teammate) are someone else's and don't count, unless
+  // the rule found them by the player's name. From now on every one of them waits the hold
+  // before it counts, so a pause seen a look later still stops it.
+  void UsePauses() { usePauses_ = true; }
+  // Nothing pausable that happened from `from` to `until` counts.
+  void Pause(int64_t from, int64_t until);
+  bool Paused(int64_t time) const;
 
   // The rule saw `count` new moments at `time` (100 ns units, any clock that only goes
   // forward). where has the box it read, as fractions of the frame; its rule and text are
@@ -50,6 +65,7 @@ class EventFuser {
     std::string rule;
     int priority = 1;
     bool confirmOnly = false;
+    bool pausable = false;  // a pause stops it
     int count = 1;
     int64_t time = 0;
     Witness witness;
@@ -64,6 +80,17 @@ class EventFuser {
     bool settled = false;
   };
 
+  static bool Pausable(EventType event) {
+    return event == EventType::Kill || event == EventType::Assist || event == EventType::Revive;
+  }
+  // Sightings of rules that count everything they see, waiting out the hold while pauses are used.
+  struct Waiting {
+    EventType event;
+    int64_t time;
+    std::string text;
+    Witness witness;
+  };
+
   // How many moments the group holds, and the rule whose count that is.
   static int Count(const Group& group, std::string* rule = nullptr);
   void Settle(Group& group);
@@ -71,7 +98,11 @@ class EventFuser {
 
   Sink sink_;
   Note note_;
+  int64_t holdMs_ = kHoldMs;
   std::vector<Group> groups_;
+  bool usePauses_ = false;
+  std::vector<std::pair<int64_t, int64_t>> pauses_;  // from, until
+  std::vector<Waiting> waiting_;
 };
 
 }  // namespace clip

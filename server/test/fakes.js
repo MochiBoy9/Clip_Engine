@@ -2,6 +2,7 @@
 // (on Node's built-in SQLite), R2, hibernatable WebSockets and the Durable Object namespace.
 
 import { DatabaseSync } from "node:sqlite";
+import { BugBoard } from "../src/bugs.js";
 import { Handles } from "../src/handles.js";
 import { Library } from "../src/library.js";
 import { Referrals } from "../src/referrals.js";
@@ -215,6 +216,7 @@ export function fakeEnv(vars = {}) {
   env.LIBRARIES = fakeNamespace(Library, env);
   env.HANDLES = fakeNamespace(Handles, env);
   env.REFERRALS = fakeNamespace(Referrals, env);
+  env.BUGS = fakeNamespace(BugBoard, env);
   return env;
 }
 

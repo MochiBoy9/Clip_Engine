@@ -1336,6 +1336,7 @@ public sealed record PositionOption(string Name, string Label)
         new("anywhere", "Anywhere in the box"),
         new("start", "Start of a row (the killer, in a killfeed)"),
         new("end", "End of a row (who died, in a killfeed)"),
+        new("middle", "Between two names (an assister, in a killfeed)"),
     ];
 
     public override string ToString() => Label;

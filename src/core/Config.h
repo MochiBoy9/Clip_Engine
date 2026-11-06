@@ -1,5 +1,6 @@
 #pragma once
 
+#include "app/AutoClipPlanner.h"
 #include "core/AudioSettings.h"
 #include "core/Hotkeys.h"
 #include "core/Win.h"
@@ -71,6 +72,9 @@ struct Config {
   std::set<EventType> autoClipEvents{kAllEventTypes.begin(), kAllEventTypes.end()};
   int clipBeforeSeconds = 10;     // how much of an automatic clip comes before the moment
   int clipAfterSeconds = 5;       // and after it
+  MomentLengths momentLengths = DefaultMomentLengths();  // those for some kinds of moment
+  bool clipLoneDeaths = true;     // false: a death only goes in a clip with something else
+  bool autoHighlights = true;     // make multi-kill and streak highlights from the kills found
   std::vector<std::string> playerNames;  // the player's in-game names, for reading killfeeds
 
   std::filesystem::path file;  // where these came from

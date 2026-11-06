@@ -50,6 +50,10 @@
 //   GET  /v1/admin/reports          reported clips (Authorization: Bearer ADMIN_TOKEN)
 //   POST /v1/admin/hide             hide a clip from the hub, or bring it back { code, hidden, clearReports }
 //
+// Bug reports (one Durable Object, src/bugs.js): anyone reports a bug, a change, a design choice or an idea
+//   GET /bugs, /bugs/<id>           the board and one report
+//   GET|POST /v1/bugs, GET /v1/bugs/<id>, PATCH /v1/admin/bugs/<id>   (see src/bugs.js)
+//
 // Public pages:
 //   GET /c/<code>                   a shared clip's web player, with its moments on the timeline
 //   GET /c/<code>/video|thumb|.json the clip itself
@@ -61,6 +65,7 @@
 // See README.md for the messages on the squad socket.
 
 import { authRoute, passwordSignIn, signUp } from "./accounts.js";
+import { BugBoard, bugsRoute } from "./bugs.js";
 import { isSquadId, normalizeInvite, randomCode, sameSecret, SQUAD_ID_LENGTH } from "./codes.js";
 import { Handles, normalizeHandle } from "./handles.js";
 import { hubRoute } from "./hub.js";
@@ -73,7 +78,7 @@ import { isMediaPointer, serveMedia } from "./media.js";
 import { normalizeReferral, Referrals } from "./referrals.js";
 import { Squad } from "./squad.js";
 
-export { Handles, Library, Referrals, Squad };
+export { BugBoard, Handles, Library, Referrals, Squad };
 
 const VERSION = 2;
 const ALPHABET = /^[0-9A-Z]+$/;
@@ -235,7 +240,7 @@ export default {
 // protection: making accounts and squads, sign-in and invite codes, key checks and special-key messages get
 // AUTH_LIMIT; every other change (uploads, friends, edits, the key maker's) gets WRITE_LIMIT. Reads aren't limited
 // here. Without the bindings (tests, wrangler dev) nothing is limited.
-const AUTH_ROUTES = /^\/(v1\/(accounts|accounts\/signin|auth\/(forgot|reset|confirm)|squads|join|license|contact|contact\/list|referrals|referrals\/activate)|hub\/api\/(signin|signup|report))$/;
+const AUTH_ROUTES = /^\/(v1\/(accounts|accounts\/signin|auth\/(forgot|reset|confirm)|squads|join|license|contact|contact\/list|referrals|referrals\/activate|bugs)|hub\/api\/(signin|signup|report))$/;
 
 async function overLimit(request, env, path, method) {
   const sensitive = method === "POST" && AUTH_ROUTES.test(path);
@@ -270,6 +275,11 @@ async function route(request, env) {
 
     // ---- the hub (src/hub.js) ----
     if (path === "/hub" || path.startsWith("/hub/")) return hubRoute(request, env, url);
+
+    // ---- bug reports (src/bugs.js) ----
+    if (path === "/bugs" || path.startsWith("/bugs/") || path === "/v1/bugs" || path.startsWith("/v1/bugs/") || path.startsWith("/v1/admin/bugs/")) {
+      return bugsRoute(request, env, url, admin(request, env));
+    }
 
     // ---- squads ----
     if (path === "/v1/squads" && method === "POST") {

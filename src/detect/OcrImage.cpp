@@ -203,4 +203,37 @@ OcrImage PrepareForOcr(const uint8_t* bgra, uint32_t width, uint32_t height, int
   return out;
 }
 
+RegionLook LookAt(const std::vector<uint8_t>& bgra, uint32_t width, uint32_t height, int bright) {
+  RegionLook look;
+  std::array<int, RegionLook::kGridX * RegionLook::kGridY> counts{};
+  if (width == 0 || height == 0 || bgra.size() < static_cast<size_t>(width) * height * 4) return look;
+  // Every pixel: a few that turn bright can be all a new letter shows in a cell.
+  for (uint32_t y = 0; y < height; ++y) {
+    const uint8_t* row = bgra.data() + static_cast<size_t>(y) * width * 4;
+    const size_t cellRow = static_cast<size_t>(y) * RegionLook::kGridY / height * RegionLook::kGridX;
+    for (uint32_t x = 0; x < width; ++x) {
+      const uint8_t* p = row + static_cast<size_t>(x) * 4;
+      const size_t cell = cellRow + static_cast<size_t>(x) * RegionLook::kGridX / width;
+      const uint8_t level = std::max({p[0], p[1], p[2]});
+      look.level[cell] += level;
+      if (level >= bright) ++look.bright[cell];
+      ++counts[cell];
+    }
+  }
+  for (size_t i = 0; i < counts.size(); ++i) {
+    if (counts[i] > 0) look.level[i] /= static_cast<float>(counts[i]);
+  }
+  return look;
+}
+
+bool RegionChanged(const RegionLook& before, const RegionLook& now, bool hudOnly) {
+  for (size_t i = 0; i < now.level.size(); ++i) {
+    if (hudOnly ? std::abs(now.bright[i] - before.bright[i]) >= kHudChangePixels
+                : std::abs(now.level[i] - before.level[i]) > 1.5f) {
+      return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace clip

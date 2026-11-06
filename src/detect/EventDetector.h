@@ -5,6 +5,7 @@
 #include "detect/EventFuser.h"
 #include "detect/SoundWatch.h"
 #include "detect/OcrImage.h"
+#include "detect/ReadPacing.h"
 
 #include <winrt/Windows.Media.Ocr.h>
 
@@ -20,23 +21,26 @@ namespace clip {
 
 // Reads the parts of the captured screen named by the game's rules a few times a second
 // with Windows' built-in text recognition, or looks there for an icon, and reports kills,
-// deaths and other moments, and the player's totals whenever the game's scoreboard is up. It copies only those small regions off the GPU, without waiting
-// on it, and runs at low priority so it never competes with the game. To keep that work
-// small, a region inside another is read as part of it when that's cheaper, a region that
-// hasn't changed since it was last read isn't read again, and banners that stay up for
-// seconds are looked at less often than kill popups.
+// deaths and other moments, and the player's totals whenever the game's scoreboard is up. It
+// copies only those small regions off the GPU, without waiting on it, and runs at low priority
+// so it never competes with the game. To keep that work small, a region inside another is read
+// as part of it when that's cheaper, a region where no HUD text came or went since it was last
+// read isn't read again, banners that stay up for seconds are looked at less often than kill
+// popups, quick popups are looked for less often after a quiet spell (CalmPacer), and the
+// scoreboard is read only while it can be up (ScoreboardGate).
 class EventDetector {
  public:
   using Sink = std::function<void(const GameEvent&)>;
   using ScoreboardSink = std::function<void(const Scoreboard&)>;
   using JournalSink = std::function<void(const JournalNote&)>;
 
-  // playerNames: for finding the player's row on a scoreboard. quality: how hard to work at
-  // reading (see ReadQuality). hudScale: the size the game's HUD is set to, 1 for 100%; with
-  // the screen's shape, it moves each rule's region to where the HUD draws it (PlaceRegion).
-  // journals: what to write down for the game's journal (Journal.h), reported to journalSink.
+  // playerNames: for finding the player's row on a scoreboard. settings: the [detection] ones.
+  // quality: how hard to work at reading (see ReadQuality). hudScale: the size the game's HUD
+  // is set to, 1 for 100%; with the screen's shape, it moves each rule's region to where the
+  // HUD draws it (PlaceRegion). journals: what to write down for the game's journal
+  // (Journal.h), reported to journalSink.
   EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCapture& capture, std::vector<DetectionRule> rules,
-                std::vector<ScoreboardRule> scoreboards, std::vector<std::string> playerNames, int sampleMs,
+                std::vector<ScoreboardRule> scoreboards, std::vector<std::string> playerNames, DetectionSettings settings,
                 ReadQuality quality, double hudScale, bool debug, Sink sink, ScoreboardSink scoreboardSink,
                 std::vector<JournalRule> journals = {}, JournalSink journalSink = {});
   ~EventDetector();
@@ -70,12 +74,14 @@ class EventDetector {
   std::vector<ScoreboardRule> scoreboards_;
   std::vector<JournalRule> journals_;
   std::vector<std::string> playerNames_;
-  int sampleMs_;
+  DetectionSettings settings_;
   ReadQuality quality_;
   bool debug_;
   Sink sink_;
   ScoreboardSink scoreboardSink_;
   JournalSink journalSink_;
+  ScoreboardGate boardGate_;
+  CalmPacer calm_;
   EventFuser fuser_;  // turns each rule's sightings into moments, for sink_
 
   std::vector<std::unique_ptr<Region>> regions_;

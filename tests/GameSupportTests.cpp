@@ -278,7 +278,7 @@ words = VICTORY
 
 [valorant.highlight]
 words = ACE
-position = middle
+position = centre
 )");
   CHECK(rules.rules.size() == 4);
   CHECK(rules.warnings.size() == 1);  // the bad position
@@ -351,6 +351,24 @@ void TestShippedRules(const char* path) {
   }
   // Games read through their own APIs have no screen rules.
   for (const char* game : {"cs2", "dota2", "league_of_legends", "rocket_league"}) CHECK(rules.ForGame(game).empty());
+
+  // Every rule of a game counts the killfeed rows it should, and only those.
+  auto counts = [&](const char* game, const char* line) {
+    std::vector<std::pair<EventType, int>> found;
+    for (const auto& r : rules.ForGame(game, {"Mochi"})) {
+      if (const int n = CountMatches(r, Tokenize(line)); n > 0) found.emplace_back(r.event, n);
+    }
+    return found;
+  };
+  using Found = std::vector<std::pair<EventType, int>>;
+  CHECK(counts("halo_infinite", "Mochi killed Bob") == (Found{{EventType::Kill, 1}}));
+  CHECK(counts("halo_infinite", "Bob killed Mochi") == (Found{{EventType::Death, 1}}));
+  CHECK(counts("halo_infinite", "Mochi committed suicide") == (Found{{EventType::Death, 1}}));
+  CHECK(counts("halo_infinite", "Mochi betrayed Bob").empty());
+  // A lone name is the player's death, never their kill as well.
+  CHECK(counts("valorant", "Mochi") == (Found{{EventType::Death, 1}}));
+  CHECK(counts("team_fortress_2", "Bob + Mochi Zed") == (Found{{EventType::Assist, 1}}));
+  CHECK(counts("team_fortress_2", "Mochi Zed") == (Found{{EventType::Kill, 1}}));
 }
 
 void TestTf2Console() {

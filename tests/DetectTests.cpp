@@ -2,12 +2,15 @@
 // parsing and turning successive screen reads into events.
 
 #include "app/AutoClipPlanner.h"
+#include "app/HighlightMaker.h"
+#include "app/MatchTracker.h"
 #include "detect/DetectionRules.h"
 #include "detect/EventFuser.h"
 #include "detect/SoundMatch.h"
 #include "detect/SoundWatch.h"
 #include "detect/ImageMatch.h"
 #include "detect/OcrImage.h"
+#include "detect/ReadPacing.h"
 #include "detect/TextMatcher.h"
 #include "media/ClipMetadata.h"
 #include "video/OutputSize.h"
@@ -193,6 +196,17 @@ void TestShippedRulesParse(const char* path) {
       death |= r.event == EventType::Death;
     }
     CHECK(kill && death);
+  }
+  // Every shipped pause rule is read with the game's death box, so it costs nothing extra.
+  CHECK(rules.pauses.size() >= 7);
+  for (const auto& pause : rules.pauses) {
+    const bool shared = std::ranges::any_of(rules.rules, [&](const DetectionRule& r) {
+      return r.game == pause.game && r.event == EventType::Death && r.threshold == pause.threshold &&
+             r.region.left == pause.region.left && r.region.top == pause.region.top &&
+             r.region.width == pause.region.width && r.region.height == pause.region.height;
+    });
+    if (!shared) std::printf("%s doesn't share a death box\n", pause.name.c_str());
+    CHECK(shared);
   }
 }
 
@@ -451,6 +465,114 @@ void TestConfirmOnly() {
   fuser.Add(score, 1, 61'500 * kMs, "ELIMINATION 250");
   CHECK(events.size() == 2);
   if (events.size() == 2) CHECK(events[1].witnesses.size() == 2);
+}
+
+// What text recognition gets wrong about keywords and names, and how a killfeed row is read.
+void TestKeywordsAndNames() {
+  // A keyword run into the next word still counts, but an exclude word stuck to it cancels it.
+  DetectionRule kill;
+  kill.event = EventType::Kill;
+  SetPhrases(kill, "ELIMINATED", "BY | YOU WERE", {});
+  CHECK(CountMatches(kill, Rows({"ELIMINATED XXSNIPER"})) == 1);
+  CHECK(CountMatches(kill, Rows({"ELIMINATEDXXSNIPER"})) == 1);
+  CHECK(CountMatches(kill, Rows({"ELIMINATED BY BOB"})) == 0);
+  CHECK(CountMatches(kill, Rows({"ELIMINATEDBY BOB"})) == 0);
+  CHECK(FindMatches(kill, Rows({"ELIMINATEDXXSNIPER"})) == std::vector<std::string>{"XXSNIPER"});
+  // Another form of a keyword is another word.
+  CHECK(!WordsMatch("DEFEATED", "DEFEAT"));
+  CHECK(!WordsMatch("ASSISTED", "ASSIST"));
+  CHECK(!WordsMatch("REVIVED", "REVIVE"));
+  CHECK(WordsMatch("REVIVED", "REVIVED"));
+  CHECK(WordsMatch("DEFEAT", "DEFEAT"));
+  CHECK(RunOnLength("ELIMINATEDBY", "ELIMINATED") == 10);
+  CHECK(RunOnLength("ELIMINATEDX", "ELIMINATED") == 0);  // a stray letter is a misread, not a run-on
+  CHECK(RunOnLength("DEFEATED", "DEFEAT") == 0);
+  DetectionRule end;
+  end.event = EventType::MatchEnd;
+  SetPhrases(end, "VICTORY | DEFEAT", "", {});
+  CHECK(CountMatches(end, Rows({"ENEMY DEFEATED"})) == 0);
+  CHECK(CountMatches(end, Rows({"DEFEAT"})) == 1);
+
+  // Names: another player whose name starts with the player's isn't them.
+  CHECK(NameMatches("ENTERRO", "ENTERRO"));
+  CHECK(NameMatches("ENTERR0", "ENTERRO"));
+  CHECK(NameMatches("ENTEPRO", "ENTERRO"));  // a misread letter
+  CHECK(!NameMatches("ENTERROX", "ENTERRO"));
+  CHECK(!NameMatches("ENTERROXX", "ENTERRO"));
+  CHECK(!NameMatches("ENTERROR2", "ENTERRO"));
+  // A four-letter name may have one look-alike letter misread, and only that.
+  CHECK(NameMatches("IUKE", "LUKE"));
+  CHECK(NameMatches("LUKE", "LUKE"));
+  CHECK(!NameMatches("IUKF", "LUKE"));
+  CHECK(!NameMatches("DUKE", "LUKE"));
+  CHECK(!NameMatches("KAI", "KAL"));
+
+  // Accented names read the same as they're typed.
+  CHECK(Tokenize("Jos\xC3\xA9 \xC5\x81ukasz \xC3\x86on") == (std::vector<std::string>{"JOSE", "LUKASZ", "AEON"}));
+  CHECK(Tokenize("A\xC3\x97" "B \xE2\x86\x92 C") == (std::vector<std::string>{"A", "B", "C"}));
+
+  // A killfeed row with only the player's name is their death, not a kill as well.
+  DetectionRule start;
+  start.event = EventType::Kill;
+  start.position = LinePosition::Start;
+  SetPhrases(start, "{player}", "", {"Enterro"});
+  DetectionRule finish;
+  finish.event = EventType::Death;
+  finish.position = LinePosition::End;
+  SetPhrases(finish, "{player}", "", {"Enterro"});
+  CHECK(CountMatches(start, Rows({"Enterro"})) == 0);
+  CHECK(CountMatches(start, Rows({"Enterro X"})) == 0);  // an icon after the name
+  CHECK(CountMatches(finish, Rows({"Enterro"})) == 1);
+  CHECK(CountMatches(start, Rows({"Enterro Bob"})) == 1);
+  CHECK(CountMatches(start, Rows({"Enterror Bob"})) == 0);
+  // A rule with words around the name isn't held to that.
+  DetectionRule suicide;
+  suicide.event = EventType::Death;
+  suicide.position = LinePosition::Start;
+  SetPhrases(suicide, "{player} COMMITTED SUICIDE", "", {"Enterro"});
+  CHECK(CountMatches(suicide, Rows({"Enterro committed suicide"})) == 1);
+
+  // An assister listed between the killer and the player killed.
+  DetectionRule assist;
+  assist.event = EventType::Assist;
+  assist.position = LinePosition::Middle;
+  SetPhrases(assist, "{player}", "", {"Enterro"});
+  CHECK(CountMatches(assist, Rows({"Killer + Enterro  Victim"})) == 1);
+  CHECK(CountMatches(assist, Rows({"Enterro Victim"})) == 0);
+  CHECK(CountMatches(assist, Rows({"Killer Enterro"})) == 0);
+  CHECK(CountMatches(assist, Rows({"Killer + Enterro X"})) == 0);
+}
+
+// A sound is recognized only once it has played out, after the killfeed showed the same kill;
+// it still backs that kill up.
+void TestLateSound() {
+  DetectionRule chime = FusedRule("chime", 1);
+  chime.confirmOnly = true;
+  const DetectionRule feed = FusedRule("feed", 2);
+  std::vector<GameEvent> events;
+  std::vector<std::string> notes;
+  EventFuser fuser([&](const GameEvent& e) { events.push_back(e); }, [&](const std::string& n) { notes.push_back(n); });
+  fuser.SetHoldMs(EventFuser::kSoundHoldMs);
+  fuser.Add(feed, 1, 10'200 * kMs, "ME BOB");
+  fuser.Flush(10'500 * kMs);
+  fuser.Add(chime, 1, 10'000 * kMs, "sound: 0.61 alike");  // began before the killfeed showed it
+  fuser.Flush(11'500 * kMs);
+  CHECK(events.empty());  // still waiting for a sound
+  fuser.Flush(12'300 * kMs);
+  CHECK(events.size() == 1);
+  if (events.size() == 1) {
+    CHECK(events[0].time == 10'200 * kMs);
+    CHECK(events[0].witnesses.size() == 2 && events[0].witnesses[1].rule == "chime");
+    CHECK(std::abs(events[0].witnesses[1].offset + 0.2) < 0.001);
+  }
+  CHECK(notes.empty());
+  // Two kills far apart: the late sound joins the one it's nearest.
+  fuser.Add(feed, 1, 30'000 * kMs, "ME ANN");
+  fuser.Add(feed, 1, 36'000 * kMs, "ME CAT");
+  fuser.Add(chime, 1, 35'800 * kMs, "sound");
+  fuser.Flush(40'000 * kMs);
+  CHECK(events.size() == 3);
+  if (events.size() == 3) CHECK(events[1].witnesses.size() == 1 && events[2].witnesses.size() == 2);
 }
 
 void TestForgetMs() {
@@ -748,6 +870,111 @@ void TestPlanner() {
   CHECK(all[0].start == 140 && all[0].end == 177);
   CHECK(all[1].start == 177 && all[1].end == 185);
   CHECK(planner.Empty());
+}
+
+// Moments that come in late or out of order, deaths that don't stand alone, and each kind of
+// moment's own lengths.
+void TestPlannerMoments() {
+  AutoClipPlanner planner(10, 5, 40);
+  planner.Add(100);            // 90..105
+  planner.Add(99, 10, 5);      // a second late, and earlier: 89..105
+  planner.Add(95, 15, 3);      // earlier still, with its own lengths: 80..105
+  planner.Add(130, 10, 3, false);  // a death on its own: no clip
+  planner.Add(104, 10, 3, false);  // a death in the fight: kept with it
+  auto all = planner.TakeAll();
+  CHECK(all.size() == 1 && all[0].start == 80 && all[0].end == 107);
+
+  planner.Add(200);           // 190..205
+  planner.Add(150);           // long before it, arriving late: its own clip, first
+  all = planner.TakeAll();
+  CHECK(all.size() == 2 && all[0].start == 140 && all[1].start == 190);
+
+  // Too long to reach all the way back: as far back as a clip can.
+  planner.Add(300);           // 290..305
+  planner.Add(314);           // 290..319
+  planner.Add(285, 10, 5);    // wants 275.., but 40 at most: 279..319
+  all = planner.TakeAll();
+  CHECK(all.size() == 1 && all[0].start == 279 && all[0].end == 319);
+
+  CHECK(ParseMomentLengths("match_end 15/8, death -/3") ==
+        (MomentLengths{{EventType::MatchEnd, {15, 8}}, {EventType::Death, {-1, 3}}}));
+  CHECK(ParseMomentLengths("") == MomentLengths{});
+  CHECK(ParseMomentLengths("Kill 4/2") == (MomentLengths{{EventType::Kill, {4, 2}}}));
+  CHECK(!ParseMomentLengths("victory 5/5"));
+  CHECK(!ParseMomentLengths("kill 5"));
+  CHECK(!ParseMomentLengths("kill five/5"));
+  CHECK(ParseMomentLengths("match_start 5/10, match_end 15/8, death -/3") == DefaultMomentLengths());
+}
+
+constexpr int64_t kSec = 10'000'000;
+
+void TestMatchTracker() {
+  // A game whose HUD shows when a match ends but not when the next starts.
+  MatchTracker matches(MatchTracker::IdleGapFor("valorant"));
+  CHECK(!matches.OnEvent(EventType::Kill, 10 * kSec));       // the first match opens by itself
+  CHECK(!matches.OnEvent(EventType::Death, 60 * kSec));
+  CHECK(!matches.OnEvent(EventType::MatchEnd, 600 * kSec));
+  CHECK(!matches.OnEvent(EventType::MatchEnd, 610 * kSec));  // the same end read again
+  CHECK(!matches.OnEvent(EventType::Kill, 605 * kSec));      // on the result screen: still that match
+  CHECK(matches.OnEvent(EventType::Kill, 900 * kSec) == 900 * kSec);  // the next match
+  CHECK(!matches.OnEvent(EventType::Kill, 950 * kSec));
+  // Its end was missed, and the player queued again: five minutes with nothing.
+  CHECK(matches.OnEvent(EventType::Death, 1300 * kSec) == 1300 * kSec);
+
+  // A banner at the start of every round, in Overwatch: one match, not one per round.
+  MatchTracker rounds(MatchTracker::IdleGapFor("overwatch"));
+  CHECK(rounds.OnEvent(EventType::MatchStart, 0) == 0);
+  CHECK(!rounds.OnEvent(EventType::MatchStart, 20 * kSec));  // shown twice before the fighting
+  CHECK(!rounds.OnEvent(EventType::Kill, 60 * kSec));
+  CHECK(!rounds.OnEvent(EventType::Kill, 300 * kSec));
+  CHECK(!rounds.OnEvent(EventType::MatchStart, 360 * kSec));  // round two
+  CHECK(!rounds.OnEvent(EventType::Kill, 420 * kSec));
+  CHECK(!rounds.OnEvent(EventType::MatchEnd, 700 * kSec));
+  CHECK(rounds.OnEvent(EventType::MatchStart, 800 * kSec) == 800 * kSec);  // the next match
+  // Its end missed, but a long while since anything happened.
+  CHECK(!rounds.OnEvent(EventType::Kill, 850 * kSec));
+  CHECK(rounds.OnEvent(EventType::MatchStart, 1100 * kSec) == 1100 * kSec);
+
+  // A scoreboard that went back down.
+  MatchTracker boards;
+  CHECK(!boards.OnScores({{"kills", 12}, {"deaths", 4}}, 100 * kSec));
+  CHECK(!boards.OnScores({{"kills", 13}, {"deaths", 4}}, 200 * kSec));
+  CHECK(!boards.OnScores({{"kills", 12}, {"deaths", 4}}, 210 * kSec));  // one misread digit
+  CHECK(boards.OnScores({{"kills", 1}, {"deaths", 0}}, 900 * kSec) == 900 * kSec);
+  // A battle royale: minutes of looting are no reason for a new match.
+  MatchTracker royale(MatchTracker::IdleGapFor("pubg"));
+  CHECK(!royale.OnEvent(EventType::Kill, 0));
+  CHECK(!royale.OnEvent(EventType::Kill, 900 * kSec));
+}
+
+void TestHighlightMaker() {
+  HighlightMaker maker;
+  auto kill = [](int64_t t) { return GameEvent{EventType::Kill, t, "kill", {}}; };
+  CHECK(maker.OnEvent(kill(10 * kSec)).empty());
+  CHECK(maker.OnEvent(kill(14 * kSec)).empty());
+  CHECK(maker.OnEvent(kill(19 * kSec)).empty());
+  CHECK(maker.Poll(22 * kSec).empty());  // could still become a quad
+  auto made = maker.Poll(26 * kSec);
+  CHECK(made.size() == 1 && made[0].text == "Triple kill" && made[0].time == 19 * kSec);
+  if (made.size() == 1) CHECK(HighlightMaker::IsMade(made[0]) && made[0].witnesses[0].text == "3 kills in 9.0 s");
+  // Two more make a five-kill streak, at once; the two together are a double kill.
+  CHECK(maker.OnEvent(kill(40 * kSec)).empty());
+  made = maker.OnEvent(kill(41 * kSec));
+  CHECK(made.size() == 1 && made[0].text == "5 kill streak" && made[0].time == 41 * kSec);
+  CHECK(maker.Poll(48 * kSec).size() == 1);
+  // A death ends the streak.
+  maker.OnEvent({EventType::Death, 50 * kSec, "", {}});
+  for (int i = 0; i < 4; ++i) CHECK(maker.OnEvent(kill((60 + i * 10) * kSec)).empty());
+  // The game called this double kill out itself.
+  maker.OnEvent(kill(200 * kSec));
+  maker.OnEvent(kill(202 * kSec));
+  maker.OnEvent({EventType::Highlight, 202 * kSec, "DOUBLE KILL", {}});
+  CHECK(maker.Poll(300 * kSec).empty());
+  // A new match hands back the multi-kill going on.
+  maker.OnEvent(kill(400 * kSec));
+  maker.OnEvent(kill(401 * kSec));
+  made = maker.Reset();
+  CHECK(made.size() == 1 && made[0].text == "Double kill");
 }
 
 void TestMetadata() {
@@ -1141,6 +1368,215 @@ void TestPlaceRegion() {
   CHECK(rules.warnings.size() == 1);
 }
 
+// [<game>.pause] rules, the scoreboard's key, and the [detection] settings for pacing reads.
+void TestPauseAndPacingRules() {
+  auto rules = Parse(R"(
+[detection]
+change_check = any
+calm_ms = 0
+
+[call_of_duty.kill]
+words = ELIMINATED
+
+[call_of_duty.pause]
+words = KILLCAM | SPECTATING
+hold_ms = 3000
+
+[call_of_duty.death]
+words = KILLED BY
+change_check = any
+
+[call_of_duty.scoreboard]
+kills = KILLS
+key = Caps Lock
+)");
+  CHECK(rules.warnings.empty());
+  CHECK(rules.changeCheck == ChangeCheck::Any && rules.changeCheckSet);
+  CHECK(rules.calmMs == 0 && rules.calmMsSet);
+  CHECK(rules.rules.size() == 2);
+  CHECK(rules.pauses.size() == 1);
+  CHECK(rules.pauses.size() == 1 && rules.pauses[0].pauses && rules.pauses[0].holdMs == 3000);
+  CHECK(rules.pauses.size() == 1 && rules.pauses[0].sampleMs == 500);  // as often as a death screen
+  CHECK(rules.pauses.size() == 1 && rules.pauses[0].words.size() == 2);
+  CHECK(rules.rules.size() == 2 && rules.rules[1].changeCheck == ChangeCheck::Any);
+  CHECK(rules.rules.size() == 2 && rules.rules[0].changeCheck == ChangeCheck::Default);
+  const auto cod = rules.ForGame("call_of_duty");
+  CHECK(cod.size() == 3 && cod.back().pauses);
+  const auto boards = rules.ScoreboardsForGame("call_of_duty");
+  CHECK(boards.size() == 1 && boards[0].read == ScoreboardRead::WhileHeld && boards[0].key == 0x14);
+
+  // A file with only a pause rule for a game doesn't take the game's shipped rules away.
+  CHECK(Parse("[apex_legends.pause]\nwords = SPECTATING\n").editedGames.empty());
+  // Defaults.
+  const auto plain = Parse("[x.kill]\nwords = KO\n\n[x.scoreboard]\nkills = K\n");
+  CHECK(plain.changeCheck == ChangeCheck::Hud && !plain.changeCheckSet && plain.calmMs == 30000);
+  CHECK(plain.scoreboards.size() == 1 && plain.scoreboards[0].read == ScoreboardRead::WhileHeld &&
+        plain.scoreboards[0].key == 0x09);
+
+  // Keys, and the two that aren't keys.
+  auto keyOf = [](const char* key) {
+    const auto parsed = Parse(std::string("[x.scoreboard]\nkills = K\nkey = ") + key + "\n");
+    return parsed.warnings.empty() && parsed.scoreboards.size() == 1 ? parsed.scoreboards[0] : ScoreboardRule{};
+  };
+  CHECK(keyOf("F1").key == 0x70 && keyOf("f12").key == 0x7B);
+  CHECK(keyOf("m").key == 'M' && keyOf("Tab").key == 0x09 && keyOf("mouse 4").key == 0x05);
+  CHECK(keyOf("none").read == ScoreboardRead::AfterMatch);
+  CHECK(keyOf("always").read == ScoreboardRead::Always);
+  CHECK(!Parse("[x.scoreboard]\nkills = K\nkey = banana\n").warnings.empty());
+  CHECK(!Parse("[x.scoreboard]\nkills = K\nkey = F25\n").warnings.empty());
+
+  // What can't be used is said.
+  CHECK(!Parse("[detection]\ncalm_ms = -5\n").warnings.empty());
+  CHECK(!Parse("[detection]\nchange_check = some\n").warnings.empty());
+  CHECK(!Parse("[x.kill]\nwords = KO\nchange_check = some\n").warnings.empty());
+  CHECK(!Parse("[x.kill]\nwords = KO\nhold_ms = 100\n").warnings.empty());  // only for pause rules
+  const auto pictured = Parse("[x.pause]\nwords = KILLCAM\nimage = cam.png\n");
+  CHECK(!pictured.warnings.empty() && pictured.pauses.size() == 1 && !pictured.pauses[0].LooksForImage());
+  const auto empty = Parse("[x.pause]\nimage = cam.png\n");
+  CHECK(empty.pauses.empty());
+
+  // Merging: a game's pause rules come from the player's file when it has some for that game.
+  auto shipped = Parse("[a.pause]\nwords = KILLCAM\n\n[b.pause]\nwords = SPECTATING\n\n[a.kill]\nwords = KO\n");
+  auto user = Parse("[detection]\ncalm_ms = 5000\n\n[a.kill]\nwords = KILLED\n\n[b.pause]\nwords = WATCHING\n");
+  const auto merged = MergeDetectionRules(std::move(shipped), std::move(user));
+  CHECK(merged.calmMs == 5000 && merged.changeCheck == ChangeCheck::Hud);
+  const auto a = merged.ForGame("a");
+  CHECK(a.size() == 2 && a[0].words[0].words[0] == "KILLED" && a[1].pauses);  // the user's kill, the shipped pause
+  const auto b = merged.ForGame("b");
+  CHECK(b.size() == 1 && b[0].pauses && b[0].words[0].words[0] == "WATCHING");
+}
+
+// Kills seen during a killcam or while spectating don't count; deaths and the rest do.
+void TestFuserPauses() {
+  const DetectionRule plain = FusedRule("plain", 1, 0);
+  const DetectionRule fused = FusedRule("fused", 1);
+  DetectionRule death = FusedRule("death", 1, 0);
+  death.event = EventType::Death;
+  DetectionRule start = FusedRule("start", 1, 0);
+  start.event = EventType::MatchStart;
+  std::vector<GameEvent> events;
+  std::vector<std::string> notes;
+  EventFuser fuser([&](const GameEvent& e) { events.push_back(e); }, [&](const std::string& n) { notes.push_back(n); });
+  fuser.UsePauses();
+
+  // A kill now waits out the hold, so a pause seen a look later still stops it.
+  fuser.Add(plain, 1, 10'000 * kMs, "KO");
+  fuser.Flush(10'500 * kMs);
+  CHECK(events.empty());
+  fuser.Flush(11'000 * kMs);
+  CHECK(events.size() == 1 && events[0].time == 10'000 * kMs);
+
+  // A killcam seen half a second after a kill popup: not counted.
+  fuser.Add(plain, 1, 20'000 * kMs, "KO");
+  fuser.Pause(20'000 * kMs, 22'500 * kMs);
+  CHECK(fuser.Paused(21'000 * kMs) && !fuser.Paused(23'000 * kMs));
+  fuser.Flush(21'100 * kMs);
+  CHECK(events.size() == 1);
+  CHECK(!notes.empty());
+
+  // A fused kill in the pause, seen by two rules: the whole group is dropped.
+  fuser.Add(fused, 1, 21'500 * kMs, "KO");
+  CHECK(events.size() == 1);
+  // And one seen just before the pause was, settled after it.
+  fuser.Add(fused, 1, 30'000 * kMs, "KO");
+  fuser.Pause(29'900 * kMs, 32'400 * kMs);
+  fuser.Flush(31'100 * kMs);
+  CHECK(events.size() == 1);
+
+  // A kill found by the player's name in a killfeed is the player's, pause or not.
+  DetectionRule named = FusedRule("named", 2);
+  named.playerWords = {"{player}"};
+  fuser.Add(named, 1, 31'000 * kMs, "ME > YOU");
+  fuser.Add(fused, 1, 31'200 * kMs, "ELIMINATION 250");
+  fuser.Flush(32'300 * kMs);
+  CHECK(events.size() == 2 && events[1].text == "ME > YOU");
+  events.pop_back();
+
+  // A death in a pause still counts, at once.
+  fuser.Add(death, 1, 31'000 * kMs, "KILLED BY");
+  CHECK(events.size() == 2 && events[1].type == EventType::Death);
+
+  // A new match ends a pause still holding.
+  fuser.Pause(40'000 * kMs, 45'000 * kMs);
+  fuser.Add(start, 1, 41'000 * kMs, "ROUND 1");
+  CHECK(events.size() == 3);
+  fuser.Add(plain, 1, 42'000 * kMs, "KO");
+  fuser.FlushAll();
+  CHECK(events.size() == 4 && events[3].type == EventType::Kill);
+
+  // Without pause rules, kills count at once as before.
+  EventFuser plainFuser([&](const GameEvent& e) { events.push_back(e); });
+  plainFuser.Add(plain, 1, 50'000 * kMs, "KO");
+  CHECK(events.size() == 5);
+}
+
+// When the scoreboard is read, and the slower pace after a quiet spell.
+void TestReadPacing() {
+  ScoreboardRule held;
+  held.sampleMs = 3000;
+  ScoreboardRule after = held;
+  after.read = ScoreboardRead::AfterMatch;
+  ScoreboardRule always = held;
+  always.read = ScoreboardRead::Always;
+
+  ScoreboardGate gate;
+  CHECK(!gate.Wanted(held, false, 1000));
+  CHECK(gate.Wanted(held, true, 1000));
+  CHECK(!gate.Wanted(after, true, 1000));
+  CHECK(gate.Wanted(always, false, 1000));
+  CHECK(ScoreboardGate::IntervalMs(held, true) == ScoreboardGate::kHeldMs);
+  CHECK(ScoreboardGate::IntervalMs(held, false) == 3000);
+  CHECK(ScoreboardGate::IntervalMs(always, true) == 3000);
+  gate.MatchEnded(100'000);
+  CHECK(gate.Wanted(held, false, 100'000) && gate.Wanted(after, false, 129'999));
+  CHECK(!gate.Wanted(held, false, 130'000) && !gate.Wanted(after, false, 130'000));
+
+  CalmPacer calm(30'000);
+  calm.Saw(0);
+  CHECK(calm.IntervalMs(250, 29'999) == 250);
+  CHECK(calm.IntervalMs(250, 30'000) == 500);
+  CHECK(calm.IntervalMs(1000, 30'000) == 1000);  // banners keep their pace
+  calm.Saw(31'000);
+  CHECK(calm.IntervalMs(250, 31'000) == 250);
+  CalmPacer never(0);
+  CHECK(never.IntervalMs(250, 1'000'000) == 250);
+}
+
+// Text coming or going changes how a region looks; scenery moving behind it, mostly, doesn't.
+void TestRegionChanged() {
+  const uint32_t w = 64, h = 32;
+  auto image = [&](uint8_t level) { return std::vector<uint8_t>(static_cast<size_t>(w) * h * 4, level); };
+  auto paint = [&](std::vector<uint8_t>& px, uint32_t x0, uint32_t y0, uint32_t size, uint8_t level) {
+    for (uint32_t y = y0; y < y0 + size; ++y) {
+      for (uint32_t x = x0; x < x0 + size; ++x) std::fill_n(px.begin() + (static_cast<size_t>(y) * w + x) * 4, 3, level);
+    }
+  };
+  const auto dark = image(40);
+  const RegionLook before = LookAt(dark, w, h);
+
+  auto text = dark;
+  paint(text, 8, 8, 3, 255);  // 9 pixels of a letter, in one cell of the grid
+  CHECK(RegionChanged(before, LookAt(text, w, h), true));
+  CHECK(RegionChanged(before, LookAt(text, w, h), false));
+
+  auto speck = dark;
+  paint(speck, 8, 8, 2, 255);  // 4: not enough to be text
+  CHECK(!RegionChanged(before, LookAt(speck, w, h), true));
+
+  // The scene behind brightens a lot, but nothing in it is as bright as HUD text.
+  const auto scenery = image(150);
+  CHECK(!RegionChanged(before, LookAt(scenery, w, h), true));
+  CHECK(RegionChanged(before, LookAt(scenery, w, h), false));
+  // With the rule's own threshold below it, it counts.
+  CHECK(RegionChanged(LookAt(dark, w, h, 100), LookAt(scenery, w, h, 100), true));
+
+  // Text that stays put while the scene behind it changes.
+  auto textOnScenery = scenery;
+  paint(textOnScenery, 8, 8, 3, 255);
+  CHECK(!RegionChanged(LookAt(text, w, h), LookAt(textOnScenery, w, h), true));
+  CHECK(!RegionChanged(before, before, false));
+}
+
 // The resolution setting: smaller recordings keep the monitor's shape and never grow past it.
 void TestOutputSize() {
   using clip::FrameSize;
@@ -1171,6 +1607,9 @@ int main(int argc, char** argv) {
   TestImageRulesParse();
   TestImageMatch();
   TestPlanner();
+  TestPlannerMoments();
+  TestMatchTracker();
+  TestHighlightMaker();
   TestMetadata();
   TestMetadataRoundTrip();
   TestTrimmed();
@@ -1183,7 +1622,13 @@ int main(int argc, char** argv) {
   TestForgetMs();
   TestWitnessRoundTrip();
   TestConfirmOnly();
+  TestLateSound();
+  TestKeywordsAndNames();
   TestSetPhrases();
+  TestPauseAndPacingRules();
+  TestFuserPauses();
+  TestReadPacing();
+  TestRegionChanged();
   if (argc > 1) TestShippedRulesParse(argv[1]);
   if (argc > 1) TestSounds(argv[1]);
   if (argc > 2) TestSoundCutRoundTrip(argv[2]);

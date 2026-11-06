@@ -123,6 +123,19 @@ public class DetectionIniTests
     }
 
     [Fact]
+    public void KeepsTheGamesPauseRulesWhenItsRulesAreReplaced()
+    {
+        var ini = DetectionIni.Parse(Ini + "\n[the_finals.pause]\nregion = 0.3, 0.1, 0.4, 0.1\nwords = SPECTATING\n");
+        ini.SetGame("the_finals", null, [new StudioRule { Game = "the_finals", Words = "ELIMINATED" }]);
+        var text = ini.ToString();
+        Assert.Contains("[the_finals.pause]\nregion = 0.3, 0.1, 0.4, 0.1\nwords = SPECTATING", text);
+        // Nor is a pause rule one the Studio shows, or one that makes the game the player's own.
+        var parsed = DetectionIni.Parse("[the_finals.pause]\nwords = SPECTATING\n");
+        Assert.Empty(parsed.Rules);
+        Assert.Empty(parsed.EditedGames);
+    }
+
+    [Fact]
     public void MarksAGameSavedInStudioAsTheUsersOwn()
     {
         var user = DetectionIni.NewChanges();

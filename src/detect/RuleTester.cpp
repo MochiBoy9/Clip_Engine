@@ -583,6 +583,9 @@ int RunScanCommand(const std::filesystem::path& input, const std::vector<Detecti
           ++found;
         },
         [](const std::string& note) { log::Info("Scan note: {}", note); });
+    if (!sounds.Empty()) fuser.SetHoldMs(EventFuser::kSoundHoldMs);
+    // Kills in a killcam or while spectating aren't the player's, as in game.
+    if (std::ranges::any_of(watches, [](const auto& w) { return w->rule.pauses; })) fuser.UsePauses();
     int lastPercent = -1;
     int64_t time = 0;
     while (auto sample = video.Next(time)) {
@@ -663,6 +666,13 @@ int RunScanCommand(const std::filesystem::path& input, const std::vector<Detecti
           const size_t chosen = ChooseRead(rule, rows);
           if (!cached->second.empty()) {
             for (const auto& word : cached->second[chosen]) text += (text.empty() ? "" : " ") + word.text;
+          }
+          if (rule.pauses) {
+            if (!FindMatches(rule, rows[chosen]).empty()) {
+              if (!fuser.Paused(ms * kHnsPerMs)) log::Info("Scan note: [{}] is up at {:.2f}; not counting kills", rule.name, ms / 1000.0);
+              fuser.Pause((ms - watch->intervalMs) * kHnsPerMs, (ms + rule.holdMs) * kHnsPerMs);
+            }
+            continue;
           }
           fresh = watch->tracker.Update(rows[chosen], ms);
         }

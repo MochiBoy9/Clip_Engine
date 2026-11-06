@@ -2,6 +2,8 @@
 
 #include "app/AutoClipPlanner.h"
 #include "app/CommandChannel.h"
+#include "app/HighlightMaker.h"
+#include "app/MatchTracker.h"
 #include "app/RecordingSession.h"
 #include "app/Timeline.h"
 #include "core/Config.h"
@@ -66,6 +68,13 @@ class App {
   double SessionSeconds(int64_t time) const;
   // Which match of the recording a moment belongs to: the match starts detected by then.
   int MatchAt(int64_t time) const;
+  // A new match began at this time (seen, or worked out by matches_).
+  void StartMatch(int64_t time);
+  // Hands highlights made from the kills to the recording, as moments of their own.
+  void AddMade(std::vector<GameEvent> made);
+  // How long a clip waits after its end before it's saved, so a multi-kill made from its kills
+  // is in it.
+  int64_t HoldBack() const;
   // Starts or stops reading the running game's own API, for games that have one.
   void SyncIntegration(const DetectedGame* game);
   // Hands moments from the game's API to the recording, like the ones read off the screen.
@@ -83,6 +92,9 @@ class App {
   std::string sessionId_;
   int64_t sessionStart_ = 0;
   std::vector<int64_t> matchStarts_;
+  MatchTracker matches_;
+  HighlightMaker highlights_;
+  bool makeHighlights_ = false;
   AutoClipPlanner planner_;
   int64_t retryAt_ = 0;
   std::string lastGame_;

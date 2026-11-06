@@ -105,6 +105,16 @@ auto_clip_events = kill, assist, death, revive, match_start, match_end, highligh
 clip_before_seconds = 10
 clip_after_seconds = 5
 
+# Seconds before/after for some kinds of moment, - for the two settings above.
+moment_clip_seconds = match_start 5/10, match_end 15/8, death -/3
+
+# false: a death is only kept in a clip with something else in it, like the fight it ended.
+clip_lone_deaths = true
+
+# Make highlights from the kills found, in every game: double, triple, quad and penta kills, and
+# every fifth kill without dying. A multi-kill the game calls out itself isn't made twice.
+auto_highlights = true
+
 # Your in-game names, separated by commas. Games that show kills in a killfeed (Valorant, Marvel
 # Rivals, Delta Force, Halo Infinite and others) need it to tell your kills and deaths from everyone else's.
 player_names =
@@ -345,6 +355,13 @@ Config Config::Load(const std::filesystem::path& file) {
       setInt(config.clipBeforeSeconds);
     } else if (key == "clip_after_seconds") {
       setInt(config.clipAfterSeconds);
+    } else if (key == "moment_clip_seconds") {
+      if (const auto lengths = ParseMomentLengths(value)) config.momentLengths = *lengths;
+      else log::Warn("Setting moment_clip_seconds should be like 'match_end 15/8, death -/3', got '{}'", value);
+    } else if (key == "clip_lone_deaths") {
+      setBool(config.clipLoneDeaths);
+    } else if (key == "auto_highlights") {
+      setBool(config.autoHighlights);
     } else if (key == "player_names") {
       config.playerNames = SplitNames(value);
     } else if (key == "hud_scale") {

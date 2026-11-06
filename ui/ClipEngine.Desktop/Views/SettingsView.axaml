@@ -368,6 +368,19 @@
             <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
             <Grid ColumnDefinitions="Auto,*,Auto">
               <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
+                <PathIcon Data="{StaticResource IconTrophy}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Multi-kills and streaks" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="Double to penta kills and every fifth kill without dying become highlights, in every game." TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <ToggleSwitch IsChecked="{Binding AutoHighlights}" OnContent="{x:Null}" OffContent="{x:Null}" />
+              </Panel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
                 <PathIcon Data="{StaticResource IconRecord}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
@@ -428,6 +441,19 @@
                     <TextBlock Text="{Binding ClipAfterText}" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" />
                   </Border>
                 </StackPanel>
+              </Panel>
+            </Grid>
+            <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Classes="tile" VerticalAlignment="Center" Margin="0,0,16,0">
+                <PathIcon Data="{StaticResource IconSwords}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                <TextBlock Text="Clip deaths on their own" FontWeight="SemiBold" FontSize="14" />
+                <TextBlock Classes="caption" Text="Off: a death is only kept in a clip of the fight around it." TextWrapping="Wrap" />
+              </StackPanel>
+              <Panel Grid.Column="2" VerticalAlignment="Center">
+                <ToggleSwitch IsChecked="{Binding ClipLoneDeaths}" OnContent="{x:Null}" OffContent="{x:Null}" />
               </Panel>
             </Grid>
             <Border Height="1" Background="{StaticResource Divider}" Margin="0,16" />

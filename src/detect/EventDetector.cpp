@@ -21,36 +21,9 @@ using winrt::Windows::Media::Ocr::OcrEngine;
 
 namespace {
 
-// A region's brightness on a coarse grid, to tell whether it changed since it was last read.
-constexpr int kGridX = 16;
-constexpr int kGridY = 8;
-using Signature = std::array<float, kGridX * kGridY>;
-
-Signature MakeSignature(const std::vector<uint8_t>& bgra, UINT width, UINT height) {
-  Signature sums{};
-  std::array<int, kGridX * kGridY> counts{};
-  // Every other pixel each way is plenty for an average.
-  for (UINT y = 0; y < height; y += 2) {
-    const uint8_t* row = bgra.data() + static_cast<size_t>(y) * width * 4;
-    const size_t cellRow = static_cast<size_t>(y) * kGridY / height * kGridX;
-    for (UINT x = 0; x < width; x += 2) {
-      const uint8_t* p = row + static_cast<size_t>(x) * 4;
-      const size_t cell = cellRow + static_cast<size_t>(x) * kGridX / width;
-      sums[cell] += std::max({p[0], p[1], p[2]});
-      ++counts[cell];
-    }
-  }
-  for (size_t i = 0; i < sums.size(); ++i) sums[i] = counts[i] > 0 ? sums[i] / counts[i] : 0;
-  return sums;
-}
-
-// Video noise and compression shift a cell by a level or so; new text in it moves it far more.
-bool Unchanged(const Signature& a, const Signature& b) {
-  for (size_t i = 0; i < a.size(); ++i) {
-    if (std::abs(a[i] - b[i]) > 1.5f) return false;
-  }
-  return true;
-}
+// A region checked only for HUD text coming or going is read this often whatever it looks like,
+// so text dimmer than the HUD usually is is still read within a second.
+constexpr int64_t kHudRefreshMs = 1000;
 
 std::string Shorten(std::string text, size_t limit) {
   if (text.size() > limit) {
@@ -79,6 +52,8 @@ struct EventDetector::Region {
   UINT shrink = 1;      // see OcrScale
   int intervalMs = 250;
   bool banner = true;   // every rule here is for a banner that stays up, so it can be read smaller
+  bool hudOnly = true;  // read again only when HUD text came or went (RegionChanged)
+  int bright = kHudBright;  // how bright its text is at least
 
   std::vector<RuleTracker> textRules;
   struct Icon {
@@ -115,10 +90,13 @@ struct EventDetector::Region {
   std::vector<uint8_t> pixels;  // BGRA, width * height * 4
   bool copying = false;         // a copy is on its way from the GPU
   int64_t copyTime = 0;
-  std::chrono::steady_clock::time_point due{};
+  std::chrono::steady_clock::time_point copiedAt{};  // when it was last copied, to pace the next
+  bool keyDown = false;  // a scoreboard's key was held at the last look
+  bool boardUp = false;  // a scoreboard was being read at the last look
 
-  bool haveSignature = false;
-  Signature signature{};
+  bool haveLook = false;
+  RegionLook look;   // how it looked when it was last read
+  int64_t readMs = 0;  // and when
   std::vector<std::vector<WordBox>> reads;  // the last read, one for each way it's read (ReadPasses)
   std::string lastText;
 
@@ -154,22 +132,30 @@ bool EventDetector::IsAvailable() {
 
 EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCapture& capture,
                              std::vector<DetectionRule> rules, std::vector<ScoreboardRule> scoreboards,
-                             std::vector<std::string> playerNames, int sampleMs, ReadQuality quality, double hudScale,
-                             bool debug, Sink sink, ScoreboardSink scoreboardSink, std::vector<JournalRule> journals,
-                             JournalSink journalSink)
+                             std::vector<std::string> playerNames, DetectionSettings settings, ReadQuality quality,
+                             double hudScale, bool debug, Sink sink, ScoreboardSink scoreboardSink,
+                             std::vector<JournalRule> journals, JournalSink journalSink)
     : gpu_(std::move(gpu)),
       capture_(capture),
       rules_(std::move(rules)),
       scoreboards_(std::move(scoreboards)),
       journals_(std::move(journals)),
       playerNames_(std::move(playerNames)),
-      sampleMs_(sampleMs),
+      settings_(settings),
       quality_(quality),
       debug_(debug),
       sink_(std::move(sink)),
       scoreboardSink_(std::move(scoreboardSink)),
       journalSink_(std::move(journalSink)),
-      fuser_([this](const GameEvent& e) { sink_(e); }, [](const std::string& note) { log::Info("{}", note); }) {
+      calm_(settings.calmMs),
+      fuser_(
+          [this](const GameEvent& e) {
+            // Games show the scoreboard by themselves once a match is over.
+            if (e.type == EventType::MatchEnd) boardGate_.MatchEnded(e.time / kHnsPerMs);
+            calm_.Saw(e.time / kHnsPerMs);
+            sink_(e);
+          },
+          [](const std::string& note) { log::Info("{}", note); }) {
   const double screenW = capture_.Width();
   const double screenH = capture_.Height();
   // Where the HUD draws each region on this screen, at the HUD size the player set.
@@ -190,6 +176,7 @@ EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCaptur
     created->width = box.right - box.left;
     created->height = box.bottom - box.top;
     created->threshold = threshold;
+    created->bright = threshold > 0 ? threshold : kHudBright;
     created->intervalMs = INT_MAX;
     regions_.push_back(std::move(created));
     return regions_.back().get();
@@ -229,10 +216,14 @@ EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCaptur
              r->box.bottom == box.bottom && r->threshold == rule.threshold && !r->gatedBy;
     });
     Region* region = existing != regions_.end() ? existing->get() : addRegion(rule.name, box, rule.threshold);
-    region->intervalMs = std::min(region->intervalMs, ScaledSampleMs(rule.sampleMs > 0 ? rule.sampleMs : sampleMs_, quality_));
+    region->intervalMs = std::min(region->intervalMs, ScaledSampleMs(rule.sampleMs > 0 ? rule.sampleMs : settings_.sampleMs, quality_));
     const bool banner = rule.position == LinePosition::Anywhere && rule.event != EventType::Kill &&
                         rule.event != EventType::Assist && rule.event != EventType::Revive;
     region->banner &= banner;
+    // An icon can be any color, so its region goes by any change; so does a rule set to.
+    const ChangeCheck check = rule.changeCheck == ChangeCheck::Default ? settings_.changeCheck : rule.changeCheck;
+    region->hudOnly &= check == ChangeCheck::Hud && !matcher;
+    if (rule.pauses) fuser_.UsePauses();
     if (rule.ReadsText()) region->textRules.emplace_back(rule);
     if (matcher) region->icons.push_back({RuleTracker(rule), std::move(*matcher), rule.imageMatch});
   }
@@ -265,6 +256,8 @@ EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCaptur
     region->intervalMs = std::min(region->intervalMs, ScaledSampleMs(journal.sampleMs, quality_));
     // Lists and feeds are small print, so they're never read at half size.
     region->banner &= !journal.ReadsFeed();
+    // Lists and results screens can be dimmer than the HUD, so any change in them counts.
+    region->hudOnly = false;
     region->journals.emplace_back(journal);
   }
 
@@ -281,7 +274,8 @@ EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCaptur
       Region* region = addRegion(board.name, box, board.threshold);
       region->board = &board;
       region->banner = false;
-      region->intervalMs = std::max(sampleMs_, board.sampleMs);
+      region->hudOnly = false;  // its numbers can be dimmer than the HUD
+      region->intervalMs = std::max(settings_.sampleMs, board.sampleMs);
     }
   }
 
@@ -329,10 +323,13 @@ EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCaptur
     }
     inner->inside.clear();
     best->intervalMs = std::min(best->intervalMs, inner->intervalMs);
+    best->hudOnly &= inner->hudOnly;
   }
 
   sounds_ = std::make_unique<SoundWatch>(rules_, [](const std::string& warning) { log::Warn("{}", warning); });
   if (sounds_->Empty()) sounds_.reset();
+  // A sound is heard only once it has played out, so moments wait for it a little longer.
+  if (sounds_) fuser_.SetHoldMs(EventFuser::kSoundHoldMs);
 
   size_t read = 0;
   for (auto& region : regions_) {
@@ -355,6 +352,17 @@ EventDetector::EventDetector(std::shared_ptr<GpuDevice> gpu, const MonitorCaptur
             read, rules_.size(), ToString(quality_));
   if (!journals_.empty()) log::Info("Keeping a journal with {} journal rules", journals_.size());
   if (sounds_) log::Info("Listening to the game's audio for its sounds");
+  if (const auto pauses = std::ranges::count_if(rules_, &DetectionRule::pauses); pauses > 0) {
+    log::Info("Not counting kills during killcams or while spectating ({} pause rules)", pauses);
+  }
+  for (const auto& region : regions_) {
+    if (!region->board) continue;
+    switch (region->board->read) {
+      case ScoreboardRead::WhileHeld: log::Info("Reading {} while its key is held and after a match", region->name); break;
+      case ScoreboardRead::AfterMatch: log::Info("Reading {} after a match", region->name); break;
+      case ScoreboardRead::Always: log::Info("Reading {} all the time", region->name); break;
+    }
+  }
   if (std::abs(screenW / screenH - kDefaultAspect) > 0.02 || hudScale != 1) {
     log::Info("Regions placed for a {}x{} screen with the HUD at {:.0f}%", capture_.Width(), capture_.Height(), hudScale * 100);
   }
@@ -395,7 +403,9 @@ void EventDetector::Run() {
       if (region->within) continue;
       direct.push_back(region.get());
       tickMs = std::min(tickMs, region->intervalMs);
+      if (region->board && region->board->read == ScoreboardRead::WhileHeld) tickMs = std::min(tickMs, ScoreboardGate::kHeldMs);
     }
+    calm_.Saw(NowHns() / kHnsPerMs);
     if (direct.empty() && !sounds_) {
       winrt::uninit_apartment();
       return;
@@ -442,14 +452,39 @@ void EventDetector::Run() {
         ID3D11Texture2D* frame = inFront ? capture_.LatestFrame() : nullptr;
         if (frame) {
           const int64_t time = NowHns();
+          const int64_t nowMs = time / kHnsPerMs;
           for (Region* region : direct) {
+            // Journal notes (menus, results screens, lists) keep their pace through a quiet spell.
+            const bool keepsPace = !region->journals.empty() || !region->gateWords.empty();
+            int intervalMs = keepsPace ? region->intervalMs : calm_.IntervalMs(region->intervalMs, nowMs);
+            if (region->board) {
+              // Only while the scoreboard can be up: its key is held, or a match just ended.
+              const ScoreboardRule& board = *region->board;
+              const bool keyDown = board.read == ScoreboardRead::WhileHeld && (GetAsyncKeyState(board.key) & 0x8000) != 0;
+              const bool wanted = boardGate_.Wanted(board, keyDown, nowMs);
+              if (!wanted && region->boardUp) {
+                // Put away: the next time it's up starts afresh.
+                region->boardTracker.Update(std::nullopt);
+                region->haveLook = false;
+              }
+              if (debug_ && wanted != region->boardUp) log::Info("{} {}", wanted ? "Reading" : "Stopped reading", region->name);
+              region->boardUp = wanted;
+              // Read it at once when its key goes down.
+              if (keyDown && !region->keyDown) region->copiedAt = {};
+              region->keyDown = keyDown;
+              if (!wanted) continue;
+              intervalMs = ScoreboardGate::IntervalMs(board, keyDown);
+            }
             // Half a look early counts as on time, as the looks never land exactly.
-            if (region->copying || now + std::chrono::milliseconds(tickMs / 2) < region->due) continue;
-            if (region->gatedBy && !region->gatedBy->GateOpen(time / kHnsPerMs)) continue;
+            if (region->copying ||
+                now + std::chrono::milliseconds(tickMs / 2) < region->copiedAt + std::chrono::milliseconds(intervalMs)) {
+              continue;
+            }
+            if (region->gatedBy && !region->gatedBy->GateOpen(nowMs)) continue;
             gpu_->context->CopySubresourceRegion(region->staging.get(), 0, 0, 0, 0, frame, 0, &region->box);
             region->copying = true;
             region->copyTime = time;
-            region->due = now + std::chrono::milliseconds(region->intervalMs);
+            region->copiedAt = now;
           }
         }
       }
@@ -460,7 +495,10 @@ void EventDetector::Run() {
         std::lock_guard lock(heardMutex_);
         heard.swap(heard_);
       }
-      for (const auto& h : heard) fuser_.Add(*h.rule, h.count, h.time, h.text);
+      for (const auto& h : heard) {
+        calm_.Saw(h.time / kHnsPerMs);
+        fuser_.Add(*h.rule, h.count, h.time, h.text);
+      }
       fuser_.Flush(NowHns());
     }
   } catch (const winrt::hresult_error& e) {
@@ -493,11 +531,13 @@ void EventDetector::Process(Region& region, int64_t time, const OcrEngine& ocr) 
   const int64_t ms = time / kHnsPerMs;
   // When nothing there changed since it was last read, it would read the same again. It's
   // compared with how it looked then rather than a look ago, so a slow fade still counts.
-  const Signature signature = MakeSignature(region.pixels, region.width, region.height);
-  const bool changed = !region.haveSignature || !Unchanged(signature, region.signature);
+  const RegionLook look = LookAt(region.pixels, region.width, region.height, region.bright);
+  const bool changed = !region.haveLook || RegionChanged(region.look, look, region.hudOnly) ||
+                       (region.hudOnly && ms - region.readMs >= kHudRefreshMs);
   if (changed) {
-    region.signature = signature;
-    region.haveSignature = true;
+    region.look = look;
+    region.haveLook = true;
+    region.readMs = ms;
   }
 
   if (region.ReadsText() && ocr && changed) {
@@ -540,7 +580,19 @@ void EventDetector::Process(Region& region, int64_t time, const OcrEngine& ocr) 
     }
     for (auto& tracker : target.textRules) {
       const size_t chosen = ChooseRead(tracker.Rule(), rows);
+      if (tracker.Rule().pauses) {
+        // A killcam or spectating: what shows from a look ago until a while after it's gone isn't
+        // the player's own.
+        if (!FindMatches(tracker.Rule(), rows[chosen]).empty()) {
+          const int64_t lead = int64_t{target.intervalMs} * kHnsPerMs;
+          const int64_t hold = int64_t{tracker.Rule().holdMs} * kHnsPerMs;
+          if (debug_ && !fuser_.Paused(time)) log::Info("[{}] is up; not counting kills", tracker.Rule().name);
+          fuser_.Pause(time - lead, time + hold);
+        }
+        continue;
+      }
       const int fresh = tracker.Update(rows[chosen], ms);
+      if (fresh > 0) calm_.Saw(ms);
       if (debug_ && fresh > 0 && chosen > 0) log::Info("[{}] found in read {} of the region", tracker.Rule().name, chosen + 1);
       fuser_.Add(tracker.Rule(), fresh, time, Shorten(text, 120), Where(target));
     }
@@ -595,6 +647,7 @@ void EventDetector::Process(Region& region, int64_t time, const OcrEngine& ocr) 
       icon.alike = alike;
     }
     const int fresh = icon.tracker.UpdateMatches(icon.found ? std::vector<std::string>{""} : std::vector<std::string>{}, ms);
+    if (fresh > 0) calm_.Saw(ms);
     fuser_.Add(icon.tracker.Rule(), fresh, time, std::format("icon: {} ({:.2f} alike)", icon.tracker.Rule().name, icon.alike),
                Where(region));
   }

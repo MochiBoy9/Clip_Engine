@@ -76,13 +76,22 @@ public class EngineSettingsTests : IDisposable
         settings.AutoClipEvents = ["kill", "revive"];
         settings.ClipBeforeSeconds = 15;
         settings.ClipAfterSeconds = 3;
+        Assert.True(settings.ClipLoneDeaths && settings.AutoHighlights);
+        settings.ClipLoneDeaths = false;
+        settings.AutoHighlights = false;
         settings.Save(_file);
+        // Engine settings the app doesn't show are left as they were.
+        File.AppendAllText(_file, "moment_clip_seconds = match_end 20/8\n");
+        EngineSettings.Load(_file).Save(_file);
+        Assert.Contains("moment_clip_seconds = match_end 20/8", File.ReadAllLines(_file));
 
         var reloaded = EngineSettings.Load(_file);
         Assert.False(reloaded.AutoClip);
         Assert.True(reloaded.Detection);
         Assert.Equal(["kill", "revive"], reloaded.AutoClipEvents);
         Assert.Equal((15, 3), (reloaded.ClipBeforeSeconds, reloaded.ClipAfterSeconds));
+        Assert.False(reloaded.ClipLoneDeaths);
+        Assert.False(reloaded.AutoHighlights);
     }
 
     [Fact]

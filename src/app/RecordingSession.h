@@ -32,7 +32,7 @@ class RecordingSession {
   // journals: what to write down in the game's journal.
   RecordingSession(const Config& config, HMONITOR monitor, std::string label, bool isGame,
                    std::vector<DetectionRule> rules, std::vector<ScoreboardRule> scoreboards,
-                   std::vector<std::string> playerNames, int detectionSampleMs, double hudScale = 1,
+                   std::vector<std::string> playerNames, DetectionSettings detection, double hudScale = 1,
                    std::vector<JournalRule> journals = {});
   ~RecordingSession();
 
